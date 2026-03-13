@@ -9,12 +9,20 @@ export default async function DashboardLayout({ children }: { children: React.Re
   
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
+  
+  let userRole = 'user';
+  try {
+    const { data: perfil } = await supabase.from('perfiles').select('rol').eq('id', user.id).single();
+    if (perfil) userRole = perfil.rol;
+  } catch (e) {
+    // default to user role on error
+  }
 
   return (
     <div className="flex h-screen bg-zinc-50 overflow-hidden">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header userEmail={user.email} />
+        <Header userEmail={user.email} userRole={userRole} />
         <main className="flex-1 overflow-y-auto p-6">
           {children}
         </main>
