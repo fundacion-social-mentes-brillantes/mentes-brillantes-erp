@@ -45,6 +45,7 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
   const [tipoFiltro, setTipoFiltro] = useState('todos')
   const [asistenteFiltro, setAsistenteFiltro] = useState('todos')
   const [metodoFiltro, setMetodoFiltro] = useState('todos')
+  const [mostrarAplicaciones, setMostrarAplicaciones] = useState(false)
 
   const supabase = createClient()
 
@@ -81,7 +82,7 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
 
   useEffect(() => {
     fetchMovimientos()
-  }, [fechaInicio, fechaFin, tipoFiltro, asistenteFiltro, metodoFiltro])
+  }, [fechaInicio, fechaFin, tipoFiltro, asistenteFiltro, metodoFiltro, mostrarAplicaciones])
 
   async function fetchMovimientos() {
     if (!supabase) return
@@ -113,7 +114,14 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
     const { data, error } = await query
 
     if (!error && data) {
-      setMovimientos(data as Movimiento[])
+      let result = data as Movimiento[]
+      if (!mostrarAplicaciones) {
+        result = result.filter(m => 
+          m.tipo_movimiento !== 'aplicacion_saldo' && 
+          m.metodo_pago?.toLowerCase() !== 'saldo_a_favor'
+        )
+      }
+      setMovimientos(result)
     }
     setLoading(false)
   }
@@ -253,9 +261,23 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
               <option value="efectivo">Efectivo</option>
               <option value="nequi">Nequi</option>
               <option value="daviplata">Daviplata</option>
-              <option value="saldo_a_favor">Saldo a Favor</option>
+              {mostrarAplicaciones && <option value="saldo_a_favor">Saldo a Favor</option>}
               <option value="otro">Otro</option>
             </select>
+          </div>
+          
+          {/* Mostrar Aplicaciones de Saldo */}
+          <div className="lg:col-span-5 flex items-center justify-end mt-2 pt-4 border-t border-zinc-100">
+            <label className="flex items-center gap-2 cursor-pointer relative">
+              <input 
+                type="checkbox" 
+                className="sr-only peer"
+                checked={mostrarAplicaciones}
+                onChange={(e) => setMostrarAplicaciones(e.target.checked)}
+              />
+              <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none ring-offset-2 peer-focus:ring-2 peer-focus:ring-zinc-900 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-zinc-900"></div>
+              <span className="text-sm font-medium text-zinc-700">Mostrar aplicaciones de saldo</span>
+            </label>
           </div>
         </div>
       </div>
@@ -323,8 +345,13 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
                     <td className="px-4 py-3 text-right font-medium text-blue-600">
                       {mov.valor_deuda > 0 ? formatCurrency(mov.valor_deuda) : '-'}
                     </td>
-                    <td className="px-4 py-3 text-right font-medium text-emerald-600">
-                      {mov.valor_ingreso > 0 ? formatCurrency(mov.valor_ingreso) : '-'}
+                    <td className="px-4 py-3 text-right font-medium">
+                      {mov.valor_ingreso > 0 ? (
+                        <span className={`flex items-center justify-end gap-1.5 ${(mov.tipo_movimiento === 'aplicacion_saldo' || mov.metodo_pago?.toLowerCase() === 'saldo_a_favor') ? 'text-zinc-500' : 'text-emerald-600'}`}>
+                          {(mov.tipo_movimiento === 'aplicacion_saldo' || mov.metodo_pago?.toLowerCase() === 'saldo_a_favor') && <span title="Ajuste contable (Saldo a Favor)"><ArrowRightLeft className="w-3.5 h-3.5" /></span>}
+                          {formatCurrency(mov.valor_ingreso)}
+                        </span>
+                      ) : '-'}
                     </td>
                     <td className="px-4 py-3 text-right font-medium text-red-600">
                       {mov.valor_egreso > 0 ? formatCurrency(mov.valor_egreso) : '-'}
@@ -395,7 +422,10 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
                     <div className="font-bold text-blue-600">{formatCurrency(mov.valor_deuda)}</div>
                   )}
                   {mov.valor_ingreso > 0 && (
-                    <div className="font-bold text-emerald-600">+{formatCurrency(mov.valor_ingreso)}</div>
+                    <div className={`font-bold flex items-center justify-end gap-1.5 ${(mov.tipo_movimiento === 'aplicacion_saldo' || mov.metodo_pago?.toLowerCase() === 'saldo_a_favor') ? 'text-zinc-500' : 'text-emerald-600'}`}>
+                      {(mov.tipo_movimiento === 'aplicacion_saldo' || mov.metodo_pago?.toLowerCase() === 'saldo_a_favor') && <span title="Ajuste contable (Saldo a Favor)"><ArrowRightLeft className="w-3.5 h-3.5" /></span>}
+                      +{formatCurrency(mov.valor_ingreso)}
+                    </div>
                   )}
                   {mov.valor_egreso > 0 && (
                     <div className="font-bold text-red-600">-{formatCurrency(mov.valor_egreso)}</div>
