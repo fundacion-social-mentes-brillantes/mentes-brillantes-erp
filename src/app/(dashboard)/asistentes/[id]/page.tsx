@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { ArrowLeft, Edit2, Calendar, FileText, CreditCard, CheckCircle2, Clock, AlertCircle, Plus, Wallet } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { AnticipoForm } from './AnticipoForm'
+import { PagarConSaldoButton } from './PagarConSaldoButton'
 
 export default async function AsistenteDetallePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -46,15 +47,15 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
     if (m.tipo === 'ingreso') totalIngresosSaldo += Number(m.monto)
     if (m.tipo === 'aplicacion') totalAplicadoSaldo += Number(m.monto)
   })
-  const saldoAFavor = totalIngresosSaldo - totalAplicadoSaldo
+  const saldoAFavor = Math.round(totalIngresosSaldo - totalAplicadoSaldo)
 
   // Calculate totals
   let totalFacturado = 0
   let totalAbonado = 0
 
   const cuentasProcesadas = (cuentas || []).map(cuenta => {
-    const abonado = cuenta.pagos_abonos?.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0) || 0
-    const pendiente = Number(cuenta.valor_total) - abonado
+    const abonado = Math.round(cuenta.pagos_abonos?.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0) || 0)
+    const pendiente = Math.round(Number(cuenta.valor_total) - abonado)
     
     totalFacturado += Number(cuenta.valor_total)
     totalAbonado += abonado
@@ -66,7 +67,9 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
     }
   })
 
-  const saldoPendiente = totalFacturado - totalAbonado
+  totalFacturado = Math.round(totalFacturado)
+  totalAbonado = Math.round(totalAbonado)
+  const saldoPendiente = Math.round(totalFacturado - totalAbonado)
   const hasMovements = cuentasProcesadas.length > 0
 
   // Extract all payments for the timeline
@@ -175,6 +178,13 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
               <p className="text-3xl font-bold text-emerald-700 mb-6">
                 ${saldoAFavor.toLocaleString('es-CO')}
               </p>
+              
+              {saldoAFavor > 0 && saldoPendiente > 0 && (
+                <div className="mb-6 -mt-2">
+                  <PagarConSaldoButton asistenteId={asistente.id} disabled={false} />
+                </div>
+              )}
+
               <div className="pt-4 border-t border-emerald-200/50">
                 <h4 className="text-sm font-medium text-emerald-900 mb-3">Registrar Anticipo</h4>
                 <AnticipoForm asistenteId={asistente.id} />

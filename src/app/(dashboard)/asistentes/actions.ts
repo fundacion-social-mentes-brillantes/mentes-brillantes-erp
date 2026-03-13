@@ -128,3 +128,79 @@ export async function deleteAsistente(id: string) {
 
   revalidatePath('/asistentes')
 }
+
+export async function pagarDeudasConSaldo(asistente_id: string): Promise<ActionState> {
+  const supabase = await createClient()
+  if (!supabase) return { error: 'Supabase no configurado' }
+
+  // Obtener saldo a favor actual
+  const { data: movimientosSaldo } = await supabase
+    .from('movimientos_saldo_favor')
+    .select('tipo, monto')
+    .eq('asistente_id', asistente_id)
+
+  let totalIngresos = 0
+  let totalAplicado = 0
+  
+  ;(movimientosSaldo || []).forEach(m => {
+    if (m.tipo === 'ingreso') totalIngresos += Number(m.monto)
+    if (m.tipo === 'aplicacion') totalAplicado += Number(m.monto)
+  })
+  
+  let saldoDisponible = Math.round(totalIngresos - totalAplicado)
+
+  if (saldoDisponible <= 0) {
+    return { error: 'No hay saldo a favor disponible para aplicar' }
+  }
+
+  // Obtener cuentas pendientes ordenadas por fecha (FIFO)
+  const { data: cuentas } = await supabase
+    .from('cuentas_por_cobrar')
+    .select(`
+      id,
+      valor_total,
+      fecha_emision,
+      pagos_abonos (monto)
+    `)
+    .eq('asistente_id', asistente_id)
+    .neq('estado', 'pagado')
+    .order('fecha_emision', { ascending: true })
+
+  if (!cuentas || cuentas.length === 0) {
+    return { error: 'No hay deudas pendientes para pagar' }
+  }
+
+  let pagosRealizados = 0;
+
+  for (const cuenta of cuentas) {
+    if (saldoDisponible <= 0) break;
+
+    const abonado = Math.round(cuenta.pagos_abonos?.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0) || 0);
+    const pendiente = Math.round(Number(cuenta.valor_total) - abonado);
+
+    if (pendiente <= 0) continue;
+
+    const montoAPagar = Math.min(saldoDisponible, pendiente);
+
+    const { error } = await supabase.rpc('aplicar_saldo_favor_trx', {
+      p_cuenta_id: cuenta.id,
+      p_asistente_id: asistente_id,
+      p_monto: montoAPagar
+    });
+
+    if (error) {
+      return { error: `Error al pagar cuenta: ${error.message}` };
+    }
+
+    saldoDisponible -= montoAPagar;
+    pagosRealizados++;
+  }
+
+  if (pagosRealizados === 0) {
+    return { error: 'No se procesó ningún pago. Verifica el saldo y las deudas.' };
+  }
+
+  revalidatePath(`/asistentes/${asistente_id}`);
+  revalidatePath('/cuentas');
+  return { success: true };
+}
