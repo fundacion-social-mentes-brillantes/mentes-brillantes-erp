@@ -1,8 +1,9 @@
-import { ArrowUpRight, ArrowDownRight, Users, Wallet, AlertCircle, Receipt, History, Info } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, Users, Wallet, AlertCircle, Receipt, History, Info, Banknote, ShoppingCart, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { MonthSelector } from "./MonthSelector";
 import { BalanceChart } from "./BalanceChart";
+import { PdfReportButton } from "./PdfReportButton";
 
 export async function Dashboard({ month }: { month?: string }) {
   const supabase = await createClient();
@@ -24,6 +25,13 @@ export async function Dashboard({ month }: { month?: string }) {
   
   const firstDayOfMonth = new Date(targetYear, targetMonth, 1).toISOString().split('T')[0];
   const lastDayOfMonth = new Date(targetYear, targetMonth + 1, 0).toISOString().split('T')[0];
+
+  // Variables para mes anterior (para cálculos de tendencia)
+  const prevMonthDate = new Date(targetYear, targetMonth - 1, 1);
+  const prevMonthYear = prevMonthDate.getFullYear();
+  const prevMonthMonth = prevMonthDate.getMonth();
+  const firstDayOfPrevMonth = new Date(prevMonthYear, prevMonthMonth, 1).toISOString().split('T')[0];
+  const lastDayOfPrevMonth = new Date(prevMonthYear, prevMonthMonth + 1, 0).toISOString().split('T')[0];
 
   // 1. INDICADORES DEL PERÍODO SELECCIONADO
   
@@ -86,6 +94,8 @@ export async function Dashboard({ month }: { month?: string }) {
     acumulado += (dayData.ingresos - dayData.egresos);
     return {
       date: date.split('-')[2], // Just the day
+      ingresos: dayData.ingresos,
+      egresos: dayData.egresos,
       balance: acumulado
     };
   });
@@ -102,6 +112,36 @@ export async function Dashboard({ month }: { month?: string }) {
     const abonado = curr.pagos_abonos?.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0) || 0;
     return acc + (Number(curr.valor_total) - abonado);
   }, 0) || 0);
+
+  // --- DATOS DEL MES ANTERIOR (TENDENCIAS) ---
+  const { data: rawIngresosPrev } = await supabase.from('pagos_abonos').select('monto, metodo_pago, origen_fondos').gte('fecha_pago', firstDayOfPrevMonth).lte('fecha_pago', lastDayOfPrevMonth);
+  const ingresosPrevData = rawIngresosPrev?.filter(item => 
+    item.metodo_pago !== 'Saldo_a_favor' && item.metodo_pago !== 'saldo_a_favor' && item.origen_fondos !== 'saldo_a_favor' && (item as any).tipo !== 'aplicacion_saldo'
+  ) || [];
+  const ingresosPrev = Math.round(ingresosPrevData.reduce((acc, curr) => acc + Number(curr.monto), 0));
+
+  const { data: egresosPrevData } = await supabase.from('egresos').select('monto').gte('fecha', firstDayOfPrevMonth).lte('fecha', lastDayOfPrevMonth);
+  const egresosPrev = Math.round(egresosPrevData?.reduce((acc, curr) => acc + Number(curr.monto), 0) || 0);
+  const utilidadPrev = ingresosPrev - egresosPrev;
+
+  const { data: cuentasPrevData } = await supabase.from('cuentas_por_cobrar').select('valor_total, pagos_abonos(monto)').gte('fecha_emision', firstDayOfPrevMonth).lte('fecha_emision', lastDayOfPrevMonth);
+  const facturadoPrev = Math.round(cuentasPrevData?.reduce((acc, curr) => acc + Number(curr.valor_total), 0) || 0);
+  const pendientePrev = Math.round(cuentasPrevData?.reduce((acc, curr) => {
+    const abonado = curr.pagos_abonos?.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0) || 0;
+    return acc + (Number(curr.valor_total) - abonado);
+  }, 0) || 0);
+
+  // Funciones de cálculo de tendencia (%)
+  const getTrend = (current: number, previous: number) => {
+    if (previous === 0) return current > 0 ? 100 : 0;
+    return Math.round(((current - previous) / Math.abs(previous)) * 100);
+  };
+
+  const ingresosTrend = getTrend(ingresosMes, ingresosPrev);
+  const egresosTrend = getTrend(egresosMes, egresosPrev);
+  const utilidadTrend = getTrend(utilidadMes, utilidadPrev);
+  const facturadoTrend = getTrend(facturadoMes, facturadoPrev);
+  const pendienteTrend = getTrend(pendienteMes, pendientePrev);
 
   // 2. INDICADORES HISTÓRICOS APARTE
   
@@ -171,41 +211,51 @@ export async function Dashboard({ month }: { month?: string }) {
     {
       name: "Ingresos del Período",
       value: `$${ingresosMes.toLocaleString()}`,
-      icon: ArrowUpRight,
+      trend: ingresosTrend,
+      goodIsUp: true,
+      icon: Banknote,
       color: "text-emerald-600",
-      bg: "bg-emerald-50",
+      bg: "bg-emerald-500/10",
       tooltip: "Suma de los pagos y abonos recibidos dentro del mes seleccionado."
     },
     {
       name: "Egresos del Período",
       value: `$${egresosMes.toLocaleString()}`,
-      icon: ArrowDownRight,
-      color: "text-red-600",
-      bg: "bg-red-50",
+      trend: egresosTrend,
+      goodIsUp: false,
+      icon: ShoppingCart,
+      color: "text-rose-500",
+      bg: "bg-rose-500/10",
       tooltip: "Suma de los gastos registrados dentro del mes seleccionado."
     },
     {
       name: "Utilidad del Período",
       value: `$${utilidadMes.toLocaleString()}`,
+      trend: utilidadTrend,
+      goodIsUp: true,
       icon: Wallet,
-      color: utilidadMes >= 0 ? "text-emerald-600" : "text-red-600",
-      bg: utilidadMes >= 0 ? "bg-emerald-50" : "bg-red-50",
+      color: utilidadMes >= 0 ? "text-indigo-600" : "text-rose-500",
+      bg: utilidadMes >= 0 ? "bg-indigo-500/10" : "bg-rose-500/10",
       tooltip: "Ingresos del período menos egresos del período."
     },
     {
       name: "Facturado del Período",
       value: `$${facturadoMes.toLocaleString()}`,
+      trend: facturadoTrend,
+      goodIsUp: true,
       icon: Receipt,
       color: "text-blue-600",
-      bg: "bg-blue-50",
+      bg: "bg-blue-500/10",
       tooltip: "Valor total de las cuentas por cobrar creadas en ese mes, aunque no se hayan pagado todavía."
     },
     {
       name: "Pendiente del Período",
       value: `$${pendienteMes.toLocaleString()}`,
+      trend: pendienteTrend,
+      goodIsUp: false,
       icon: AlertCircle,
-      color: "text-amber-600",
-      bg: "bg-amber-50",
+      color: "text-amber-500",
+      bg: "bg-amber-500/10",
       tooltip: "Saldo que aún falta por cobrar, pero solo de las cuentas creadas en ese mes."
     },
   ];
@@ -240,90 +290,111 @@ export async function Dashboard({ month }: { month?: string }) {
   const displayMonthName = new Date(targetYear, targetMonth, 1).toLocaleString('es', { month: 'long', year: 'numeric' });
 
   return (
-    <div className="space-y-8">
+    <div id="dashboard-content" className="space-y-8 pb-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Dashboard</h1>
           <p className="text-zinc-500 text-sm">Resumen financiero y estado de cartera.</p>
         </div>
-        <MonthSelector currentMonth={currentMonthValue} />
+        <div className="flex items-center gap-3">
+          <PdfReportButton displayMonthName={displayMonthName} />
+          <MonthSelector currentMonth={currentMonthValue} />
+        </div>
       </div>
 
       {/* 1. INDICADORES DEL PERÍODO */}
-      <section className="space-y-4">
+      <section className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
         <h2 className="text-lg font-semibold text-zinc-900 border-b border-zinc-200 pb-2">
           Indicadores del Período <span className="text-zinc-500 font-normal text-sm ml-2 capitalize">({displayMonthName})</span>
         </h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          {periodStats.map((stat) => (
-            <div
-              key={stat.name}
-              className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm flex flex-col justify-between"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <p className="text-xs font-medium text-zinc-500">{stat.name}</p>
-                  <div className="group relative flex items-center">
-                    <Info className="w-3.5 h-3.5 text-zinc-400 cursor-help outline-none" tabIndex={0} />
-                    <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 bg-zinc-900 text-white text-xs rounded-md p-2 shadow-lg z-10 text-center">
-                      {stat.tooltip}
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-900"></div>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
+          {periodStats.map((stat) => {
+            const isTrendPositive = stat.trend > 0;
+            const isTrendNeutral = stat.trend === 0;
+            const trendIsGood = (isTrendPositive && stat.goodIsUp) || (!isTrendPositive && !stat.goodIsUp);
+            
+            return (
+              <div
+                key={stat.name}
+                className="relative overflow-hidden rounded-2xl border border-zinc-200/50 bg-white/60 backdrop-blur-xl p-5 shadow-sm transition-all hover:shadow-md hover:-translate-y-1"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs font-medium text-zinc-500">{stat.name}</p>
+                    <div className="group relative flex items-center">
+                      <Info className="w-3.5 h-3.5 text-zinc-400 cursor-help outline-none" tabIndex={0} />
+                      <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 bg-zinc-900/90 backdrop-blur text-white text-xs rounded-lg p-2.5 shadow-xl z-20 text-center">
+                        {stat.tooltip}
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-900/90"></div>
+                      </div>
                     </div>
                   </div>
+                  <div className={`p-2 rounded-xl ${stat.bg} backdrop-blur-md`}>
+                    <stat.icon className={`h-4 w-4 ${stat.color}`} />
+                  </div>
                 </div>
-                <div className={`p-1.5 rounded-lg ${stat.bg}`}>
-                  <stat.icon className={`h-4 w-4 ${stat.color}`} />
+                <div className="mt-3 flex items-end justify-between">
+                  <p className="text-2xl font-bold tracking-tight text-zinc-900">{stat.value}</p>
+                  
+                  {!isTrendNeutral && (
+                    <div className={`flex items-center gap-1 text-xs font-medium ${trendIsGood ? 'text-emerald-600 bg-emerald-500/10' : 'text-rose-600 bg-rose-500/10'} px-1.5 py-0.5 rounded-md`}>
+                      {isTrendPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                      {Math.abs(stat.trend)}%
+                    </div>
+                  )}
+                  {isTrendNeutral && (
+                    <div className="flex items-center gap-1 text-xs font-medium text-zinc-500 bg-zinc-100 px-1.5 py-0.5 rounded-md">
+                      <Minus className="w-3 h-3" />
+                      0%
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="mt-3">
-                <p className="text-xl font-semibold text-zinc-900">{stat.value}</p>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
       {/* 2. INDICADORES HISTÓRICOS */}
-      <section className="space-y-4">
+      <section className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
         <h2 className="text-lg font-semibold text-zinc-900 border-b border-zinc-200 pb-2">
           Indicadores Históricos <span className="text-zinc-500 font-normal text-sm ml-2">(Acumulado General)</span>
         </h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
           {historicalStats.map((stat) => (
             <div
               key={stat.name}
-              className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm flex flex-col justify-between"
+              className="relative overflow-hidden rounded-2xl border border-zinc-200/50 bg-white/60 backdrop-blur-xl p-5 shadow-sm transition-all hover:shadow-md hover:-translate-y-1"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   <p className="text-sm font-medium text-zinc-500">{stat.name}</p>
                   <div className="group relative flex items-center">
                     <Info className="w-4 h-4 text-zinc-400 cursor-help outline-none" tabIndex={0} />
-                    <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 bg-zinc-900 text-white text-xs rounded-md p-2 shadow-lg z-10 text-center">
+                    <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 bg-zinc-900/90 backdrop-blur text-white text-xs rounded-lg p-3 shadow-xl z-20 text-center">
                       {stat.tooltip}
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-900"></div>
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-900/90"></div>
                     </div>
                   </div>
                 </div>
-                <div className={`p-2 rounded-lg ${stat.bg}`}>
+                <div className={`p-2 rounded-xl ${stat.bg} backdrop-blur-md`}>
                   <stat.icon className={`h-4 w-4 ${stat.color}`} />
                 </div>
               </div>
               <div className="mt-4">
-                <p className="text-2xl font-semibold text-zinc-900">{stat.value}</p>
+                <p className="text-3xl font-bold tracking-tight text-zinc-900">{stat.value}</p>
               </div>
             </div>
           ))}
         </div>
       </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm flex flex-col">
-          <h3 className="text-base font-semibold text-zinc-900 mb-4">Balance del Período</h3>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-1000">
+        <div className="lg:col-span-2 rounded-2xl border border-zinc-200/50 bg-white/60 backdrop-blur-xl p-6 shadow-sm flex flex-col">
           <BalanceChart data={chartData} utilidadMes={utilidadMes} displayMonthName={displayMonthName} />
         </div>
         
-        <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm flex flex-col">
+        <div className="rounded-2xl border border-zinc-200/50 bg-white/60 backdrop-blur-xl p-6 shadow-sm flex flex-col">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base font-semibold text-zinc-900">Cuentas Recientes Pendientes</h3>
             <Link href="/cuentas?estado=pendiente" className="text-xs font-medium text-blue-600 hover:text-blue-800">Ver todas</Link>

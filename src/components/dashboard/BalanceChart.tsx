@@ -1,9 +1,20 @@
 'use client';
 
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { 
+  ComposedChart, 
+  Bar, 
+  Line, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  Legend,
+  Cell
+} from 'recharts';
 
 interface BalanceChartProps {
-  data: { date: string; balance: number }[];
+  data: { date: string; ingresos: number; egresos: number; balance: number }[];
   utilidadMes: number;
   displayMonthName: string;
 }
@@ -13,53 +24,102 @@ export function BalanceChart({ data, utilidadMes, displayMonthName }: BalanceCha
     return value.toLocaleString('es-CO');
   };
 
-  return (
-    <div className="flex-1 flex flex-col min-h-[300px]">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <p className="text-sm text-zinc-500">Utilidad Bruta ({displayMonthName})</p>
-          <p className={`text-3xl font-bold ${utilidadMes >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-            ${formatCurrency(utilidadMes)}
-          </p>
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white/90 backdrop-blur-md border border-zinc-200 p-4 rounded-xl shadow-xl flex flex-col gap-2 min-w-[200px]">
+          <p className="text-zinc-500 font-medium text-xs mb-1 uppercase tracking-wider">Día {label}</p>
+          {payload.map((entry: any, index: number) => (
+            <div key={index} className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }}></div>
+                <span className="text-sm text-zinc-700 capitalize">{entry.name}</span>
+              </div>
+              <span className={`font-semibold ${entry.name === 'Utilidad Acumulada' ? 'text-indigo-600' : entry.name === 'Ingresos' ? 'text-emerald-600' : 'text-rose-500'}`}>
+                ${formatCurrency(entry.value)}
+              </span>
+            </div>
+          ))}
         </div>
-        <div className="text-right">
-          <p className="text-xs text-zinc-400">Ingresos - Egresos</p>
-          <p className="text-xs text-zinc-400">Acumulado por día</p>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <div className="flex-1 flex flex-col min-h-[350px]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
+        <div>
+          <p className="text-sm font-medium text-zinc-500 mb-1">Utilidad Bruta ({displayMonthName})</p>
+          <div className="flex items-end gap-3">
+            <p className={`text-4xl font-extrabold tracking-tight ${utilidadMes >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+              ${formatCurrency(utilidadMes)}
+            </p>
+          </div>
         </div>
       </div>
       
-      <div className="flex-1 w-full h-full min-h-[200px]">
+      <div className="flex-1 w-full h-full min-h-[250px] -ml-2">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" />
+          <ComposedChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f4f4f5" />
             <XAxis 
               dataKey="date" 
               axisLine={false}
               tickLine={false}
-              tick={{ fontSize: 12, fill: '#71717a' }}
+              tick={{ fontSize: 11, fill: '#a1a1aa' }}
               dy={10}
             />
             <YAxis 
               axisLine={false}
               tickLine={false}
-              tick={{ fontSize: 12, fill: '#71717a' }}
-              tickFormatter={(value) => `$${formatCurrency(value)}`}
-              width={80}
+              tick={{ fontSize: 11, fill: '#a1a1aa' }}
+              tickFormatter={(value) => `$${(value / 1000)}k`}
+              width={65}
             />
-            <Tooltip 
-              formatter={(value: number) => [`$${formatCurrency(value)}`, 'Balance']}
-              labelFormatter={(label) => `Día ${label}`}
-              contentStyle={{ borderRadius: '8px', border: '1px solid #e4e4e7', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f4f4f5', opacity: 0.4 }} />
+            
+            <Legend 
+              verticalAlign="top" 
+              height={36} 
+              iconType="circle"
+              wrapperStyle={{ fontSize: '13px', paddingTop: '10px' }}
             />
+            
+            <Bar 
+              dataKey="ingresos" 
+              name="Ingresos" 
+              fill="#10b981" 
+              radius={[4, 4, 0, 0]}
+              barSize={20}
+            >
+              {data.map((entry, index) => (
+                <Cell key={`cell-in-${index}`} fill="#10b981" fillOpacity={0.8} />
+              ))}
+            </Bar>
+            
+            <Bar 
+              dataKey="egresos" 
+              name="Egresos" 
+              fill="#fb7185" 
+              radius={[4, 4, 0, 0]}
+              barSize={20}
+            >
+              {data.map((entry, index) => (
+                <Cell key={`cell-out-${index}`} fill="#fb7185" fillOpacity={0.8} />
+              ))}
+            </Bar>
+            
             <Line 
               type="monotone" 
               dataKey="balance" 
-              stroke={utilidadMes >= 0 ? '#059669' : '#dc2626'} 
+              name="Utilidad Acumulada"
+              stroke="#6366f1" 
               strokeWidth={3}
               dot={false}
-              activeDot={{ r: 6, fill: utilidadMes >= 0 ? '#059669' : '#dc2626', stroke: '#fff', strokeWidth: 2 }}
+              activeDot={{ r: 6, fill: '#6366f1', stroke: '#fff', strokeWidth: 2 }}
             />
-          </LineChart>
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
     </div>
