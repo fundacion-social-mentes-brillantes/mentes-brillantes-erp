@@ -28,12 +28,21 @@ export async function Dashboard({ month }: { month?: string }) {
   // 1. INDICADORES DEL PERÍODO SELECCIONADO
   
   // Ingresos del Mes
-  const { data: ingresosData } = await supabase
+  const { data: rawIngresosData } = await supabase
     .from('pagos_abonos')
-    .select('monto, fecha_pago')
+    .select('monto, fecha_pago, metodo_pago, origen_fondos')
     .gte('fecha_pago', firstDayOfMonth)
     .lte('fecha_pago', lastDayOfMonth);
-  const ingresosMes = ingresosData?.reduce((acc, curr) => acc + Number(curr.monto), 0) || 0;
+    
+  // Excluir ingresos que provienen de saldo a favor para no duplicar sumas
+  const ingresosData = rawIngresosData?.filter(item => 
+    item.metodo_pago !== 'Saldo_a_favor' && 
+    item.metodo_pago !== 'saldo_a_favor' &&
+    item.origen_fondos !== 'saldo_a_favor' &&
+    (item as any).tipo !== 'aplicacion_saldo'
+  ) || [];
+
+  const ingresosMes = Math.round(ingresosData.reduce((acc, curr) => acc + Number(curr.monto), 0));
 
   // Egresos del Mes
   const { data: egresosData } = await supabase
@@ -41,10 +50,10 @@ export async function Dashboard({ month }: { month?: string }) {
     .select('monto, fecha')
     .gte('fecha', firstDayOfMonth)
     .lte('fecha', lastDayOfMonth);
-  const egresosMes = egresosData?.reduce((acc, curr) => acc + Number(curr.monto), 0) || 0;
+  const egresosMes = Math.round(egresosData?.reduce((acc, curr) => acc + Number(curr.monto), 0) || 0);
   
   // Utilidad del Mes
-  const utilidadMes = ingresosMes - egresosMes;
+  const utilidadMes = Math.round(ingresosMes - egresosMes);
 
   // Preparar datos para la gráfica de balance acumulado
   const dailyData: Record<string, { ingresos: number, egresos: number }> = {};
@@ -88,11 +97,11 @@ export async function Dashboard({ month }: { month?: string }) {
     .gte('fecha_emision', firstDayOfMonth)
     .lte('fecha_emision', lastDayOfMonth);
     
-  const facturadoMes = cuentasPeriodoData?.reduce((acc, curr) => acc + Number(curr.valor_total), 0) || 0;
-  const pendienteMes = cuentasPeriodoData?.reduce((acc, curr) => {
+  const facturadoMes = Math.round(cuentasPeriodoData?.reduce((acc, curr) => acc + Number(curr.valor_total), 0) || 0);
+  const pendienteMes = Math.round(cuentasPeriodoData?.reduce((acc, curr) => {
     const abonado = curr.pagos_abonos?.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0) || 0;
     return acc + (Number(curr.valor_total) - abonado);
-  }, 0) || 0;
+  }, 0) || 0);
 
   // 2. INDICADORES HISTÓRICOS APARTE
   
@@ -102,10 +111,10 @@ export async function Dashboard({ month }: { month?: string }) {
     .select('valor_total, pagos_abonos(monto)')
     .in('estado', ['pendiente', 'parcial']);
     
-  const carteraTotal = carteraTotalData?.reduce((acc, curr) => {
+  const carteraTotal = Math.round(carteraTotalData?.reduce((acc, curr) => {
     const abonado = curr.pagos_abonos?.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0) || 0;
     return acc + (Number(curr.valor_total) - abonado);
-  }, 0) || 0;
+  }, 0) || 0);
   
   // Cartera Antigua (+30 días)
   const thirtyDaysAgo = new Date();
@@ -132,6 +141,7 @@ export async function Dashboard({ month }: { month?: string }) {
     }
   });
   
+  carteraAntigua = Math.round(carteraAntigua);
   const personasConCarteraAntigua = personasAntiguasSet.size;
 
   // Cuentas Pendientes (Top 5 más recientes para la lista)
@@ -153,7 +163,7 @@ export async function Dashboard({ month }: { month?: string }) {
     const total_abonado = cuenta.pagos_abonos?.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0) || 0;
     return {
       ...cuenta,
-      monto_pendiente: Number(cuenta.valor_total) - total_abonado
+      monto_pendiente: Math.round(Number(cuenta.valor_total) - total_abonado)
     };
   }) || [];
 
