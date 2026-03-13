@@ -9,6 +9,8 @@ export function PdfReportButton({ displayMonthName }: { displayMonthName: string
   const [isGenerating, setIsGenerating] = useState(false)
 
   const handleGeneratePdf = async () => {
+    let clone: HTMLElement | null = null;
+    
     try {
       setIsGenerating(true)
       
@@ -17,17 +19,44 @@ export function PdfReportButton({ displayMonthName }: { displayMonthName: string
         throw new Error('No se encontró el contenido del dashboard')
       }
 
-      // Añadir temporalmente clase para forzar estilos de impresión si es necesario
-      dashboardElement.classList.add('pdf-export-mode')
-
-      const canvas = await html2canvas(dashboardElement, {
-        scale: 2, // Mejor resolución
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff'
+      // 1. Clonar el elemento
+      clone = dashboardElement.cloneNode(true) as HTMLElement
+      
+      // 2. Preparar el clon: oculto del viewport pero ocupando espacio renderizable
+      clone.style.position = 'absolute'
+      clone.style.top = '0'
+      clone.style.left = '-9999px' // Oculto fuera de pantalla
+      clone.style.width = `${dashboardElement.offsetWidth}px` // Mantener ancho
+      
+      // 3. Remover clases problemáticas para html2canvas (Filtros de Glassmorphism)
+      const elementsWithBlur = clone.querySelectorAll('.backdrop-blur-xl, .backdrop-blur-md, .backdrop-blur')
+      elementsWithBlur.forEach(el => {
+        el.classList.remove('backdrop-blur-xl', 'backdrop-blur-md', 'backdrop-blur')
+        // Forzar fondo sólido donde era translúcido
+        if (el.classList.contains('bg-white/60')) {
+          el.classList.remove('bg-white/60')
+          el.classList.add('bg-white')
+        }
+        if (el.classList.contains('bg-white/90')) {
+          el.classList.remove('bg-white/90')
+          el.classList.add('bg-white')
+        }
+        if (el.classList.contains('bg-zinc-900/90')) {
+          el.classList.remove('bg-zinc-900/90')
+          el.classList.add('bg-zinc-900')
+        }
       })
 
-      dashboardElement.classList.remove('pdf-export-mode')
+      // 4. Adjuntar al body para que el navegador lo pueda re-pintar
+      document.body.appendChild(clone)
+
+      // 5. Capturar el clon limpio
+      const canvas = await html2canvas(clone, {
+        scale: 2, 
+        useCORS: true,
+        logging: true, // Habilitado para debug
+        backgroundColor: '#ffffff'
+      })
 
       const imgData = canvas.toDataURL('image/jpeg', 1.0)
       
@@ -58,10 +87,14 @@ export function PdfReportButton({ displayMonthName }: { displayMonthName: string
 
       pdf.save(`Reporte_Gerencial_${displayMonthName.replace(' ', '_')}.pdf`)
     } catch (error) {
-      console.error('Error generando PDF:', error)
-      alert('Hubo un error al generar el reporte PDF. Por favor intenta nuevamente.')
+      console.error('Error Fatal generando PDF:', error)
+      alert('Hubo un error al generar el reporte PDF. Revisa la consola (F12) para más detalles.')
     } finally {
       setIsGenerating(false)
+      // Limpieza: Asegurarnos de remover siempre el nodo clonado
+      if (clone && document.body.contains(clone)) {
+        document.body.removeChild(clone)
+      }
     }
   }
 
