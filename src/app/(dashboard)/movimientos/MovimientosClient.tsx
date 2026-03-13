@@ -10,8 +10,11 @@ import {
   Wallet, 
   Receipt,
   ArrowRightLeft,
-  Calendar
+  Calendar,
+  XCircle,
+  Trash2
 } from 'lucide-react'
+import { anularMovimiento } from './actions'
 
 type Asistente = {
   id: string
@@ -46,6 +49,7 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
   const [asistenteFiltro, setAsistenteFiltro] = useState('todos')
   const [metodoFiltro, setMetodoFiltro] = useState('todos')
   const [mostrarAplicaciones, setMostrarAplicaciones] = useState(false)
+  const [isAnulando, setIsAnulando] = useState<string | null>(null)
 
   const supabase = createClient()
 
@@ -165,6 +169,38 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
       case 'aplicacion_saldo': return 'bg-amber-50 text-amber-700 border-amber-200'
       case 'egreso': return 'bg-red-50 text-red-700 border-red-200'
       default: return 'bg-zinc-50 text-zinc-700 border-zinc-200'
+    }
+  }
+
+  const handleAnular = async (mov: Movimiento) => {
+    if (!window.confirm('¿Estás seguro de anular este movimiento? Esto revertirá el pago en la deuda del asistente (o la entrada de dinero si es anticipo/egreso).')) return;
+    
+    setIsAnulando(mov.movimiento_id)
+    try {
+      // Necesitamos el monto real para revertirlo.
+      // Si es ingreso o cobro, usamos valor_ingreso. Si es egreso, usamos valor_egreso.
+      let monto_revertir = 0;
+      if (mov.tipo_movimiento === 'egreso') monto_revertir = mov.valor_egreso;
+      else monto_revertir = mov.valor_ingreso; // abono, anticipo, aplicacion_saldo
+
+      const result = await anularMovimiento(
+        mov.movimiento_id,
+        mov.tipo_movimiento,
+        monto_revertir,
+        mov.asistente_id
+      )
+      
+      if (result?.error) {
+        alert(result.error)
+      } else {
+        alert('Movimiento anulado correctamente.')
+        await fetchMovimientos()
+      }
+    } catch (error) {
+      console.error(error)
+      alert('Error inesperado al anular')
+    } finally {
+      setIsAnulando(null)
     }
   }
 
@@ -297,6 +333,7 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
                 <th className="px-4 py-3 text-right">Ingreso</th>
                 <th className="px-4 py-3 text-right">Egreso</th>
                 <th className="px-4 py-3">Estado/Notas</th>
+                <th className="px-4 py-3 text-center">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-200">
@@ -317,8 +354,8 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
                 </tr>
               ) : (
                 movimientos.map((mov) => (
-                  <tr key={`${mov.movimiento_id}-${mov.tipo_movimiento}`} className="hover:bg-zinc-50/50 transition-colors">
-                    <td className="px-4 py-3 whitespace-nowrap text-zinc-600">
+                  <tr key={`${mov.movimiento_id}-${mov.tipo_movimiento}`} className={`hover:bg-zinc-50/50 transition-colors ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'opacity-50 grayscale' : ''}`}>
+                    <td className={`px-4 py-3 whitespace-nowrap ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'line-through text-zinc-400' : 'text-zinc-600'}`}>
                       {new Date(mov.fecha).toLocaleDateString('es-CO', { timeZone: 'UTC' })}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
@@ -331,7 +368,7 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
                       {mov.asistente_nombre || <span className="text-zinc-400 italic">N/A</span>}
                     </td>
                     <td className="px-4 py-3 text-zinc-700 max-w-[200px] truncate" title={mov.concepto}>
-                      {mov.concepto}
+                      <span className={mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'line-through' : ''}>{mov.concepto}</span>
                     </td>
                     <td className="px-4 py-3">
                       {mov.metodo_pago ? (
@@ -342,27 +379,47 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
                         <span className="text-zinc-400">-</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right font-medium text-blue-600">
+                    <td className={`px-4 py-3 text-right font-medium ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'text-zinc-400 line-through' : 'text-blue-600'}`}>
                       {mov.valor_deuda > 0 ? formatCurrency(mov.valor_deuda) : '-'}
                     </td>
                     <td className="px-4 py-3 text-right font-medium">
                       {mov.valor_ingreso > 0 ? (
-                        <span className={`flex items-center justify-end gap-1.5 ${(mov.tipo_movimiento === 'aplicacion_saldo' || mov.metodo_pago?.toLowerCase() === 'saldo_a_favor') ? 'text-zinc-500' : 'text-emerald-600'}`}>
+                        <span className={`flex items-center justify-end gap-1.5 ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'text-zinc-400 line-through' : ((mov.tipo_movimiento === 'aplicacion_saldo' || mov.metodo_pago?.toLowerCase() === 'saldo_a_favor') ? 'text-zinc-500' : 'text-emerald-600')}`}>
                           {(mov.tipo_movimiento === 'aplicacion_saldo' || mov.metodo_pago?.toLowerCase() === 'saldo_a_favor') && <span title="Ajuste contable (Saldo a Favor)"><ArrowRightLeft className="w-3.5 h-3.5" /></span>}
                           {formatCurrency(mov.valor_ingreso)}
                         </span>
                       ) : '-'}
                     </td>
-                    <td className="px-4 py-3 text-right font-medium text-red-600">
+                    <td className={`px-4 py-3 text-right font-medium ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'text-zinc-400 line-through' : 'text-red-600'}`}>
                       {mov.valor_egreso > 0 ? formatCurrency(mov.valor_egreso) : '-'}
                     </td>
                     <td className="px-4 py-3 text-xs text-zinc-500 max-w-[150px] truncate">
                       {mov.estado_o_saldo && (
-                        <span className="capitalize font-medium text-zinc-700 mr-2">
+                        <span className={`capitalize font-medium mr-2 ${mov.estado_o_saldo.toLowerCase() === 'anulado' ? 'text-red-500' : 'text-zinc-700'}`}>
                           [{mov.estado_o_saldo}]
                         </span>
                       )}
                       <span title={mov.notas || ''}>{mov.notas || ''}</span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {mov.tipo_movimiento !== 'cuenta_cobrar' && mov.estado_o_saldo?.toLowerCase() !== 'anulado' ? (
+                        <button
+                          onClick={() => handleAnular(mov)}
+                          disabled={isAnulando === mov.movimiento_id}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded disabled:opacity-50 transition-colors"
+                          title="Anular Movimiento"
+                        >
+                          {isAnulando === mov.movimiento_id ? (
+                            <div className="w-4 h-4 rounded-full border-2 border-red-300 border-t-red-600 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </button>
+                      ) : mov.estado_o_saldo?.toLowerCase() === 'anulado' ? (
+                        <span className="text-xs text-red-400 font-medium">Anulado</span>
+                      ) : (
+                        <span className="text-zinc-300">-</span>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -385,19 +442,19 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
           </div>
         ) : (
           movimientos.map((mov) => (
-            <div key={`${mov.movimiento_id}-${mov.tipo_movimiento}`} className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm space-y-3">
+            <div key={`${mov.movimiento_id}-${mov.tipo_movimiento}`} className={`bg-white p-4 rounded-xl border border-zinc-200 shadow-sm space-y-3 ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'opacity-60 grayscale' : ''}`}>
               <div className="flex justify-between items-start">
                 <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border ${getTipoBadgeColor(mov.tipo_movimiento)}`}>
                   {getTipoIcon(mov.tipo_movimiento)}
                   {getTipoLabel(mov.tipo_movimiento)}
                 </span>
-                <span className="text-xs font-medium text-zinc-500 bg-zinc-100 px-2 py-1 rounded-md">
-                  {new Date(mov.fecha).toLocaleDateString('es-CO', { timeZone: 'UTC' })}
+                <span className={`text-xs font-medium px-2 py-1 rounded-md ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'text-red-500 bg-red-50' : 'text-zinc-500 bg-zinc-100'}`}>
+                  {mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'Anulado' : new Date(mov.fecha).toLocaleDateString('es-CO', { timeZone: 'UTC' })}
                 </span>
               </div>
               
               <div>
-                <div className="font-medium text-zinc-900">{mov.concepto}</div>
+                <div className={`font-medium ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'line-through text-zinc-500' : 'text-zinc-900'}`}>{mov.concepto}</div>
                 {mov.asistente_nombre && (
                   <div className="text-sm text-zinc-500">{mov.asistente_nombre}</div>
                 )}
@@ -410,14 +467,14 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
                       {mov.metodo_pago.replace('_', ' ')}
                     </span>
                   )}
-                  {mov.estado_o_saldo && (
+                  {mov.estado_o_saldo && mov.estado_o_saldo?.toLowerCase() !== 'anulado' && (
                     <span className="capitalize text-xs font-medium text-zinc-700">
                       Estado: {mov.estado_o_saldo}
                     </span>
                   )}
                 </div>
                 
-                <div className="text-right">
+                <div className={`text-right ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'line-through opacity-70' : ''}`}>
                   {mov.valor_deuda > 0 && (
                     <div className="font-bold text-blue-600">{formatCurrency(mov.valor_deuda)}</div>
                   )}
@@ -433,11 +490,25 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
                 </div>
               </div>
               
-              {mov.notas && (
-                <div className="text-xs text-zinc-500 bg-zinc-50 p-2 rounded-md border border-zinc-100">
-                  {mov.notas}
-                </div>
-              )}
+              <div className="flex items-center justify-between mt-2 pt-2 border-t border-zinc-100">
+                {mov.notas ? (
+                  <div className="text-xs text-zinc-500 bg-zinc-50 p-2 rounded-md border border-zinc-100 flex-1 mr-2">
+                    {mov.notas}
+                  </div>
+                ) : (
+                  <div className="flex-1"></div>
+                )}
+                
+                {mov.tipo_movimiento !== 'cuenta_cobrar' && mov.estado_o_saldo?.toLowerCase() !== 'anulado' && (
+                  <button
+                    onClick={() => handleAnular(mov)}
+                    disabled={isAnulando === mov.movimiento_id}
+                    className="flex items-center gap-1 text-xs font-medium text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-md transition-colors"
+                  >
+                     {isAnulando === mov.movimiento_id ? 'Anulando...' : <><Trash2 className="w-3.5 h-3.5" /> Anular</>}
+                  </button>
+                )}
+              </div>
             </div>
           ))
         )}
