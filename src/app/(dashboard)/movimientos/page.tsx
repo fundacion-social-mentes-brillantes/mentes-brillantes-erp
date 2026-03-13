@@ -16,6 +16,14 @@ export default async function MovimientosPage() {
     .select('id, nombre')
     .order('nombre')
 
+  // Obtener rol del usuario actual
+  const { data: { user } } = await supabase.auth.getUser()
+  let isAdmin = false
+  if (user) {
+    const { data: perfil } = await supabase.from('perfiles').select('rol').eq('id', user.id).single()
+    isAdmin = perfil?.rol === 'admin'
+  }
+
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       <div>
@@ -25,7 +33,7 @@ export default async function MovimientosPage() {
         </p>
       </div>
 
-      <MovimientosClient asistentes={asistentes || []} />
+      <MovimientosClient asistentes={asistentes || []} isAdmin={isAdmin} />
     </div>
   )
 }

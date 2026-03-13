@@ -12,9 +12,20 @@ import {
   ArrowRightLeft,
   Calendar,
   XCircle,
-  Trash2
+  Trash2,
+  Pencil,
+  Ban,
+  Save,
+  AlertTriangle
 } from 'lucide-react'
-import { anularMovimiento } from './actions'
+import { anularMovimiento, editarMovimiento, eliminarMovimiento } from './actions'
+import { 
+  Sheet, 
+  SheetContent, 
+  SheetHeader, 
+  SheetTitle, 
+  SheetDescription 
+} from '@/components/ui/sheet'
 
 type Asistente = {
   id: string
@@ -35,9 +46,10 @@ type Movimiento = {
   estado_o_saldo: string | null
   notas: string | null
   creado_en: string
+  categoria?: string
 }
 
-export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
+export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes: Asistente[], isAdmin?: boolean }) {
   const [movimientos, setMovimientos] = useState<Movimiento[]>([])
   const [loading, setLoading] = useState(true)
   
@@ -49,21 +61,19 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
   const [asistenteFiltro, setAsistenteFiltro] = useState('todos')
   const [metodoFiltro, setMetodoFiltro] = useState('todos')
   const [mostrarAplicaciones, setMostrarAplicaciones] = useState(false)
-  const [isAnulando, setIsAnulando] = useState<string | null>(null)
+  
+  // Sheet State
+  const [selectedMov, setSelectedMov] = useState<Movimiento | null>(null)
+  const [isSheetOpen, setIsSheetOpen] = useState(false)
+  
+  // Edit State
+  const [isEditing, setIsEditing] = useState(false)
+  const [editForm, setEditForm] = useState<any>({})
+  const [isSaving, setIsSaving] = useState(false)
+  const [isAnulando, setIsAnulando] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const supabase = createClient()
-
-  useEffect(() => {
-    // Set default dates for "este_mes" on initial load
-    if (rangoFecha === 'este_mes') {
-      const now = new Date()
-      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
-      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-      
-      setFechaInicio(firstDay.toISOString().split('T')[0])
-      setFechaFin(lastDay.toISOString().split('T')[0])
-    }
-  }, [])
 
   useEffect(() => {
     if (rangoFecha === 'este_mes') {
@@ -96,23 +106,12 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
       .from('vw_movimientos_generales')
       .select('*')
       
-    if (fechaInicio) {
-      query = query.gte('fecha', fechaInicio)
-    }
-    if (fechaFin) {
-      query = query.lte('fecha', fechaFin)
-    }
-    if (tipoFiltro !== 'todos') {
-      query = query.eq('tipo_movimiento', tipoFiltro)
-    }
-    if (asistenteFiltro !== 'todos') {
-      query = query.eq('asistente_id', asistenteFiltro)
-    }
-    if (metodoFiltro !== 'todos') {
-      query = query.eq('metodo_pago', metodoFiltro)
-    }
+    if (fechaInicio) query = query.gte('fecha', fechaInicio)
+    if (fechaFin) query = query.lte('fecha', fechaFin)
+    if (tipoFiltro !== 'todos') query = query.eq('tipo_movimiento', tipoFiltro)
+    if (asistenteFiltro !== 'todos') query = query.eq('asistente_id', asistenteFiltro)
+    if (metodoFiltro !== 'todos') query = query.eq('metodo_pago', metodoFiltro)
 
-    // Order by date descending, then by created_at descending
     query = query.order('fecha', { ascending: false }).order('creado_en', { ascending: false })
 
     const { data, error } = await query
@@ -172,55 +171,99 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
     }
   }
 
-  const handleAnular = async (mov: Movimiento) => {
-    if (!window.confirm('¿Estás seguro de anular este movimiento? Esto revertirá el pago en la deuda del asistente (o la entrada de dinero si es anticipo/egreso).')) return;
-    
-    setIsAnulando(mov.movimiento_id)
-    try {
-      // Necesitamos el monto real para revertirlo.
-      // Si es ingreso o cobro, usamos valor_ingreso. Si es egreso, usamos valor_egreso.
-      let monto_revertir = 0;
-      if (mov.tipo_movimiento === 'egreso') monto_revertir = mov.valor_egreso;
-      else monto_revertir = mov.valor_ingreso; // abono, anticipo, aplicacion_saldo
+  const handleRowClick = (mov: Movimiento) => {
+    setSelectedMov(mov)
+    // Initialize edit form based on movement type
+    setEditForm({
+      monto: mov.tipo_movimiento === 'egreso' ? mov.valor_egreso : mov.valor_ingreso,
+      fecha: mov.fecha,
+      concepto: mov.concepto,
+      metodo_pago: mov.metodo_pago || '',
+      asistente_id: mov.asistente_id || '',
+      notas: mov.notas || ''
+    })
+    setIsEditing(false)
+    setIsSheetOpen(true)
+  }
 
-      const result = await anularMovimiento(
-        mov.movimiento_id,
-        mov.tipo_movimiento,
-        monto_revertir,
-        mov.asistente_id
-      )
+  const handleSaveEdit = async () => {
+    if (!selectedMov) return
+    setIsSaving(true)
+    try {
+      const result = await editarMovimiento(selectedMov.movimiento_id, selectedMov.tipo_movimiento, editForm)
+      if (result?.error) {
+        alert(result.error)
+      } else {
+        setIsSheetOpen(false)
+        await fetchMovimientos()
+      }
+    } catch (e) {
+      alert("Error al guardar cambios")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleAnular = async () => {
+    if (!selectedMov) return
+    if (!window.confirm('¿Estás seguro de anular este movimiento?')) return;
+    
+    setIsAnulando(true)
+    try {
+      let monto_revertir = selectedMov.tipo_movimiento === 'egreso' ? selectedMov.valor_egreso : selectedMov.valor_ingreso;
+      const result = await anularMovimiento(selectedMov.movimiento_id, selectedMov.tipo_movimiento, monto_revertir, selectedMov.asistente_id)
       
       if (result?.error) {
         alert(result.error)
       } else {
-        alert('Movimiento anulado correctamente.')
+        setIsSheetOpen(false)
         await fetchMovimientos()
       }
     } catch (error) {
-      console.error(error)
       alert('Error inesperado al anular')
     } finally {
-      setIsAnulando(null)
+      setIsAnulando(false)
+    }
+  }
+
+  const handleEliminar = async () => {
+    if (!selectedMov) return
+    if (!window.confirm('¡ATENCIÓN! Vas a ELIMINAR permanentemente este registro de la base de datos. ¿Estás absolutamente seguro?')) return;
+    if (!window.confirm('Segunda confirmación: ¿Este movimiento está duplicado o es un error grave y deseas BORRARLO físicamente?')) return;
+    
+    setIsDeleting(true)
+    try {
+      let monto_revertir = selectedMov.tipo_movimiento === 'egreso' ? selectedMov.valor_egreso : selectedMov.valor_ingreso;
+      const result = await eliminarMovimiento(selectedMov.movimiento_id, selectedMov.tipo_movimiento, monto_revertir, selectedMov.asistente_id)
+      
+      if (result?.error) {
+        alert(result.error)
+      } else {
+        setIsSheetOpen(false)
+        await fetchMovimientos()
+      }
+    } catch (error) {
+      alert('Error inesperado al eliminar')
+    } finally {
+      setIsDeleting(false)
     }
   }
 
   return (
     <div className="space-y-4">
-      {/* Filters */}
+      {/* Filters (same as before) */}
       <div className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm space-y-4">
         <div className="flex items-center gap-2 text-sm font-medium text-zinc-700 mb-2">
-          <Filter className="w-4 h-4" />
-          Filtros
+          <Filter className="w-4 h-4" /> Filtros
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          {/* Rango de Fechas */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-zinc-500">Periodo</label>
             <select 
               value={rangoFecha}
               onChange={(e) => setRangoFecha(e.target.value as any)}
-              className="w-full h-9 rounded-md border border-zinc-300 bg-white px-3 py-1 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+              className="w-full h-9 rounded-md border border-zinc-300 bg-white px-3 py-1 text-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
             >
               <option value="este_mes">Este mes</option>
               <option value="mes_pasado">Mes pasado</option>
@@ -229,38 +272,22 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
             </select>
           </div>
 
-          {/* Fechas Custom */}
           {rangoFecha === 'custom' && (
             <div className="space-y-1.5 lg:col-span-2 grid grid-cols-2 gap-2">
               <div>
                 <label className="text-xs font-medium text-zinc-500">Desde</label>
-                <input 
-                  type="date" 
-                  value={fechaInicio}
-                  onChange={(e) => setFechaInicio(e.target.value)}
-                  className="w-full h-9 rounded-md border border-zinc-300 bg-white px-3 py-1 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
-                />
+                <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="w-full h-9 rounded-md border border-zinc-300 bg-white px-3 py-1 text-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500" />
               </div>
               <div>
                 <label className="text-xs font-medium text-zinc-500">Hasta</label>
-                <input 
-                  type="date" 
-                  value={fechaFin}
-                  onChange={(e) => setFechaFin(e.target.value)}
-                  className="w-full h-9 rounded-md border border-zinc-300 bg-white px-3 py-1 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
-                />
+                <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="w-full h-9 rounded-md border border-zinc-300 bg-white px-3 py-1 text-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500" />
               </div>
             </div>
           )}
 
-          {/* Tipo de Movimiento */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-zinc-500">Tipo</label>
-            <select 
-              value={tipoFiltro}
-              onChange={(e) => setTipoFiltro(e.target.value)}
-              className="w-full h-9 rounded-md border border-zinc-300 bg-white px-3 py-1 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
-            >
+            <select value={tipoFiltro} onChange={(e) => setTipoFiltro(e.target.value)} className="w-full h-9 rounded-md border border-zinc-300 bg-white px-3 py-1 text-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500">
               <option value="todos">Todos los tipos</option>
               <option value="cuenta_cobrar">Cuentas por Cobrar</option>
               <option value="abono">Abonos / Ingresos</option>
@@ -270,29 +297,17 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
             </select>
           </div>
 
-          {/* Asistente */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-zinc-500">Asistente</label>
-            <select 
-              value={asistenteFiltro}
-              onChange={(e) => setAsistenteFiltro(e.target.value)}
-              className="w-full h-9 rounded-md border border-zinc-300 bg-white px-3 py-1 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
-            >
+            <select value={asistenteFiltro} onChange={(e) => setAsistenteFiltro(e.target.value)} className="w-full h-9 rounded-md border border-zinc-300 bg-white px-3 py-1 text-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500">
               <option value="todos">Todos los asistentes</option>
-              {asistentes.map(a => (
-                <option key={a.id} value={a.id}>{a.nombre}</option>
-              ))}
+              {asistentes.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
             </select>
           </div>
 
-          {/* Método de Pago */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-zinc-500">Método de Pago</label>
-            <select 
-              value={metodoFiltro}
-              onChange={(e) => setMetodoFiltro(e.target.value)}
-              className="w-full h-9 rounded-md border border-zinc-300 bg-white px-3 py-1 text-sm shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
-            >
+            <select value={metodoFiltro} onChange={(e) => setMetodoFiltro(e.target.value)} className="w-full h-9 rounded-md border border-zinc-300 bg-white px-3 py-1 text-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500">
               <option value="todos">Todos los métodos</option>
               <option value="efectivo">Efectivo</option>
               <option value="nequi">Nequi</option>
@@ -302,15 +317,9 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
             </select>
           </div>
           
-          {/* Mostrar Aplicaciones de Saldo */}
           <div className="lg:col-span-5 flex items-center justify-end mt-2 pt-4 border-t border-zinc-100">
             <label className="flex items-center gap-2 cursor-pointer relative">
-              <input 
-                type="checkbox" 
-                className="sr-only peer"
-                checked={mostrarAplicaciones}
-                onChange={(e) => setMostrarAplicaciones(e.target.checked)}
-              />
+              <input type="checkbox" className="sr-only peer" checked={mostrarAplicaciones} onChange={(e) => setMostrarAplicaciones(e.target.checked)} />
               <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none ring-offset-2 peer-focus:ring-2 peer-focus:ring-zinc-900 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-zinc-900"></div>
               <span className="text-sm font-medium text-zinc-700">Mostrar aplicaciones de saldo</span>
             </label>
@@ -333,7 +342,6 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
                 <th className="px-4 py-3 text-right">Ingreso</th>
                 <th className="px-4 py-3 text-right">Egreso</th>
                 <th className="px-4 py-3">Estado/Notas</th>
-                <th className="px-4 py-3 text-center">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-200">
@@ -342,19 +350,21 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
                   <td colSpan={9} className="px-4 py-8 text-center text-zinc-500">
                     <div className="flex justify-center items-center gap-2">
                       <div className="w-4 h-4 rounded-full border-2 border-zinc-300 border-t-zinc-900 animate-spin" />
-                      Cargando movimientos...
+                      Cargando...
                     </div>
                   </td>
                 </tr>
               ) : movimientos.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-zinc-500">
-                    No se encontraron movimientos con los filtros actuales.
-                  </td>
+                  <td colSpan={9} className="px-4 py-8 text-center text-zinc-500">Sin movimientos</td>
                 </tr>
               ) : (
                 movimientos.map((mov) => (
-                  <tr key={`${mov.movimiento_id}-${mov.tipo_movimiento}`} className={`hover:bg-zinc-50/50 transition-colors ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'opacity-50 grayscale' : ''}`}>
+                  <tr 
+                    key={`${mov.movimiento_id}-${mov.tipo_movimiento}`} 
+                    onClick={() => handleRowClick(mov)}
+                    className={`hover:bg-zinc-50 cursor-pointer transition-colors ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'opacity-50 grayscale hover:opacity-75' : ''}`}
+                  >
                     <td className={`px-4 py-3 whitespace-nowrap ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'line-through text-zinc-400' : 'text-zinc-600'}`}>
                       {new Date(mov.fecha).toLocaleDateString('es-CO', { timeZone: 'UTC' })}
                     </td>
@@ -375,9 +385,7 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
                         <span className="capitalize text-zinc-600 bg-zinc-100 px-2 py-1 rounded-md text-xs border border-zinc-200">
                           {mov.metodo_pago.replace('_', ' ')}
                         </span>
-                      ) : (
-                        <span className="text-zinc-400">-</span>
-                      )}
+                      ) : <span className="text-zinc-400">-</span>}
                     </td>
                     <td className={`px-4 py-3 text-right font-medium ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'text-zinc-400 line-through' : 'text-blue-600'}`}>
                       {mov.valor_deuda > 0 ? formatCurrency(mov.valor_deuda) : '-'}
@@ -385,7 +393,7 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
                     <td className="px-4 py-3 text-right font-medium">
                       {mov.valor_ingreso > 0 ? (
                         <span className={`flex items-center justify-end gap-1.5 ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'text-zinc-400 line-through' : ((mov.tipo_movimiento === 'aplicacion_saldo' || mov.metodo_pago?.toLowerCase() === 'saldo_a_favor') ? 'text-zinc-500' : 'text-emerald-600')}`}>
-                          {(mov.tipo_movimiento === 'aplicacion_saldo' || mov.metodo_pago?.toLowerCase() === 'saldo_a_favor') && <span title="Ajuste contable (Saldo a Favor)"><ArrowRightLeft className="w-3.5 h-3.5" /></span>}
+                          {(mov.tipo_movimiento === 'aplicacion_saldo' || mov.metodo_pago?.toLowerCase() === 'saldo_a_favor') && <span title="Ajuste contable"><ArrowRightLeft className="w-3.5 h-3.5" /></span>}
                           {formatCurrency(mov.valor_ingreso)}
                         </span>
                       ) : '-'}
@@ -394,32 +402,8 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
                       {mov.valor_egreso > 0 ? formatCurrency(mov.valor_egreso) : '-'}
                     </td>
                     <td className="px-4 py-3 text-xs text-zinc-500 max-w-[150px] truncate">
-                      {mov.estado_o_saldo && (
-                        <span className={`capitalize font-medium mr-2 ${mov.estado_o_saldo.toLowerCase() === 'anulado' ? 'text-red-500' : 'text-zinc-700'}`}>
-                          [{mov.estado_o_saldo}]
-                        </span>
-                      )}
+                      {mov.estado_o_saldo && <span className={`capitalize font-medium mr-2 ${mov.estado_o_saldo.toLowerCase() === 'anulado' ? 'text-red-500' : 'text-zinc-700'}`}>[{mov.estado_o_saldo}]</span>}
                       <span title={mov.notas || ''}>{mov.notas || ''}</span>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {mov.tipo_movimiento !== 'cuenta_cobrar' && mov.estado_o_saldo?.toLowerCase() !== 'anulado' ? (
-                        <button
-                          onClick={() => handleAnular(mov)}
-                          disabled={isAnulando === mov.movimiento_id}
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded disabled:opacity-50 transition-colors"
-                          title="Anular Movimiento"
-                        >
-                          {isAnulando === mov.movimiento_id ? (
-                            <div className="w-4 h-4 rounded-full border-2 border-red-300 border-t-red-600 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-4 h-4" />
-                          )}
-                        </button>
-                      ) : mov.estado_o_saldo?.toLowerCase() === 'anulado' ? (
-                        <span className="text-xs text-red-400 font-medium">Anulado</span>
-                      ) : (
-                        <span className="text-zinc-300">-</span>
-                      )}
                     </td>
                   </tr>
                 ))
@@ -432,21 +416,21 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
       {/* Mobile Cards */}
       <div className="md:hidden space-y-3">
         {loading ? (
-          <div className="bg-white p-8 rounded-xl border border-zinc-200 text-center text-zinc-500 flex justify-center items-center gap-2">
-            <div className="w-4 h-4 rounded-full border-2 border-zinc-300 border-t-zinc-900 animate-spin" />
-            Cargando...
-          </div>
+             <div className="bg-white p-8 rounded-xl border border-zinc-200 text-center text-zinc-500 flex justify-center items-center gap-2">
+             <div className="w-4 h-4 rounded-full border-2 border-zinc-300 border-t-zinc-900 animate-spin" /> Cargando...
+           </div>
         ) : movimientos.length === 0 ? (
-          <div className="bg-white p-8 rounded-xl border border-zinc-200 text-center text-zinc-500">
-            No hay movimientos.
-          </div>
+          <div className="bg-white p-8 rounded-xl border border-zinc-200 text-center text-zinc-500">Sin movimientos</div>
         ) : (
           movimientos.map((mov) => (
-            <div key={`${mov.movimiento_id}-${mov.tipo_movimiento}`} className={`bg-white p-4 rounded-xl border border-zinc-200 shadow-sm space-y-3 ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'opacity-60 grayscale' : ''}`}>
+            <div 
+              key={`${mov.movimiento_id}-${mov.tipo_movimiento}`} 
+              onClick={() => handleRowClick(mov)}
+              className={`bg-white p-4 cursor-pointer hover:bg-zinc-50 transition-colors rounded-xl border border-zinc-200 shadow-sm space-y-3 ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'opacity-60 grayscale' : ''}`}
+            >
               <div className="flex justify-between items-start">
                 <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border ${getTipoBadgeColor(mov.tipo_movimiento)}`}>
-                  {getTipoIcon(mov.tipo_movimiento)}
-                  {getTipoLabel(mov.tipo_movimiento)}
+                  {getTipoIcon(mov.tipo_movimiento)} {getTipoLabel(mov.tipo_movimiento)}
                 </span>
                 <span className={`text-xs font-medium px-2 py-1 rounded-md ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'text-red-500 bg-red-50' : 'text-zinc-500 bg-zinc-100'}`}>
                   {mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'Anulado' : new Date(mov.fecha).toLocaleDateString('es-CO', { timeZone: 'UTC' })}
@@ -455,64 +439,206 @@ export function MovimientosClient({ asistentes }: { asistentes: Asistente[] }) {
               
               <div>
                 <div className={`font-medium ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'line-through text-zinc-500' : 'text-zinc-900'}`}>{mov.concepto}</div>
-                {mov.asistente_nombre && (
-                  <div className="text-sm text-zinc-500">{mov.asistente_nombre}</div>
-                )}
+                {mov.asistente_nombre && <div className="text-sm text-zinc-500">{mov.asistente_nombre}</div>}
               </div>
 
               <div className="flex items-center justify-between pt-2 border-t border-zinc-100">
                 <div className="flex flex-col gap-1">
                   {mov.metodo_pago && (
-                    <span className="capitalize text-zinc-600 bg-zinc-100 px-2 py-0.5 rounded-md text-xs border border-zinc-200 w-fit">
-                      {mov.metodo_pago.replace('_', ' ')}
-                    </span>
-                  )}
-                  {mov.estado_o_saldo && mov.estado_o_saldo?.toLowerCase() !== 'anulado' && (
-                    <span className="capitalize text-xs font-medium text-zinc-700">
-                      Estado: {mov.estado_o_saldo}
-                    </span>
+                    <span className="capitalize text-zinc-600 bg-zinc-100 px-2 py-0.5 rounded-md text-xs border border-zinc-200 w-fit">{mov.metodo_pago.replace('_', ' ')}</span>
                   )}
                 </div>
                 
                 <div className={`text-right ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'line-through opacity-70' : ''}`}>
-                  {mov.valor_deuda > 0 && (
-                    <div className="font-bold text-blue-600">{formatCurrency(mov.valor_deuda)}</div>
-                  )}
-                  {mov.valor_ingreso > 0 && (
-                    <div className={`font-bold flex items-center justify-end gap-1.5 ${(mov.tipo_movimiento === 'aplicacion_saldo' || mov.metodo_pago?.toLowerCase() === 'saldo_a_favor') ? 'text-zinc-500' : 'text-emerald-600'}`}>
-                      {(mov.tipo_movimiento === 'aplicacion_saldo' || mov.metodo_pago?.toLowerCase() === 'saldo_a_favor') && <span title="Ajuste contable (Saldo a Favor)"><ArrowRightLeft className="w-3.5 h-3.5" /></span>}
-                      +{formatCurrency(mov.valor_ingreso)}
-                    </div>
-                  )}
-                  {mov.valor_egreso > 0 && (
-                    <div className="font-bold text-red-600">-{formatCurrency(mov.valor_egreso)}</div>
-                  )}
+                  {mov.valor_deuda > 0 && <div className="font-bold text-blue-600">{formatCurrency(mov.valor_deuda)}</div>}
+                  {mov.valor_ingreso > 0 && <div className="font-bold text-emerald-600">+{formatCurrency(mov.valor_ingreso)}</div>}
+                  {mov.valor_egreso > 0 && <div className="font-bold text-red-600">-{formatCurrency(mov.valor_egreso)}</div>}
                 </div>
-              </div>
-              
-              <div className="flex items-center justify-between mt-2 pt-2 border-t border-zinc-100">
-                {mov.notas ? (
-                  <div className="text-xs text-zinc-500 bg-zinc-50 p-2 rounded-md border border-zinc-100 flex-1 mr-2">
-                    {mov.notas}
-                  </div>
-                ) : (
-                  <div className="flex-1"></div>
-                )}
-                
-                {mov.tipo_movimiento !== 'cuenta_cobrar' && mov.estado_o_saldo?.toLowerCase() !== 'anulado' && (
-                  <button
-                    onClick={() => handleAnular(mov)}
-                    disabled={isAnulando === mov.movimiento_id}
-                    className="flex items-center gap-1 text-xs font-medium text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-md transition-colors"
-                  >
-                     {isAnulando === mov.movimiento_id ? 'Anulando...' : <><Trash2 className="w-3.5 h-3.5" /> Anular</>}
-                  </button>
-                )}
               </div>
             </div>
           ))
         )}
       </div>
+
+      {/* Universal Side Panel */}
+      <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+        <SheetContent className="overflow-y-auto sm:max-w-md w-full bg-white/95 backdrop-blur-xl border-l border-zinc-200">
+          {selectedMov && (
+            <div className="space-y-6">
+              <SheetHeader>
+                <div className="flex items-center gap-2 mb-2">
+                   <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border ${getTipoBadgeColor(selectedMov.tipo_movimiento)}`}>
+                    {getTipoIcon(selectedMov.tipo_movimiento)} {getTipoLabel(selectedMov.tipo_movimiento)}
+                  </span>
+                  {selectedMov.estado_o_saldo && (
+                    <span className={`text-xs font-bold uppercase tracking-wider ${selectedMov.estado_o_saldo.toLowerCase() === 'anulado' ? 'text-red-500' : 'text-zinc-500'}`}>
+                      {selectedMov.estado_o_saldo}
+                    </span>
+                  )}
+                </div>
+                <SheetTitle className="text-xl">{selectedMov.concepto || 'Movimiento'}</SheetTitle>
+                <SheetDescription>
+                  Registrado el {new Date(selectedMov.creado_en).toLocaleString('es-CO')}
+                </SheetDescription>
+              </SheetHeader>
+
+              {/* READ-ONLY MODE OR Cuentas por Cobrar (which we don't edit here directly) */}
+              {!isAdmin || !isEditing || selectedMov.tipo_movimiento === 'cuenta_cobrar' ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4 bg-zinc-50 p-4 rounded-xl border border-zinc-200">
+                    <div>
+                      <p className="text-xs text-zinc-500 font-medium">Asistente</p>
+                      <p className="font-medium text-zinc-900">{selectedMov.asistente_nombre || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-zinc-500 font-medium">Fecha de Movimiento</p>
+                      <p className="font-medium text-zinc-900">{new Date(selectedMov.fecha).toLocaleDateString('es-CO', { timeZone: 'UTC' })}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-zinc-500 font-medium">Valor</p>
+                      <p className={`font-bold ${selectedMov.valor_ingreso > 0 ? 'text-emerald-600' : selectedMov.valor_egreso > 0 ? 'text-red-600' : 'text-blue-600'}`}>
+                         {formatCurrency(selectedMov.valor_ingreso || selectedMov.valor_egreso || selectedMov.valor_deuda)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-zinc-500 font-medium">Método de Pago</p>
+                      <p className="font-medium text-zinc-900 capitalize">{selectedMov.metodo_pago?.replace('_', ' ') || 'N/A'}</p>
+                    </div>
+                  </div>
+                  
+                  {selectedMov.notas && (
+                    <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200">
+                      <p className="text-xs text-yellow-800 font-bold mb-1 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Notas / Observaciones</p>
+                      <p className="text-sm text-yellow-900">{selectedMov.notas}</p>
+                    </div>
+                  )}
+
+                  {/* ADMIN ACTION BUTTONS (Only if not already editing) */}
+                  {isAdmin && selectedMov.tipo_movimiento !== 'cuenta_cobrar' && !isEditing && (
+                    <div className="pt-6 border-t border-zinc-200 flex flex-col gap-3">
+                      <button 
+                        onClick={() => setIsEditing(true)}
+                        className="w-full flex justify-center items-center gap-2 bg-zinc-900 text-white py-2 rounded-lg font-medium hover:bg-zinc-800 transition-colors"
+                      >
+                        <Pencil className="w-4 h-4" /> Activar Edición Libre
+                      </button>
+                      
+                      {selectedMov.estado_o_saldo?.toLowerCase() !== 'anulado' && (
+                        <button 
+                          onClick={handleAnular}
+                          disabled={isAnulando}
+                          className="w-full flex justify-center items-center gap-2 bg-red-50 text-red-600 py-2 rounded-lg font-medium hover:bg-red-100 transition-colors border border-red-200"
+                        >
+                          {isAnulando ? 'Anulando...' : <><Ban className="w-4 h-4" /> Anular Movimiento (Safe)</>}
+                        </button>
+                      )}
+
+                      <button 
+                        onClick={handleEliminar}
+                        disabled={isDeleting}
+                        className="w-full flex justify-center items-center gap-2 text-red-500 text-sm font-medium hover:underline mt-4"
+                      >
+                        {isDeleting ? 'Borrando duro...' : <><Trash2 className="w-4 h-4" /> Eliminar Permanentemente (Hard Delete)</>}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* EDIT MODE (Admin Only) */
+                <div className="space-y-4">
+                  <div className="bg-zinc-900 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center justify-between">
+                    <span>Modo Edición Activado</span>
+                    <button onClick={() => setIsEditing(false)} className="text-zinc-400 hover:text-white">Cancelar</button>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-500 mb-1">Monto (COP)</label>
+                      <input 
+                        type="number" 
+                        value={editForm.monto}
+                        onChange={e => setEditForm({...editForm, monto: e.target.value})}
+                        className="w-full h-10 rounded-md border border-zinc-300 px-3 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" 
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-500 mb-1">Fecha</label>
+                      <input 
+                        type="date" 
+                        value={editForm.fecha}
+                        onChange={e => setEditForm({...editForm, fecha: e.target.value})}
+                        className="w-full h-10 rounded-md border border-zinc-300 px-3 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" 
+                      />
+                    </div>
+
+                    {selectedMov.tipo_movimiento === 'egreso' && (
+                      <div>
+                        <label className="block text-xs font-medium text-zinc-500 mb-1">Concepto</label>
+                        <input 
+                          type="text" 
+                          value={editForm.concepto}
+                          onChange={e => setEditForm({...editForm, concepto: e.target.value})}
+                          className="w-full h-10 rounded-md border border-zinc-300 px-3 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" 
+                        />
+                      </div>
+                    )}
+
+                    {(selectedMov.tipo_movimiento === 'abono' || selectedMov.tipo_movimiento === 'egreso' || selectedMov.tipo_movimiento === 'anticipo') && (
+                      <div>
+                        <label className="block text-xs font-medium text-zinc-500 mb-1">Método de Pago</label>
+                        <select 
+                          value={editForm.metodo_pago}
+                          onChange={e => setEditForm({...editForm, metodo_pago: e.target.value})}
+                          className="w-full h-10 rounded-md border border-zinc-300 px-3 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                        >
+                          <option value="efectivo">Efectivo</option>
+                          <option value="nequi">Nequi</option>
+                          <option value="daviplata">Daviplata</option>
+                          <option value="saldo_a_favor">Saldo a Favor</option>
+                          <option value="transferencia">Transferencia</option>
+                          <option value="otro">Otro</option>
+                        </select>
+                      </div>
+                    )}
+
+                    {selectedMov.tipo_movimiento === 'anticipo' && (
+                      <div>
+                        <label className="block text-xs font-medium text-zinc-500 mb-1">Asistente</label>
+                        <select 
+                          value={editForm.asistente_id}
+                          onChange={e => setEditForm({...editForm, asistente_id: e.target.value})}
+                          className="w-full h-10 rounded-md border border-zinc-300 px-3 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                        >
+                          {asistentes.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+                        </select>
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-500 mb-1">Notas</label>
+                      <textarea 
+                        value={editForm.notas}
+                        onChange={e => setEditForm({...editForm, notas: e.target.value})}
+                        className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                        rows={3}
+                      />
+                    </div>
+                    
+                    <button 
+                      onClick={handleSaveEdit}
+                      disabled={isSaving}
+                      className="w-full flex justify-center items-center gap-2 bg-emerald-600 text-white py-2 rounded-lg font-medium hover:bg-emerald-700 transition-colors mt-4"
+                    >
+                      {isSaving ? 'Guardando...' : <><Save className="w-4 h-4" /> Guardar Cambios</>}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }
