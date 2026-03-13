@@ -27,15 +27,15 @@ export function BalanceChart({ data, utilidadMes, displayMonthName }: BalanceCha
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white/90 backdrop-blur-md border border-zinc-200 p-4 rounded-xl shadow-xl flex flex-col gap-2 min-w-[200px]">
-          <p className="text-zinc-500 font-medium text-xs mb-1 uppercase tracking-wider">Día {label}</p>
+        <div className="bg-[#ffffff]/90 backdrop-blur-md border border-[#e4e4e7] p-4 rounded-xl shadow-xl flex flex-col gap-2 min-w-[200px]">
+          <p className="text-[#71717a] font-medium text-xs mb-1 uppercase tracking-wider">Día {label}</p>
           {payload.map((entry: any, index: number) => (
             <div key={index} className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }}></div>
-                <span className="text-sm text-zinc-700 capitalize">{entry.name}</span>
+                <span className="text-sm text-[#3f3f46] capitalize">{entry.name}</span>
               </div>
-              <span className={`font-semibold ${entry.name === 'Utilidad Acumulada' ? 'text-indigo-600' : entry.name === 'Ingresos' ? 'text-emerald-600' : 'text-rose-500'}`}>
+              <span className={`font-semibold ${entry.name === 'Utilidad Acumulada' ? 'text-[#4f46e5]' : entry.name === 'Ingresos' ? 'text-[#059669]' : 'text-[#f43f5e]'}`}>
                 ${formatCurrency(entry.value)}
               </span>
             </div>
@@ -50,9 +50,9 @@ export function BalanceChart({ data, utilidadMes, displayMonthName }: BalanceCha
     <div className="flex-1 flex flex-col min-h-[350px]">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
         <div>
-          <p className="text-sm font-medium text-zinc-500 mb-1">Utilidad Bruta ({displayMonthName})</p>
+          <p className="text-sm font-medium text-[#71717a] mb-1">Utilidad Bruta ({displayMonthName})</p>
           <div className="flex items-end gap-3">
-            <p className={`text-4xl font-extrabold tracking-tight ${utilidadMes >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+            <p className={`text-4xl font-extrabold tracking-tight ${utilidadMes >= 0 ? 'text-[#059669]' : 'text-[#ef4444]'}`}>
               ${formatCurrency(utilidadMes)}
             </p>
           </div>

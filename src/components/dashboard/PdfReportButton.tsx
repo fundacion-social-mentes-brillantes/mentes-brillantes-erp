@@ -28,29 +28,55 @@ export function PdfReportButton({ displayMonthName }: { displayMonthName: string
       clone.style.left = '-9999px' // Oculto fuera de pantalla
       clone.style.width = `${dashboardElement.offsetWidth}px` // Mantener ancho
       
-      // 3. Remover clases problemáticas para html2canvas (Filtros de Glassmorphism)
+      // 3. Remover clases problemáticas y forzar colores estándar
       const elementsWithBlur = clone.querySelectorAll('.backdrop-blur-xl, .backdrop-blur-md, .backdrop-blur')
       elementsWithBlur.forEach(el => {
         el.classList.remove('backdrop-blur-xl', 'backdrop-blur-md', 'backdrop-blur')
-        // Forzar fondo sólido donde era translúcido
-        if (el.classList.contains('bg-white/60')) {
-          el.classList.remove('bg-white/60')
-          el.classList.add('bg-white')
+      })
+
+      // 4. Adjuntar al body para que el navegador lo pueda re-pintar y leer estilos computados
+      document.body.appendChild(clone)
+      
+      // 5. Normalizar TODO color moderno (oklch, lab, color()) a formatos seguros para html2canvas
+      // Es vital hacerlo después de adjuntar al DOM para que getComputedStyle funcione
+      const allElements = clone.querySelectorAll('*')
+      
+      const safeFallbackColors: Record<string, string> = {
+        color: '#18181b', // zinc-900 por defecto para texto
+        backgroundColor: 'transparent',
+        borderColor: '#e4e4e7', // zinc-200 por defecto para bordes
+        fill: 'none',
+        stroke: '#71717a' // zinc-500 por defecto para svg e iconos
+      }
+
+      const colorProperties = ['color', 'backgroundColor', 'borderColor', 'borderTopColor', 'borderBottomColor', 'borderLeftColor', 'borderRightColor', 'fill', 'stroke'] as const
+
+      Array.from(allElements).forEach((el) => {
+        const computedStyle = window.getComputedStyle(el)
+        
+        colorProperties.forEach(prop => {
+          const value = computedStyle[prop as any]
+          // Si el valor computado usa funciones modernas que html2canvas no soporta
+          if (value && (value.includes('oklch') || value.includes('lab') || value.includes('color(') || value.includes('oklab'))) {
+            // Sobrescribir inline style con un fallback seguro RGB/HEX
+            (el as HTMLElement).style[prop as any] = safeFallbackColors[prop] || '#000000'
+          }
+        })
+      })
+
+      // Limpieza manual adicional para fondos transparentes problemáticos
+      elementsWithBlur.forEach(el => {
+        if (el.classList.contains('bg-[#ffffff]/60') || el.classList.contains('bg-[#ffffff]/90')) {
+          el.classList.remove('bg-[#ffffff]/60', 'bg-[#ffffff]/90')
+          ;(el as HTMLElement).style.backgroundColor = '#ffffff'
         }
-        if (el.classList.contains('bg-white/90')) {
-          el.classList.remove('bg-white/90')
-          el.classList.add('bg-white')
-        }
-        if (el.classList.contains('bg-zinc-900/90')) {
-          el.classList.remove('bg-zinc-900/90')
-          el.classList.add('bg-zinc-900')
+        if (el.classList.contains('bg-[#18181b]/90')) {
+          el.classList.remove('bg-[#18181b]/90')
+          ;(el as HTMLElement).style.backgroundColor = '#18181b'
         }
       })
 
-      // 4. Adjuntar al body para que el navegador lo pueda re-pintar
-      document.body.appendChild(clone)
-
-      // 5. Capturar el clon limpio
+      // 6. Capturar el clon limpio
       const canvas = await html2canvas(clone, {
         scale: 2, 
         useCORS: true,

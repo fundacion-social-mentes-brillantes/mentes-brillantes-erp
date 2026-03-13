@@ -214,8 +214,8 @@ export async function Dashboard({ month }: { month?: string }) {
       trend: ingresosTrend,
       goodIsUp: true,
       icon: Banknote,
-      color: "text-emerald-600",
-      bg: "bg-emerald-500/10",
+      color: "text-[#059669]",
+      bg: "bg-[#10b981]/10",
       tooltip: "Suma de los pagos y abonos recibidos dentro del mes seleccionado."
     },
     {
@@ -224,8 +224,8 @@ export async function Dashboard({ month }: { month?: string }) {
       trend: egresosTrend,
       goodIsUp: false,
       icon: ShoppingCart,
-      color: "text-rose-500",
-      bg: "bg-rose-500/10",
+      color: "text-[#f43f5e]",
+      bg: "bg-[#f43f5e]/10",
       tooltip: "Suma de los gastos registrados dentro del mes seleccionado."
     },
     {
@@ -234,8 +234,8 @@ export async function Dashboard({ month }: { month?: string }) {
       trend: utilidadTrend,
       goodIsUp: true,
       icon: Wallet,
-      color: utilidadMes >= 0 ? "text-indigo-600" : "text-rose-500",
-      bg: utilidadMes >= 0 ? "bg-indigo-500/10" : "bg-rose-500/10",
+      color: utilidadMes >= 0 ? "text-[#4f46e5]" : "text-[#f43f5e]",
+      bg: utilidadMes >= 0 ? "bg-[#6366f1]/10" : "bg-[#f43f5e]/10",
       tooltip: "Ingresos del período menos egresos del período."
     },
     {
@@ -244,8 +244,8 @@ export async function Dashboard({ month }: { month?: string }) {
       trend: facturadoTrend,
       goodIsUp: true,
       icon: Receipt,
-      color: "text-blue-600",
-      bg: "bg-blue-500/10",
+      color: "text-[#2563eb]",
+      bg: "bg-[#3b82f6]/10",
       tooltip: "Valor total de las cuentas por cobrar creadas en ese mes, aunque no se hayan pagado todavía."
     },
     {
@@ -254,8 +254,8 @@ export async function Dashboard({ month }: { month?: string }) {
       trend: pendienteTrend,
       goodIsUp: false,
       icon: AlertCircle,
-      color: "text-amber-500",
-      bg: "bg-amber-500/10",
+      color: "text-[#f59e0b]",
+      bg: "bg-[#f59e0b]/10",
       tooltip: "Saldo que aún falta por cobrar, pero solo de las cuentas creadas en ese mes."
     },
   ];
@@ -265,24 +265,24 @@ export async function Dashboard({ month }: { month?: string }) {
       name: "Cartera Total",
       value: `$${carteraTotal.toLocaleString()}`,
       icon: Wallet,
-      color: "text-zinc-700",
-      bg: "bg-zinc-100",
+      color: "text-[#3f3f46]",
+      bg: "bg-[#f4f4f5]",
       tooltip: "Toda la deuda pendiente del sistema, sin importar el mes."
     },
     {
       name: "Cartera Antigua (+30 días)",
       value: `$${carteraAntigua.toLocaleString()}`,
       icon: History,
-      color: "text-red-600",
-      bg: "bg-red-50",
+      color: "text-[#dc2626]",
+      bg: "bg-[#fef2f2]",
       tooltip: "Deuda pendiente de cuentas con más de 30 días desde su fecha de emisión."
     },
     {
       name: "Personas con Deuda Antigua",
       value: personasConCarteraAntigua.toString(),
       icon: Users,
-      color: "text-orange-600",
-      bg: "bg-orange-50",
+      color: "text-[#ea580c]",
+      bg: "bg-[#fff7ed]",
       tooltip: "Cantidad de asistentes que tienen al menos una cuenta antigua pendiente."
     },
   ];
@@ -293,8 +293,8 @@ export async function Dashboard({ month }: { month?: string }) {
     <div id="dashboard-content" className="space-y-8 pb-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Dashboard</h1>
-          <p className="text-zinc-500 text-sm">Resumen financiero y estado de cartera.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-[#18181b]">Dashboard</h1>
+          <p className="text-[#71717a] text-sm">Resumen financiero y estado de cartera.</p>
         </div>
         <div className="flex items-center gap-3">
           <PdfReportButton displayMonthName={displayMonthName} />
@@ -304,8 +304,8 @@ export async function Dashboard({ month }: { month?: string }) {
 
       {/* 1. INDICADORES DEL PERÍODO */}
       <section className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <h2 className="text-lg font-semibold text-zinc-900 border-b border-zinc-200 pb-2">
-          Indicadores del Período <span className="text-zinc-500 font-normal text-sm ml-2 capitalize">({displayMonthName})</span>
+        <h2 className="text-lg font-semibold text-[#18181b] border-b border-[#e4e4e7] pb-2">
+          Indicadores del Período <span className="text-[#71717a] font-normal text-sm ml-2 capitalize">({displayMonthName})</span>
         </h2>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
           {periodStats.map((stat) => {
@@ -316,16 +316,16 @@ export async function Dashboard({ month }: { month?: string }) {
             return (
               <div
                 key={stat.name}
-                className="relative overflow-hidden rounded-2xl border border-zinc-200/50 bg-white/60 backdrop-blur-xl p-5 shadow-sm transition-all hover:shadow-md hover:-translate-y-1"
+                className="relative overflow-hidden rounded-2xl border border-[#e4e4e7]/50 bg-[#ffffff]/60 backdrop-blur-xl p-5 shadow-sm transition-all hover:shadow-md hover:-translate-y-1"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    <p className="text-xs font-medium text-zinc-500">{stat.name}</p>
+                    <p className="text-xs font-medium text-[#71717a]">{stat.name}</p>
                     <div className="group relative flex items-center">
-                      <Info className="w-3.5 h-3.5 text-zinc-400 cursor-help outline-none" tabIndex={0} />
-                      <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 bg-zinc-900/90 backdrop-blur text-white text-xs rounded-lg p-2.5 shadow-xl z-20 text-center">
+                      <Info className="w-3.5 h-3.5 text-[#a1a1aa] cursor-help outline-none" tabIndex={0} />
+                      <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 bg-[#18181b]/90 backdrop-blur text-white text-xs rounded-lg p-2.5 shadow-xl z-20 text-center">
                         {stat.tooltip}
-                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-900/90"></div>
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#18181b]/90"></div>
                       </div>
                     </div>
                   </div>
@@ -334,16 +334,16 @@ export async function Dashboard({ month }: { month?: string }) {
                   </div>
                 </div>
                 <div className="mt-3 flex items-end justify-between">
-                  <p className="text-2xl font-bold tracking-tight text-zinc-900">{stat.value}</p>
+                  <p className="text-2xl font-bold tracking-tight text-[#18181b]">{stat.value}</p>
                   
                   {!isTrendNeutral && (
-                    <div className={`flex items-center gap-1 text-xs font-medium ${trendIsGood ? 'text-emerald-600 bg-emerald-500/10' : 'text-rose-600 bg-rose-500/10'} px-1.5 py-0.5 rounded-md`}>
+                    <div className={`flex items-center gap-1 text-xs font-medium ${trendIsGood ? 'text-[#059669] bg-[#10b981]/10' : 'text-[#e11d48] bg-[#f43f5e]/10'} px-1.5 py-0.5 rounded-md`}>
                       {isTrendPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                       {Math.abs(stat.trend)}%
                     </div>
                   )}
                   {isTrendNeutral && (
-                    <div className="flex items-center gap-1 text-xs font-medium text-zinc-500 bg-zinc-100 px-1.5 py-0.5 rounded-md">
+                    <div className="flex items-center gap-1 text-xs font-medium text-[#71717a] bg-[#f4f4f5] px-1.5 py-0.5 rounded-md">
                       <Minus className="w-3 h-3" />
                       0%
                     </div>
@@ -357,23 +357,23 @@ export async function Dashboard({ month }: { month?: string }) {
 
       {/* 2. INDICADORES HISTÓRICOS */}
       <section className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
-        <h2 className="text-lg font-semibold text-zinc-900 border-b border-zinc-200 pb-2">
-          Indicadores Históricos <span className="text-zinc-500 font-normal text-sm ml-2">(Acumulado General)</span>
+        <h2 className="text-lg font-semibold text-[#18181b] border-b border-[#e4e4e7] pb-2">
+          Indicadores Históricos <span className="text-[#71717a] font-normal text-sm ml-2">(Acumulado General)</span>
         </h2>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
           {historicalStats.map((stat) => (
             <div
               key={stat.name}
-              className="relative overflow-hidden rounded-2xl border border-zinc-200/50 bg-white/60 backdrop-blur-xl p-5 shadow-sm transition-all hover:shadow-md hover:-translate-y-1"
+              className="relative overflow-hidden rounded-2xl border border-[#e4e4e7]/50 bg-[#ffffff]/60 backdrop-blur-xl p-5 shadow-sm transition-all hover:shadow-md hover:-translate-y-1"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                  <p className="text-sm font-medium text-zinc-500">{stat.name}</p>
+                  <p className="text-sm font-medium text-[#71717a]">{stat.name}</p>
                   <div className="group relative flex items-center">
-                    <Info className="w-4 h-4 text-zinc-400 cursor-help outline-none" tabIndex={0} />
-                    <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 bg-zinc-900/90 backdrop-blur text-white text-xs rounded-lg p-3 shadow-xl z-20 text-center">
+                    <Info className="w-4 h-4 text-[#a1a1aa] cursor-help outline-none" tabIndex={0} />
+                    <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 bg-[#18181b]/90 backdrop-blur text-white text-xs rounded-lg p-3 shadow-xl z-20 text-center">
                       {stat.tooltip}
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-900/90"></div>
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#18181b]/90"></div>
                     </div>
                   </div>
                 </div>
@@ -382,7 +382,7 @@ export async function Dashboard({ month }: { month?: string }) {
                 </div>
               </div>
               <div className="mt-4">
-                <p className="text-3xl font-bold tracking-tight text-zinc-900">{stat.value}</p>
+                <p className="text-3xl font-bold tracking-tight text-[#18181b]">{stat.value}</p>
               </div>
             </div>
           ))}
@@ -390,29 +390,29 @@ export async function Dashboard({ month }: { month?: string }) {
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-1000">
-        <div className="lg:col-span-2 rounded-2xl border border-zinc-200/50 bg-white/60 backdrop-blur-xl p-6 shadow-sm flex flex-col">
+        <div className="lg:col-span-2 rounded-2xl border border-[#e4e4e7]/50 bg-[#ffffff]/60 backdrop-blur-xl p-6 shadow-sm flex flex-col">
           <BalanceChart data={chartData} utilidadMes={utilidadMes} displayMonthName={displayMonthName} />
         </div>
         
-        <div className="rounded-2xl border border-zinc-200/50 bg-white/60 backdrop-blur-xl p-6 shadow-sm flex flex-col">
+        <div className="rounded-2xl border border-[#e4e4e7]/50 bg-[#ffffff]/60 backdrop-blur-xl p-6 shadow-sm flex flex-col">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base font-semibold text-zinc-900">Cuentas Recientes Pendientes</h3>
-            <Link href="/cuentas?estado=pendiente" className="text-xs font-medium text-blue-600 hover:text-blue-800">Ver todas</Link>
+            <h3 className="text-base font-semibold text-[#18181b]">Cuentas Recientes Pendientes</h3>
+            <Link href="/cuentas?estado=pendiente" className="text-xs font-medium text-[#2563eb] hover:text-[#1e40af]">Ver todas</Link>
           </div>
           <div className="space-y-4 flex-1 overflow-y-auto">
             {cuentasPendientes?.map((cuenta: any) => {
               const saldo = cuenta.monto_pendiente || 0;
               const isOverdue = new Date(cuenta.fecha_emision) < new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // Más de 30 días
               return (
-                <Link key={cuenta.id} href={`/cuentas/${cuenta.id}`} className="flex items-center justify-between border-b border-zinc-100 pb-4 last:border-0 last:pb-0 hover:bg-zinc-50 p-2 -mx-2 rounded-lg transition-colors">
+                <Link key={cuenta.id} href={`/cuentas/${cuenta.id}`} className="flex items-center justify-between border-b border-[#f4f4f5] pb-4 last:border-0 last:pb-0 hover:bg-zinc-50 p-2 -mx-2 rounded-lg transition-colors">
                   <div className="flex-1 min-w-0 pr-4">
-                    <p className="text-sm font-medium text-zinc-900 truncate">{cuenta.asistentes?.nombre}</p>
-                    <p className="text-xs text-zinc-500 truncate">{cuenta.concepto}</p>
+                    <p className="text-sm font-medium text-[#18181b] truncate">{cuenta.asistentes?.nombre}</p>
+                    <p className="text-xs text-[#71717a] truncate">{cuenta.concepto}</p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-sm font-medium text-red-600">${Number(saldo).toLocaleString()}</p>
+                    <p className="text-sm font-medium text-[#dc2626]">${Number(saldo).toLocaleString()}</p>
                     {isOverdue && (
-                      <p className="text-[10px] font-medium text-red-500 flex items-center justify-end gap-1 mt-0.5">
+                      <p className="text-[10px] font-medium text-[#ef4444] flex items-center justify-end gap-1 mt-0.5">
                         <AlertCircle className="w-3 h-3" /> Vencida
                       </p>
                     )}
@@ -421,7 +421,7 @@ export async function Dashboard({ month }: { month?: string }) {
               )
             })}
             {!cuentasPendientes?.length && (
-              <div className="text-center text-sm text-zinc-500 py-8">
+              <div className="text-center text-sm text-[#71717a] py-8">
                 No hay cuentas pendientes.
               </div>
             )}
