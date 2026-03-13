@@ -1,0 +1,273 @@
+'use server'
+
+import { createClient } from '@/lib/supabase/server'
+import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
+import { calcularEstadoCuenta } from '@/lib/utils/cuentas'
+
+export type ActionState = {
+  error?: string;
+  success?: boolean;
+} | null;
+
+export async function saveCuenta(prevState: ActionState, formData: FormData): Promise<ActionState> {
+  const supabase = await createClient()
+  if (!supabase) return { error: 'Supabase no configurado' }
+
+  const asistente_id = formData.get('asistente_id') as string
+  const concepto = formData.get('concepto') as string
+  const valor_total_str = formData.get('valor_total') as string
+  const fecha_emision = formData.get('fecha_emision') as string
+  const abono_inicial_str = formData.get('abono_inicial') as string
+  const metodo_pago = formData.get('metodo_pago') as string
+
+  const valor_total = Math.round(parseFloat(valor_total_str))
+  const abono_inicial = abono_inicial_str ? Math.round(parseFloat(abono_inicial_str)) : 0
+
+  if (!asistente_id || !concepto || !valor_total_str || !fecha_emision) {
+    return { error: 'Todos los campos son obligatorios' }
+  }
+
+  if (isNaN(valor_total) || valor_total <= 0) {
+    return { error: 'El valor total debe ser mayor a 0' }
+  }
+
+  if (abono_inicial < 0) {
+    return { error: 'El abono inicial no puede ser negativo' }
+  }
+
+  if (abono_inicial > valor_total) {
+    return { error: 'El abono inicial no puede ser mayor al valor total' }
+  }
+
+  const estado = calcularEstadoCuenta(valor_total, abono_inicial)
+
+  const { data: cuenta, error: cuentaError } = await supabase.from('cuentas_por_cobrar').insert([{
+    asistente_id,
+    concepto,
+    valor_total,
+    fecha_emision,
+    estado
+  }]).select().single()
+
+  if (cuentaError) {
+    return { error: cuentaError.message }
+  }
+
+  if (abono_inicial > 0 && cuenta) {
+    const { error: abonoError } = await supabase.from('pagos_abonos').insert([{
+      cuenta_id: cuenta.id,
+      monto: abono_inicial,
+      metodo_pago: metodo_pago || 'efectivo',
+      origen_fondos: 'pago_directo',
+      fecha_pago: fecha_emision,
+      notas: 'Abono inicial'
+    }])
+
+    if (abonoError) {
+      return { error: 'Cuenta creada, pero hubo un error al registrar el abono inicial: ' + abonoError.message }
+    }
+  }
+
+  revalidatePath('/cuentas')
+  redirect('/cuentas')
+}
+
+export async function saveAbono(cuenta_id: string, prevState: ActionState, formData: FormData): Promise<ActionState> {
+  const supabase = await createClient()
+  if (!supabase) return { error: 'Supabase no configurado' }
+
+  const monto_str = formData.get('monto') as string
+  const metodo_pago = formData.get('metodo_pago') as string
+  const fecha_pago = formData.get('fecha_pago') as string
+  const notas = formData.get('notas') as string
+
+  const monto = Math.round(parseFloat(monto_str))
+
+  if (!monto_str || !metodo_pago || !fecha_pago) {
+    return { error: 'Monto, método y fecha son obligatorios' }
+  }
+
+  if (isNaN(monto) || monto <= 0) {
+    return { error: 'El monto debe ser mayor a 0' }
+  }
+
+  // Verificar que el abono no supere el saldo pendiente
+  const { data: cuentaData } = await supabase
+    .from('cuentas_por_cobrar')
+    .select('valor_total, pagos_abonos(monto)')
+    .eq('id', cuenta_id)
+    .single()
+
+  if (cuentaData) {
+    const valor_total = Number(cuentaData.valor_total)
+    const total_abonado_previo = cuentaData.pagos_abonos?.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0) || 0
+    const monto_pendiente = valor_total - total_abonado_previo
+
+    if (monto > monto_pendiente) {
+      return { error: `El abono no puede superar el saldo pendiente ($${monto_pendiente.toLocaleString()})` }
+    }
+  }
+
+  const { error } = await supabase.from('pagos_abonos').insert([{
+    cuenta_id,
+    monto,
+    metodo_pago,
+    origen_fondos: 'pago_directo',
+    fecha_pago,
+    notas: notas || null
+  }])
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  // Actualizar estado de la cuenta
+  if (cuentaData) {
+    const valor_total = Number(cuentaData.valor_total)
+    const total_abonado_previo = cuentaData.pagos_abonos?.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0) || 0
+    const nuevo_total_abonado = total_abonado_previo + monto
+    const nuevo_estado = calcularEstadoCuenta(valor_total, nuevo_total_abonado)
+
+    await supabase.from('cuentas_por_cobrar').update({ estado: nuevo_estado }).eq('id', cuenta_id)
+  }
+
+  revalidatePath(`/cuentas/${cuenta_id}`)
+  revalidatePath('/cuentas')
+  return { success: true }
+}
+
+export async function aplicarSaldoFavor(cuenta_id: string, asistente_id: string, maxMontoAplicable: string, prevState: ActionState, formData: FormData): Promise<ActionState> {
+  const supabase = await createClient()
+  if (!supabase) return { error: 'Supabase no configurado' }
+
+  const monto = Math.round(parseFloat(formData.get('monto') as string))
+  const maxMonto = Math.round(parseFloat(maxMontoAplicable))
+
+  if (isNaN(monto) || monto <= 0) return { error: 'El monto debe ser mayor a 0' }
+  if (monto > maxMonto) return { error: `El monto no puede superar $${maxMonto.toLocaleString()}` }
+
+  // Usar RPC para garantizar operación atómica
+  const { error } = await supabase.rpc('aplicar_saldo_favor_trx', {
+    p_cuenta_id: cuenta_id,
+    p_asistente_id: asistente_id,
+    p_monto: monto
+  })
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  revalidatePath(`/cuentas/${cuenta_id}`)
+  revalidatePath(`/asistentes/${asistente_id}`)
+  revalidatePath('/cuentas')
+  return { success: true }
+}
+
+export async function editValorCuenta(cuenta_id: string, valor_anterior: number, prevState: ActionState, formData: FormData): Promise<ActionState> {
+  const supabase = await createClient()
+  if (!supabase) return { error: 'Supabase no configurado' }
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'No autenticado' }
+  const { data: perfil } = await supabase.from('perfiles').select('rol').eq('id', user.id).single()
+  if (!perfil || perfil.rol !== 'admin') return { error: 'Acceso denegado' }
+
+  const valor_nuevo_str = formData.get('valor_nuevo') as string
+  const motivo = formData.get('motivo') as string
+
+  if (!valor_nuevo_str || !motivo) return { error: 'Valor y motivo son obligatorios' }
+
+  const valor_nuevo = Math.round(parseFloat(valor_nuevo_str))
+  if (isNaN(valor_nuevo) || valor_nuevo <= 0) return { error: 'El valor debe ser mayor a 0' }
+
+  const { error: updateError } = await supabase
+    .from('cuentas_por_cobrar')
+    .update({ valor_total: valor_nuevo })
+    .eq('id', cuenta_id)
+
+  if (updateError) return { error: updateError.message }
+
+  await supabase.from('auditoria_financiera').insert([{
+    tabla_afectada: 'cuentas_por_cobrar',
+    registro_id: cuenta_id,
+    usuario_id: user.id,
+    accion: 'edicion_valor',
+    valor_anterior,
+    valor_nuevo,
+    motivo
+  }])
+
+  const { data: cuentaData } = await supabase
+    .from('cuentas_por_cobrar')
+    .select('valor_total, pagos_abonos(monto)')
+    .eq('id', cuenta_id)
+    .single()
+
+  if (cuentaData) {
+    const total_abonado = cuentaData.pagos_abonos?.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0) || 0
+    const nuevo_estado = calcularEstadoCuenta(Number(cuentaData.valor_total), total_abonado)
+    await supabase.from('cuentas_por_cobrar').update({ estado: nuevo_estado }).eq('id', cuenta_id)
+  }
+
+  revalidatePath(`/cuentas/${cuenta_id}`)
+  revalidatePath('/cuentas')
+  return { success: true }
+}
+
+export async function editMontoAbono(abono_id: string, cuenta_id: string, valor_anterior: number, prevState: ActionState, formData: FormData): Promise<ActionState> {
+  const supabase = await createClient()
+  if (!supabase) return { error: 'Supabase no configurado' }
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'No autenticado' }
+  const { data: perfil } = await supabase.from('perfiles').select('rol').eq('id', user.id).single()
+  if (!perfil || perfil.rol !== 'admin') return { error: 'Acceso denegado' }
+
+  const valor_nuevo_str = formData.get('valor_nuevo') as string
+  const motivo = formData.get('motivo') as string
+
+  if (!valor_nuevo_str || !motivo) return { error: 'Valor y motivo son obligatorios' }
+
+  const valor_nuevo = Math.round(parseFloat(valor_nuevo_str))
+  if (isNaN(valor_nuevo) || valor_nuevo <= 0) return { error: 'El valor debe ser mayor a 0' }
+
+  const { data: abono } = await supabase.from('pagos_abonos').select('origen_fondos').eq('id', abono_id).single()
+
+  const { error: updateError } = await supabase.from('pagos_abonos').update({ monto: valor_nuevo }).eq('id', abono_id)
+  if (updateError) return { error: updateError.message }
+
+  if (abono?.origen_fondos === 'saldo_a_favor') {
+     await supabase.from('movimientos_saldo_favor')
+       .update({ monto: valor_nuevo })
+       .eq('cuenta_id', cuenta_id)
+       .eq('tipo', 'aplicacion')
+       .eq('monto', valor_anterior)
+  }
+
+  await supabase.from('auditoria_financiera').insert([{
+    tabla_afectada: 'pagos_abonos',
+    registro_id: abono_id,
+    usuario_id: user.id,
+    accion: 'edicion_abono',
+    valor_anterior,
+    valor_nuevo,
+    motivo
+  }])
+
+  const { data: cuentaData } = await supabase
+    .from('cuentas_por_cobrar')
+    .select('valor_total, pagos_abonos(monto)')
+    .eq('id', cuenta_id)
+    .single()
+
+  if (cuentaData) {
+    const total_abonado = cuentaData.pagos_abonos?.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0) || 0
+    const nuevo_estado = calcularEstadoCuenta(Number(cuentaData.valor_total), total_abonado)
+    await supabase.from('cuentas_por_cobrar').update({ estado: nuevo_estado }).eq('id', cuenta_id)
+  }
+
+  revalidatePath(`/cuentas/${cuenta_id}`)
+  revalidatePath('/cuentas')
+  return { success: true }
+}

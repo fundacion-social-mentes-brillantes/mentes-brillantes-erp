@@ -1,0 +1,130 @@
+'use server'
+
+import { createClient } from '@/lib/supabase/server'
+import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
+
+export type ActionState = {
+  error?: string;
+  success?: boolean;
+} | null;
+
+export async function saveAsistente(id: string | null, prevState: ActionState, formData: FormData): Promise<ActionState> {
+  const supabase = await createClient()
+  if (!supabase) return { error: 'Supabase no configurado' }
+
+  const nombre = formData.get('nombre') as string
+  const cedula = formData.get('cedula') as string
+  const correo = formData.get('correo') as string
+  const telefono = formData.get('telefono') as string
+  const codigo = formData.get('codigo') as string
+
+  if (!nombre) {
+    return { error: 'El nombre es obligatorio' }
+  }
+
+  const data = {
+    nombre,
+    cedula: cedula || null,
+    correo: correo || null,
+    telefono: telefono || null,
+    codigo: codigo || null
+  }
+
+  if (id) {
+    const { error } = await supabase.from('asistentes').update(data).eq('id', id)
+    if (error) {
+      if (error.code === '23505') return { error: 'Ya existe un asistente con esa cédula o código' }
+      return { error: error.message }
+    }
+  } else {
+    const { error } = await supabase.from('asistentes').insert([data])
+    if (error) {
+      if (error.code === '23505') return { error: 'Ya existe un asistente con esa cédula o código' }
+      return { error: error.message }
+    }
+  }
+
+  revalidatePath('/asistentes')
+  redirect('/asistentes')
+}
+
+export async function toggleAsistenteEstado(id: string, activo: boolean) {
+  const supabase = await createClient()
+  if (!supabase) return
+  await supabase.from('asistentes').update({ activo }).eq('id', id)
+  revalidatePath('/asistentes')
+}
+
+export async function saveAnticipo(asistente_id: string, prevState: ActionState, formData: FormData): Promise<ActionState> {
+  const supabase = await createClient()
+  if (!supabase) return { error: 'Supabase no configurado' }
+
+  const monto = parseFloat(formData.get('monto') as string)
+  const metodo_pago = formData.get('metodo_pago') as string
+  const fecha = formData.get('fecha') as string
+  const notas = formData.get('notas') as string
+
+  if (isNaN(monto) || monto <= 0) return { error: 'El monto debe ser mayor a 0' }
+  if (!metodo_pago || !fecha) return { error: 'Método y fecha son obligatorios' }
+
+  const { error } = await supabase.from('movimientos_saldo_favor').insert([{
+    asistente_id,
+    tipo: 'ingreso',
+    monto,
+    fecha,
+    metodo_pago,
+    notas: notas || null
+  }])
+
+  if (error) return { error: error.message }
+
+  revalidatePath(`/asistentes/${asistente_id}`)
+  return { success: true }
+}
+
+export async function deleteAsistente(id: string) {
+  const supabase = await createClient()
+  if (!supabase) return { error: 'Supabase no configurado' }
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'No autenticado' }
+
+  // Verificar si es admin
+  const { data: perfil } = await supabase.from('perfiles').select('rol').eq('id', user.id).single()
+  
+  if (!perfil || perfil.rol !== 'admin') {
+    // Si no hay perfiles en toda la base de datos (fase inicial), permitimos la acción
+    const { count } = await supabase.from('perfiles').select('*', { count: 'exact', head: true })
+    if (count !== 0) {
+      return { error: 'Acceso denegado. Solo los administradores pueden eliminar registros.' }
+    }
+  }
+
+  // Verificar si tiene cuentas por cobrar asociadas
+  const { count: cuentasCount, error: cuentasError } = await supabase
+    .from('cuentas_por_cobrar')
+    .select('*', { count: 'exact', head: true })
+    .eq('asistente_id', id)
+  
+  if (cuentasError) {
+    return { error: 'Error al verificar relaciones del asistente.' }
+  }
+
+  if (cuentasCount && cuentasCount > 0) {
+    return { error: 'No se puede eliminar este asistente porque tiene cuentas por cobrar asociadas. Se recomienda desactivarlo en su lugar para mantener el historial.' }
+  }
+
+  // Intentar eliminar
+  const { error } = await supabase.from('asistentes').delete().eq('id', id)
+  
+  if (error) {
+    // Capturar error de restricción de clave foránea si hay otras relaciones
+    if (error.code === '23503') {
+      return { error: 'No se puede eliminar el asistente porque tiene registros financieros o históricos asociados.' }
+    }
+    return { error: 'Error al eliminar: ' + error.message }
+  }
+
+  revalidatePath('/asistentes')
+}
