@@ -209,15 +209,16 @@ export async function obtenerSiguienteCodigoAsistente(): Promise<number> {
   const supabase = await createClient()
   if (!supabase) return 1
 
-  const { data, error } = await supabase
+  const { data } = await supabase
     .from('asistentes')
     .select('codigo')
-    .order('codigo', { ascending: false })
-    .limit(1)
-    .single()
 
-  if (error || !data?.codigo) return 1
+  if (!data || data.length === 0) return 1
 
-  const maxCodigo = Number(data.codigo)
-  return isNaN(maxCodigo) ? 1 : maxCodigo + 1
+  const codigos = data
+    .map(item => parseInt(item.codigo))
+    .filter(n => !isNaN(n))
+
+  const maxCodigo = codigos.length > 0 ? Math.max(...codigos) : 0
+  return maxCodigo + 1
 }
