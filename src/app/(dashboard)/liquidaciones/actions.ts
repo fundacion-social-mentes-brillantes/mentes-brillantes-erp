@@ -94,20 +94,35 @@ export async function generarLiquidacion(periodo_id: string) {
   if (!periodo || periodo.estado !== 'abierto') return
 
   // 2. Obtener ingresos cobrados en el periodo
-  const { data: ingresosData } = await supabase
+  // IMPORTANTE: misma lógica que Dashboard para garantizar sincronización
+  const { data: rawIngresosData } = await supabase
     .from('pagos_abonos')
-    .select('monto')
+    .select('monto, metodo_pago, origen_fondos, estado, notas')
     .gte('fecha_pago', periodo.fecha_inicio)
     .lte('fecha_pago', periodo.fecha_fin)
-  const ingresos_cobrados = ingresosData?.reduce((acc, curr) => acc + Number(curr.monto), 0) || 0
 
-  // 3. Obtener egresos en el periodo
-  const { data: egresosData } = await supabase
+  // Excluir pagos aplicados desde saldo a favor (evita doble conteo) y anulados
+  const ingresosValidos = rawIngresosData?.filter(item =>
+    item.metodo_pago !== 'Saldo_a_favor' &&
+    item.metodo_pago !== 'saldo_a_favor' &&
+    item.origen_fondos !== 'saldo_a_favor' &&
+    !item.notas?.includes('[ANULADO]') &&
+    item.estado !== 'anulado'
+  ) || []
+  const ingresos_cobrados = Math.round(ingresosValidos.reduce((acc, curr) => acc + Number(curr.monto), 0))
+
+  // 3. Obtener egresos en el periodo (excluyendo anulados)
+  const { data: rawEgresosData } = await supabase
     .from('egresos')
-    .select('monto')
+    .select('monto, estado, notas')
     .gte('fecha', periodo.fecha_inicio)
     .lte('fecha', periodo.fecha_fin)
-  const egresos_periodo = egresosData?.reduce((acc, curr) => acc + Number(curr.monto), 0) || 0
+
+  const egresosValidos = rawEgresosData?.filter(item =>
+    !item.notas?.includes('[ANULADO]') &&
+    item.estado !== 'anulado'
+  ) || []
+  const egresos_periodo = Math.round(egresosValidos.reduce((acc, curr) => acc + Number(curr.monto), 0))
 
   const utilidad_neta = ingresos_cobrados - egresos_periodo
 
@@ -121,12 +136,12 @@ export async function generarLiquidacion(periodo_id: string) {
   // 6. Calcular y guardar liquidaciones
   const liquidaciones = socios.map(socio => {
     const porcentaje_aplicado = Number(socio.porcentaje_participacion)
-    const valor_correspondiente = (utilidad_neta * porcentaje_aplicado) / 100
-    
+    const valor_correspondiente = Math.round((utilidad_neta * porcentaje_aplicado) / 100)
+
     const adelantos_socio = adelantosData?.filter(a => a.socio_id === socio.id) || []
-    const adelantos_descontados = adelantos_socio.reduce((acc, curr) => acc + Number(curr.monto), 0)
-    
-    const valor_neto_pagar = valor_correspondiente - adelantos_descontados
+    const adelantos_descontados = Math.round(adelantos_socio.reduce((acc, curr) => acc + Number(curr.monto), 0))
+
+    const valor_neto_pagar = Math.round(valor_correspondiente - adelantos_descontados)
 
     return {
       periodo_id,

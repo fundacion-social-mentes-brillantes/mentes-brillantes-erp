@@ -40,25 +40,41 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
   let egresos_periodo = 0;
 
   if (periodo.estado === 'abierto') {
-    const { data: ingresosData } = await supabase
+    // Misma lógica de filtrado que el Dashboard para garantizar sincronización
+    const { data: rawIngresosData } = await supabase
       ?.from('pagos_abonos')
-      .select('monto')
+      .select('monto, metodo_pago, origen_fondos, estado, notas')
       .gte('fecha_pago', periodo.fecha_inicio)
       .lte('fecha_pago', periodo.fecha_fin) || { data: [] }
-    ingresos_cobrados = ingresosData?.reduce((acc, curr) => acc + Number(curr.monto), 0) || 0
 
-    const { data: egresosData } = await supabase
+    // Excluir saldo_a_favor (para no duplicar) y anulados (igual que el Dashboard)
+    const ingresosData = rawIngresosData?.filter(item =>
+      item.metodo_pago !== 'Saldo_a_favor' &&
+      item.metodo_pago !== 'saldo_a_favor' &&
+      item.origen_fondos !== 'saldo_a_favor' &&
+      !item.notas?.includes('[ANULADO]') &&
+      item.estado !== 'anulado'
+    ) || []
+    ingresos_cobrados = Math.round(ingresosData.reduce((acc, curr) => acc + Number(curr.monto), 0))
+
+    const { data: rawEgresosData } = await supabase
       ?.from('egresos')
-      .select('monto')
+      .select('monto, estado, notas')
       .gte('fecha', periodo.fecha_inicio)
       .lte('fecha', periodo.fecha_fin) || { data: [] }
-    egresos_periodo = egresosData?.reduce((acc, curr) => acc + Number(curr.monto), 0) || 0
+
+    // Excluir egresos anulados (igual que el Dashboard)
+    const egresosData = rawEgresosData?.filter(item =>
+      !item.notas?.includes('[ANULADO]') &&
+      item.estado !== 'anulado'
+    ) || []
+    egresos_periodo = Math.round(egresosData.reduce((acc, curr) => acc + Number(curr.monto), 0))
   } else if (liquidaciones && liquidaciones.length > 0) {
-    ingresos_cobrados = Number(liquidaciones[0].ingresos_cobrados)
-    egresos_periodo = Number(liquidaciones[0].egresos_periodo)
+    ingresos_cobrados = Math.round(Number(liquidaciones[0].ingresos_cobrados))
+    egresos_periodo = Math.round(Number(liquidaciones[0].egresos_periodo))
   }
 
-  const utilidad_neta = ingresos_cobrados - egresos_periodo
+  const utilidad_neta = Math.round(ingresos_cobrados - egresos_periodo)
 
   // Get company config
   const { data: empresaData, error: empresaError } = await supabase.from('configuracion_empresa').select('*').eq('id', 1).single()
