@@ -1,15 +1,30 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, useState } from 'react'
 import { saveAsistente } from './actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 
-export function AsistenteForm({ asistente }: { asistente?: any }) {
+export function AsistenteForm({
+  asistente,
+  codigoSugerido,
+}: {
+  asistente?: any
+  codigoSugerido?: number
+}) {
   const actionWithId = saveAsistente.bind(null, asistente?.id || null)
   const [state, formAction, isPending] = useActionState(actionWithId, null)
+
+  // Inicializa con el código existente (modo edición) o el sugerido por el servidor (modo creación)
+  const [codigoInterno, setCodigoInterno] = useState<string>(
+    asistente?.codigo != null
+      ? String(asistente.codigo)
+      : codigoSugerido != null
+        ? String(codigoSugerido)
+        : ''
+  )
 
   return (
     <form action={formAction} className="space-y-6 max-w-2xl bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
@@ -39,7 +54,12 @@ export function AsistenteForm({ asistente }: { asistente?: any }) {
         </div>
         <div className="space-y-2">
           <label className="text-sm font-medium text-zinc-900">Código Interno</label>
-          <Input name="codigo" defaultValue={asistente?.codigo} disabled={isPending} />
+          <Input
+            name="codigo"
+            value={codigoInterno}
+            onChange={(e) => setCodigoInterno(e.target.value)}
+            disabled={isPending}
+          />
         </div>
       </div>
 

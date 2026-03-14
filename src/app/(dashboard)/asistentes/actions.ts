@@ -204,3 +204,20 @@ export async function pagarDeudasConSaldo(asistente_id: string): Promise<ActionS
   revalidatePath('/cuentas');
   return { success: true };
 }
+
+export async function obtenerSiguienteCodigoAsistente(): Promise<number> {
+  const supabase = await createClient()
+  if (!supabase) return 1
+
+  const { data, error } = await supabase
+    .from('asistentes')
+    .select('codigo')
+    .order('codigo', { ascending: false })
+    .limit(1)
+    .single()
+
+  if (error || !data?.codigo) return 1
+
+  const maxCodigo = Number(data.codigo)
+  return isNaN(maxCodigo) ? 1 : maxCodigo + 1
+}
