@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { 
-  Search, 
-  Filter, 
-  ArrowDownRight, 
-  ArrowUpRight, 
-  Wallet, 
+import Link from 'next/link'
+import {
+  Search,
+  Filter,
+  ArrowDownRight,
+  ArrowUpRight,
+  Wallet,
   Receipt,
   ArrowRightLeft,
   Calendar,
@@ -16,15 +17,16 @@ import {
   Pencil,
   Ban,
   Save,
-  AlertTriangle
+  AlertTriangle,
+  ExternalLink
 } from 'lucide-react'
 import { anularMovimiento, editarMovimiento, eliminarMovimiento } from './actions'
-import { 
-  Sheet, 
-  SheetContent, 
-  SheetHeader, 
-  SheetTitle, 
-  SheetDescription 
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription
 } from '@/components/ui/sheet'
 
 type Asistente = {
@@ -52,7 +54,7 @@ type Movimiento = {
 export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes: Asistente[], isAdmin?: boolean }) {
   const [movimientos, setMovimientos] = useState<Movimiento[]>([])
   const [loading, setLoading] = useState(true)
-  
+
   // Filters
   const [rangoFecha, setRangoFecha] = useState<'este_mes' | 'mes_pasado' | 'todos' | 'custom'>('este_mes')
   const [fechaInicio, setFechaInicio] = useState('')
@@ -61,11 +63,11 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
   const [asistenteFiltro, setAsistenteFiltro] = useState('todos')
   const [metodoFiltro, setMetodoFiltro] = useState('todos')
   const [mostrarAplicaciones, setMostrarAplicaciones] = useState(false)
-  
+
   // Sheet State
   const [selectedMov, setSelectedMov] = useState<Movimiento | null>(null)
   const [isSheetOpen, setIsSheetOpen] = useState(false)
-  
+
   // Edit State
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState<any>({})
@@ -101,11 +103,11 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
   async function fetchMovimientos() {
     if (!supabase) return
     setLoading(true)
-    
+
     let query = supabase
       .from('vw_movimientos_generales')
       .select('*')
-      
+
     if (fechaInicio) query = query.gte('fecha', fechaInicio)
     if (fechaFin) query = query.lte('fecha', fechaFin)
     if (tipoFiltro !== 'todos') query = query.eq('tipo_movimiento', tipoFiltro)
@@ -119,8 +121,8 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
     if (!error && data) {
       let result = data as Movimiento[]
       if (!mostrarAplicaciones) {
-        result = result.filter(m => 
-          m.tipo_movimiento !== 'aplicacion_saldo' && 
+        result = result.filter(m =>
+          m.tipo_movimiento !== 'aplicacion_saldo' &&
           m.metodo_pago?.toLowerCase() !== 'saldo_a_favor'
         )
       }
@@ -207,12 +209,12 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
   const handleAnular = async () => {
     if (!selectedMov) return
     if (!window.confirm('¿Estás seguro de anular este movimiento?')) return;
-    
+
     setIsAnulando(true)
     try {
       let monto_revertir = selectedMov.tipo_movimiento === 'egreso' ? selectedMov.valor_egreso : selectedMov.valor_ingreso;
       const result = await anularMovimiento(selectedMov.movimiento_id, selectedMov.tipo_movimiento, monto_revertir, selectedMov.asistente_id)
-      
+
       if (result?.error) {
         alert(result.error)
       } else {
@@ -230,12 +232,12 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
     if (!selectedMov) return
     if (!window.confirm('¡ATENCIÓN! Vas a ELIMINAR permanentemente este registro de la base de datos. ¿Estás absolutamente seguro?')) return;
     if (!window.confirm('Segunda confirmación: ¿Este movimiento está duplicado o es un error grave y deseas BORRARLO físicamente?')) return;
-    
+
     setIsDeleting(true)
     try {
       let monto_revertir = selectedMov.tipo_movimiento === 'egreso' ? selectedMov.valor_egreso : selectedMov.valor_ingreso;
       const result = await eliminarMovimiento(selectedMov.movimiento_id, selectedMov.tipo_movimiento, monto_revertir, selectedMov.asistente_id)
-      
+
       if (result?.error) {
         alert(result.error)
       } else {
@@ -249,6 +251,14 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
     }
   }
 
+  const isAsistenteValidForLink = (id: string | null, nombre: string | null) => {
+    if (!id) return false
+    if (id.toLowerCase() === 'n/a') return false
+    if (nombre?.toLowerCase().includes('egreso general')) return false
+    if (nombre?.toLowerCase() === 'n/a') return false
+    return true
+  }
+
   return (
     <div className="space-y-4">
       {/* Filters (same as before) */}
@@ -256,11 +266,11 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
         <div className="flex items-center gap-2 text-sm font-medium text-zinc-700 mb-2">
           <Filter className="w-4 h-4" /> Filtros
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-zinc-500">Periodo</label>
-            <select 
+            <select
               value={rangoFecha}
               onChange={(e) => setRangoFecha(e.target.value as any)}
               className="w-full h-9 rounded-md border border-zinc-300 bg-white px-3 py-1 text-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
@@ -316,7 +326,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
               <option value="otro">Otro</option>
             </select>
           </div>
-          
+
           <div className="lg:col-span-5 flex items-center justify-end mt-2 pt-4 border-t border-zinc-100">
             <label className="flex items-center gap-2 cursor-pointer relative">
               <input type="checkbox" className="sr-only peer" checked={mostrarAplicaciones} onChange={(e) => setMostrarAplicaciones(e.target.checked)} />
@@ -360,8 +370,8 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                 </tr>
               ) : (
                 movimientos.map((mov) => (
-                  <tr 
-                    key={`${mov.movimiento_id}-${mov.tipo_movimiento}`} 
+                  <tr
+                    key={`${mov.movimiento_id}-${mov.tipo_movimiento}`}
                     onClick={() => handleRowClick(mov)}
                     className={`hover:bg-zinc-50 cursor-pointer transition-colors ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'opacity-50 grayscale hover:opacity-75' : ''}`}
                   >
@@ -375,7 +385,21 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                       </span>
                     </td>
                     <td className="px-4 py-3 font-medium text-zinc-900">
-                      {mov.asistente_nombre || <span className="text-zinc-400 italic">N/A</span>}
+                      {mov.asistente_nombre ? (
+                        isAsistenteValidForLink(mov.asistente_id, mov.asistente_nombre) ? (
+                          <Link
+                            href={`/asistentes/${mov.asistente_id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                          >
+                            {mov.asistente_nombre}
+                          </Link>
+                        ) : (
+                          <span>{mov.asistente_nombre}</span>
+                        )
+                      ) : (
+                        <span className="text-zinc-400 italic">N/A</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-zinc-700 max-w-[200px] truncate" title={mov.concepto}>
                       <span className={mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'line-through' : ''}>{mov.concepto}</span>
@@ -416,15 +440,15 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
       {/* Mobile Cards */}
       <div className="md:hidden space-y-3">
         {loading ? (
-             <div className="bg-white p-8 rounded-xl border border-zinc-200 text-center text-zinc-500 flex justify-center items-center gap-2">
-             <div className="w-4 h-4 rounded-full border-2 border-zinc-300 border-t-zinc-900 animate-spin" /> Cargando...
-           </div>
+          <div className="bg-white p-8 rounded-xl border border-zinc-200 text-center text-zinc-500 flex justify-center items-center gap-2">
+            <div className="w-4 h-4 rounded-full border-2 border-zinc-300 border-t-zinc-900 animate-spin" /> Cargando...
+          </div>
         ) : movimientos.length === 0 ? (
           <div className="bg-white p-8 rounded-xl border border-zinc-200 text-center text-zinc-500">Sin movimientos</div>
         ) : (
           movimientos.map((mov) => (
-            <div 
-              key={`${mov.movimiento_id}-${mov.tipo_movimiento}`} 
+            <div
+              key={`${mov.movimiento_id}-${mov.tipo_movimiento}`}
               onClick={() => handleRowClick(mov)}
               className={`bg-white p-4 cursor-pointer hover:bg-zinc-50 transition-colors rounded-xl border border-zinc-200 shadow-sm space-y-3 ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'opacity-60 grayscale' : ''}`}
             >
@@ -436,10 +460,24 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                   {mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'Anulado' : new Date(mov.fecha).toLocaleDateString('es-CO', { timeZone: 'UTC' })}
                 </span>
               </div>
-              
+
               <div>
                 <div className={`font-medium ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'line-through text-zinc-500' : 'text-zinc-900'}`}>{mov.concepto}</div>
-                {mov.asistente_nombre && <div className="text-sm text-zinc-500">{mov.asistente_nombre}</div>}
+                {mov.asistente_nombre && (
+                  <div className="text-sm">
+                    {isAsistenteValidForLink(mov.asistente_id, mov.asistente_nombre) ? (
+                      <Link
+                        href={`/asistentes/${mov.asistente_id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                      >
+                        {mov.asistente_nombre}
+                      </Link>
+                    ) : (
+                      <span className="text-zinc-500">{mov.asistente_nombre}</span>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-between pt-2 border-t border-zinc-100">
@@ -448,7 +486,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                     <span className="capitalize text-zinc-600 bg-zinc-100 px-2 py-0.5 rounded-md text-xs border border-zinc-200 w-fit">{mov.metodo_pago.replace('_', ' ')}</span>
                   )}
                 </div>
-                
+
                 <div className={`text-right ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'line-through opacity-70' : ''}`}>
                   {mov.valor_deuda > 0 && <div className="font-bold text-blue-600">{formatCurrency(mov.valor_deuda)}</div>}
                   {mov.valor_ingreso > 0 && <div className="font-bold text-emerald-600">+{formatCurrency(mov.valor_ingreso)}</div>}
@@ -467,7 +505,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
             <div className="space-y-6">
               <SheetHeader>
                 <div className="flex items-center gap-2 mb-2">
-                   <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border ${getTipoBadgeColor(selectedMov.tipo_movimiento)}`}>
+                  <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border ${getTipoBadgeColor(selectedMov.tipo_movimiento)}`}>
                     {getTipoIcon(selectedMov.tipo_movimiento)} {getTipoLabel(selectedMov.tipo_movimiento)}
                   </span>
                   {selectedMov.estado_o_saldo && (
@@ -489,6 +527,15 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                     <div>
                       <p className="text-xs text-zinc-500 font-medium">Asistente</p>
                       <p className="font-medium text-zinc-900">{selectedMov.asistente_nombre || 'N/A'}</p>
+                      {isAsistenteValidForLink(selectedMov.asistente_id, selectedMov.asistente_nombre) && (
+                        <Link
+                          href={`/asistentes/${selectedMov.asistente_id}`}
+                          className="inline-flex items-center gap-1.5 mt-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-md transition-colors border border-blue-200"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          Ver Perfil Completo
+                        </Link>
+                      )}
                     </div>
                     <div>
                       <p className="text-xs text-zinc-500 font-medium">Fecha de Movimiento</p>
@@ -497,7 +544,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                     <div>
                       <p className="text-xs text-zinc-500 font-medium">Valor</p>
                       <p className={`font-bold ${selectedMov.valor_ingreso > 0 ? 'text-emerald-600' : selectedMov.valor_egreso > 0 ? 'text-red-600' : 'text-blue-600'}`}>
-                         {formatCurrency(selectedMov.valor_ingreso || selectedMov.valor_egreso || selectedMov.valor_deuda)}
+                        {formatCurrency(selectedMov.valor_ingreso || selectedMov.valor_egreso || selectedMov.valor_deuda)}
                       </p>
                     </div>
                     <div>
@@ -505,7 +552,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                       <p className="font-medium text-zinc-900 capitalize">{selectedMov.metodo_pago?.replace('_', ' ') || 'N/A'}</p>
                     </div>
                   </div>
-                  
+
                   {selectedMov.notas && (
                     <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200">
                       <p className="text-xs text-yellow-800 font-bold mb-1 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Notas / Observaciones</p>
@@ -516,15 +563,15 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                   {/* ADMIN ACTION BUTTONS (Only if not already editing) */}
                   {isAdmin && selectedMov.tipo_movimiento !== 'cuenta_cobrar' && !isEditing && (
                     <div className="pt-6 border-t border-zinc-200 flex flex-col gap-3">
-                      <button 
+                      <button
                         onClick={() => setIsEditing(true)}
                         className="w-full flex justify-center items-center gap-2 bg-zinc-900 text-white py-2 rounded-lg font-medium hover:bg-zinc-800 transition-colors"
                       >
                         <Pencil className="w-4 h-4" /> Activar Edición Libre
                       </button>
-                      
+
                       {selectedMov.estado_o_saldo?.toLowerCase() !== 'anulado' && (
-                        <button 
+                        <button
                           onClick={handleAnular}
                           disabled={isAnulando}
                           className="w-full flex justify-center items-center gap-2 bg-red-50 text-red-600 py-2 rounded-lg font-medium hover:bg-red-100 transition-colors border border-red-200"
@@ -533,7 +580,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                         </button>
                       )}
 
-                      <button 
+                      <button
                         onClick={handleEliminar}
                         disabled={isDeleting}
                         className="w-full flex justify-center items-center gap-2 text-red-500 text-sm font-medium hover:underline mt-4"
@@ -554,32 +601,32 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                   <div className="space-y-4">
                     <div>
                       <label className="block text-xs font-medium text-zinc-500 mb-1">Monto (COP)</label>
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         value={editForm.monto}
-                        onChange={e => setEditForm({...editForm, monto: e.target.value})}
-                        className="w-full h-10 rounded-md border border-zinc-300 px-3 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" 
+                        onChange={e => setEditForm({ ...editForm, monto: e.target.value })}
+                        className="w-full h-10 rounded-md border border-zinc-300 px-3 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                       />
                     </div>
-                    
+
                     <div>
                       <label className="block text-xs font-medium text-zinc-500 mb-1">Fecha</label>
-                      <input 
-                        type="date" 
+                      <input
+                        type="date"
                         value={editForm.fecha}
-                        onChange={e => setEditForm({...editForm, fecha: e.target.value})}
-                        className="w-full h-10 rounded-md border border-zinc-300 px-3 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" 
+                        onChange={e => setEditForm({ ...editForm, fecha: e.target.value })}
+                        className="w-full h-10 rounded-md border border-zinc-300 px-3 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                       />
                     </div>
 
                     {selectedMov.tipo_movimiento === 'egreso' && (
                       <div>
                         <label className="block text-xs font-medium text-zinc-500 mb-1">Concepto</label>
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           value={editForm.concepto}
-                          onChange={e => setEditForm({...editForm, concepto: e.target.value})}
-                          className="w-full h-10 rounded-md border border-zinc-300 px-3 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" 
+                          onChange={e => setEditForm({ ...editForm, concepto: e.target.value })}
+                          className="w-full h-10 rounded-md border border-zinc-300 px-3 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                         />
                       </div>
                     )}
@@ -587,9 +634,9 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                     {(selectedMov.tipo_movimiento === 'abono' || selectedMov.tipo_movimiento === 'egreso' || selectedMov.tipo_movimiento === 'anticipo') && (
                       <div>
                         <label className="block text-xs font-medium text-zinc-500 mb-1">Método de Pago</label>
-                        <select 
+                        <select
                           value={editForm.metodo_pago}
-                          onChange={e => setEditForm({...editForm, metodo_pago: e.target.value})}
+                          onChange={e => setEditForm({ ...editForm, metodo_pago: e.target.value })}
                           className="w-full h-10 rounded-md border border-zinc-300 px-3 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                         >
                           <option value="efectivo">Efectivo</option>
@@ -605,9 +652,9 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                     {selectedMov.tipo_movimiento === 'anticipo' && (
                       <div>
                         <label className="block text-xs font-medium text-zinc-500 mb-1">Asistente</label>
-                        <select 
+                        <select
                           value={editForm.asistente_id}
-                          onChange={e => setEditForm({...editForm, asistente_id: e.target.value})}
+                          onChange={e => setEditForm({ ...editForm, asistente_id: e.target.value })}
                           className="w-full h-10 rounded-md border border-zinc-300 px-3 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                         >
                           {asistentes.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
@@ -617,15 +664,15 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
 
                     <div>
                       <label className="block text-xs font-medium text-zinc-500 mb-1">Notas</label>
-                      <textarea 
+                      <textarea
                         value={editForm.notas}
-                        onChange={e => setEditForm({...editForm, notas: e.target.value})}
+                        onChange={e => setEditForm({ ...editForm, notas: e.target.value })}
                         className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                         rows={3}
                       />
                     </div>
-                    
-                    <button 
+
+                    <button
                       onClick={handleSaveEdit}
                       disabled={isSaving}
                       className="w-full flex justify-center items-center gap-2 bg-emerald-600 text-white py-2 rounded-lg font-medium hover:bg-emerald-700 transition-colors mt-4"
