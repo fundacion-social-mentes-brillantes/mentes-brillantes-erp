@@ -8,6 +8,18 @@ export default async function CuentasPage() {
 
   if (!supabase) return null
 
+  // Rol del usuario
+  let isAdmin = false
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: perfil } = await supabase.from('perfiles').select('rol').eq('id', user.id).single()
+      isAdmin = perfil?.rol === 'admin'
+    }
+  } catch (e) {
+    isAdmin = false
+  }
+
   const { data: cuentasData } = await supabase
     .from('cuentas_por_cobrar')
     .select(`
@@ -59,9 +71,9 @@ export default async function CuentasPage() {
           <Plus className="w-4 h-4" />
           Nueva Cuenta
         </Link>
-      </div>
+    </div>
 
-      <CuentasClient cuentas={cuentas} />
+      <CuentasClient cuentas={cuentas} isAdmin={isAdmin} />
     </div>
   )
 }

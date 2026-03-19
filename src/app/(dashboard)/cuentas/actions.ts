@@ -73,6 +73,38 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
   redirect('/cuentas')
 }
 
+export async function deleteCuenta(cuenta_id: string): Promise<ActionState> {
+  const supabase = await createClient()
+  if (!supabase) return { error: 'Supabase no configurado' }
+
+  // Verificar admin
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'No autenticado' }
+  const { data: perfil } = await supabase.from('perfiles').select('rol').eq('id', user.id).single()
+  if (!perfil || perfil.rol !== 'admin') return { error: 'Acceso denegado' }
+
+  // Bloquear si tiene movimientos/pagos
+  const { count: pagosCount, error: pagosError } = await supabase
+    .from('pagos_abonos')
+    .select('*', { count: 'exact', head: true })
+    .eq('cuenta_id', cuenta_id)
+
+  if (pagosError) return { error: pagosError.message }
+  if ((pagosCount ?? 0) > 0) {
+    return { error: 'No se puede eliminar la cuenta porque tiene pagos registrados. Anula o elimina los pagos primero.' }
+  }
+
+  const { error: deleteError } = await supabase
+    .from('cuentas_por_cobrar')
+    .delete()
+    .eq('id', cuenta_id)
+
+  if (deleteError) return { error: deleteError.message }
+
+  revalidatePath('/cuentas')
+  redirect('/cuentas')
+}
+
 export async function saveAbono(cuenta_id: string, prevState: ActionState, formData: FormData): Promise<ActionState> {
   const supabase = await createClient()
   if (!supabase) return { error: 'Supabase no configurado' }

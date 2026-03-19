@@ -10,6 +10,7 @@ import {
   SheetTitle,
   SheetDescription,
 } from '@/components/ui/sheet'
+import { DeleteCuentaButton } from './[id]/DeleteCuentaButton'
 
 type Abono = {
   monto: number
@@ -52,7 +53,7 @@ const estadoBadge = (estado: string) => {
   }
 }
 
-export function CuentasClient({ cuentas }: { cuentas: Cuenta[] }) {
+export function CuentasClient({ cuentas, isAdmin = false }: { cuentas: Cuenta[], isAdmin?: boolean }) {
   const [selectedCuenta, setSelectedCuenta] = useState<Cuenta | null>(null)
   const [isSheetOpen, setIsSheetOpen] = useState(false)
 
@@ -209,6 +210,22 @@ export function CuentasClient({ cuentas }: { cuentas: Cuenta[] }) {
                   Emitida el {new Date(selectedCuenta.fecha_emision).toLocaleDateString('es-CO', { timeZone: 'UTC' })}
                 </SheetDescription>
               </SheetHeader>
+
+              {isAdmin && (
+                <div className="bg-white rounded-xl border border-zinc-200 shadow-sm p-4 space-y-3">
+                  <h3 className="text-sm font-semibold text-zinc-900">Acciones (Admin)</h3>
+                  <Link
+                    href={`/cuentas/${selectedCuenta.id}`}
+                    className="inline-flex items-center justify-center gap-2 rounded-md border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+                  >
+                    Editar cuenta
+                  </Link>
+                  <div className="pt-1">
+                    <DeleteCuentaButton cuentaId={selectedCuenta.id} />
+                    <p className="text-xs text-zinc-500 mt-1">No se puede eliminar si tiene pagos registrados.</p>
+                  </div>
+                </div>
+              )}
 
               {/* Info principal */}
               <div className="grid grid-cols-2 gap-4 bg-zinc-50 p-4 rounded-xl border border-zinc-200">

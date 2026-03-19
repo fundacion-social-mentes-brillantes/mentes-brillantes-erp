@@ -43,9 +43,17 @@ export async function anularMovimiento(
   }
 
   // Obtener notas actuales
-  const { data: recordData } = await supabase.from(tablaDestino).select('notas').eq('id', movimiento_id).single()
+  const { data: recordData } = await supabase.from(tablaDestino).select('notas, origen_fondos, metodo_pago').eq('id', movimiento_id).single()
   const currentNotas = recordData?.notas || ''
   const newNotas = `[ANULADO] ${currentNotas}`.trim()
+
+  // Bloquear anulación de pagos que provienen de saldo a favor
+  const origenFondos = recordData?.origen_fondos?.toLowerCase?.()
+  const metodoPago = recordData?.metodo_pago?.toLowerCase?.()
+  const esSaldoFavor = origenFondos === 'saldo_a_favor' || metodoPago === 'saldo_a_favor'
+  if (tablaDestino === 'pagos_abonos' && esSaldoFavor) {
+    return { error: 'No se puede anular este pago porque proviene de saldo a favor. Usa el flujo de devolución de saldo cuando esté disponible.' }
+  }
   
   // Marcar como anulado y actualizar notas
   const { error: updateError } = await supabase

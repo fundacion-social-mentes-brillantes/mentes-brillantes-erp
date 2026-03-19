@@ -5,6 +5,7 @@ import { ArrowLeft, CreditCard, Wallet } from 'lucide-react'
 import { AbonoForm } from './AbonoForm'
 import { AplicarSaldoForm } from './AplicarSaldoForm'
 import { EditValorModal, EditAbonoModal } from './EditModals'
+import { DeleteCuentaButton } from './DeleteCuentaButton'
 
 export default async function DetalleCuentaPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -165,6 +166,23 @@ export default async function DetalleCuentaPage({ params }: { params: Promise<{ 
 
         {/* Formulario de Nuevo Abono */}
         <div className="lg:col-span-1 space-y-6">
+          {isAdmin && (
+            <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
+              <h3 className="font-semibold text-zinc-900 mb-3">Acciones (Admin)</h3>
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm text-zinc-600 mb-2">Editar valor de la cuenta</p>
+                  <EditValorModal cuentaId={cuenta.id} valorActual={Number(saldos.valor_total)} />
+                </div>
+                <div className="pt-2 border-t border-zinc-100">
+                  <p className="text-sm text-zinc-600 mb-2">Eliminar cuenta</p>
+                  <DeleteCuentaButton cuentaId={cuenta.id} />
+                  <p className="text-xs text-zinc-500 mt-2">Solo se puede eliminar si no tiene pagos registrados.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {cuenta.estado !== 'pagado' ? (
             <>
               {saldoAFavor > 0 && (
