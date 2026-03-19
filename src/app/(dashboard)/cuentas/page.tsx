@@ -24,11 +24,13 @@ export default async function CuentasPage() {
 
   const cuentas = (cuentasData ?? []).map((cuenta: any) => {
     const valor_total = Number(cuenta.valor_total)
-    const total_abonado =
-      cuenta.pagos_abonos?.reduce(
-        (sum: number, pago: any) => sum + Number(pago.monto),
-        0
-      ) ?? 0
+    const pagosValidos = cuenta.pagos_abonos?.filter(
+      (pago: any) => !pago.notas?.includes('[ANULADO]')
+    ) ?? []
+    const total_abonado = pagosValidos.reduce(
+      (sum: number, pago: any) => sum + Number(pago.monto),
+      0
+    )
     const monto_pendiente = valor_total - total_abonado
     return {
       id: cuenta.id,

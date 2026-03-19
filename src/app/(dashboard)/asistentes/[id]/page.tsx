@@ -64,7 +64,8 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
   let totalAbonado = 0
 
   const cuentasProcesadas = (cuentas || []).map(cuenta => {
-    const abonado = Math.round(cuenta.pagos_abonos?.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0) || 0)
+    const pagosValidos = cuenta.pagos_abonos?.filter((pago: any) => !pago.notas?.includes('[ANULADO]')) || []
+    const abonado = Math.round(pagosValidos.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0))
     const pendiente = Math.round(Number(cuenta.valor_total) - abonado)
     
     totalFacturado += Number(cuenta.valor_total)

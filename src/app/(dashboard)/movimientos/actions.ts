@@ -92,13 +92,15 @@ export async function anularMovimiento(
       // Recalcular estado de la cuenta
       const { data: cuentaData } = await supabase
         .from('cuentas_por_cobrar')
-        .select('valor_total, pagos_abonos(id, monto, estado)')
+        .select('valor_total, pagos_abonos(id, monto, estado, notas)')
         .eq('id', pago.cuenta_id)
         .single()
 
       if (cuentaData) {
         // Sumar solo los abonos que NO estén anulados
-        const pagosValidos = cuentaData.pagos_abonos?.filter((p: any) => p.estado !== 'anulado') || []
+        const pagosValidos = cuentaData.pagos_abonos?.filter(
+          (p: any) => p.estado !== 'anulado' && !p.notas?.includes('[ANULADO]')
+        ) || []
         const total_abonado = pagosValidos.reduce((sum: number, p: any) => sum + Number(p.monto), 0)
         
         const valor_total = Number(cuentaData.valor_total)
@@ -197,12 +199,14 @@ export async function editarMovimiento(
     if (pago?.cuenta_id) {
        const { data: cuentaData } = await supabase
         .from('cuentas_por_cobrar')
-        .select('valor_total, pagos_abonos(id, monto, estado)')
+        .select('valor_total, pagos_abonos(id, monto, estado, notas)')
         .eq('id', pago.cuenta_id)
         .single()
 
       if (cuentaData) {
-        const pagosValidos = cuentaData.pagos_abonos?.filter((p: any) => p.estado !== 'anulado') || []
+        const pagosValidos = cuentaData.pagos_abonos?.filter(
+          (p: any) => p.estado !== 'anulado' && !p.notas?.includes('[ANULADO]')
+        ) || []
         const total_abonado = pagosValidos.reduce((sum: number, p: any) => sum + Number(p.monto), 0)
         
         const valor_total = Number(cuentaData.valor_total)
@@ -301,12 +305,14 @@ export async function eliminarMovimiento(
   if (cuentaToRecalculate) {
     const { data: cuentaData } = await supabase
       .from('cuentas_por_cobrar')
-      .select('valor_total, pagos_abonos(id, monto, estado)')
+      .select('valor_total, pagos_abonos(id, monto, estado, notas)')
       .eq('id', cuentaToRecalculate)
       .single()
 
     if (cuentaData) {
-      const pagosValidos = cuentaData.pagos_abonos?.filter((p: any) => p.estado !== 'anulado') || []
+      const pagosValidos = cuentaData.pagos_abonos?.filter(
+        (p: any) => p.estado !== 'anulado' && !p.notas?.includes('[ANULADO]')
+      ) || []
       const total_abonado = pagosValidos.reduce((sum: number, p: any) => sum + Number(p.monto), 0)
       
       const valor_total = Number(cuentaData.valor_total)

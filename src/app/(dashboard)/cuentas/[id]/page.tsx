@@ -32,8 +32,10 @@ export default async function DetalleCuentaPage({ params }: { params: Promise<{ 
     new Date(b.fecha_pago).getTime() - new Date(a.fecha_pago).getTime()
   ) || []
 
+  const abonosValidos = abonos.filter((a: any) => !a.notas?.includes('[ANULADO]'))
+
   const valor_total = Number(cuenta.valor_total)
-  const total_abonado = abonos.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0)
+  const total_abonado = abonosValidos.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0)
   const monto_pendiente = valor_total - total_abonado
   const saldos = { valor_total, total_abonado, monto_pendiente }
 
