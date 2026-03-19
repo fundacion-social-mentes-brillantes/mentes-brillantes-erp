@@ -32,12 +32,22 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
     .eq('asistente_id', id)
     .order('fecha_emision', { ascending: false })
 
+  let movimientosSaldo: any[] | null = null
+  let saldoFavorError: string | null = null
+
   // Fetch movimientos de saldo a favor
-  const { data: movimientosSaldo } = await supabase
+  const { data: movimientosData, error: movError } = await supabase
     .from('movimientos_saldo_favor')
     .select('*')
     .eq('asistente_id', id)
     .order('fecha', { ascending: false })
+
+  if (movError) {
+    console.error('Error cargando movimientos_saldo_favor:', movError)
+    saldoFavorError = 'No se pudo cargar el historial de saldo a favor. Contacta al administrador.'
+  } else {
+    movimientosSaldo = movimientosData
+  }
 
   let totalIngresosSaldo = 0
   let totalAplicadoSaldo = 0
@@ -117,6 +127,12 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Left Column: Info & Stats */}
         <div className="space-y-6 md:col-span-1">
+          {saldoFavorError && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 text-amber-800 p-4 text-sm">
+              {saldoFavorError}
+            </div>
+          )}
+
           {/* Contact Info Card */}
           <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50">

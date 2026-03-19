@@ -54,6 +54,7 @@ type Movimiento = {
 export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes: Asistente[], isAdmin?: boolean }) {
   const [movimientos, setMovimientos] = useState<Movimiento[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   // Filters
   const [rangoFecha, setRangoFecha] = useState<'este_mes' | 'mes_pasado' | 'todos' | 'custom'>('este_mes')
@@ -103,6 +104,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
   async function fetchMovimientos() {
     if (!supabase) return
     setLoading(true)
+    setLoadError(null)
 
     let query = supabase
       .from('vw_movimientos_generales')
@@ -118,7 +120,10 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
 
     const { data, error } = await query
 
-    if (!error && data) {
+    if (error) {
+      console.error('Error cargando movimientos:', error)
+      setLoadError('No se pudo cargar el historial porque falta la vista de movimientos o hay un problema de conexión. Contacta al administrador.')
+    } else if (data) {
       let result = data as Movimiento[]
       if (!mostrarAplicaciones) {
         result = result.filter(m =>
@@ -261,6 +266,12 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
 
   return (
     <div className="space-y-4">
+      {loadError && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg p-3">
+          {loadError}
+        </div>
+      )}
+
       {/* Filters (same as before) */}
       <div className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm space-y-4">
         <div className="flex items-center gap-2 text-sm font-medium text-zinc-700 mb-2">
@@ -642,8 +653,6 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                           <option value="efectivo">Efectivo</option>
                           <option value="nequi">Nequi</option>
                           <option value="daviplata">Daviplata</option>
-                          <option value="saldo_a_favor">Saldo a Favor</option>
-                          <option value="transferencia">Transferencia</option>
                           <option value="otro">Otro</option>
                         </select>
                       </div>

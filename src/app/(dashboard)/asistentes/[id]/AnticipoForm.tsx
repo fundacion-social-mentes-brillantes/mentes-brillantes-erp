@@ -47,7 +47,6 @@ export function AnticipoForm({ asistenteId }: { asistenteId: string }) {
           <option value="efectivo">Efectivo</option>
           <option value="nequi">Nequi</option>
           <option value="daviplata">Daviplata</option>
-          <option value="transferencia">Transferencia</option>
           <option value="otro">Otro</option>
         </select>
       </div>
