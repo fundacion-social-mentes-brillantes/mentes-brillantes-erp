@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { requireAdmin } from '@/lib/utils/authz'
 
 export type ActionState = {
   error?: string;
@@ -57,8 +58,12 @@ export async function toggleAsistenteEstado(id: string, activo: boolean) {
 }
 
 export async function saveAnticipo(asistente_id: string, prevState: ActionState, formData: FormData): Promise<ActionState> {
-  const supabase = await createClient()
-  if (!supabase) return { error: 'Supabase no configurado' }
+  let supabase
+  try {
+    ({ supabase } = await requireAdmin())
+  } catch (e: any) {
+    return { error: e?.message || 'Acceso denegado' }
+  }
 
   const monto = parseFloat(formData.get('monto') as string)
   const metodo_pago = formData.get('metodo_pago') as string
@@ -84,21 +89,11 @@ export async function saveAnticipo(asistente_id: string, prevState: ActionState,
 }
 
 export async function deleteAsistente(id: string) {
-  const supabase = await createClient()
-  if (!supabase) return { error: 'Supabase no configurado' }
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'No autenticado' }
-
-  // Verificar si es admin
-  const { data: perfil } = await supabase.from('perfiles').select('rol').eq('id', user.id).single()
-  
-  if (!perfil || perfil.rol !== 'admin') {
-    // Si no hay perfiles en toda la base de datos (fase inicial), permitimos la acción
-    const { count } = await supabase.from('perfiles').select('*', { count: 'exact', head: true })
-    if (count !== 0) {
-      return { error: 'Acceso denegado. Solo los administradores pueden eliminar registros.' }
-    }
+  let supabase
+  try {
+    ({ supabase } = await requireAdmin())
+  } catch (e: any) {
+    return { error: e?.message || 'Acceso denegado' }
   }
 
   // Verificar si tiene cuentas por cobrar asociadas
@@ -115,11 +110,9 @@ export async function deleteAsistente(id: string) {
     return { error: 'No se puede eliminar este asistente porque tiene cuentas por cobrar asociadas. Se recomienda desactivarlo en su lugar para mantener el historial.' }
   }
 
-  // Intentar eliminar
   const { error } = await supabase.from('asistentes').delete().eq('id', id)
   
   if (error) {
-    // Capturar error de restricción de clave foránea si hay otras relaciones
     if (error.code === '23503') {
       return { error: 'No se puede eliminar el asistente porque tiene registros financieros o históricos asociados.' }
     }
@@ -130,8 +123,12 @@ export async function deleteAsistente(id: string) {
 }
 
 export async function pagarDeudasConSaldo(asistente_id: string): Promise<ActionState> {
-  const supabase = await createClient()
-  if (!supabase) return { error: 'Supabase no configurado' }
+  let supabase
+  try {
+    ({ supabase } = await requireAdmin())
+  } catch (e: any) {
+    return { error: e?.message || 'Acceso denegado' }
+  }
 
   // Obtener saldo a favor actual
   const { data: movimientosSaldo } = await supabase
@@ -160,7 +157,7 @@ export async function pagarDeudasConSaldo(asistente_id: string): Promise<ActionS
       id,
       valor_total,
       fecha_emision,
-      pagos_abonos (monto)
+      pagos_abonos (monto, notas)
     `)
     .eq('asistente_id', asistente_id)
     .neq('estado', 'pagado')
@@ -175,7 +172,9 @@ export async function pagarDeudasConSaldo(asistente_id: string): Promise<ActionS
   for (const cuenta of cuentas) {
     if (saldoDisponible <= 0) break;
 
-    const abonado = Math.round(cuenta.pagos_abonos?.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0) || 0);
+    const abonado = Math.round(
+      cuenta.pagos_abonos?.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0) || 0
+    );
     const pendiente = Math.round(Number(cuenta.valor_total) - abonado);
 
     if (pendiente <= 0) continue;

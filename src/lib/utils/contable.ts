@@ -37,6 +37,9 @@ export function filtrarIngresosOperativos<T extends PagoRecord>(
   })
 }
 
+// Alias para compatibilidad con llamadas existentes
+export const filtrarPagosValidos = filtrarPagosValidosCuentas
+
 export const sumarMontos = (pagos: PagoRecord[] = []) =>
   pagos.reduce((sum, p) => sum + Number(p.monto || 0), 0)
 

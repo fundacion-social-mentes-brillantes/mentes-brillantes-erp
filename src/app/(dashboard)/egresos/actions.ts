@@ -1,8 +1,8 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { requireAdmin } from '@/lib/utils/authz'
 
 export type ActionState = {
   error?: string;
@@ -10,8 +10,12 @@ export type ActionState = {
 } | null;
 
 export async function saveEgreso(id: string | null, prevState: ActionState, formData: FormData): Promise<ActionState> {
-  const supabase = await createClient()
-  if (!supabase) return { error: 'Supabase no configurado' }
+  let supabase
+  try {
+    ({ supabase } = await requireAdmin())
+  } catch (e: any) {
+    return { error: e?.message || 'Acceso denegado' }
+  }
 
   const concepto = formData.get('concepto') as string
   const monto_str = formData.get('monto') as string
@@ -52,8 +56,12 @@ export async function saveEgreso(id: string | null, prevState: ActionState, form
 }
 
 export async function deleteEgreso(id: string) {
-  const supabase = await createClient()
-  if (!supabase) return { error: 'Supabase no configurado' }
+  let supabase
+  try {
+    ({ supabase } = await requireAdmin())
+  } catch (e: any) {
+    return { error: e?.message || 'Acceso denegado' }
+  }
   const { error } = await supabase.from('egresos').delete().eq('id', id)
   if (error) return { error: error.message }
   revalidatePath('/egresos')
