@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { filtrarIngresosOperativos, esAnuladoCompleto, sumarMontos } from '@/lib/utils/contable'
 
 export type ActionState = {
   error?: string;
@@ -102,14 +103,11 @@ export async function generarLiquidacion(periodo_id: string) {
     .lte('fecha_pago', periodo.fecha_fin)
 
   // Excluir pagos aplicados desde saldo a favor (evita doble conteo) y anulados
-  const ingresosValidos = rawIngresosData?.filter(item =>
-    item.metodo_pago !== 'Saldo_a_favor' &&
-    item.metodo_pago !== 'saldo_a_favor' &&
-    item.origen_fondos !== 'saldo_a_favor' &&
-    !item.notas?.includes('[ANULADO]') &&
-    item.estado !== 'anulado'
-  ) || []
-  const ingresos_cobrados = Math.round(ingresosValidos.reduce((acc, curr) => acc + Number(curr.monto), 0))
+  const ingresosValidos = filtrarIngresosOperativos(rawIngresosData ?? [], {
+    excluirSaldoAFavor: true,
+    excluirAplicacionSaldo: true
+  })
+  const ingresos_cobrados = Math.round(sumarMontos(ingresosValidos))
 
   // 3. Obtener egresos en el periodo (excluyendo anulados)
   const { data: rawEgresosData } = await supabase
@@ -118,11 +116,8 @@ export async function generarLiquidacion(periodo_id: string) {
     .gte('fecha', periodo.fecha_inicio)
     .lte('fecha', periodo.fecha_fin)
 
-  const egresosValidos = rawEgresosData?.filter(item =>
-    !item.notas?.includes('[ANULADO]') &&
-    item.estado !== 'anulado'
-  ) || []
-  const egresos_periodo = Math.round(egresosValidos.reduce((acc, curr) => acc + Number(curr.monto), 0))
+  const egresosValidos = (rawEgresosData ?? []).filter(item => !esAnuladoCompleto(item))
+  const egresos_periodo = Math.round(sumarMontos(egresosValidos))
 
   const utilidad_neta = ingresos_cobrados - egresos_periodo
 

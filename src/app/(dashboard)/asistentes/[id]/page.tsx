@@ -4,6 +4,7 @@ import { ArrowLeft, Edit2, Calendar, FileText, CreditCard, CheckCircle2, Clock, 
 import { notFound } from 'next/navigation'
 import { AnticipoForm } from './AnticipoForm'
 import { PagarConSaldoButton } from './PagarConSaldoButton'
+import { filtrarPagosValidos, sumarMontos } from '@/lib/utils/contable'
 
 export default async function AsistenteDetallePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -64,8 +65,8 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
   let totalAbonado = 0
 
   const cuentasProcesadas = (cuentas || []).map(cuenta => {
-    const pagosValidos = cuenta.pagos_abonos?.filter((pago: any) => !pago.notas?.includes('[ANULADO]')) || []
-    const abonado = Math.round(pagosValidos.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0))
+    const pagosValidos = filtrarPagosValidos(cuenta.pagos_abonos || [])
+    const abonado = Math.round(sumarMontos(pagosValidos))
     const pendiente = Math.round(Number(cuenta.valor_total) - abonado)
     
     totalFacturado += Number(cuenta.valor_total)

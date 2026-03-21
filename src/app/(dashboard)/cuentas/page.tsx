@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import { CuentasClient } from './CuentasClient'
+import { filtrarPagosValidos, sumarMontos } from '@/lib/utils/contable'
 
 export default async function CuentasPage() {
   const supabase = await createClient()
@@ -36,13 +37,8 @@ export default async function CuentasPage() {
 
   const cuentas = (cuentasData ?? []).map((cuenta: any) => {
     const valor_total = Number(cuenta.valor_total)
-    const pagosValidos = cuenta.pagos_abonos?.filter(
-      (pago: any) => !pago.notas?.includes('[ANULADO]')
-    ) ?? []
-    const total_abonado = pagosValidos.reduce(
-      (sum: number, pago: any) => sum + Number(pago.monto),
-      0
-    )
+    const pagosValidos = filtrarPagosValidos(cuenta.pagos_abonos ?? [])
+    const total_abonado = sumarMontos(pagosValidos)
     const monto_pendiente = valor_total - total_abonado
     return {
       id: cuenta.id,

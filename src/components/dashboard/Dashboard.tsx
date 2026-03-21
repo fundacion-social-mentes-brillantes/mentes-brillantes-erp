@@ -4,6 +4,7 @@ import Link from "next/link";
 import { MonthSelector } from "./MonthSelector";
 import { BalanceChart } from "./BalanceChart";
 import { PdfReportButton } from "./PdfReportButton";
+import { filtrarIngresosOperativos, esAnuladoCompleto, filtrarPagosValidosCuentas, sumarMontos } from "@/lib/utils/contable";
 
 export async function Dashboard({ month }: { month?: string }) {
   const supabase = await createClient();
@@ -42,17 +43,11 @@ export async function Dashboard({ month }: { month?: string }) {
     .gte('fecha_pago', firstDayOfMonth)
     .lte('fecha_pago', lastDayOfMonth);
     
-  // Excluir ingresos que provienen de saldo a favor para no duplicar sumas
-  const ingresosData = rawIngresosData?.filter(item => 
-    item.metodo_pago !== 'Saldo_a_favor' && 
-    item.metodo_pago !== 'saldo_a_favor' &&
-    item.origen_fondos !== 'saldo_a_favor' &&
-    (item as any).tipo !== 'aplicacion_saldo' &&
-    !item.notas?.includes('[ANULADO]') && 
-    item.estado !== 'anulado'
-  ) || [];
-
-  const ingresosMes = Math.round(ingresosData.reduce((acc, curr) => acc + Number(curr.monto), 0));
+  const ingresosData = filtrarIngresosOperativos(rawIngresosData ?? [], {
+    excluirSaldoAFavor: true,
+    excluirAplicacionSaldo: true
+  });
+  const ingresosMes = Math.round(sumarMontos(ingresosData));
 
   // Egresos del Mes
   const { data: rawEgresosData } = await supabase
@@ -61,8 +56,8 @@ export async function Dashboard({ month }: { month?: string }) {
     .gte('fecha', firstDayOfMonth)
     .lte('fecha', lastDayOfMonth);
     
-  const egresosData = rawEgresosData?.filter(item => !item.notas?.includes('[ANULADO]') && item.estado !== 'anulado') || [];
-  const egresosMes = Math.round(egresosData.reduce((acc, curr) => acc + Number(curr.monto), 0));
+  const egresosData = (rawEgresosData ?? []).filter((item) => !esAnuladoCompleto(item));
+  const egresosMes = Math.round(sumarMontos(egresosData));
   
   // Utilidad del Mes
   const utilidadMes = Math.round(ingresosMes - egresosMes);
@@ -119,14 +114,15 @@ export async function Dashboard({ month }: { month?: string }) {
 
   // --- DATOS DEL MES ANTERIOR (TENDENCIAS) ---
   const { data: rawIngresosPrev } = await supabase.from('pagos_abonos').select('monto, metodo_pago, origen_fondos, estado, notas').gte('fecha_pago', firstDayOfPrevMonth).lte('fecha_pago', lastDayOfPrevMonth);
-  const ingresosPrevData = rawIngresosPrev?.filter(item => 
-    item.metodo_pago !== 'Saldo_a_favor' && item.metodo_pago !== 'saldo_a_favor' && item.origen_fondos !== 'saldo_a_favor' && (item as any).tipo !== 'aplicacion_saldo' && !item.notas?.includes('[ANULADO]') && item.estado !== 'anulado'
-  ) || [];
-  const ingresosPrev = Math.round(ingresosPrevData.reduce((acc, curr) => acc + Number(curr.monto), 0));
+  const ingresosPrevData = filtrarIngresosOperativos(rawIngresosPrev ?? [], {
+    excluirSaldoAFavor: true,
+    excluirAplicacionSaldo: true
+  });
+  const ingresosPrev = Math.round(sumarMontos(ingresosPrevData));
 
   const { data: rawEgresosPrevData } = await supabase.from('egresos').select('monto, estado, notas').gte('fecha', firstDayOfPrevMonth).lte('fecha', lastDayOfPrevMonth);
-  const egresosPrevData = rawEgresosPrevData?.filter(item => !item.notas?.includes('[ANULADO]') && item.estado !== 'anulado') || [];
-  const egresosPrev = Math.round(egresosPrevData.reduce((acc, curr) => acc + Number(curr.monto), 0));
+  const egresosPrevData = (rawEgresosPrevData ?? []).filter((item) => !esAnuladoCompleto(item));
+  const egresosPrev = Math.round(sumarMontos(egresosPrevData));
   const utilidadPrev = ingresosPrev - egresosPrev;
 
   const { data: cuentasPrevData } = await supabase.from('cuentas_por_cobrar').select('valor_total, pagos_abonos(monto)').gte('fecha_emision', firstDayOfPrevMonth).lte('fecha_emision', lastDayOfPrevMonth);
@@ -157,7 +153,7 @@ export async function Dashboard({ month }: { month?: string }) {
     .in('estado', ['pendiente', 'parcial']);
     
   const carteraTotal = Math.round(carteraTotalData?.reduce((acc, curr) => {
-    const abonado = curr.pagos_abonos?.filter((p: any) => p.estado !== 'anulado' && !p.notas?.includes('[ANULADO]')).reduce((sum: number, pago: any) => sum + Number(pago.monto), 0) || 0;
+    const abonado = filtrarPagosValidosCuentas(curr.pagos_abonos || []).reduce((sum: number, pago: any) => sum + Number(pago.monto), 0);
     return acc + (Number(curr.valor_total) - abonado);
   }, 0) || 0);
   
@@ -176,7 +172,7 @@ export async function Dashboard({ month }: { month?: string }) {
   const personasAntiguasSet = new Set<string>();
   
   carteraAntiguaData?.forEach(curr => {
-    const abonado = curr.pagos_abonos?.filter((p: any) => p.estado !== 'anulado' && !p.notas?.includes('[ANULADO]')).reduce((sum: number, p: any) => sum + Number(p.monto), 0) || 0;
+    const abonado = filtrarPagosValidosCuentas(curr.pagos_abonos || []).reduce((sum: number, p: any) => sum + Number(p.monto), 0);
     const pendiente = Number(curr.valor_total) - abonado;
     if (pendiente > 0) {
       carteraAntigua += pendiente;
@@ -198,14 +194,15 @@ export async function Dashboard({ month }: { month?: string }) {
       fecha_emision,
       valor_total,
       asistentes ( nombre ),
-      pagos_abonos ( monto )
+      pagos_abonos ( monto, estado, notas )
     `)
     .in('estado', ['pendiente', 'parcial'])
     .order('fecha_emision', { ascending: false })
     .limit(5);
 
   const cuentasPendientes = cuentasPendientesData?.map((cuenta: any) => {
-    const total_abonado = cuenta.pagos_abonos?.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0) || 0;
+    const pagosValidos = filtrarPagosValidosCuentas(cuenta.pagos_abonos || [])
+    const total_abonado = pagosValidos.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0);
     return {
       ...cuenta,
       monto_pendiente: Math.round(Number(cuenta.valor_total) - total_abonado)

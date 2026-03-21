@@ -6,6 +6,7 @@ import { AbonoForm } from './AbonoForm'
 import { AplicarSaldoForm } from './AplicarSaldoForm'
 import { EditValorModal, EditAbonoModal } from './EditModals'
 import { DeleteCuentaButton } from './DeleteCuentaButton'
+import { filtrarPagosValidos, sumarMontos } from '@/lib/utils/contable'
 
 export default async function DetalleCuentaPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -33,10 +34,10 @@ export default async function DetalleCuentaPage({ params }: { params: Promise<{ 
     new Date(b.fecha_pago).getTime() - new Date(a.fecha_pago).getTime()
   ) || []
 
-  const abonosValidos = abonos.filter((a: any) => !a.notas?.includes('[ANULADO]'))
+  const abonosValidos = filtrarPagosValidos(abonos)
 
   const valor_total = Number(cuenta.valor_total)
-  const total_abonado = abonosValidos.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0)
+  const total_abonado = sumarMontos(abonosValidos)
   const monto_pendiente = valor_total - total_abonado
   const saldos = { valor_total, total_abonado, monto_pendiente }
 
