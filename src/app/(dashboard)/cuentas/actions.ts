@@ -44,17 +44,34 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
     return { error: 'El abono inicial no puede ser mayor al valor total' }
   }
 
-  const { error: rpcError } = await supabase.rpc('rpc_crear_cuenta_con_abono', {
-    p_asistente_id: asistente_id,
-    p_concepto: concepto,
-    p_valor_total: valor_total,
-    p_fecha_emision: fecha_emision,
-    p_abono_inicial: abono_inicial,
-    p_metodo_pago: metodo_pago || 'efectivo',
-    p_user_id: user.id
-  })
+  const estado = calcularEstadoCuenta(valor_total, abono_inicial)
 
-  if (rpcError) return { error: rpcError.message }
+  const { data: cuenta, error: cuentaError } = await supabase.from('cuentas_por_cobrar').insert([{
+    asistente_id,
+    concepto,
+    valor_total,
+    fecha_emision,
+    estado
+  }]).select().single()
+
+  if (cuentaError) {
+    return { error: cuentaError.message }
+  }
+
+  if (abono_inicial > 0 && cuenta) {
+    const { error: abonoError } = await supabase.from('pagos_abonos').insert([{
+      cuenta_id: cuenta.id,
+      monto: abono_inicial,
+      metodo_pago: metodo_pago || 'efectivo',
+      origen_fondos: 'pago_directo',
+      fecha_pago: fecha_emision,
+      notas: 'Abono inicial'
+    }])
+
+    if (abonoError) {
+      return { error: 'Cuenta creada, pero hubo un error al registrar el abono inicial: ' + abonoError.message }
+    }
+  }
 
   revalidatePath('/cuentas')
   redirect('/cuentas')
