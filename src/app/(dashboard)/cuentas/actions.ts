@@ -85,12 +85,22 @@ export async function deleteCuenta(cuenta_id: string): Promise<ActionState> {
     return { error: e?.message || 'Acceso denegado' }
   }
 
-  const { error } = await supabase.rpc('rpc_eliminar_cuenta', {
-    p_cuenta_id: cuenta_id,
-    p_user_id: user.id
-  })
+  const { count: pagosCount, error: pagosError } = await supabase
+    .from('pagos_abonos')
+    .select('*', { count: 'exact', head: true })
+    .eq('cuenta_id', cuenta_id)
 
-  if (error) return { error: error.message }
+  if (pagosError) return { error: pagosError.message }
+  if ((pagosCount ?? 0) > 0) {
+    return { error: 'No se puede eliminar la cuenta porque tiene pagos registrados. Anula o elimina los pagos primero.' }
+  }
+
+  const { error: deleteError } = await supabase
+    .from('cuentas_por_cobrar')
+    .delete()
+    .eq('id', cuenta_id)
+
+  if (deleteError) return { error: deleteError.message }
 
   revalidatePath('/cuentas')
   redirect('/cuentas')
@@ -213,14 +223,35 @@ export async function editValorCuenta(cuenta_id: string, valor_anterior: number,
   const valor_nuevo = Math.round(parseFloat(valor_nuevo_str))
   if (isNaN(valor_nuevo) || valor_nuevo <= 0) return { error: 'El valor debe ser mayor a 0' }
 
-  const { error } = await supabase.rpc('rpc_editar_valor_cuenta', {
-    p_cuenta_id: cuenta_id,
-    p_valor_nuevo: valor_nuevo,
-    p_motivo: motivo,
-    p_user_id: user.id
-  })
+  const { error: updateError } = await supabase
+    .from('cuentas_por_cobrar')
+    .update({ valor_total: valor_nuevo })
+    .eq('id', cuenta_id)
 
-  if (error) return { error: error.message }
+  if (updateError) return { error: updateError.message }
+
+  await supabase.from('auditoria_financiera').insert([{
+    tabla_afectada: 'cuentas_por_cobrar',
+    registro_id: cuenta_id,
+    usuario_id: user.id,
+    accion: 'edicion_valor',
+    valor_anterior,
+    valor_nuevo,
+    motivo
+  }])
+
+  const { data: cuentaData } = await supabase
+    .from('cuentas_por_cobrar')
+    .select('valor_total, pagos_abonos(monto, notas)')
+    .eq('id', cuenta_id)
+    .single()
+
+  if (cuentaData) {
+    const pagosValidos = cuentaData.pagos_abonos?.filter((p: any) => !p.notas?.includes('[ANULADO]')) || []
+    const total_abonado = pagosValidos.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0)
+    const nuevo_estado = calcularEstadoCuenta(Number(cuentaData.valor_total), total_abonado)
+    await supabase.from('cuentas_por_cobrar').update({ estado: nuevo_estado }).eq('id', cuenta_id)
+  }
 
   revalidatePath(`/cuentas/${cuenta_id}`)
   revalidatePath('/cuentas')
@@ -243,15 +274,41 @@ export async function editMontoAbono(abono_id: string, cuenta_id: string, valor_
   const valor_nuevo = Math.round(parseFloat(valor_nuevo_str))
   if (isNaN(valor_nuevo) || valor_nuevo <= 0) return { error: 'El valor debe ser mayor a 0' }
 
-  const { error } = await supabase.rpc('rpc_editar_monto_abono', {
-    p_abono_id: abono_id,
-    p_cuenta_id: cuenta_id,
-    p_valor_nuevo: valor_nuevo,
-    p_motivo: motivo,
-    p_user_id: user.id
-  })
+  const { data: abono } = await supabase.from('pagos_abonos').select('origen_fondos').eq('id', abono_id).single()
 
-  if (error) return { error: error.message }
+  const { error: updateError } = await supabase.from('pagos_abonos').update({ monto: valor_nuevo }).eq('id', abono_id)
+  if (updateError) return { error: updateError.message }
+
+  if (abono?.origen_fondos === 'saldo_a_favor') {
+     await supabase.from('movimientos_saldo_favor')
+       .update({ monto: valor_nuevo })
+       .eq('cuenta_id', cuenta_id)
+       .eq('tipo', 'aplicacion')
+       .eq('monto', valor_anterior)
+  }
+
+  await supabase.from('auditoria_financiera').insert([{
+    tabla_afectada: 'pagos_abonos',
+    registro_id: abono_id,
+    usuario_id: user.id,
+    accion: 'edicion_abono',
+    valor_anterior,
+    valor_nuevo,
+    motivo
+  }])
+
+  const { data: cuentaData } = await supabase
+    .from('cuentas_por_cobrar')
+    .select('valor_total, pagos_abonos(monto, notas)')
+    .eq('id', cuenta_id)
+    .single()
+
+  if (cuentaData) {
+    const pagosValidos = cuentaData.pagos_abonos?.filter((p: any) => !p.notas?.includes('[ANULADO]')) || []
+    const total_abonado = pagosValidos.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0)
+    const nuevo_estado = calcularEstadoCuenta(Number(cuentaData.valor_total), total_abonado)
+    await supabase.from('cuentas_por_cobrar').update({ estado: nuevo_estado }).eq('id', cuenta_id)
+  }
 
   revalidatePath(`/cuentas/${cuenta_id}`)
   revalidatePath('/cuentas')
