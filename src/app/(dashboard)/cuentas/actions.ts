@@ -2,8 +2,8 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { calcularEstadoCuenta } from '@/lib/utils/cuentas'
-import { requireAdmin } from '@/lib/utils/authz'
+import { calcularEstadoCuenta } from '../../../lib/utils/cuentas'
+import { requireAdmin } from '../../../lib/utils/authz'
 
 export type ActionState = {
   error?: string;

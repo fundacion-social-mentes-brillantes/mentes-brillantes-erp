@@ -6,7 +6,8 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "set NODE_OPTIONS=--require=./patch-netuse.cjs&&set ESBUILD_BINARY_PATH=C:\\mentes-brillantes-erp\\node_modules\\@esbuild\\win32-x64\\esbuild.exe&&set TMP=.tmp&&set TEMP=.tmp&&vitest run --reporter=basic"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -37,6 +38,7 @@
     "@types/react-dom": "^19",
     "postcss": "^8",
     "tailwindcss": "^4.0.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^1.6.0"
   }
 }

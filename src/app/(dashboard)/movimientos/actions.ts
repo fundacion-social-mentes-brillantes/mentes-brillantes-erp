@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { requireAdmin } from '@/lib/utils/authz'
+import { requireAdmin } from '../../../lib/utils/authz'
 
 export type ActionState = {
   error?: string;
