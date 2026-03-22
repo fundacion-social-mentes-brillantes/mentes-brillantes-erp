@@ -1,4 +1,4 @@
-import { Sidebar } from "@/components/layout/Sidebar";
+﻿import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
@@ -19,14 +19,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   return (
-    <div className="flex h-screen bg-zinc-50 overflow-hidden">
+    <div className="flex h-screen bg-[rgb(var(--bg))] text-[rgb(var(--text-primary))] overflow-hidden transition-colors">
       <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden bg-[rgb(var(--surface-2))]">
         <Header userEmail={user.email} userRole={userRole} />
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-6 bg-[rgb(var(--surface-2))]">
           {children}
         </main>
       </div>
     </div>
   );
 }
+

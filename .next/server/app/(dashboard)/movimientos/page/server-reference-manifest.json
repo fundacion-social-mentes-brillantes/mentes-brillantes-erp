@@ -1,0 +1,50 @@
+{
+  "node": {
+    "78b5f9fa686ef1c3c376a3ba01f08d2912f561820a": {
+      "workers": {
+        "app/(dashboard)/movimientos/page": {
+          "moduleId": 21382,
+          "async": false,
+          "exportedName": "anularMovimiento",
+          "filename": "src/app/(dashboard)/movimientos/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/movimientos/page": "action-browser"
+      },
+      "exportedName": "anularMovimiento",
+      "filename": "src/app/(dashboard)/movimientos/actions.ts"
+    },
+    "70f76e08d6c04bb364a31a4c8b3ff6d6082409c176": {
+      "workers": {
+        "app/(dashboard)/movimientos/page": {
+          "moduleId": 21382,
+          "async": false,
+          "exportedName": "editarMovimiento",
+          "filename": "src/app/(dashboard)/movimientos/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/movimientos/page": "action-browser"
+      },
+      "exportedName": "editarMovimiento",
+      "filename": "src/app/(dashboard)/movimientos/actions.ts"
+    },
+    "78aa76cffbc2db0c7a92a3a47c86a4988ac343ccb4": {
+      "workers": {
+        "app/(dashboard)/movimientos/page": {
+          "moduleId": 21382,
+          "async": false,
+          "exportedName": "eliminarMovimiento",
+          "filename": "src/app/(dashboard)/movimientos/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/movimientos/page": "action-browser"
+      },
+      "exportedName": "eliminarMovimiento",
+      "filename": "src/app/(dashboard)/movimientos/actions.ts"
+    }
+  },
+  "edge": {}
+}

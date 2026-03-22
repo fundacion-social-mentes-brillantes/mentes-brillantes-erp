@@ -1,0 +1,20 @@
+{
+  "node": {
+    "60da085b7f67e0b5a40d7e82d8833f423c96bf74ee": {
+      "workers": {
+        "app/(dashboard)/cuentas/nueva/page": {
+          "moduleId": 89602,
+          "async": false,
+          "exportedName": "saveCuenta",
+          "filename": "src/app/(dashboard)/cuentas/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/cuentas/nueva/page": "action-browser"
+      },
+      "exportedName": "saveCuenta",
+      "filename": "src/app/(dashboard)/cuentas/actions.ts"
+    }
+  },
+  "edge": {}
+}

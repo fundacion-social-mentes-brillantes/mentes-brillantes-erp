@@ -1,0 +1,35 @@
+{
+  "node": {
+    "70b80b97d230643b40a509bf1a0ceedea9797b9ea4": {
+      "workers": {
+        "app/(dashboard)/asistentes/[id]/page": {
+          "moduleId": 53531,
+          "async": false,
+          "exportedName": "saveAnticipo",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/asistentes/[id]/page": "action-browser"
+      },
+      "exportedName": "saveAnticipo",
+      "filename": "src/app/(dashboard)/asistentes/actions.ts"
+    },
+    "40b3e7c04a78e5f0ebb4eea5e46e682d09699b5458": {
+      "workers": {
+        "app/(dashboard)/asistentes/[id]/page": {
+          "moduleId": 53531,
+          "async": false,
+          "exportedName": "pagarDeudasConSaldo",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/asistentes/[id]/page": "action-browser"
+      },
+      "exportedName": "pagarDeudasConSaldo",
+      "filename": "src/app/(dashboard)/asistentes/actions.ts"
+    }
+  },
+  "edge": {}
+}

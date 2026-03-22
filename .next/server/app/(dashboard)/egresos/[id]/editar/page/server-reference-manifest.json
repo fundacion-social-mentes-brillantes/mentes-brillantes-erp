@@ -1,0 +1,20 @@
+{
+  "node": {
+    "7077725261a282fcb2f006e42fadbfeca0e0325775": {
+      "workers": {
+        "app/(dashboard)/egresos/[id]/editar/page": {
+          "moduleId": 48365,
+          "async": false,
+          "exportedName": "saveEgreso",
+          "filename": "src/app/(dashboard)/egresos/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/egresos/[id]/editar/page": "action-browser"
+      },
+      "exportedName": "saveEgreso",
+      "filename": "src/app/(dashboard)/egresos/actions.ts"
+    }
+  },
+  "edge": {}
+}

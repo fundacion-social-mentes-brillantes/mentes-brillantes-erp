@@ -1,0 +1,20 @@
+{
+  "node": {
+    "707ba8a024f74d5d95b1b2182cb5c80ce8c4eac243": {
+      "workers": {
+        "app/(dashboard)/socios/[id]/editar/page": {
+          "moduleId": 37621,
+          "async": false,
+          "exportedName": "saveSocio",
+          "filename": "src/app/(dashboard)/socios/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/socios/[id]/editar/page": "action-browser"
+      },
+      "exportedName": "saveSocio",
+      "filename": "src/app/(dashboard)/socios/actions.ts"
+    }
+  },
+  "edge": {}
+}

@@ -1,8 +1,9 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { hasEnvVars } from "@/lib/env";
 import { SetupSupabase } from "@/components/setup/SetupSupabase";
+import { ThemeProvider } from "@/components/theme/ThemeProvider";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -17,9 +18,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es">
+    <html lang="es" data-theme="light">
       <body className={inter.className}>
-        {!hasEnvVars() ? <SetupSupabase /> : children}
+        <ThemeProvider>
+          {!hasEnvVars() ? <SetupSupabase /> : children}
+        </ThemeProvider>
       </body>
     </html>
   );

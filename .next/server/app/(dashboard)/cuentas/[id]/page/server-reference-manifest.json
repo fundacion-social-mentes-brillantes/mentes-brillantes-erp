@@ -1,0 +1,80 @@
+{
+  "node": {
+    "70d5be7c71f7caa968c7ab1cf211c6c99ed00ac454": {
+      "workers": {
+        "app/(dashboard)/cuentas/[id]/page": {
+          "moduleId": 86224,
+          "async": false,
+          "exportedName": "saveAbono",
+          "filename": "src/app/(dashboard)/cuentas/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/cuentas/[id]/page": "action-browser"
+      },
+      "exportedName": "saveAbono",
+      "filename": "src/app/(dashboard)/cuentas/actions.ts"
+    },
+    "7ca84cefdc82bd3a4ee9194b5bed2cf964abf37164": {
+      "workers": {
+        "app/(dashboard)/cuentas/[id]/page": {
+          "moduleId": 86224,
+          "async": false,
+          "exportedName": "aplicarSaldoFavor",
+          "filename": "src/app/(dashboard)/cuentas/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/cuentas/[id]/page": "action-browser"
+      },
+      "exportedName": "aplicarSaldoFavor",
+      "filename": "src/app/(dashboard)/cuentas/actions.ts"
+    },
+    "78e2fba24d9290ed07a45720b8ef76c8f45f5220cf": {
+      "workers": {
+        "app/(dashboard)/cuentas/[id]/page": {
+          "moduleId": 86224,
+          "async": false,
+          "exportedName": "editValorCuenta",
+          "filename": "src/app/(dashboard)/cuentas/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/cuentas/[id]/page": "action-browser"
+      },
+      "exportedName": "editValorCuenta",
+      "filename": "src/app/(dashboard)/cuentas/actions.ts"
+    },
+    "7cf89b13292cf72b8f08b9465df98513ec56e48167": {
+      "workers": {
+        "app/(dashboard)/cuentas/[id]/page": {
+          "moduleId": 86224,
+          "async": false,
+          "exportedName": "editMontoAbono",
+          "filename": "src/app/(dashboard)/cuentas/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/cuentas/[id]/page": "action-browser"
+      },
+      "exportedName": "editMontoAbono",
+      "filename": "src/app/(dashboard)/cuentas/actions.ts"
+    },
+    "40b086f9e7a20ec9a6404245d1aa0f98cb04b5164f": {
+      "workers": {
+        "app/(dashboard)/cuentas/[id]/page": {
+          "moduleId": 86224,
+          "async": false,
+          "exportedName": "deleteCuenta",
+          "filename": "src/app/(dashboard)/cuentas/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/cuentas/[id]/page": "action-browser"
+      },
+      "exportedName": "deleteCuenta",
+      "filename": "src/app/(dashboard)/cuentas/actions.ts"
+    }
+  },
+  "edge": {}
+}

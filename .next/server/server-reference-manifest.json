@@ -1,0 +1,472 @@
+{
+  "node": {
+    "007bbef72409d2008e244b81eb644535c0869bd874": {
+      "workers": {
+        "app/(dashboard)/asistentes/nuevo/page": {
+          "moduleId": 52174,
+          "async": false,
+          "exportedName": "obtenerSiguienteCodigoAsistente",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        },
+        "app/(dashboard)/asistentes/page": {
+          "moduleId": 61258,
+          "async": false,
+          "exportedName": "obtenerSiguienteCodigoAsistente",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/asistentes/nuevo/page": "rsc",
+        "app/(dashboard)/asistentes/page": "rsc"
+      },
+      "filename": "src/app/(dashboard)/asistentes/actions.ts",
+      "exportedName": "obtenerSiguienteCodigoAsistente"
+    },
+    "402e879eb2ba09a9e9d33a4b4e466dd8911cd7315f": {
+      "workers": {
+        "app/(dashboard)/asistentes/nuevo/page": {
+          "moduleId": 52174,
+          "async": false,
+          "exportedName": "deleteAsistente",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        },
+        "app/(dashboard)/asistentes/page": {
+          "moduleId": 61258,
+          "async": false,
+          "exportedName": "deleteAsistente",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/asistentes/nuevo/page": "rsc",
+        "app/(dashboard)/asistentes/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/asistentes/actions.ts",
+      "exportedName": "deleteAsistente"
+    },
+    "40b3e7c04a78e5f0ebb4eea5e46e682d09699b5458": {
+      "workers": {
+        "app/(dashboard)/asistentes/[id]/page": {
+          "moduleId": 53531,
+          "async": false,
+          "exportedName": "pagarDeudasConSaldo",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        },
+        "app/(dashboard)/asistentes/nuevo/page": {
+          "moduleId": 52174,
+          "async": false,
+          "exportedName": "pagarDeudasConSaldo",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        },
+        "app/(dashboard)/asistentes/page": {
+          "moduleId": 61258,
+          "async": false,
+          "exportedName": "pagarDeudasConSaldo",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/asistentes/[id]/page": "action-browser",
+        "app/(dashboard)/asistentes/nuevo/page": "rsc",
+        "app/(dashboard)/asistentes/page": "rsc"
+      },
+      "filename": "src/app/(dashboard)/asistentes/actions.ts",
+      "exportedName": "pagarDeudasConSaldo"
+    },
+    "60cf7f3faf1bf9a375c81d2aef3f4107ac07d87275": {
+      "workers": {
+        "app/(dashboard)/asistentes/nuevo/page": {
+          "moduleId": 52174,
+          "async": false,
+          "exportedName": "toggleAsistenteEstado",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        },
+        "app/(dashboard)/asistentes/page": {
+          "moduleId": 61258,
+          "async": false,
+          "exportedName": "toggleAsistenteEstado",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/asistentes/nuevo/page": "rsc",
+        "app/(dashboard)/asistentes/page": "rsc"
+      },
+      "filename": "src/app/(dashboard)/asistentes/actions.ts",
+      "exportedName": "toggleAsistenteEstado"
+    },
+    "7038e84b5bfba22f9d3ac08d33621caa74dae2c300": {
+      "workers": {
+        "app/(dashboard)/asistentes/[id]/editar/page": {
+          "moduleId": 43564,
+          "async": false,
+          "exportedName": "saveAsistente",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        },
+        "app/(dashboard)/asistentes/nuevo/page": {
+          "moduleId": 52174,
+          "async": false,
+          "exportedName": "saveAsistente",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        },
+        "app/(dashboard)/asistentes/page": {
+          "moduleId": 61258,
+          "async": false,
+          "exportedName": "saveAsistente",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/asistentes/[id]/editar/page": "action-browser",
+        "app/(dashboard)/asistentes/nuevo/page": "rsc",
+        "app/(dashboard)/asistentes/page": "rsc"
+      },
+      "filename": "src/app/(dashboard)/asistentes/actions.ts",
+      "exportedName": "saveAsistente"
+    },
+    "70b80b97d230643b40a509bf1a0ceedea9797b9ea4": {
+      "workers": {
+        "app/(dashboard)/asistentes/[id]/page": {
+          "moduleId": 53531,
+          "async": false,
+          "exportedName": "saveAnticipo",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        },
+        "app/(dashboard)/asistentes/nuevo/page": {
+          "moduleId": 52174,
+          "async": false,
+          "exportedName": "saveAnticipo",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        },
+        "app/(dashboard)/asistentes/page": {
+          "moduleId": 61258,
+          "async": false,
+          "exportedName": "saveAnticipo",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/asistentes/[id]/page": "action-browser",
+        "app/(dashboard)/asistentes/nuevo/page": "rsc",
+        "app/(dashboard)/asistentes/page": "rsc"
+      },
+      "filename": "src/app/(dashboard)/asistentes/actions.ts",
+      "exportedName": "saveAnticipo"
+    },
+    "607c458049a5a34f720227a59405933a2adacd2726": {
+      "workers": {
+        "app/(dashboard)/configuracion/page": {
+          "moduleId": 49746,
+          "async": false,
+          "exportedName": "procesarMigracion",
+          "filename": "src/app/(dashboard)/configuracion/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/configuracion/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/configuracion/actions.ts",
+      "exportedName": "procesarMigracion"
+    },
+    "40fdf9000d98a5333b5d05dddb0c9f88a096c48044": {
+      "workers": {
+        "app/(dashboard)/configuracion/page": {
+          "moduleId": 49746,
+          "async": false,
+          "exportedName": "actualizarConfiguracionEmpresa",
+          "filename": "src/app/(dashboard)/configuracion/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/configuracion/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/configuracion/actions.ts",
+      "exportedName": "actualizarConfiguracionEmpresa"
+    },
+    "40b086f9e7a20ec9a6404245d1aa0f98cb04b5164f": {
+      "workers": {
+        "app/(dashboard)/cuentas/[id]/page": {
+          "moduleId": 86224,
+          "async": false,
+          "exportedName": "deleteCuenta",
+          "filename": "src/app/(dashboard)/cuentas/actions.ts"
+        },
+        "app/(dashboard)/cuentas/page": {
+          "moduleId": 99536,
+          "async": false,
+          "exportedName": "deleteCuenta",
+          "filename": "src/app/(dashboard)/cuentas/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/cuentas/[id]/page": "action-browser",
+        "app/(dashboard)/cuentas/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/cuentas/actions.ts",
+      "exportedName": "deleteCuenta"
+    },
+    "70d5be7c71f7caa968c7ab1cf211c6c99ed00ac454": {
+      "workers": {
+        "app/(dashboard)/cuentas/[id]/page": {
+          "moduleId": 86224,
+          "async": false,
+          "exportedName": "saveAbono",
+          "filename": "src/app/(dashboard)/cuentas/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/cuentas/[id]/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/cuentas/actions.ts",
+      "exportedName": "saveAbono"
+    },
+    "7ca84cefdc82bd3a4ee9194b5bed2cf964abf37164": {
+      "workers": {
+        "app/(dashboard)/cuentas/[id]/page": {
+          "moduleId": 86224,
+          "async": false,
+          "exportedName": "aplicarSaldoFavor",
+          "filename": "src/app/(dashboard)/cuentas/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/cuentas/[id]/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/cuentas/actions.ts",
+      "exportedName": "aplicarSaldoFavor"
+    },
+    "78e2fba24d9290ed07a45720b8ef76c8f45f5220cf": {
+      "workers": {
+        "app/(dashboard)/cuentas/[id]/page": {
+          "moduleId": 86224,
+          "async": false,
+          "exportedName": "editValorCuenta",
+          "filename": "src/app/(dashboard)/cuentas/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/cuentas/[id]/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/cuentas/actions.ts",
+      "exportedName": "editValorCuenta"
+    },
+    "7cf89b13292cf72b8f08b9465df98513ec56e48167": {
+      "workers": {
+        "app/(dashboard)/cuentas/[id]/page": {
+          "moduleId": 86224,
+          "async": false,
+          "exportedName": "editMontoAbono",
+          "filename": "src/app/(dashboard)/cuentas/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/cuentas/[id]/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/cuentas/actions.ts",
+      "exportedName": "editMontoAbono"
+    },
+    "60da085b7f67e0b5a40d7e82d8833f423c96bf74ee": {
+      "workers": {
+        "app/(dashboard)/cuentas/nueva/page": {
+          "moduleId": 89602,
+          "async": false,
+          "exportedName": "saveCuenta",
+          "filename": "src/app/(dashboard)/cuentas/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/cuentas/nueva/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/cuentas/actions.ts",
+      "exportedName": "saveCuenta"
+    },
+    "400d2d2fdcb7b3f71def1d3b7692b538447523c8dc": {
+      "workers": {
+        "app/(dashboard)/egresos/page": {
+          "moduleId": 37412,
+          "async": false,
+          "exportedName": "deleteEgreso",
+          "filename": "src/app/(dashboard)/egresos/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/egresos/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/egresos/actions.ts",
+      "exportedName": "deleteEgreso"
+    },
+    "7077725261a282fcb2f006e42fadbfeca0e0325775": {
+      "workers": {
+        "app/(dashboard)/egresos/[id]/editar/page": {
+          "moduleId": 48365,
+          "async": false,
+          "exportedName": "saveEgreso",
+          "filename": "src/app/(dashboard)/egresos/actions.ts"
+        },
+        "app/(dashboard)/egresos/nuevo/page": {
+          "moduleId": 75181,
+          "async": false,
+          "exportedName": "saveEgreso",
+          "filename": "src/app/(dashboard)/egresos/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/egresos/[id]/editar/page": "action-browser",
+        "app/(dashboard)/egresos/nuevo/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/egresos/actions.ts",
+      "exportedName": "saveEgreso"
+    },
+    "70244e6c80d5cf6222086921177bb6c49ea0dd878d": {
+      "workers": {
+        "app/(dashboard)/liquidaciones/[id]/page": {
+          "moduleId": 50687,
+          "async": false,
+          "exportedName": "saveAdelanto",
+          "filename": "src/app/(dashboard)/liquidaciones/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/liquidaciones/[id]/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/liquidaciones/actions.ts",
+      "exportedName": "saveAdelanto"
+    },
+    "40ef25f9283deeb572777fe9e1938a5bc6d1538b66": {
+      "workers": {
+        "app/(dashboard)/liquidaciones/[id]/page": {
+          "moduleId": 50687,
+          "async": false,
+          "exportedName": "generarLiquidacion",
+          "filename": "src/app/(dashboard)/liquidaciones/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/liquidaciones/[id]/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/liquidaciones/actions.ts",
+      "exportedName": "generarLiquidacion"
+    },
+    "606edc7cb62fae2538cd15fed417a23b92dfd844d2": {
+      "workers": {
+        "app/(dashboard)/liquidaciones/nuevo/page": {
+          "moduleId": 68465,
+          "async": false,
+          "exportedName": "savePeriodo",
+          "filename": "src/app/(dashboard)/liquidaciones/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/liquidaciones/nuevo/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/liquidaciones/actions.ts",
+      "exportedName": "savePeriodo"
+    },
+    "78b5f9fa686ef1c3c376a3ba01f08d2912f561820a": {
+      "workers": {
+        "app/(dashboard)/movimientos/page": {
+          "moduleId": 21382,
+          "async": false,
+          "exportedName": "anularMovimiento",
+          "filename": "src/app/(dashboard)/movimientos/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/movimientos/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/movimientos/actions.ts",
+      "exportedName": "anularMovimiento"
+    },
+    "70f76e08d6c04bb364a31a4c8b3ff6d6082409c176": {
+      "workers": {
+        "app/(dashboard)/movimientos/page": {
+          "moduleId": 21382,
+          "async": false,
+          "exportedName": "editarMovimiento",
+          "filename": "src/app/(dashboard)/movimientos/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/movimientos/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/movimientos/actions.ts",
+      "exportedName": "editarMovimiento"
+    },
+    "78aa76cffbc2db0c7a92a3a47c86a4988ac343ccb4": {
+      "workers": {
+        "app/(dashboard)/movimientos/page": {
+          "moduleId": 21382,
+          "async": false,
+          "exportedName": "eliminarMovimiento",
+          "filename": "src/app/(dashboard)/movimientos/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/movimientos/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/movimientos/actions.ts",
+      "exportedName": "eliminarMovimiento"
+    },
+    "606dbd792c7dc345400a8e32ed54a8d40ef6de2994": {
+      "workers": {
+        "app/(dashboard)/socios/page": {
+          "moduleId": 79502,
+          "async": false,
+          "exportedName": "toggleSocioEstado",
+          "filename": "src/app/(dashboard)/socios/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/socios/page": "rsc"
+      },
+      "filename": "src/app/(dashboard)/socios/actions.ts",
+      "exportedName": "toggleSocioEstado"
+    },
+    "707ba8a024f74d5d95b1b2182cb5c80ce8c4eac243": {
+      "workers": {
+        "app/(dashboard)/socios/[id]/editar/page": {
+          "moduleId": 37621,
+          "async": false,
+          "exportedName": "saveSocio",
+          "filename": "src/app/(dashboard)/socios/actions.ts"
+        },
+        "app/(dashboard)/socios/nuevo/page": {
+          "moduleId": 9848,
+          "async": false,
+          "exportedName": "saveSocio",
+          "filename": "src/app/(dashboard)/socios/actions.ts"
+        },
+        "app/(dashboard)/socios/page": {
+          "moduleId": 79502,
+          "async": false,
+          "exportedName": "saveSocio",
+          "filename": "src/app/(dashboard)/socios/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/socios/[id]/editar/page": "action-browser",
+        "app/(dashboard)/socios/nuevo/page": "action-browser",
+        "app/(dashboard)/socios/page": "rsc"
+      },
+      "filename": "src/app/(dashboard)/socios/actions.ts",
+      "exportedName": "saveSocio"
+    },
+    "608fbc200dd67ea6718829efa2a58caf8c83fe2ddc": {
+      "workers": {
+        "app/login/page": {
+          "moduleId": 40246,
+          "async": false,
+          "exportedName": "loginAction",
+          "filename": "src/app/login/actions.ts"
+        }
+      },
+      "layer": {
+        "app/login/page": "action-browser"
+      },
+      "filename": "src/app/login/actions.ts",
+      "exportedName": "loginAction"
+    }
+  },
+  "edge": {},
+  "encryptionKey": "5/+caDmZG8Gz8RtfGehOP8q9ykVdGBucfNpk3btRjjo="
+}

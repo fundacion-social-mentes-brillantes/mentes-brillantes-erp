@@ -1,0 +1,35 @@
+{
+  "node": {
+    "607c458049a5a34f720227a59405933a2adacd2726": {
+      "workers": {
+        "app/(dashboard)/configuracion/page": {
+          "moduleId": 49746,
+          "async": false,
+          "exportedName": "procesarMigracion",
+          "filename": "src/app/(dashboard)/configuracion/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/configuracion/page": "action-browser"
+      },
+      "exportedName": "procesarMigracion",
+      "filename": "src/app/(dashboard)/configuracion/actions.ts"
+    },
+    "40fdf9000d98a5333b5d05dddb0c9f88a096c48044": {
+      "workers": {
+        "app/(dashboard)/configuracion/page": {
+          "moduleId": 49746,
+          "async": false,
+          "exportedName": "actualizarConfiguracionEmpresa",
+          "filename": "src/app/(dashboard)/configuracion/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/configuracion/page": "action-browser"
+      },
+      "exportedName": "actualizarConfiguracionEmpresa",
+      "filename": "src/app/(dashboard)/configuracion/actions.ts"
+    }
+  },
+  "edge": {}
+}

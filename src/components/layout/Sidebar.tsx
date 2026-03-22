@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -42,7 +42,7 @@ export function Sidebar() {
       {/* Mobile Toggle Button */}
       <button 
         onClick={() => setIsOpen(true)}
-        className="md:hidden fixed top-3 left-4 z-50 p-2 bg-zinc-950 text-white rounded-md shadow-md"
+        className="md:hidden fixed top-3 left-4 z-50 p-2 bg-[rgb(var(--surface-1))] text-[rgb(var(--text-primary))] border border-[rgb(var(--border))] rounded-md shadow-soft"
       >
         <Menu className="w-5 h-5" />
       </button>
@@ -57,14 +57,14 @@ export function Sidebar() {
 
       {/* Sidebar */}
       <aside className={cn(
-        "fixed md:static inset-y-0 left-0 z-50 w-64 bg-zinc-950 text-zinc-300 flex flex-col h-screen border-r border-zinc-800 transition-transform duration-300 ease-in-out",
+        "fixed md:static inset-y-0 left-0 z-50 w-64 bg-[rgb(var(--surface-1))] text-[rgb(var(--text-primary))] flex flex-col h-screen border-r border-[rgb(var(--border))] transition-transform duration-300 ease-in-out shadow-soft md:shadow-none",
         isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
       )}>
-        <div className="h-16 flex items-center justify-between px-6 border-b border-zinc-800">
-          <div className="font-bold text-white text-lg tracking-tight">
+        <div className="h-16 flex items-center justify-between px-6 border-b border-[rgb(var(--border))]">
+          <div className="font-bold text-[rgb(var(--text-primary))] text-lg tracking-tight">
             Mentes Brillantes
           </div>
-          <button onClick={() => setIsOpen(false)} className="md:hidden p-1 text-zinc-400 hover:text-white">
+          <button onClick={() => setIsOpen(false)} className="md:hidden p-1 text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))]">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -78,10 +78,10 @@ export function Sidebar() {
                   <Link
                     href={item.href}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                      "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors border border-transparent",
                       isActive 
-                        ? "bg-zinc-800 text-white" 
-                        : "hover:bg-zinc-800/50 hover:text-white"
+                        ? "bg-[rgba(var(--accent),0.14)] text-[rgb(var(--accent-strong))] border-[rgba(var(--accent),0.35)] shadow-soft" 
+                        : "hover:bg-[rgb(var(--surface-2))] hover:text-[rgb(var(--text-primary))] text-[rgb(var(--text-muted))]"
                     )}
                   >
                     <item.icon className="w-4 h-4" />
@@ -93,12 +93,12 @@ export function Sidebar() {
           </ul>
         </nav>
 
-        <div className="p-4 border-t border-zinc-800">
+        <div className="p-4 border-t border-[rgb(var(--border))]">
           <ul className="space-y-1">
             <li>
               <Link
                 href="/configuracion"
-                className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium hover:bg-zinc-800/50 hover:text-white transition-colors"
+                className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium hover:bg-[rgb(var(--surface-2))] hover:text-[rgb(var(--text-primary))] text-[rgb(var(--text-muted))] transition-colors"
               >
                 <Settings className="w-4 h-4" />
                 Configuración
@@ -108,7 +108,7 @@ export function Sidebar() {
               <form action="/auth/signout" method="post">
                 <button
                   type="submit"
-                  className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors"
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-[rgb(var(--danger))] hover:bg-[rgba(var(--danger),0.12)] transition-colors"
                 >
                   <LogOut className="w-4 h-4" />
                   Cerrar Sesión
@@ -121,3 +121,4 @@ export function Sidebar() {
     </>
   );
 }
+
