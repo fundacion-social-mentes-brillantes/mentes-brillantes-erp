@@ -34,6 +34,9 @@ export async function anularMovimiento(
     case 'anticipo':
       tablaDestino = 'movimientos_saldo_favor'
       break
+    case 'donacion':
+      tablaDestino = 'donaciones_asistentes'
+      break
     default:
       return { error: 'Tipo de movimiento no soportado para anulación directa.' }
   }
@@ -132,7 +135,9 @@ export async function anularMovimiento(
   revalidatePath('/movimientos')
   revalidatePath('/dashboard')
   revalidatePath('/asistentes')
-  revalidatePath('/cuentas')
+  if (tipo_movimiento === 'abono' || tipo_movimiento === 'aplicacion_saldo') {
+    revalidatePath('/cuentas')
+  }
 
   return { success: true }
 }
@@ -181,6 +186,14 @@ export async function editarMovimiento(
       delete updatePayload.concepto
       delete updatePayload.categoria
       break
+    case 'donacion':
+      tablaDestino = 'donaciones_asistentes'
+      if (newData.fecha !== undefined) updatePayload.fecha = newData.fecha
+      if (newData.metodo_pago !== undefined) updatePayload.metodo_pago = newData.metodo_pago
+      if (newData.asistente_id !== undefined) updatePayload.asistente_id = newData.asistente_id
+      delete updatePayload.concepto
+      delete updatePayload.categoria
+      break
     default:
       return { error: 'Tipo de movimiento no soportado para edición.' }
   }
@@ -224,7 +237,9 @@ export async function editarMovimiento(
   revalidatePath('/movimientos')
   revalidatePath('/dashboard')
   revalidatePath('/asistentes')
-  revalidatePath('/cuentas')
+  if (tipo_movimiento === 'abono' || tipo_movimiento === 'aplicacion_saldo') {
+    revalidatePath('/cuentas')
+  }
 
   return { success: true }
 }
@@ -253,6 +268,9 @@ export async function eliminarMovimiento(
       break
     case 'anticipo':
       tablaDestino = 'movimientos_saldo_favor'
+      break
+    case 'donacion':
+      tablaDestino = 'donaciones_asistentes'
       break
     default:
       return { error: 'Tipo de movimiento no soportado para el borrado duro.' }
@@ -323,7 +341,9 @@ export async function eliminarMovimiento(
   revalidatePath('/movimientos')
   revalidatePath('/dashboard')
   revalidatePath('/asistentes')
-  revalidatePath('/cuentas')
+  if (tipo_movimiento === 'abono' || tipo_movimiento === 'aplicacion_saldo') {
+    revalidatePath('/cuentas')
+  }
 
   return { success: true }
 }

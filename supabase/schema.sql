@@ -105,6 +105,8 @@ CREATE TABLE liquidaciones_socios (
   periodo_id UUID REFERENCES periodos(id) ON DELETE RESTRICT,
   socio_id UUID REFERENCES socios(id) ON DELETE RESTRICT,
   ingresos_cobrados DECIMAL(12,2) NOT NULL,
+  donaciones_periodo DECIMAL(12,2) NOT NULL DEFAULT 0,
+  ingresos_operativos DECIMAL(12,2) NOT NULL DEFAULT 0,
   egresos_periodo DECIMAL(12,2) NOT NULL,
   utilidad_neta DECIMAL(12,2) NOT NULL,
   porcentaje_aplicado DECIMAL(5,2) NOT NULL,
@@ -150,3 +152,121 @@ $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER trg_estado_cuenta AFTER INSERT OR UPDATE OR DELETE ON pagos_abonos
 FOR EACH ROW EXECUTE FUNCTION actualizar_estado_cuenta();
+
+-- DONACIONES DE ASISTENTES (flujo independiente a cuentas/abonos)
+CREATE TABLE IF NOT EXISTS donaciones_asistentes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  asistente_id UUID NOT NULL REFERENCES asistentes(id) ON DELETE RESTRICT,
+  legacy_row_id TEXT UNIQUE,
+  monto DECIMAL(12,2) NOT NULL CHECK (monto > 0),
+  metodo_pago metodo_pago NOT NULL,
+  fecha DATE NOT NULL DEFAULT CURRENT_DATE,
+  notas TEXT,
+  estado TEXT NOT NULL DEFAULT 'activo' CHECK (estado IN ('activo','anulado')),
+  creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_donaciones_asistente_fecha ON donaciones_asistentes (asistente_id, fecha DESC);
+CREATE INDEX IF NOT EXISTS idx_donaciones_estado ON donaciones_asistentes (estado);
+
+-- Vista de movimientos generales (incluye donaciones)
+CREATE OR REPLACE VIEW vw_movimientos_generales AS
+SELECT
+  c.id AS movimiento_id,
+  c.fecha_emision AS fecha,
+  'cuenta_cobrar' AS tipo_movimiento,
+  c.asistente_id,
+  a.nombre AS asistente_nombre,
+  c.concepto AS concepto,
+  NULL::metodo_pago AS metodo_pago,
+  GREATEST(c.valor_total - COALESCE((
+    SELECT SUM(pa.monto) FROM pagos_abonos pa WHERE pa.cuenta_id = c.id AND pa.estado <> 'anulado' AND pa.notas NOT ILIKE '%[ANULADO]%'
+  ), 0),0) AS valor_deuda,
+  0::DECIMAL(12,2) AS valor_ingreso,
+  0::DECIMAL(12,2) AS valor_egreso,
+  c.estado AS estado_o_saldo,
+  NULL::text AS notas,
+  c.creado_en AS creado_en,
+  NULL::text AS categoria
+FROM cuentas_por_cobrar c
+LEFT JOIN asistentes a ON a.id = c.asistente_id
+
+UNION ALL
+
+SELECT
+  p.id AS movimiento_id,
+  p.fecha_pago AS fecha,
+  'abono' AS tipo_movimiento,
+  c.asistente_id,
+  a.nombre AS asistente_nombre,
+  c.concepto AS concepto,
+  p.metodo_pago AS metodo_pago,
+  0::DECIMAL(12,2) AS valor_deuda,
+  CASE WHEN p.estado <> 'anulado' AND p.notas NOT ILIKE '%[ANULADO]%' THEN p.monto ELSE 0 END AS valor_ingreso,
+  0::DECIMAL(12,2) AS valor_egreso,
+  p.estado AS estado_o_saldo,
+  p.notas AS notas,
+  p.creado_en AS creado_en,
+  NULL::text AS categoria
+FROM pagos_abonos p
+LEFT JOIN cuentas_por_cobrar c ON c.id = p.cuenta_id
+LEFT JOIN asistentes a ON a.id = c.asistente_id
+
+UNION ALL
+
+SELECT
+  msf.id AS movimiento_id,
+  msf.fecha AS fecha,
+  CASE WHEN msf.tipo = 'ingreso' THEN 'anticipo' ELSE 'aplicacion_saldo' END AS tipo_movimiento,
+  msf.asistente_id,
+  a.nombre AS asistente_nombre,
+  COALESCE(msf.notas, 'Saldo a favor') AS concepto,
+  msf.metodo_pago AS metodo_pago,
+  0::DECIMAL(12,2) AS valor_deuda,
+  CASE WHEN msf.tipo = 'ingreso' THEN msf.monto ELSE 0 END AS valor_ingreso,
+  CASE WHEN msf.tipo = 'aplicacion' THEN msf.monto ELSE 0 END AS valor_egreso,
+  msf.tipo AS estado_o_saldo,
+  msf.notas AS notas,
+  msf.creado_en AS creado_en,
+  NULL::text AS categoria
+FROM movimientos_saldo_favor msf
+LEFT JOIN asistentes a ON a.id = msf.asistente_id
+
+UNION ALL
+
+SELECT
+  e.id AS movimiento_id,
+  e.fecha AS fecha,
+  'egreso' AS tipo_movimiento,
+  NULL::uuid AS asistente_id,
+  NULL::text AS asistente_nombre,
+  e.concepto AS concepto,
+  e.metodo_pago AS metodo_pago,
+  0::DECIMAL(12,2) AS valor_deuda,
+  0::DECIMAL(12,2) AS valor_ingreso,
+  CASE WHEN e.estado <> 'anulado' AND e.notas NOT ILIKE '%[ANULADO]%' THEN e.monto ELSE 0 END AS valor_egreso,
+  e.estado AS estado_o_saldo,
+  e.notas AS notas,
+  e.creado_en AS creado_en,
+  e.categoria AS categoria
+FROM egresos e
+
+UNION ALL
+
+SELECT
+  d.id AS movimiento_id,
+  d.fecha AS fecha,
+  'donacion' AS tipo_movimiento,
+  d.asistente_id AS asistente_id,
+  a.nombre AS asistente_nombre,
+  'Donación' AS concepto,
+  d.metodo_pago AS metodo_pago,
+  0::DECIMAL(12,2) AS valor_deuda,
+  CASE WHEN d.estado <> 'anulado' THEN d.monto ELSE 0 END AS valor_ingreso,
+  0::DECIMAL(12,2) AS valor_egreso,
+  d.estado AS estado_o_saldo,
+  d.notas AS notas,
+  d.creado_en AS creado_en,
+  NULL::text AS categoria
+FROM donaciones_asistentes d
+LEFT JOIN asistentes a ON a.id = d.asistente_id;

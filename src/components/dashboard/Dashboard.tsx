@@ -49,6 +49,14 @@ export async function Dashboard({ month }: { month?: string }) {
   });
   const ingresosMes = Math.round(sumarMontos(ingresosData));
 
+  // Donaciones del Mes
+  const { data: rawDonaciones } = await supabase
+    .from('donaciones_asistentes')
+    .select('monto, estado, notas')
+    .gte('fecha', firstDayOfMonth)
+    .lte('fecha', lastDayOfMonth);
+  const donacionesMes = Math.round((rawDonaciones ?? []).filter(d => d.estado !== 'anulado' && !d.notas?.includes('[ANULADO]')).reduce((acc, d) => acc + Number(d.monto), 0));
+
   // Egresos del Mes
   const { data: rawEgresosData } = await supabase
     .from('egresos')
@@ -60,7 +68,8 @@ export async function Dashboard({ month }: { month?: string }) {
   const egresosMes = Math.round(sumarMontos(egresosData));
   
   // Utilidad del Mes
-  const utilidadMes = Math.round(ingresosMes - egresosMes);
+  const ingresosTotales = Math.round(ingresosMes + donacionesMes);
+  const utilidadMes = Math.round(ingresosTotales - egresosMes);
 
   // Preparar datos para la grÃ¡fica de balance acumulado
   const dailyData: Record<string, { ingresos: number, egresos: number }> = {};
@@ -119,6 +128,9 @@ export async function Dashboard({ month }: { month?: string }) {
     excluirAplicacionSaldo: true
   });
   const ingresosPrev = Math.round(sumarMontos(ingresosPrevData));
+  const { data: rawDonacionesPrev } = await supabase.from('donaciones_asistentes').select('monto, estado, notas').gte('fecha', firstDayOfPrevMonth).lte('fecha', lastDayOfPrevMonth);
+  const donacionesPrev = Math.round((rawDonacionesPrev ?? []).filter(d => d.estado !== 'anulado' && !d.notas?.includes('[ANULADO]')).reduce((acc, d) => acc + Number(d.monto), 0));
+  const ingresosTotalesPrev = ingresosPrev + donacionesPrev;
 
   const { data: rawEgresosPrevData } = await supabase.from('egresos').select('monto, estado, notas').gte('fecha', firstDayOfPrevMonth).lte('fecha', lastDayOfPrevMonth);
   const egresosPrevData = (rawEgresosPrevData ?? []).filter((item) => !esAnuladoCompleto(item));
@@ -139,6 +151,8 @@ export async function Dashboard({ month }: { month?: string }) {
   };
 
   const ingresosTrend = getTrend(ingresosMes, ingresosPrev);
+  const donacionesTrend = getTrend(donacionesMes, donacionesPrev);
+  const ingresosTotalesTrend = getTrend(ingresosTotales, ingresosTotalesPrev);
   const egresosTrend = getTrend(egresosMes, egresosPrev);
   const utilidadTrend = getTrend(utilidadMes, utilidadPrev);
   const facturadoTrend = getTrend(facturadoMes, facturadoPrev);
@@ -211,17 +225,37 @@ export async function Dashboard({ month }: { month?: string }) {
 
   const periodStats = [
     {
-      name: "Ingresos del PerÃ­odo",
+      name: "Ingresos de Cartera",
       value: `$${ingresosMes.toLocaleString()}`,
       trend: ingresosTrend,
       goodIsUp: true,
       icon: Banknote,
       color: "text-[rgb(var(--success))]",
       bg: "bg-[rgba(var(--success),0.12)]",
-      tooltip: "Suma de los pagos y abonos recibidos dentro del mes seleccionado."
+      tooltip: "Pagos y abonos recibidos (sin saldo a favor) en el mes."
     },
     {
-      name: "Egresos del PerÃ­odo",
+      name: "Donaciones",
+      value: `$${donacionesMes.toLocaleString()}`,
+      trend: donacionesTrend,
+      goodIsUp: true,
+      icon: Wallet,
+      color: "text-[rgb(var(--info))]",
+      bg: "bg-[rgba(var(--info),0.12)]",
+      tooltip: "Donaciones voluntarias registradas en el mes."
+    },
+    {
+      name: "Ingresos Totales",
+      value: `$${ingresosTotales.toLocaleString()}`,
+      trend: ingresosTotalesTrend,
+      goodIsUp: true,
+      icon: Banknote,
+      color: "text-[rgb(var(--success))]",
+      bg: "bg-[rgba(var(--success),0.12)]",
+      tooltip: "Ingresos de cartera + donaciones del mes."
+    },
+    {
+      name: "Egresos del Período",
       value: `$${egresosMes.toLocaleString()}`,
       trend: egresosTrend,
       goodIsUp: false,
@@ -231,34 +265,34 @@ export async function Dashboard({ month }: { month?: string }) {
       tooltip: "Suma de los gastos registrados dentro del mes seleccionado."
     },
     {
-      name: "Utilidad del PerÃ­odo",
+      name: "Utilidad del Período",
       value: `$${utilidadMes.toLocaleString()}`,
       trend: utilidadTrend,
       goodIsUp: true,
       icon: Wallet,
       color: utilidadMes >= 0 ? "text-[rgb(var(--info))]" : "text-[rgb(var(--danger))]",
       bg: utilidadMes >= 0 ? "bg-[rgba(var(--info),0.12)]" : "bg-[rgba(var(--danger),0.12)]",
-      tooltip: "Ingresos del perÃ­odo menos egresos del perÃ­odo."
+      tooltip: "Ingresos totales menos egresos del período."
     },
     {
-      name: "Facturado del PerÃ­odo",
+      name: "Facturado del Período",
       value: `$${facturadoMes.toLocaleString()}`,
       trend: facturadoTrend,
       goodIsUp: true,
       icon: Receipt,
       color: "text-[rgb(var(--info))]",
       bg: "bg-[rgba(var(--info),0.12)]",
-      tooltip: "Valor total de las cuentas por cobrar creadas en ese mes, aunque no se hayan pagado todavÃ­a."
+      tooltip: "Valor total de las cuentas por cobrar creadas en ese mes, aunque no se hayan pagado todavía."
     },
     {
-      name: "Pendiente del PerÃ­odo",
+      name: "Pendiente del Período",
       value: `$${pendienteMes.toLocaleString()}`,
       trend: pendienteTrend,
       goodIsUp: false,
       icon: AlertCircle,
       color: "text-[rgb(var(--warning))]",
       bg: "bg-[rgba(var(--warning),0.14)]",
-      tooltip: "Saldo que aÃºn falta por cobrar, pero solo de las cuentas creadas en ese mes."
+      tooltip: "Saldo que aún falta por cobrar, pero solo de las cuentas creadas en ese mes."
     },
   ];
   

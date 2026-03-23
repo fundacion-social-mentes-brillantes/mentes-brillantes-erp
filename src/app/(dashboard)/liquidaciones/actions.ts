@@ -109,6 +109,17 @@ export async function generarLiquidacion(periodo_id: string) {
   })
   const ingresos_cobrados = Math.round(sumarMontos(ingresosValidos))
 
+  // 2b. Donaciones en el periodo (solo activas)
+  const { data: rawDonaciones } = await supabase
+    .from('donaciones_asistentes')
+    .select('monto, estado, notas')
+    .gte('fecha', periodo.fecha_inicio)
+    .lte('fecha', periodo.fecha_fin)
+
+  const donacionesValidas = (rawDonaciones ?? []).filter(d => d.estado !== 'anulado' && !d.notas?.includes('[ANULADO]'))
+  const donaciones_periodo = Math.round(sumarMontos(donacionesValidas))
+  const ingresos_operativos = ingresos_cobrados + donaciones_periodo
+
   // 3. Obtener egresos en el periodo (excluyendo anulados)
   const { data: rawEgresosData } = await supabase
     .from('egresos')
@@ -119,7 +130,7 @@ export async function generarLiquidacion(periodo_id: string) {
   const egresosValidos = (rawEgresosData ?? []).filter(item => !esAnuladoCompleto(item))
   const egresos_periodo = Math.round(sumarMontos(egresosValidos))
 
-  const utilidad_neta = ingresos_cobrados - egresos_periodo
+  const utilidad_neta = ingresos_operativos - egresos_periodo
 
   // 4. Obtener socios activos
   const { data: socios } = await supabase.from('socios').select('*').eq('activo', true)
@@ -142,6 +153,8 @@ export async function generarLiquidacion(periodo_id: string) {
       periodo_id,
       socio_id: socio.id,
       ingresos_cobrados,
+      donaciones_periodo,
+      ingresos_operativos,
       egresos_periodo,
       utilidad_neta,
       porcentaje_aplicado,

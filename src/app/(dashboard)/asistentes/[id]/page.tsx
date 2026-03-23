@@ -1,10 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { ArrowLeft, Edit2, Calendar, FileText, CreditCard, CheckCircle2, Clock, AlertCircle, Plus, Wallet } from 'lucide-react'
+import { ArrowLeft, Edit2, Calendar, FileText, CreditCard, CheckCircle2, Clock, AlertCircle, Plus, Wallet, HeartHandshake } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { AnticipoForm } from './AnticipoForm'
 import { PagarConSaldoButton } from './PagarConSaldoButton'
 import { filtrarPagosValidos, sumarMontos } from '@/lib/utils/contable'
+import { DonacionForm } from './DonacionForm'
 
 export default async function AsistenteDetallePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -60,6 +61,18 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
   })
   const saldoAFavor = Math.round(totalIngresosSaldo - totalAplicadoSaldo)
 
+  // Donaciones
+  const { data: donacionesData } = await supabase
+    .from('donaciones_asistentes')
+    .select('*')
+    .eq('asistente_id', id)
+    .order('fecha', { ascending: false })
+
+  const donaciones = donacionesData || []
+  const donacionesActivas = donaciones.filter(d => d.estado !== 'anulado')
+  const totalDonado = Math.round(donacionesActivas.reduce((acc, curr) => acc + Number(curr.monto), 0))
+  const cantidadDonaciones = donaciones.length
+
   // Calculate totals
   let totalFacturado = 0
   let totalAbonado = 0
@@ -82,7 +95,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
   totalFacturado = Math.round(totalFacturado)
   totalAbonado = Math.round(totalAbonado)
   const saldoPendiente = Math.round(totalFacturado - totalAbonado)
-  const hasMovements = cuentasProcesadas.length > 0
+  const hasMovements = (cuentasProcesadas.length > 0) || (donaciones.length > 0) || (movimientos.length > 0) || (todosLosAbonos.length > 0)
 
   // Extract all payments for the timeline
   const todosLosAbonos = (cuentas || []).flatMap(cuenta => 
@@ -209,6 +222,31 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
               </div>
             </div>
           </div>
+
+          {/* Donaciones Card */}
+          <div className="rounded-xl border border-teal-200 bg-teal-50 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-teal-100 bg-teal-100/50 flex items-center gap-2">
+              <HeartHandshake className="w-4 h-4 text-teal-700" />
+              <h3 className="font-medium text-teal-900">Donaciones</h3>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="flex items-end justify-between">
+                <div>
+                  <p className="text-xs font-medium text-teal-800 uppercase tracking-wider mb-1">Total Donado</p>
+                  <p className="text-2xl font-bold text-teal-800">${totalDonado.toLocaleString('es-CO')}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs font-medium text-teal-800 uppercase tracking-wider mb-1">Donaciones</p>
+                  <p className="text-lg font-semibold text-teal-700">{cantidadDonaciones}</p>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-teal-100">
+                <h4 className="text-sm font-semibold text-teal-900 mb-2">Registrar Donación</h4>
+                <DonacionForm asistenteId={asistente.id} />
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Right Column: History */}
@@ -220,7 +258,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
               </div>
               <h3 className="text-lg font-medium text-zinc-900 mb-1">Sin movimientos</h3>
               <p className="text-zinc-500 max-w-sm mx-auto mb-6">
-                Este asistente aún no tiene cuentas por cobrar ni abonos registrados en el sistema.
+                Este asistente aún no tiene cuentas por cobrar, donaciones ni abonos registrados en el sistema.
               </p>
               <Link 
                 href={`/cuentas/nueva?asistente=${asistente.id}`}
@@ -295,6 +333,41 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                       <div className="flex justify-between text-[10px] text-zinc-500 font-medium uppercase tracking-wider">
                         <span>Abonado: ${cuenta.abonado.toLocaleString('es-CO')}</span>
                         <span>Total: ${Number(cuenta.valor_total).toLocaleString('es-CO')}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Donaciones */}
+              <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
+                <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center justify-between">
+                  <h3 className="font-medium text-zinc-900 flex items-center gap-2">
+                    <HeartHandshake className="w-4 h-4 text-teal-600" />
+                    Donaciones del Asistente
+                  </h3>
+                </div>
+                <div className="divide-y divide-zinc-100">
+                  {donaciones.length === 0 ? (
+                    <div className="p-6 text-sm text-zinc-500 text-center">No hay donaciones registradas.</div>
+                  ) : donaciones.map((dona) => (
+                    <div key={dona.id} className="p-5 hover:bg-zinc-50/50 transition-colors flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-base font-semibold text-teal-700">+${Number(dona.monto).toLocaleString('es-CO')}</span>
+                          <span className="text-xs px-2 py-1 rounded-full border border-teal-200 bg-teal-50 text-teal-700 capitalize">
+                            {dona.metodo_pago?.replace('_', ' ')}
+                          </span>
+                        </div>
+                        <span className="text-xs text-zinc-500 bg-zinc-100 px-2 py-1 rounded-md">
+                          {new Date(dona.fecha).toLocaleDateString('es-CO')}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-zinc-500">
+                        <span className={`font-medium ${dona.estado === 'anulado' ? 'text-red-600' : 'text-teal-700'}`}>
+                          {dona.estado === 'anulado' ? 'Anulado' : 'Activo'}
+                        </span>
+                        {dona.notas && <span className="truncate max-w-[220px]" title={dona.notas}>{dona.notas}</span>}
                       </div>
                     </div>
                   ))}

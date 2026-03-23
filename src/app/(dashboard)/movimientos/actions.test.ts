@@ -79,6 +79,27 @@ describe('anularMovimiento', () => {
     expect(insertMock).toHaveBeenCalled();
     expect(revalidatePathMock).toHaveBeenCalledWith('/cuentas');
   });
+
+  it('anula donación sin revalidar cuentas', async () => {
+    const updateDon = vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) }));
+    const selectDon = vi.fn(() => ({
+      eq: vi.fn(() => singleWrapper({ notas: 'nota', monto: 20000 }))
+    }));
+    const supabase = buildSupabase({
+      donaciones_asistentes: {
+        select: selectDon,
+        update: updateDon,
+      },
+      auditoria_financiera: { insert: vi.fn() },
+    });
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin' } });
+
+    const res = await anularMovimiento('d1', 'donacion', 20000, null);
+    expect(res?.success).toBe(true);
+    expect(updateDon).toHaveBeenCalled();
+    expect(revalidatePathMock).toHaveBeenCalledWith('/movimientos');
+    expect(revalidatePathMock).not.toHaveBeenCalledWith('/cuentas');
+  });
 });
 
 describe('editarMovimiento', () => {
@@ -120,6 +141,20 @@ describe('editarMovimiento', () => {
     expect(updatePago).toHaveBeenCalled();
     expect(updateCuenta).toHaveBeenCalled();
     expect(revalidatePathMock).toHaveBeenCalledWith('/movimientos');
+  });
+
+  it('edita donación sin revalidar cuentas', async () => {
+    const updateDon = vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) }));
+    const supabase = buildSupabase({
+      donaciones_asistentes: { update: updateDon },
+    });
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin' } });
+
+    const res = await editarMovimiento('d1', 'donacion', { monto: 100000, fecha: '2024-01-01', metodo_pago: 'efectivo' });
+    expect(res?.success).toBe(true);
+    expect(updateDon).toHaveBeenCalled();
+    expect(revalidatePathMock).toHaveBeenCalledWith('/movimientos');
+    expect(revalidatePathMock).not.toHaveBeenCalledWith('/cuentas');
   });
 });
 
@@ -163,5 +198,22 @@ describe('eliminarMovimiento', () => {
     expect(deleteMock).toHaveBeenCalled();
     expect(updateCuenta).toHaveBeenCalled();
     expect(revalidatePathMock).toHaveBeenCalledWith('/movimientos');
+  });
+
+  it('elimina donación sin tocar cuentas', async () => {
+    const deleteMock = vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) }));
+    const supabase = buildSupabase({
+      donaciones_asistentes: {
+        delete: deleteMock,
+      },
+      auditoria_financiera: { insert: vi.fn() }
+    });
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin' } });
+
+    const res = await eliminarMovimiento('d1', 'donacion', 50000, null);
+    expect(res?.success).toBe(true);
+    expect(deleteMock).toHaveBeenCalled();
+    expect(revalidatePathMock).toHaveBeenCalledWith('/movimientos');
+    expect(revalidatePathMock).not.toHaveBeenCalledWith('/cuentas');
   });
 });

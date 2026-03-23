@@ -37,7 +37,7 @@ type Asistente = {
 type Movimiento = {
   movimiento_id: string
   fecha: string
-  tipo_movimiento: 'cuenta_cobrar' | 'abono' | 'anticipo' | 'aplicacion_saldo' | 'egreso'
+  tipo_movimiento: 'cuenta_cobrar' | 'abono' | 'anticipo' | 'aplicacion_saldo' | 'egreso' | 'donacion'
   asistente_id: string | null
   asistente_nombre: string | null
   concepto: string
@@ -151,6 +151,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
       case 'abono': return <ArrowDownRight className="w-4 h-4 text-emerald-500" />
       case 'anticipo': return <Wallet className="w-4 h-4 text-emerald-500" />
       case 'aplicacion_saldo': return <ArrowRightLeft className="w-4 h-4 text-amber-500" />
+      case 'donacion': return <ArrowDownRight className="w-4 h-4 text-teal-500" />
       case 'egreso': return <ArrowUpRight className="w-4 h-4 text-red-500" />
       default: return <Receipt className="w-4 h-4 text-zinc-500" />
     }
@@ -162,6 +163,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
       case 'abono': return 'Abono / Ingreso'
       case 'anticipo': return 'Anticipo'
       case 'aplicacion_saldo': return 'Aplicación Saldo'
+      case 'donacion': return 'Donación'
       case 'egreso': return 'Egreso'
       default: return tipo
     }
@@ -173,6 +175,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
       case 'abono': return 'bg-emerald-50 text-emerald-700 border-emerald-200'
       case 'anticipo': return 'bg-emerald-50 text-emerald-700 border-emerald-200'
       case 'aplicacion_saldo': return 'bg-amber-50 text-amber-700 border-amber-200'
+      case 'donacion': return 'bg-teal-50 text-teal-700 border-teal-200'
       case 'egreso': return 'bg-red-50 text-red-700 border-red-200'
       default: return 'bg-zinc-50 text-zinc-700 border-zinc-200'
     }
@@ -314,6 +317,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
               <option value="abono">Abonos / Ingresos</option>
               <option value="anticipo">Anticipos</option>
               <option value="aplicacion_saldo">Aplicación de Saldo</option>
+              <option value="donacion">Donaciones</option>
               <option value="egreso">Egresos</option>
             </select>
           </div>
@@ -642,7 +646,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                       </div>
                     )}
 
-                    {(selectedMov.tipo_movimiento === 'abono' || selectedMov.tipo_movimiento === 'egreso' || selectedMov.tipo_movimiento === 'anticipo') && (
+                    {(selectedMov.tipo_movimiento === 'abono' || selectedMov.tipo_movimiento === 'egreso' || selectedMov.tipo_movimiento === 'anticipo' || selectedMov.tipo_movimiento === 'donacion') && (
                       <div>
                         <label className="block text-xs font-medium text-zinc-500 mb-1">Método de Pago</label>
                         <select

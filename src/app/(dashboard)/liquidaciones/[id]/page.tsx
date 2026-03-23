@@ -37,6 +37,8 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
 
   // Cálculos en vivo si está abierto
   let ingresos_cobrados = 0;
+  let donaciones_periodo = 0;
+  let ingresos_operativos = 0;
   let egresos_periodo = 0;
 
   if (periodo.estado === 'abierto') {
@@ -57,6 +59,15 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
     ) || []
     ingresos_cobrados = Math.round(ingresosData.reduce((acc, curr) => acc + Number(curr.monto), 0))
 
+    const { data: rawDonaciones } = await supabase
+      ?.from('donaciones_asistentes')
+      .select('monto, estado, notas')
+      .gte('fecha', periodo.fecha_inicio)
+      .lte('fecha', periodo.fecha_fin) || { data: [] }
+
+    const donacionesValidas = (rawDonaciones || []).filter(d => d.estado !== 'anulado' && !d.notas?.includes('[ANULADO]'))
+    donaciones_periodo = Math.round(donacionesValidas.reduce((acc: number, curr: any) => acc + Number(curr.monto), 0))
+
     const { data: rawEgresosData } = await supabase
       ?.from('egresos')
       .select('monto, estado, notas')
@@ -69,12 +80,16 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
       item.estado !== 'anulado'
     ) || []
     egresos_periodo = Math.round(egresosData.reduce((acc, curr) => acc + Number(curr.monto), 0))
+
+    ingresos_operativos = ingresos_cobrados + donaciones_periodo
   } else if (liquidaciones && liquidaciones.length > 0) {
     ingresos_cobrados = Math.round(Number(liquidaciones[0].ingresos_cobrados))
+    donaciones_periodo = Math.round(Number(liquidaciones[0].donaciones_periodo ?? 0))
+    ingresos_operativos = Math.round(Number(liquidaciones[0].ingresos_operativos ?? ingresos_cobrados + donaciones_periodo))
     egresos_periodo = Math.round(Number(liquidaciones[0].egresos_periodo))
   }
 
-  const utilidad_neta = Math.round(ingresos_cobrados - egresos_periodo)
+  const utilidad_neta = Math.round(ingresos_operativos - egresos_periodo)
 
   // Get company config
   const { data: empresaData, error: empresaError } = await supabase.from('configuracion_empresa').select('*').eq('id', 1).single()
@@ -149,7 +164,9 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
               fecha_fin: periodo.fecha_fin
             }}
             financiero={{
-              ingresos: ingresos_cobrados,
+              ingresos_cartera: ingresos_cobrados,
+              donaciones: donaciones_periodo,
+              ingresos_totales: ingresos_operativos,
               egresos: egresos_periodo,
               utilidad: utilidad_neta
             }}
@@ -162,10 +179,18 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
       </div>
 
       {/* Resumen Financiero */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
         <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
-          <p className="text-sm text-zinc-500">Ingresos Cobrados</p>
+          <p className="text-sm text-zinc-500">Ingresos cobrados (cartera)</p>
           <p className="text-2xl font-semibold text-emerald-600 mt-2">${ingresos_cobrados.toLocaleString()}</p>
+        </div>
+        <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
+          <p className="text-sm text-zinc-500">Donaciones</p>
+          <p className="text-2xl font-semibold text-teal-600 mt-2">${donaciones_periodo.toLocaleString()}</p>
+        </div>
+        <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
+          <p className="text-sm text-zinc-500">Ingresos totales</p>
+          <p className="text-2xl font-semibold text-emerald-700 mt-2">${ingresos_operativos.toLocaleString()}</p>
         </div>
         <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
           <p className="text-sm text-zinc-500">Egresos del Período</p>
