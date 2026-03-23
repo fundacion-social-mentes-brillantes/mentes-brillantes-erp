@@ -95,7 +95,6 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
   totalFacturado = Math.round(totalFacturado)
   totalAbonado = Math.round(totalAbonado)
   const saldoPendiente = Math.round(totalFacturado - totalAbonado)
-  const hasMovements = (cuentasProcesadas.length > 0) || (donaciones.length > 0) || (movimientos.length > 0) || (todosLosAbonos.length > 0)
 
   // Extract all payments for the timeline
   const todosLosAbonos = (cuentas || []).flatMap(cuenta => 
@@ -105,6 +104,8 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
       cuenta_id: cuenta.id
     }))
   ).sort((a, b) => new Date(b.fecha_pago).getTime() - new Date(a.fecha_pago).getTime())
+
+  const hasMovements = (cuentasProcesadas.length > 0) || (donaciones.length > 0) || (movimientos.length > 0) || (todosLosAbonos.length > 0)
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-10">
