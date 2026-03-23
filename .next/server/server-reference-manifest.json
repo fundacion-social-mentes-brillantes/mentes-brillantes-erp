@@ -168,6 +168,51 @@
       "filename": "src/app/(dashboard)/asistentes/donacionesActions.ts",
       "exportedName": "crearDonacion"
     },
+    "609f928484f8898a909f2d19e03b7ed197c25025d0": {
+      "workers": {
+        "app/(dashboard)/asistentes/[id]/page": {
+          "moduleId": 65455,
+          "async": false,
+          "exportedName": "anularDonacionForm",
+          "filename": "src/app/(dashboard)/asistentes/donacionesActions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/asistentes/[id]/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/asistentes/donacionesActions.ts",
+      "exportedName": "anularDonacionForm"
+    },
+    "604b3ad2198f036263ed50a3a9f7fae9285b4f3324": {
+      "workers": {
+        "app/(dashboard)/asistentes/[id]/page": {
+          "moduleId": 65455,
+          "async": false,
+          "exportedName": "editarDonacionForm",
+          "filename": "src/app/(dashboard)/asistentes/donacionesActions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/asistentes/[id]/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/asistentes/donacionesActions.ts",
+      "exportedName": "editarDonacionForm"
+    },
+    "60e645f71fbc93dd714194095de63f01281a7669cf": {
+      "workers": {
+        "app/(dashboard)/asistentes/[id]/page": {
+          "moduleId": 65455,
+          "async": false,
+          "exportedName": "eliminarDonacionForm",
+          "filename": "src/app/(dashboard)/asistentes/donacionesActions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/asistentes/[id]/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/asistentes/donacionesActions.ts",
+      "exportedName": "eliminarDonacionForm"
+    },
     "607c458049a5a34f720227a59405933a2adacd2726": {
       "workers": {
         "app/(dashboard)/configuracion/page": {

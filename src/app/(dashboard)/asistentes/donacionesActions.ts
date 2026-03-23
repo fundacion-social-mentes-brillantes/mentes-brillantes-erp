@@ -130,3 +130,34 @@ export async function eliminarDonacion(id: string, asistente_id: string, motivo?
   revalidatePath('/dashboard')
   return { success: true }
 }
+
+// Wrappers para formularios (FormData)
+export async function editarDonacionForm(prev: DonacionState, formData: FormData): Promise<DonacionState> {
+  const id = formData.get('id') as string
+  const asistente_id = formData.get('asistente_id') as string
+  const monto = formData.get('monto')
+  const metodo_pago = formData.get('metodo_pago') as string | null
+  const fecha = formData.get('fecha') as string | null
+  const notas = formData.get('notas') as string | null
+
+  return editarDonacion(id, asistente_id, {
+    monto: monto ? parseFloat(monto as string) : undefined,
+    metodo_pago: metodo_pago || undefined,
+    fecha: fecha || undefined,
+    notas: notas ?? undefined
+  })
+}
+
+export async function anularDonacionForm(prev: DonacionState, formData: FormData): Promise<DonacionState> {
+  const id = formData.get('id') as string
+  const asistente_id = formData.get('asistente_id') as string
+  const motivo = formData.get('motivo') as string | undefined
+  return anularDonacion(id, asistente_id, motivo)
+}
+
+export async function eliminarDonacionForm(prev: DonacionState, formData: FormData): Promise<DonacionState> {
+  const id = formData.get('id') as string
+  const asistente_id = formData.get('asistente_id') as string
+  const motivo = formData.get('motivo') as string | undefined
+  return eliminarDonacion(id, asistente_id, motivo)
+}

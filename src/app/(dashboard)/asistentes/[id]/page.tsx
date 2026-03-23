@@ -6,12 +6,22 @@ import { AnticipoForm } from './AnticipoForm'
 import { PagarConSaldoButton } from './PagarConSaldoButton'
 import { filtrarPagosValidos, sumarMontos } from '@/lib/utils/contable'
 import { DonacionForm } from './DonacionForm'
+import { DonacionActionsMenu } from './DonacionActionsMenu'
 
 export default async function AsistenteDetallePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient()
   
   if (!supabase) return null
+
+  // Perfil de usuario y rol
+  const { data: userData } = await supabase.auth.getUser()
+  let userRole: string | null = null
+  if (userData?.user) {
+    const { data: perfil } = await supabase.from('perfiles').select('rol').eq('id', userData.user.id).single()
+    userRole = perfil?.rol || null
+  }
+  const isAdmin = userRole === 'admin'
 
   // Fetch asistente
   const { data: asistente } = await supabase
@@ -201,13 +211,13 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
           </div>
 
           {/* Saldo a Favor Card */}
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-emerald-100 bg-emerald-100/50 flex items-center gap-2">
-              <Wallet className="w-4 h-4 text-emerald-700" />
-              <h3 className="font-medium text-emerald-900">Saldo a Favor</h3>
+          <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] shadow-soft overflow-hidden">
+            <div className="px-5 py-4 border-b border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] flex items-center gap-2">
+              <Wallet className="w-4 h-4 text-[rgb(var(--accent))]" />
+              <h3 className="font-medium text-[rgb(var(--text-primary))]">Saldo a Favor</h3>
             </div>
             <div className="p-5">
-              <p className="text-3xl font-bold text-emerald-700 mb-6">
+              <p className="text-3xl font-bold text-[rgb(var(--text-primary))] mb-6">
                 ${saldoAFavor.toLocaleString('es-CO')}
               </p>
               
@@ -217,33 +227,33 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                 </div>
               )}
 
-              <div className="pt-4 border-t border-emerald-200/50">
-                <h4 className="text-sm font-medium text-emerald-900 mb-3">Registrar Anticipo</h4>
+              <div className="pt-4 border-t border-[rgb(var(--border))]">
+                <h4 className="text-sm font-medium text-[rgb(var(--text-primary))] mb-3">Registrar Anticipo</h4>
                 <AnticipoForm asistenteId={asistente.id} />
               </div>
             </div>
           </div>
 
           {/* Donaciones Card */}
-          <div className="rounded-xl border border-teal-200 bg-teal-50 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-teal-100 bg-teal-100/50 flex items-center gap-2">
-              <HeartHandshake className="w-4 h-4 text-teal-700" />
-              <h3 className="font-medium text-teal-900">Donaciones</h3>
+          <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] shadow-soft overflow-hidden">
+            <div className="px-5 py-4 border-b border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] flex items-center gap-2">
+              <HeartHandshake className="w-4 h-4 text-[rgb(var(--accent))]" />
+              <h3 className="font-medium text-[rgb(var(--text-primary))]">Donaciones</h3>
             </div>
             <div className="p-5 space-y-4">
               <div className="flex items-end justify-between">
                 <div>
-                  <p className="text-xs font-medium text-teal-800 uppercase tracking-wider mb-1">Total Donado</p>
-                  <p className="text-2xl font-bold text-teal-800">${totalDonado.toLocaleString('es-CO')}</p>
+                  <p className="text-xs font-medium text-[rgb(var(--text-muted))] uppercase tracking-wider mb-1">Total Donado</p>
+                  <p className="text-2xl font-bold text-[rgb(var(--text-primary))]">${totalDonado.toLocaleString('es-CO')}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs font-medium text-teal-800 uppercase tracking-wider mb-1">Donaciones</p>
-                  <p className="text-lg font-semibold text-teal-700">{cantidadDonaciones}</p>
+                  <p className="text-xs font-medium text-[rgb(var(--text-muted))] uppercase tracking-wider mb-1">Donaciones</p>
+                  <p className="text-lg font-semibold text-[rgb(var(--text-primary))]">{cantidadDonaciones}</p>
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-teal-100">
-                <h4 className="text-sm font-semibold text-teal-900 mb-2">Registrar Donación</h4>
+              <div className="pt-3 border-t border-[rgb(var(--border))]">
+                <h4 className="text-sm font-semibold text-[rgb(var(--text-primary))] mb-2">Registrar Donación</h4>
                 <DonacionForm asistenteId={asistente.id} />
               </div>
             </div>
@@ -341,34 +351,40 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
               </div>
 
               {/* Donaciones */}
-              <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
-                <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center justify-between">
-                  <h3 className="font-medium text-zinc-900 flex items-center gap-2">
-                    <HeartHandshake className="w-4 h-4 text-teal-600" />
+              <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] shadow-soft overflow-hidden">
+                <div className="px-5 py-4 border-b border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] flex items-center justify-between">
+                  <h3 className="font-medium text-[rgb(var(--text-primary))] flex items-center gap-2">
+                    <HeartHandshake className="w-4 h-4 text-[rgb(var(--accent))]" />
                     Donaciones del Asistente
                   </h3>
                 </div>
-                <div className="divide-y divide-zinc-100">
+                <div className="divide-y divide-[rgb(var(--border))]">
                   {donaciones.length === 0 ? (
-                    <div className="p-6 text-sm text-zinc-500 text-center">No hay donaciones registradas.</div>
+                    <div className="p-6 text-sm text-[rgb(var(--text-muted))] bg-[rgb(var(--surface-2))] text-center">No hay donaciones registradas.</div>
                   ) : donaciones.map((dona) => (
-                    <div key={dona.id} className="p-5 hover:bg-zinc-50/50 transition-colors flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
+                    <div
+                      key={dona.id}
+                      className="p-5 hover:bg-[rgb(var(--surface-3))] transition-colors flex flex-col gap-3"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="flex items-center gap-2">
-                          <span className="text-base font-semibold text-teal-700">+${Number(dona.monto).toLocaleString('es-CO')}</span>
-                          <span className="text-xs px-2 py-1 rounded-full border border-teal-200 bg-teal-50 text-teal-700 capitalize">
+                          <span className="text-base font-semibold text-[rgb(var(--accent))]">+${Number(dona.monto).toLocaleString('es-CO')}</span>
+                          <span className="text-xs px-2 py-1 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] text-[rgb(var(--text-primary))] capitalize">
                             {dona.metodo_pago?.replace('_', ' ')}
                           </span>
                         </div>
-                        <span className="text-xs text-zinc-500 bg-zinc-100 px-2 py-1 rounded-md">
-                          {new Date(dona.fecha).toLocaleDateString('es-CO')}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-[rgb(var(--text-muted))] bg-[rgb(var(--surface-2))] px-2 py-1 rounded-md border border-[rgb(var(--border))]">
+                            {new Date(dona.fecha).toLocaleDateString('es-CO')}
+                          </span>
+                          {isAdmin && <DonacionActionsMenu donacion={dona} />}
+                        </div>
                       </div>
-                      <div className="flex items-center justify-between text-xs text-zinc-500">
-                        <span className={`font-medium ${dona.estado === 'anulado' ? 'text-red-600' : 'text-teal-700'}`}>
+                      <div className="flex items-start justify-between text-xs text-[rgb(var(--text-muted))] gap-3">
+                        <span className={`font-medium ${dona.estado === 'anulado' ? 'text-[rgb(var(--danger))]' : 'text-[rgb(var(--accent))]'}`}>
                           {dona.estado === 'anulado' ? 'Anulado' : 'Activo'}
                         </span>
-                        {dona.notas && <span className="truncate max-w-[220px]" title={dona.notas}>{dona.notas}</span>}
+                        {dona.notas && <span className="truncate max-w-[260px] text-[rgb(var(--text-primary))]" title={dona.notas}>{dona.notas}</span>}
                       </div>
                     </div>
                   ))}
@@ -420,41 +436,43 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
 
               {/* Historial de Saldo a Favor */}
               {movimientos.length > 0 && (
-                <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden mt-6">
-                  <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50">
-                    <h3 className="font-medium text-zinc-900 flex items-center gap-2">
-                      <Wallet className="w-4 h-4 text-zinc-500" />
+                <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] shadow-soft overflow-hidden mt-6">
+                  <div className="px-5 py-4 border-b border-[rgb(var(--border))] bg-[rgb(var(--surface-3))]">
+                    <h3 className="font-medium text-[rgb(var(--text-primary))] flex items-center gap-2">
+                      <Wallet className="w-4 h-4 text-[rgb(var(--accent))]" />
                       Historial de Saldo a Favor
                     </h3>
                   </div>
                   <div className="p-0">
-                    <div className="divide-y divide-zinc-100">
+                    <div className="divide-y divide-[rgb(var(--border))]">
                       {movimientos.map((mov) => (
-                        <div key={mov.id} className="p-5 hover:bg-zinc-50/50 transition-colors flex items-start gap-4">
-                          <div className={`flex items-center justify-center w-10 h-10 rounded-full shrink-0 mt-0.5 ${
-                            mov.tipo === 'ingreso' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'
+                        <div key={mov.id} className="p-5 hover:bg-[rgb(var(--surface-3))] transition-colors flex items-start gap-4">
+                          <div className={`flex items-center justify-center w-10 h-10 rounded-full shrink-0 mt-0.5 border border-[rgb(var(--border))] ${
+                            mov.tipo === 'ingreso'
+                              ? 'bg-[rgba(var(--accent),0.12)] text-[rgb(var(--accent))]'
+                              : 'bg-[rgba(var(--info),0.12)] text-[rgb(var(--text-primary))]'
                           }`}>
                             <Wallet className="w-5 h-5" />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between mb-1">
                               <span className={`font-bold text-base ${
-                                mov.tipo === 'ingreso' ? 'text-emerald-600' : 'text-blue-600'
+                                mov.tipo === 'ingreso' ? 'text-[rgb(var(--accent))]' : 'text-[rgb(var(--text-primary))]'
                               }`}>
                                 {mov.tipo === 'ingreso' ? '+' : '-'}${Number(mov.monto).toLocaleString('es-CO')}
                               </span>
-                              <time className="text-xs font-medium text-zinc-500 bg-zinc-100 px-2 py-1 rounded-md">
+                              <time className="text-xs font-medium text-[rgb(var(--text-muted))] bg-[rgb(var(--surface-2))] px-2 py-1 rounded-md border border-[rgb(var(--border))]">
                                 {new Date(mov.fecha).toLocaleDateString('es-CO')}
                               </time>
                             </div>
-                            <div className="text-sm text-zinc-900 mb-1.5">
+                            <div className="text-sm text-[rgb(var(--text-primary))] mb-1.5">
                               {mov.tipo === 'ingreso' ? 'Anticipo registrado' : 'Saldo aplicado a cuenta'}
                             </div>
-                            <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-                              <span className="capitalize bg-zinc-100 px-2 py-0.5 rounded-md border border-zinc-200">
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-[rgb(var(--text-muted))]">
+                              <span className="capitalize bg-[rgb(var(--surface-2))] px-2 py-0.5 rounded-md border border-[rgb(var(--border))]">
                                 {mov.tipo === 'aplicacion' ? 'Saldo a favor' : mov.metodo_pago}
                               </span>
-                              {mov.notas && <span className="truncate flex-1" title={mov.notas}>• {mov.notas}</span>}
+                              {mov.notas && <span className="truncate flex-1 text-[rgb(var(--text-primary))]" title={mov.notas}>• {mov.notas}</span>}
                             </div>
                           </div>
                         </div>
