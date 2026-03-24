@@ -309,16 +309,39 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                 </div>
               </div>
 
-              {paqueteActivo ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] p-4 space-y-3">
                   <h4 className="text-sm font-semibold text-[rgb(var(--text-primary))]">Registrar sesión</h4>
-                  <RegisterCoachSessionForm paqueteId={paqueteActivo.id} disabled={false} />
+                  {paqueteActivo ? (
+                    <RegisterCoachSessionForm paqueteId={paqueteActivo.id} disabled={false} />
+                  ) : (
+                    <p className="text-sm text-[rgb(var(--text-muted))]">
+                      No hay paquetes coach con sesiones pendientes.
+                    </p>
+                  )}
                 </div>
-              ) : (
-                <p className="text-sm text-[rgb(var(--text-muted))]">
-                  No hay paquetes coach con sesiones pendientes.
-                </p>
-              )}
+                <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] p-4 space-y-3">
+                  <h4 className="text-sm font-semibold text-[rgb(var(--text-primary))]">Historial de sesiones coach</h4>
+                  <p className="text-xs text-[rgb(var(--text-muted))]">Solo sesiones registradas desde este módulo.</p>
+                  <div className="divide-y divide-[rgb(var(--border))] border border-[rgb(var(--border))] rounded-md max-h-72 overflow-y-auto">
+                    {sesionesLista.length === 0 ? (
+                      <div className="px-4 py-3 text-sm text-[rgb(var(--text-muted))]">Aún no hay sesiones registradas.</div>
+                    ) : (
+                      sesionesLista.map((s: any, idx: number) => (
+                        <div key={`${s.paquete_id}-${idx}-${s.fecha}`} className="px-4 py-3 text-sm flex justify-between gap-3">
+                          <div className="space-y-1">
+                            <span className="block text-[rgb(var(--text-primary))]">{new Date(s.fecha).toLocaleDateString('es-CO')}</span>
+                            <span className="block text-[rgb(var(--text-muted))]">{s.notas || 'Sin notas'}</span>
+                          </div>
+                          <div className="text-right text-[rgb(var(--text-muted))] text-xs">
+                            {s.cuenta_id ? <Link href={`/cuentas/${s.cuenta_id}`} className="text-[rgb(var(--info))] hover:underline">Ver cuenta</Link> : 'Sin cuenta'}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
 
               <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] p-4 space-y-3">
                 <h4 className="text-sm font-semibold text-[rgb(var(--text-primary))]">Exportar PDF</h4>
@@ -329,28 +352,6 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                   sesionesRestantes={sesionesRestantes}
                   sesiones={sesionesLista.map((s) => ({ fecha: s.fecha, notas: s.notas || '' }))}
                 />
-              </div>
-
-              <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] p-4 space-y-3">
-                <h4 className="text-sm font-semibold text-[rgb(var(--text-primary))]">Historial de sesiones coach</h4>
-                <p className="text-xs text-[rgb(var(--text-muted))]">Solo sesiones registradas desde este módulo.</p>
-                <div className="divide-y divide-[rgb(var(--border))] border border-[rgb(var(--border))] rounded-md overflow-hidden">
-                  {sesionesLista.length === 0 ? (
-                    <div className="px-4 py-3 text-sm text-[rgb(var(--text-muted))]">Aún no hay sesiones registradas.</div>
-                  ) : (
-                    sesionesLista.map((s: any, idx: number) => (
-                      <div key={`${s.paquete_id}-${idx}-${s.fecha}`} className="px-4 py-3 text-sm flex justify-between gap-3">
-                        <div className="space-y-1">
-                          <span className="block text-[rgb(var(--text-primary))]">{new Date(s.fecha).toLocaleDateString('es-CO')}</span>
-                          <span className="block text-[rgb(var(--text-muted))]">{s.notas || 'Sin notas'}</span>
-                        </div>
-                        <div className="text-right text-[rgb(var(--text-muted))] text-xs">
-                          {s.cuenta_id ? <Link href={`/cuentas/${s.cuenta_id}`} className="text-[rgb(var(--info))] hover:underline">Ver cuenta</Link> : 'Sin cuenta'}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
               </div>
             </div>
           </div>
@@ -540,7 +541,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                     </h3>
                   </div>
                   <div className="p-0">
-                    <div className="divide-y divide-[rgb(var(--border))]">
+                    <div className="divide-y divide-[rgb(var(--border))] max-h-72 overflow-y-auto">
                       {movimientos.map((mov) => (
                         <div key={mov.id} className="p-5 hover:bg-[rgb(var(--surface-3))] transition-colors flex items-start gap-4">
                           <div className={`flex items-center justify-center w-10 h-10 rounded-full shrink-0 mt-0.5 border border-[rgb(var(--border))] ${

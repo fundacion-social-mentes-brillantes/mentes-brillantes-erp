@@ -3,7 +3,7 @@
     "70d5be7c71f7caa968c7ab1cf211c6c99ed00ac454": {
       "workers": {
         "app/(dashboard)/cuentas/[id]/page": {
-          "moduleId": 86224,
+          "moduleId": 17388,
           "async": false,
           "exportedName": "saveAbono",
           "filename": "src/app/(dashboard)/cuentas/actions.ts"
@@ -18,7 +18,7 @@
     "7ca84cefdc82bd3a4ee9194b5bed2cf964abf37164": {
       "workers": {
         "app/(dashboard)/cuentas/[id]/page": {
-          "moduleId": 86224,
+          "moduleId": 17388,
           "async": false,
           "exportedName": "aplicarSaldoFavor",
           "filename": "src/app/(dashboard)/cuentas/actions.ts"
@@ -33,7 +33,7 @@
     "78e2fba24d9290ed07a45720b8ef76c8f45f5220cf": {
       "workers": {
         "app/(dashboard)/cuentas/[id]/page": {
-          "moduleId": 86224,
+          "moduleId": 17388,
           "async": false,
           "exportedName": "editValorCuenta",
           "filename": "src/app/(dashboard)/cuentas/actions.ts"
@@ -48,7 +48,7 @@
     "7cf89b13292cf72b8f08b9465df98513ec56e48167": {
       "workers": {
         "app/(dashboard)/cuentas/[id]/page": {
-          "moduleId": 86224,
+          "moduleId": 17388,
           "async": false,
           "exportedName": "editMontoAbono",
           "filename": "src/app/(dashboard)/cuentas/actions.ts"
@@ -63,7 +63,7 @@
     "40b086f9e7a20ec9a6404245d1aa0f98cb04b5164f": {
       "workers": {
         "app/(dashboard)/cuentas/[id]/page": {
-          "moduleId": 86224,
+          "moduleId": 17388,
           "async": false,
           "exportedName": "deleteCuenta",
           "filename": "src/app/(dashboard)/cuentas/actions.ts"
@@ -74,6 +74,51 @@
       },
       "exportedName": "deleteCuenta",
       "filename": "src/app/(dashboard)/cuentas/actions.ts"
+    },
+    "60f025984f03af23a2580d9770117b4abd0353aa85": {
+      "workers": {
+        "app/(dashboard)/cuentas/[id]/page": {
+          "moduleId": 17388,
+          "async": false,
+          "exportedName": "registrarSesion",
+          "filename": "src/app/(dashboard)/coach/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/cuentas/[id]/page": "action-browser"
+      },
+      "exportedName": "registrarSesion",
+      "filename": "src/app/(dashboard)/coach/actions.ts"
+    },
+    "60c8f5ca503491432fe1ad89aefc56edfe74c29ee5": {
+      "workers": {
+        "app/(dashboard)/cuentas/[id]/page": {
+          "moduleId": 17388,
+          "async": false,
+          "exportedName": "editarSesion",
+          "filename": "src/app/(dashboard)/coach/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/cuentas/[id]/page": "action-browser"
+      },
+      "exportedName": "editarSesion",
+      "filename": "src/app/(dashboard)/coach/actions.ts"
+    },
+    "603deb5d57b004ca21798f7cfbbd6bc812b242ddca": {
+      "workers": {
+        "app/(dashboard)/cuentas/[id]/page": {
+          "moduleId": 17388,
+          "async": false,
+          "exportedName": "eliminarSesion",
+          "filename": "src/app/(dashboard)/coach/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/cuentas/[id]/page": "action-browser"
+      },
+      "exportedName": "eliminarSesion",
+      "filename": "src/app/(dashboard)/coach/actions.ts"
     }
   },
   "edge": {}

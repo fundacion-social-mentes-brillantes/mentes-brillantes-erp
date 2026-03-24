@@ -47,7 +47,7 @@
     "40b3e7c04a78e5f0ebb4eea5e46e682d09699b5458": {
       "workers": {
         "app/(dashboard)/asistentes/[id]/page": {
-          "moduleId": 65455,
+          "moduleId": 92762,
           "async": false,
           "exportedName": "pagarDeudasConSaldo",
           "filename": "src/app/(dashboard)/asistentes/actions.ts"
@@ -127,7 +127,7 @@
     "70b80b97d230643b40a509bf1a0ceedea9797b9ea4": {
       "workers": {
         "app/(dashboard)/asistentes/[id]/page": {
-          "moduleId": 65455,
+          "moduleId": 92762,
           "async": false,
           "exportedName": "saveAnticipo",
           "filename": "src/app/(dashboard)/asistentes/actions.ts"
@@ -156,7 +156,7 @@
     "60dcc9b6187d1477b752c2c2f0ba027e49de822678": {
       "workers": {
         "app/(dashboard)/asistentes/[id]/page": {
-          "moduleId": 65455,
+          "moduleId": 92762,
           "async": false,
           "exportedName": "crearDonacion",
           "filename": "src/app/(dashboard)/asistentes/donacionesActions.ts"
@@ -171,7 +171,7 @@
     "609f928484f8898a909f2d19e03b7ed197c25025d0": {
       "workers": {
         "app/(dashboard)/asistentes/[id]/page": {
-          "moduleId": 65455,
+          "moduleId": 92762,
           "async": false,
           "exportedName": "anularDonacionForm",
           "filename": "src/app/(dashboard)/asistentes/donacionesActions.ts"
@@ -186,7 +186,7 @@
     "604b3ad2198f036263ed50a3a9f7fae9285b4f3324": {
       "workers": {
         "app/(dashboard)/asistentes/[id]/page": {
-          "moduleId": 65455,
+          "moduleId": 92762,
           "async": false,
           "exportedName": "editarDonacionForm",
           "filename": "src/app/(dashboard)/asistentes/donacionesActions.ts"
@@ -201,7 +201,7 @@
     "60e645f71fbc93dd714194095de63f01281a7669cf": {
       "workers": {
         "app/(dashboard)/asistentes/[id]/page": {
-          "moduleId": 65455,
+          "moduleId": 92762,
           "async": false,
           "exportedName": "eliminarDonacionForm",
           "filename": "src/app/(dashboard)/asistentes/donacionesActions.ts"
@@ -212,6 +212,28 @@
       },
       "filename": "src/app/(dashboard)/asistentes/donacionesActions.ts",
       "exportedName": "eliminarDonacionForm"
+    },
+    "60f025984f03af23a2580d9770117b4abd0353aa85": {
+      "workers": {
+        "app/(dashboard)/asistentes/[id]/page": {
+          "moduleId": 92762,
+          "async": false,
+          "exportedName": "registrarSesion",
+          "filename": "src/app/(dashboard)/coach/actions.ts"
+        },
+        "app/(dashboard)/cuentas/[id]/page": {
+          "moduleId": 17388,
+          "async": false,
+          "exportedName": "registrarSesion",
+          "filename": "src/app/(dashboard)/coach/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/asistentes/[id]/page": "action-browser",
+        "app/(dashboard)/cuentas/[id]/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/coach/actions.ts",
+      "exportedName": "registrarSesion"
     },
     "607c458049a5a34f720227a59405933a2adacd2726": {
       "workers": {
@@ -246,7 +268,7 @@
     "40b086f9e7a20ec9a6404245d1aa0f98cb04b5164f": {
       "workers": {
         "app/(dashboard)/cuentas/[id]/page": {
-          "moduleId": 86224,
+          "moduleId": 17388,
           "async": false,
           "exportedName": "deleteCuenta",
           "filename": "src/app/(dashboard)/cuentas/actions.ts"
@@ -268,7 +290,7 @@
     "70d5be7c71f7caa968c7ab1cf211c6c99ed00ac454": {
       "workers": {
         "app/(dashboard)/cuentas/[id]/page": {
-          "moduleId": 86224,
+          "moduleId": 17388,
           "async": false,
           "exportedName": "saveAbono",
           "filename": "src/app/(dashboard)/cuentas/actions.ts"
@@ -283,7 +305,7 @@
     "7ca84cefdc82bd3a4ee9194b5bed2cf964abf37164": {
       "workers": {
         "app/(dashboard)/cuentas/[id]/page": {
-          "moduleId": 86224,
+          "moduleId": 17388,
           "async": false,
           "exportedName": "aplicarSaldoFavor",
           "filename": "src/app/(dashboard)/cuentas/actions.ts"
@@ -298,7 +320,7 @@
     "78e2fba24d9290ed07a45720b8ef76c8f45f5220cf": {
       "workers": {
         "app/(dashboard)/cuentas/[id]/page": {
-          "moduleId": 86224,
+          "moduleId": 17388,
           "async": false,
           "exportedName": "editValorCuenta",
           "filename": "src/app/(dashboard)/cuentas/actions.ts"
@@ -313,7 +335,7 @@
     "7cf89b13292cf72b8f08b9465df98513ec56e48167": {
       "workers": {
         "app/(dashboard)/cuentas/[id]/page": {
-          "moduleId": 86224,
+          "moduleId": 17388,
           "async": false,
           "exportedName": "editMontoAbono",
           "filename": "src/app/(dashboard)/cuentas/actions.ts"
@@ -324,6 +346,36 @@
       },
       "filename": "src/app/(dashboard)/cuentas/actions.ts",
       "exportedName": "editMontoAbono"
+    },
+    "60c8f5ca503491432fe1ad89aefc56edfe74c29ee5": {
+      "workers": {
+        "app/(dashboard)/cuentas/[id]/page": {
+          "moduleId": 17388,
+          "async": false,
+          "exportedName": "editarSesion",
+          "filename": "src/app/(dashboard)/coach/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/cuentas/[id]/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/coach/actions.ts",
+      "exportedName": "editarSesion"
+    },
+    "603deb5d57b004ca21798f7cfbbd6bc812b242ddca": {
+      "workers": {
+        "app/(dashboard)/cuentas/[id]/page": {
+          "moduleId": 17388,
+          "async": false,
+          "exportedName": "eliminarSesion",
+          "filename": "src/app/(dashboard)/coach/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/cuentas/[id]/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/coach/actions.ts",
+      "exportedName": "eliminarSesion"
     },
     "60da085b7f67e0b5a40d7e82d8833f423c96bf74ee": {
       "workers": {

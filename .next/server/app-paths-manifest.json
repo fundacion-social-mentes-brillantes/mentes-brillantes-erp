@@ -3,6 +3,7 @@
   "/(dashboard)/asistentes/[id]/page": "app/(dashboard)/asistentes/[id]/page.js",
   "/(dashboard)/asistentes/nuevo/page": "app/(dashboard)/asistentes/nuevo/page.js",
   "/(dashboard)/asistentes/page": "app/(dashboard)/asistentes/page.js",
+  "/(dashboard)/buscar/page": "app/(dashboard)/buscar/page.js",
   "/(dashboard)/configuracion/page": "app/(dashboard)/configuracion/page.js",
   "/(dashboard)/cuentas/[id]/page": "app/(dashboard)/cuentas/[id]/page.js",
   "/(dashboard)/cuentas/nueva/page": "app/(dashboard)/cuentas/nueva/page.js",

@@ -1,6 +1,6 @@
 var R=require("../../../../chunks/ssr/[turbopack]_runtime.js")("server/app/(dashboard)/cuentas/[id]/page.js")
-R.c("server/chunks/ssr/[root-of-the-server]__ada915aa._.js")
-R.c("server/chunks/ssr/src_app_(dashboard)_cuentas_[id]_87110943._.js")
+R.c("server/chunks/ssr/[root-of-the-server]__228dcc1c._.js")
+R.c("server/chunks/ssr/src_145cad44._.js")
 R.c("server/chunks/ssr/_fb2b1a66._.js")
 R.c("server/chunks/ssr/node_modules_next_dist_4b63a0e1._.js")
 R.c("server/chunks/ssr/[root-of-the-server]__19a548e8._.js")
@@ -14,7 +14,7 @@ R.c("server/chunks/ssr/node_modules_next_dist_client_components_builtin_forbidde
 R.c("server/chunks/ssr/node_modules_next_dist_client_components_builtin_unauthorized_15817684.js")
 R.c("server/chunks/ssr/_f365d23e._.js")
 R.c("server/chunks/ssr/_94517f0e._.js")
-R.c("server/chunks/ssr/_220d1317._.js")
+R.c("server/chunks/ssr/_a0d05f49._.js")
 R.c("server/chunks/ssr/node_modules_next_fd00b625._.js")
 R.m(41096)
 module.exports=R.m(41096).exports
