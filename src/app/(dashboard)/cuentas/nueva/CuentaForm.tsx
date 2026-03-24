@@ -14,6 +14,7 @@ export function CuentaForm({ asistentes, asistenteInicial }: { asistentes: any[]
   const [sesiones, setSesiones] = useState<number>(1)
   const [concepto, setConcepto] = useState('')
   const conceptoCoach = useMemo(() => `Sesión guía coach - ${sesiones || 1} sesiones`, [sesiones])
+  const asistenteInicialLimpio = asistenteInicial || ''
 
   useEffect(() => {
     if (tipo === 'coach') {
@@ -35,7 +36,7 @@ export function CuentaForm({ asistentes, asistenteInicial }: { asistentes: any[]
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2 md:col-span-2">
           <label className="text-sm font-medium text-zinc-900">Asistente *</label>
-          <SearchableAsistenteSelect asistentes={asistentes} disabled={isPending} initialSelectedId={asistenteInicial} />
+          <SearchableAsistenteSelect asistentes={asistentes} disabled={isPending} initialSelectedId={asistenteInicialLimpio} />
         </div>
 
         <div className="space-y-2 md:col-span-2">

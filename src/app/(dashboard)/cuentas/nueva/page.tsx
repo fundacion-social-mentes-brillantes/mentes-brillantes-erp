@@ -1,10 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
 import { CuentaForm } from './CuentaForm'
 
-export default async function NuevaCuentaPage({ searchParams }: { searchParams?: { asistente?: string } }) {
+export default async function NuevaCuentaPage({ searchParams }: { searchParams?: { asistente?: string | string[] } }) {
   const supabase = await createClient()
   const { data: asistentes } = await supabase?.from('asistentes').select('id, nombre, codigo').eq('activo', true).order('nombre') || { data: [] }
-  const asistenteInicial = searchParams?.asistente
+  const asistenteInicial = Array.isArray(searchParams?.asistente)
+    ? searchParams?.asistente[0]
+    : searchParams?.asistente || undefined
 
   return (
     <div className="space-y-6">
