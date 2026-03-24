@@ -91,13 +91,22 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
     .select('id, cuenta_id, sesiones_compradas, coach_sesiones (id, fecha, notas)')
     .eq('asistente_id', id)
 
+  const { data: sesionesCoach } = await supabase
+    .from('coach_sesiones')
+    .select('id, fecha, notas, paquete_id, asistente_id, coach_paquetes (cuenta_id, sesiones_compradas)')
+    .eq('asistente_id', id)
+    .order('fecha', { ascending: false })
+
   const sesionesCompradas = paquetesCoach?.reduce((acc: number, p: any) => acc + (p.sesiones_compradas || 0), 0) || 0
-  const sesionesRealizadas = paquetesCoach?.reduce((acc: number, p: any) => acc + (p.coach_sesiones?.length || 0), 0) || 0
+  const sesionesRealizadas = (sesionesCoach || []).length
   const sesionesRestantes = Math.max(0, sesionesCompradas - sesionesRealizadas)
-  const sesionesLista = (paquetesCoach || []).flatMap((p: any) =>
-    (p.coach_sesiones || []).map((s: any) => ({ fecha: s.fecha, notas: s.notas, paquete_id: p.id }))
-  ).sort((a: any, b: any) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
-  const paqueteActivo = (paquetesCoach || []).find((p: any) => (p.coach_sesiones?.length || 0) < (p.sesiones_compradas || 0))
+  const sesionesLista = (sesionesCoach || []).map((s: any) => ({
+    fecha: s.fecha,
+    notas: s.notas,
+    paquete_id: s.paquete_id,
+    cuenta_id: s.coach_paquetes?.cuenta_id || null
+  }))
+  const paqueteActivo = (paquetesCoach || []).find((p: any) => (sesionesCoach || []).filter((s) => s.paquete_id === p.id).length < (p.sesiones_compradas || 0))
 
   // Calculate totals
   let totalFacturado = 0
@@ -320,6 +329,28 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                   sesionesRestantes={sesionesRestantes}
                   sesiones={sesionesLista.map((s) => ({ fecha: s.fecha, notas: s.notas || '' }))}
                 />
+              </div>
+
+              <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] p-4 space-y-3">
+                <h4 className="text-sm font-semibold text-[rgb(var(--text-primary))]">Historial de sesiones coach</h4>
+                <p className="text-xs text-[rgb(var(--text-muted))]">Solo sesiones registradas desde este módulo.</p>
+                <div className="divide-y divide-[rgb(var(--border))] border border-[rgb(var(--border))] rounded-md overflow-hidden">
+                  {sesionesLista.length === 0 ? (
+                    <div className="px-4 py-3 text-sm text-[rgb(var(--text-muted))]">Aún no hay sesiones registradas.</div>
+                  ) : (
+                    sesionesLista.map((s: any, idx: number) => (
+                      <div key={`${s.paquete_id}-${idx}-${s.fecha}`} className="px-4 py-3 text-sm flex justify-between gap-3">
+                        <div className="space-y-1">
+                          <span className="block text-[rgb(var(--text-primary))]">{new Date(s.fecha).toLocaleDateString('es-CO')}</span>
+                          <span className="block text-[rgb(var(--text-muted))]">{s.notas || 'Sin notas'}</span>
+                        </div>
+                        <div className="text-right text-[rgb(var(--text-muted))] text-xs">
+                          {s.cuenta_id ? <Link href={`/cuentas/${s.cuenta_id}`} className="text-[rgb(var(--info))] hover:underline">Ver cuenta</Link> : 'Sin cuenta'}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
           </div>
