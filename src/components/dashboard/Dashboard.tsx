@@ -348,6 +348,9 @@ export async function Dashboard({ month }: { month?: string }) {
             Resumen del mes <span className="text-[rgb(var(--text-muted))] font-normal text-sm ml-2 capitalize">({displayMonthName})</span>
           </h2>
           <p className="text-sm text-[rgb(var(--text-muted))]">Cuatro KPIs clave y, debajo, el detalle financiero del período.</p>
+          <p className="text-sm font-medium text-[rgb(var(--text-primary))]">
+            En {displayMonthName} ingresaron <span className="text-[rgb(var(--success))]">${ingresosTotales.toLocaleString()}</span>, se gastaron <span className="text-[rgb(var(--danger))]">${egresosMes.toLocaleString()}</span>, la utilidad fue <span className="text-[rgb(var(--info))]">${utilidadMes.toLocaleString()}</span> y quedan <span className="text-[rgb(var(--warning))]">${pendienteMes.toLocaleString()}</span> por cobrar.
+          </p>
         </div>
 
         {/* Top 4 tarjetas principales */}
@@ -366,8 +369,8 @@ export async function Dashboard({ month }: { month?: string }) {
                     <div className="flex items-center gap-2">
                       <p className="text-xs font-medium uppercase tracking-wide text-[rgb(var(--text-muted))]">{stat.name}</p>
                       <details className="group">
-                        <summary className="list-none cursor-pointer text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))]">
-                          <Info className="w-3.5 h-3.5 inline-block align-middle" />
+                        <summary className="list-none cursor-pointer text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] text-[11px] font-semibold inline-flex items-center gap-1">
+                          <Info className="w-3.5 h-3.5 inline-block align-middle" /> Ayuda
                         </summary>
                         <div className="mt-2 text-xs text-[rgb(var(--text-primary))] bg-[rgb(var(--surface-2))] border border-[rgb(var(--border))] rounded-lg p-2.5 shadow-lg w-56">
                           {stat.help}
@@ -398,25 +401,25 @@ export async function Dashboard({ month }: { month?: string }) {
         </div>
 
         {/* Detalle del período */}
-        <div className="rounded-2xl border border-[rgba(var(--border),0.6)] bg-[rgba(var(--surface-1),0.7)] backdrop-blur-xl p-4">
-          <div className="flex items-center justify-between mb-3">
+        <div className="rounded-xl border border-[rgba(var(--border),0.35)] bg-[rgba(var(--surface-1),0.5)] backdrop-blur p-3">
+          <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold text-[rgb(var(--text-primary))]">Detalle del período</h3>
             <span className="text-xs text-[rgb(var(--text-muted))]">Ingresos de cartera, donaciones y facturado</span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             {detailStats.map((stat) => {
               const isTrendPositive = stat.trend > 0;
               const isTrendNeutral = stat.trend === 0;
               const trendIsGood = (isTrendPositive && stat.goodIsUp) || (!isTrendPositive && !stat.goodIsUp);
               return (
-                <div key={stat.name} className="rounded-xl border border-[rgba(var(--border),0.6)] bg-[rgba(var(--surface-2),0.8)] p-4">
+                <div key={stat.name} className="rounded-lg border border-[rgba(var(--border),0.5)] bg-[rgba(var(--surface-2),0.7)] p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-2">
                         <p className="text-xs font-medium text-[rgb(var(--text-muted))]">{stat.name}</p>
                         <details className="group">
-                          <summary className="list-none cursor-pointer text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))]">
-                            <Info className="w-3 h-3 inline-block align-middle" />
+                          <summary className="list-none cursor-pointer text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] text-[11px] font-semibold inline-flex items-center gap-1">
+                            <Info className="w-3 h-3 inline-block align-middle" /> Ayuda
                           </summary>
                           <div className="mt-2 text-xs text-[rgb(var(--text-primary))] bg-[rgb(var(--surface-2))] border border-[rgb(var(--border))] rounded-lg p-2 shadow-lg w-52">
                             {stat.help}
@@ -453,14 +456,14 @@ export async function Dashboard({ month }: { month?: string }) {
         <h2 className="text-lg font-semibold text-[rgb(var(--text-primary))] border-b border-[rgb(var(--border))] pb-2">
           Indicadores históricos y cartera <span className="text-[rgb(var(--text-muted))] font-normal text-sm ml-2">(Acumulado general)</span>
         </h2>
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {historicalStats.map((stat) => (
             <div
               key={stat.name}
-              className="relative overflow-hidden rounded-2xl border border-[rgba(var(--border),0.5)] bg-[rgba(var(--surface-1),0.6)] backdrop-blur-xl p-5 shadow-sm transition-all hover:shadow-md hover:-translate-y-1"
+              className="relative overflow-hidden rounded-xl border border-[rgba(var(--border),0.45)] bg-[rgba(var(--surface-1),0.55)] backdrop-blur-lg p-4 shadow-sm"
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
                   <p className="text-sm font-medium text-[rgb(var(--text-muted))]">{stat.name}</p>
                   <div className="group relative flex items-center">
                     <Info className="w-4 h-4 text-[rgb(var(--text-muted))] cursor-help outline-none" tabIndex={0} />
@@ -474,8 +477,8 @@ export async function Dashboard({ month }: { month?: string }) {
                   <stat.icon className={`h-4 w-4 ${stat.color}`} />
                 </div>
               </div>
-              <div className="mt-4">
-                <p className="text-3xl font-bold tracking-tight text-[rgb(var(--text-primary))]">{stat.value}</p>
+              <div className="mt-3">
+                <p className="text-2xl font-semibold tracking-tight text-[rgb(var(--text-primary))]">{stat.value}</p>
               </div>
             </div>
           ))}
