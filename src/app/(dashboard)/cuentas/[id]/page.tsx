@@ -9,6 +9,7 @@ import { DeleteCuentaButton } from './DeleteCuentaButton'
 import { filtrarPagosValidos, sumarMontos } from '@/lib/utils/contable'
 import { RegisterCoachSessionForm } from '@/components/coach/RegisterCoachSessionForm'
 import { CoachSessionsPdf } from '@/components/coach/CoachSessionsPdf'
+import { CoachSessionActions } from '@/components/coach/CoachSessionActions'
 
 export default async function DetalleCuentaPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -99,38 +100,38 @@ export default async function DetalleCuentaPage({ params }: { params: Promise<{ 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Resumen de la Cuenta */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
+          <div className="bg-[rgb(var(--surface-1))] p-6 rounded-xl border border-[rgb(var(--border))] shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
               <div>
-                <h2 className="text-lg font-semibold text-zinc-900">{cuenta.concepto}</h2>
-                <p className="text-zinc-500 text-sm">Asistente: {cuenta.asistentes?.nombre}</p>
+                <h2 className="text-lg font-semibold text-[rgb(var(--text-primary))]">{cuenta.concepto}</h2>
+                <p className="text-[rgb(var(--text-muted))] text-sm">Asistente: {cuenta.asistentes?.nombre}</p>
               </div>
               <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium 
-                ${cuenta.estado === 'pagado' ? 'bg-emerald-100 text-emerald-700' : 
-                  cuenta.estado === 'parcial' ? 'bg-amber-100 text-amber-700' : 
-                  'bg-red-100 text-red-700'}`}>
+                ${cuenta.estado === 'pagado' ? 'bg-[rgba(var(--success),0.15)] text-[rgb(var(--success))]' : 
+                  cuenta.estado === 'parcial' ? 'bg-[rgba(var(--warning),0.18)] text-[rgb(var(--warning))]' : 
+                  'bg-[rgba(var(--danger),0.15)] text-[rgb(var(--danger-strong))]'}`}>
                 {cuenta.estado.toUpperCase()}
               </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 py-4 border-y border-zinc-100">
               <div>
-                <p className="text-sm text-zinc-500">Valor Total</p>
+                <p className="text-sm text-[rgb(var(--text-muted))]">Valor Total</p>
                 <div className="flex items-center gap-2">
-                  <p className="text-xl font-semibold text-zinc-900">${Number(saldos.valor_total).toLocaleString()}</p>
+                  <p className="text-xl font-semibold text-[rgb(var(--text-primary))]">${Number(saldos.valor_total).toLocaleString()}</p>
                   {isAdmin && <EditValorModal cuentaId={cuenta.id} valorActual={Number(saldos.valor_total)} />}
                 </div>
               </div>
               <div>
-                <p className="text-sm text-zinc-500">Total Abonado</p>
-                <p className="text-xl font-semibold text-emerald-600">${Number(saldos.total_abonado).toLocaleString()}</p>
+                <p className="text-sm text-[rgb(var(--text-muted))]">Total Abonado</p>
+                <p className="text-xl font-semibold text-[rgb(var(--success))]">${Number(saldos.total_abonado).toLocaleString()}</p>
               </div>
               <div>
-                <p className="text-sm text-zinc-500">Saldo Pendiente</p>
-                <p className="text-xl font-semibold text-red-600">${Number(saldos.monto_pendiente).toLocaleString()}</p>
+                <p className="text-sm text-[rgb(var(--text-muted))]">Saldo Pendiente</p>
+                <p className="text-xl font-semibold text-[rgb(var(--danger-strong))]">${Number(saldos.monto_pendiente).toLocaleString()}</p>
               </div>
             </div>
-            <div className="mt-4 text-sm text-zinc-500">
+            <div className="mt-4 text-sm text-[rgb(var(--text-muted))]">
               Fecha de emisión: {new Date(cuenta.fecha_emision).toLocaleDateString()}
             </div>
           </div>
@@ -176,17 +177,20 @@ export default async function DetalleCuentaPage({ params }: { params: Promise<{ 
                 </div>
               </div>
               <div className="mt-4">
-                <h4 className="text-sm font-semibold text-zinc-900 mb-2">Historial de sesiones</h4>
-                <div className="divide-y divide-zinc-100 border border-zinc-200 rounded-lg overflow-hidden bg-white">
+                <h4 className="text-sm font-semibold text-[rgb(var(--text-primary))] mb-2">Historial de sesiones</h4>
+                <div className="divide-y divide-[rgb(var(--border))] border border-[rgb(var(--border))] rounded-lg overflow-hidden bg-[rgb(var(--surface-1))]">
                   {paquete.coach_sesiones?.length ? paquete.coach_sesiones
                     .sort((a: any, b: any) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
                     .map((s: any) => (
-                      <div key={s.id} className="px-4 py-3 text-sm flex justify-between">
-                        <span className="text-zinc-900">{new Date(s.fecha).toLocaleDateString('es-CO')}</span>
-                        <span className="text-zinc-500 truncate max-w-[260px] text-right">{s.notas || 'Sin notas'}</span>
+                      <div key={s.id} className="px-4 py-3 text-sm flex justify-between items-start gap-3">
+                        <div className="space-y-1">
+                          <span className="block text-[rgb(var(--text-primary))]">{new Date(s.fecha).toLocaleDateString('es-CO')}</span>
+                          <span className="block text-[rgb(var(--text-muted))] truncate max-w-[260px]">{s.notas || 'Sin notas'}</span>
+                        </div>
+                        {isAdmin && <CoachSessionActions sesionId={s.id} fecha={s.fecha} notas={s.notas} />}
                       </div>
                     )) : (
-                    <div className="px-4 py-4 text-sm text-zinc-500">Aún no hay sesiones registradas.</div>
+                    <div className="px-4 py-4 text-sm text-[rgb(var(--text-muted))]">Aún no hay sesiones registradas.</div>
                   )}
                 </div>
               </div>
@@ -194,13 +198,13 @@ export default async function DetalleCuentaPage({ params }: { params: Promise<{ 
           )}
 
           {/* Historial de Abonos */}
-          <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-zinc-200 bg-zinc-50">
-              <h3 className="font-semibold text-zinc-900">Historial de Abonos</h3>
+            <div className="bg-[rgb(var(--surface-1))] rounded-xl border border-[rgb(var(--border))] shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-[rgb(var(--border))] bg-[rgb(var(--surface-2))]">
+              <h3 className="font-semibold text-[rgb(var(--text-primary))]">Historial de Abonos</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left whitespace-nowrap">
-                <thead className="bg-zinc-50/50 border-b border-zinc-100 text-zinc-500 font-medium">
+                <thead className="bg-[rgb(var(--surface-2))] border-b border-[rgb(var(--border))] text-[rgb(var(--text-muted))] font-medium">
                   <tr>
                     <th className="px-4 py-3">Fecha</th>
                     <th className="px-4 py-3">Método</th>
@@ -208,11 +212,11 @@ export default async function DetalleCuentaPage({ params }: { params: Promise<{ 
                     <th className="px-4 py-3">Notas</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-100">
+                <tbody className="divide-y divide-[rgb(var(--border))]">
                   {abonos.map((abono: any) => (
-                    <tr key={abono.id} className="hover:bg-zinc-50/50">
-                      <td className="px-4 py-3 text-zinc-900">{new Date(abono.fecha_pago).toLocaleDateString()}</td>
-                      <td className="px-4 py-3 text-zinc-500 capitalize">
+                    <tr key={abono.id} className="hover:bg-[rgb(var(--surface-2))]">
+                      <td className="px-4 py-3 text-[rgb(var(--text-primary))]">{new Date(abono.fecha_pago).toLocaleDateString()}</td>
+                      <td className="px-4 py-3 text-[rgb(var(--text-muted))] capitalize">
                         {abono.origen_fondos === 'saldo_a_favor' ? 'Saldo a favor' : abono.metodo_pago}
                       </td>
                       <td className="px-4 py-3 text-right font-medium text-emerald-600">
@@ -221,12 +225,12 @@ export default async function DetalleCuentaPage({ params }: { params: Promise<{ 
                           {isAdmin && <EditAbonoModal abonoId={abono.id} cuentaId={cuenta.id} valorActual={Number(abono.monto)} />}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-zinc-500 text-xs truncate max-w-[150px]">{abono.notas || '-'}</td>
+                      <td className="px-4 py-3 text-[rgb(var(--text-muted))] text-xs truncate max-w-[150px]">{abono.notas || '-'}</td>
                     </tr>
                   ))}
                   {!abonos.length && (
                     <tr>
-                      <td colSpan={4} className="px-4 py-8 text-center text-zinc-500">
+                      <td colSpan={4} className="px-4 py-8 text-center text-[rgb(var(--text-muted))]">
                         No hay abonos registrados.
                       </td>
                     </tr>
@@ -240,17 +244,17 @@ export default async function DetalleCuentaPage({ params }: { params: Promise<{ 
         {/* Formulario de Nuevo Abono */}
         <div className="lg:col-span-1 space-y-6">
           {isAdmin && (
-            <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
-              <h3 className="font-semibold text-zinc-900 mb-3">Acciones (Admin)</h3>
+            <div className="bg-[rgb(var(--surface-1))] p-6 rounded-xl border border-[rgb(var(--border))] shadow-sm">
+              <h3 className="font-semibold text-[rgb(var(--text-primary))] mb-3">Acciones (Admin)</h3>
               <div className="space-y-3">
                 <div>
-                  <p className="text-sm text-zinc-600 mb-2">Editar valor de la cuenta</p>
+                  <p className="text-sm text-[rgb(var(--text-muted))] mb-2">Editar valor de la cuenta</p>
                   <EditValorModal cuentaId={cuenta.id} valorActual={Number(saldos.valor_total)} />
                 </div>
                 <div className="pt-2 border-t border-zinc-100">
-                  <p className="text-sm text-zinc-600 mb-2">Eliminar cuenta</p>
+                  <p className="text-sm text-[rgb(var(--text-muted))] mb-2">Eliminar cuenta</p>
                   <DeleteCuentaButton cuentaId={cuenta.id} />
-                  <p className="text-xs text-zinc-500 mt-2">Solo se puede eliminar si no tiene pagos registrados.</p>
+                  <p className="text-xs text-[rgb(var(--text-muted))] mt-2">Solo se puede eliminar si no tiene pagos registrados.</p>
                 </div>
               </div>
             </div>
@@ -259,12 +263,12 @@ export default async function DetalleCuentaPage({ params }: { params: Promise<{ 
           {cuenta.estado !== 'pagado' ? (
             <>
               {saldoAFavor > 0 && (
-                <div className="bg-emerald-50 p-6 rounded-xl border border-emerald-200 shadow-sm">
+                <div className="bg-[rgba(var(--success),0.12)] p-6 rounded-xl border border-[rgba(var(--success),0.3)] shadow-sm">
                   <div className="flex items-center gap-2 mb-2">
                     <Wallet className="w-5 h-5 text-emerald-600" />
-                    <h3 className="font-semibold text-emerald-900">Saldo a Favor Disponible</h3>
+                    <h3 className="font-semibold text-[rgb(var(--text-primary))]">Saldo a Favor Disponible</h3>
                   </div>
-                  <p className="text-2xl font-bold text-emerald-700 mb-4">${saldoAFavor.toLocaleString('es-CO')}</p>
+                  <p className="text-2xl font-bold text-[rgb(var(--success))] mb-4">${saldoAFavor.toLocaleString('es-CO')}</p>
                   <AplicarSaldoForm 
                     cuentaId={cuenta.id} 
                     asistenteId={cuenta.asistente_id} 
@@ -273,18 +277,18 @@ export default async function DetalleCuentaPage({ params }: { params: Promise<{ 
                 </div>
               )}
 
-              <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm sticky top-6">
+              <div className="bg-[rgb(var(--surface-1))] p-6 rounded-xl border border-[rgb(var(--border))] shadow-sm sticky top-6">
                 <div className="flex items-center gap-2 mb-4">
                   <CreditCard className="w-5 h-5 text-zinc-400" />
-                  <h3 className="font-semibold text-zinc-900">Registrar Abono</h3>
+                  <h3 className="font-semibold text-[rgb(var(--text-primary))]">Registrar Abono</h3>
                 </div>
                 <AbonoForm cuentaId={cuenta.id} maxMonto={saldos.monto_pendiente} />
               </div>
             </>
           ) : (
-            <div className="bg-emerald-50 p-6 rounded-xl border border-emerald-200 text-center">
-              <h3 className="font-semibold text-emerald-800 mb-2">Cuenta Pagada</h3>
-              <p className="text-sm text-emerald-600">Esta cuenta no tiene saldo pendiente.</p>
+            <div className="bg-[rgba(var(--success),0.12)] p-6 rounded-xl border border-[rgba(var(--success),0.3)] text-center">
+              <h3 className="font-semibold text-[rgb(var(--success))] mb-2">Cuenta Pagada</h3>
+              <p className="text-sm text-[rgb(var(--text-primary))]">Esta cuenta no tiene saldo pendiente.</p>
             </div>
           )}
         </div>

@@ -46,6 +46,71 @@ export async function registrarSesion(prev: CoachActionState, formData: FormData
   return { success: true }
 }
 
+export async function editarSesion(prev: CoachActionState, formData: FormData): Promise<CoachActionState> {
+  let supabase
+  try {
+    ({ supabase } = await requireAdmin())
+  } catch (e: any) {
+    return { error: e?.message || 'Acceso denegado' }
+  }
+
+  const sesion_id = formData.get('sesion_id') as string
+  const fecha = (formData.get('fecha') as string) || new Date().toISOString().split('T')[0]
+  const notas = (formData.get('notas') as string) || null
+
+  if (!sesion_id) return { error: 'Sesión requerida' }
+
+  const { data: sesion } = await supabase
+    .from('coach_sesiones')
+    .select('id, paquete_id, asistente_id, coach_paquetes (cuenta_id)')
+    .eq('id', sesion_id)
+    .single()
+
+  if (!sesion) return { error: 'Sesión no encontrada' }
+
+  const { error } = await supabase
+    .from('coach_sesiones')
+    .update({ fecha, notas })
+    .eq('id', sesion_id)
+
+  if (error) return { error: error.message }
+
+  const cuenta_id = (sesion as any).coach_paquetes?.cuenta_id
+  const asistente_id = sesion.asistente_id
+  if (cuenta_id) revalidatePath(`/cuentas/${cuenta_id}`)
+  if (asistente_id) revalidatePath(`/asistentes/${asistente_id}`)
+  return { success: true }
+}
+
+export async function eliminarSesion(prev: CoachActionState, formData: FormData): Promise<CoachActionState> {
+  let supabase
+  try {
+    ({ supabase } = await requireAdmin())
+  } catch (e: any) {
+    return { error: e?.message || 'Acceso denegado' }
+  }
+
+  const sesion_id = formData.get('sesion_id') as string
+  if (!sesion_id) return { error: 'Sesión requerida' }
+
+  const { data: sesion } = await supabase
+    .from('coach_sesiones')
+    .select('id, paquete_id, asistente_id, coach_paquetes (cuenta_id)')
+    .eq('id', sesion_id)
+    .single()
+
+  if (!sesion) return { error: 'Sesión no encontrada' }
+
+  const { error } = await supabase.from('coach_sesiones').delete().eq('id', sesion_id)
+  if (error) return { error: error.message }
+
+  const cuenta_id = (sesion as any).coach_paquetes?.cuenta_id
+  const asistente_id = sesion.asistente_id
+  if (cuenta_id) revalidatePath(`/cuentas/${cuenta_id}`)
+  if (asistente_id) revalidatePath(`/asistentes/${asistente_id}`)
+  return { success: true }
+}
+
 export async function getCoachSummary(asistente_id: string) {
   const supabase = await import('@/lib/supabase/server').then(m => m.createClient())
   if (!supabase) return null
