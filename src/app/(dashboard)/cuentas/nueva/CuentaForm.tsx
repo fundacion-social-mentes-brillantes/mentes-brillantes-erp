@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, useEffect, useMemo, useState } from 'react'
 import { saveCuenta } from '../actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,6 +10,18 @@ import { SearchableAsistenteSelect } from '@/components/SearchableAsistenteSelec
 
 export function CuentaForm({ asistentes }: { asistentes: any[] }) {
   const [state, formAction, isPending] = useActionState(saveCuenta, null)
+  const [tipo, setTipo] = useState<'general' | 'coach'>('general')
+  const [sesiones, setSesiones] = useState<number>(1)
+  const [concepto, setConcepto] = useState('')
+  const conceptoCoach = useMemo(() => `Sesión guía coach - ${sesiones || 1} sesiones`, [sesiones])
+
+  useEffect(() => {
+    if (tipo === 'coach') {
+      setConcepto(conceptoCoach)
+    } else {
+      setConcepto('')
+    }
+  }, [tipo, conceptoCoach])
 
   return (
     <form action={formAction} className="space-y-6 max-w-2xl bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
@@ -25,10 +37,51 @@ export function CuentaForm({ asistentes }: { asistentes: any[] }) {
           <label className="text-sm font-medium text-zinc-900">Asistente *</label>
           <SearchableAsistenteSelect asistentes={asistentes} disabled={isPending} />
         </div>
+
+        <div className="space-y-2 md:col-span-2">
+          <label className="text-sm font-medium text-zinc-900">Tipo de cuenta *</label>
+          <div className="flex gap-4 text-sm text-zinc-700">
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="tipo_cuenta_radio"
+                value="general"
+                checked={tipo === 'general'}
+                onChange={() => setTipo('general')}
+                disabled={isPending}
+              />
+              General
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="tipo_cuenta_radio"
+                value="coach"
+                checked={tipo === 'coach'}
+                onChange={() => setTipo('coach')}
+                disabled={isPending}
+              />
+              Paquete coach
+            </label>
+          </div>
+          <input type="hidden" name="tipo_cuenta" value={tipo} />
+        </div>
         
         <div className="space-y-2 md:col-span-2">
           <label className="text-sm font-medium text-zinc-900">Concepto *</label>
-          <Input name="concepto" placeholder="Ej: Tratamiento mensual" required disabled={isPending} />
+          <Input
+            name="concepto"
+            placeholder="Ej: Tratamiento mensual"
+            required
+            disabled={isPending}
+            value={concepto}
+            onChange={(e) => setConcepto(e.target.value)}
+          />
+          {tipo === 'coach' && (
+            <p className="text-xs text-zinc-500">
+              Se autogenera como “{conceptoCoach}”, puedes ajustarlo si lo necesitas.
+            </p>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -40,6 +93,28 @@ export function CuentaForm({ asistentes }: { asistentes: any[] }) {
           <label className="text-sm font-medium text-zinc-900">Fecha de Emisión *</label>
           <Input name="fecha_emision" type="date" defaultValue={new Date().toISOString().split('T')[0]} required disabled={isPending} />
         </div>
+
+        {tipo === 'coach' && (
+          <>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-zinc-900">Sesiones compradas *</label>
+              <Input
+                name="sesiones_coach"
+                type="number"
+                min="1"
+                required
+                value={sesiones}
+                onChange={(e) => setSesiones(Math.max(1, Number(e.target.value) || 1))}
+                disabled={isPending}
+              />
+            </div>
+            <div className="space-y-1 md:col-span-2">
+              <p className="text-xs text-zinc-500">
+                El valor total es pactado libremente; no se calcula por sesión. El paquete puede tener saldo pendiente aunque todas las sesiones no se hayan usado.
+              </p>
+            </div>
+          </>
+        )}
 
         <div className="space-y-2 pt-4 border-t border-zinc-100 md:col-span-2">
           <h3 className="text-sm font-semibold text-zinc-900">Pago Inicial (Opcional)</h3>

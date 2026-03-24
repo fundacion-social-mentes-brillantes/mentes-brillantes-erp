@@ -1,12 +1,14 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, CreditCard, Wallet } from 'lucide-react'
+import { ArrowLeft, CreditCard, Wallet, HeartHandshake } from 'lucide-react'
 import { AbonoForm } from './AbonoForm'
 import { AplicarSaldoForm } from './AplicarSaldoForm'
 import { EditValorModal, EditAbonoModal } from './EditModals'
 import { DeleteCuentaButton } from './DeleteCuentaButton'
 import { filtrarPagosValidos, sumarMontos } from '@/lib/utils/contable'
+import { RegisterCoachSessionForm } from '@/components/coach/RegisterCoachSessionForm'
+import { CoachSessionsPdf } from '@/components/coach/CoachSessionsPdf'
 
 export default async function DetalleCuentaPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -70,6 +72,18 @@ export default async function DetalleCuentaPage({ params }: { params: Promise<{ 
     .in('registro_id', [id, ...abonoIds])
     .order('fecha', { ascending: false })
 
+  // Paquete coach (si aplica)
+  const { data: paqueteData } = await supabase
+    .from('coach_paquetes')
+    .select('id, sesiones_compradas, asistente_id, coach_sesiones (id, fecha, notas)')
+    .eq('cuenta_id', id)
+    .limit(1)
+
+  const paquete = paqueteData?.[0] || null
+
+  const sesionesRealizadas = paquete?.coach_sesiones?.length || 0
+  const sesionesRestantes = paquete ? Math.max(0, (paquete.sesiones_compradas || 0) - sesionesRealizadas) : 0
+
   return (
     <div className="space-y-6 max-w-5xl">
       <div className="flex items-center gap-4">
@@ -120,6 +134,64 @@ export default async function DetalleCuentaPage({ params }: { params: Promise<{ 
               Fecha de emisión: {new Date(cuenta.fecha_emision).toLocaleDateString()}
             </div>
           </div>
+
+          {paquete && (
+            <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <HeartHandshake className="w-5 h-5 text-emerald-600" />
+                  <h3 className="text-lg font-semibold text-zinc-900">Paquete coach</h3>
+                </div>
+                <span className="text-xs text-zinc-500">Sesiones registradas solo desde este módulo (no retroactivas)</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                  <p className="text-xs text-zinc-500">Compradas</p>
+                  <p className="text-2xl font-bold text-zinc-900">{paquete.sesiones_compradas}</p>
+                </div>
+                <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                  <p className="text-xs text-zinc-500">Realizadas</p>
+                  <p className="text-2xl font-bold text-emerald-700">{sesionesRealizadas}</p>
+                </div>
+                <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                  <p className="text-xs text-zinc-500">Restantes</p>
+                  <p className="text-2xl font-bold text-red-600">{sesionesRestantes}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                  <h4 className="text-sm font-semibold text-zinc-900 mb-2">Registrar sesión</h4>
+                  <RegisterCoachSessionForm paqueteId={paquete.id} disabled={sesionesRestantes <= 0} />
+                  {sesionesRestantes <= 0 && <p className="text-xs text-red-600 mt-2">No quedan sesiones disponibles.</p>}
+                </div>
+                <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                  <h4 className="text-sm font-semibold text-zinc-900 mb-2">Exportar PDF</h4>
+                  <CoachSessionsPdf
+                    asistenteNombre={cuenta.asistentes?.nombre || ''}
+                    sesionesCompradas={paquete.sesiones_compradas}
+                    sesionesRealizadas={sesionesRealizadas}
+                    sesionesRestantes={sesionesRestantes}
+                    sesiones={(paquete.coach_sesiones || []).map((s: any) => ({ fecha: s.fecha, notas: s.notas }))}
+                  />
+                </div>
+              </div>
+              <div className="mt-4">
+                <h4 className="text-sm font-semibold text-zinc-900 mb-2">Historial de sesiones</h4>
+                <div className="divide-y divide-zinc-100 border border-zinc-200 rounded-lg overflow-hidden bg-white">
+                  {paquete.coach_sesiones?.length ? paquete.coach_sesiones
+                    .sort((a: any, b: any) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
+                    .map((s: any) => (
+                      <div key={s.id} className="px-4 py-3 text-sm flex justify-between">
+                        <span className="text-zinc-900">{new Date(s.fecha).toLocaleDateString('es-CO')}</span>
+                        <span className="text-zinc-500 truncate max-w-[260px] text-right">{s.notas || 'Sin notas'}</span>
+                      </div>
+                    )) : (
+                    <div className="px-4 py-4 text-sm text-zinc-500">Aún no hay sesiones registradas.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Historial de Abonos */}
           <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">

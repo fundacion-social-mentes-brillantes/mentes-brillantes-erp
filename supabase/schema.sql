@@ -153,6 +153,32 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER trg_estado_cuenta AFTER INSERT OR UPDATE OR DELETE ON pagos_abonos
 FOR EACH ROW EXECUTE FUNCTION actualizar_estado_cuenta();
 
+-- PAQUETES COACH (una cuenta -> un paquete)
+CREATE TABLE IF NOT EXISTS coach_paquetes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  cuenta_id UUID NOT NULL REFERENCES cuentas_por_cobrar(id) ON DELETE CASCADE,
+  asistente_id UUID NOT NULL REFERENCES asistentes(id) ON DELETE RESTRICT,
+  sesiones_compradas INTEGER NOT NULL CHECK (sesiones_compradas > 0),
+  notas TEXT,
+  creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (cuenta_id)
+);
+
+CREATE INDEX IF NOT EXISTS coach_paquetes_asistente_idx ON coach_paquetes (asistente_id);
+
+-- Sesiones registradas de paquetes coach
+CREATE TABLE IF NOT EXISTS coach_sesiones (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  paquete_id UUID NOT NULL REFERENCES coach_paquetes(id) ON DELETE CASCADE,
+  asistente_id UUID NOT NULL REFERENCES asistentes(id) ON DELETE RESTRICT,
+  fecha DATE NOT NULL DEFAULT CURRENT_DATE,
+  notas TEXT,
+  creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS coach_sesiones_paquete_idx ON coach_sesiones (paquete_id);
+CREATE INDEX IF NOT EXISTS coach_sesiones_asistente_idx ON coach_sesiones (asistente_id);
+
 -- DONACIONES DE ASISTENTES (flujo independiente a cuentas/abonos)
 CREATE TABLE IF NOT EXISTS donaciones_asistentes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -76,6 +76,16 @@ describe('deleteCuenta', () => {
             })),
           };
         }
+        if (table === 'coach_paquetes') {
+          const single = vi.fn().mockResolvedValue({ data: null });
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                single,
+              })),
+            })),
+          };
+        }
         if (table === 'cuentas_por_cobrar') {
           return {
             delete: vi.fn(() => ({

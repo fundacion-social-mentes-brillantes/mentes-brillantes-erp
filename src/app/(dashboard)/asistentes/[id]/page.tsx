@@ -7,6 +7,8 @@ import { PagarConSaldoButton } from './PagarConSaldoButton'
 import { filtrarPagosValidos, sumarMontos } from '@/lib/utils/contable'
 import { DonacionForm } from './DonacionForm'
 import { DonacionActionsMenu } from './DonacionActionsMenu'
+import { RegisterCoachSessionForm } from '@/components/coach/RegisterCoachSessionForm'
+import { CoachSessionsPdf } from '@/components/coach/CoachSessionsPdf'
 
 export default async function AsistenteDetallePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -82,6 +84,20 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
   const donacionesActivas = donaciones.filter(d => d.estado !== 'anulado')
   const totalDonado = Math.round(donacionesActivas.reduce((acc, curr) => acc + Number(curr.monto), 0))
   const cantidadDonaciones = donaciones.length
+
+  // Paquetes coach y sesiones (solo módulo nuevo)
+  const { data: paquetesCoach } = await supabase
+    .from('coach_paquetes')
+    .select('id, cuenta_id, sesiones_compradas, coach_sesiones (id, fecha, notas)')
+    .eq('asistente_id', id)
+
+  const sesionesCompradas = paquetesCoach?.reduce((acc: number, p: any) => acc + (p.sesiones_compradas || 0), 0) || 0
+  const sesionesRealizadas = paquetesCoach?.reduce((acc: number, p: any) => acc + (p.coach_sesiones?.length || 0), 0) || 0
+  const sesionesRestantes = Math.max(0, sesionesCompradas - sesionesRealizadas)
+  const sesionesLista = (paquetesCoach || []).flatMap((p: any) =>
+    (p.coach_sesiones || []).map((s: any) => ({ fecha: s.fecha, notas: s.notas, paquete_id: p.id }))
+  ).sort((a: any, b: any) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
+  const paqueteActivo = (paquetesCoach || []).find((p: any) => (p.coach_sesiones?.length || 0) < (p.sesiones_compradas || 0))
 
   // Calculate totals
   let totalFacturado = 0
@@ -255,6 +271,55 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
               <div className="pt-3 border-t border-[rgb(var(--border))]">
                 <h4 className="text-sm font-semibold text-[rgb(var(--text-primary))] mb-2">Registrar Donación</h4>
                 <DonacionForm asistenteId={asistente.id} />
+              </div>
+            </div>
+          </div>
+
+          {/* Sesiones coach */}
+          <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] shadow-soft overflow-hidden">
+            <div className="px-5 py-4 border-b border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] flex items-center justify-between">
+              <div>
+                <h3 className="font-medium text-[rgb(var(--text-primary))]">Sesiones guía coach</h3>
+                <p className="text-xs text-[rgb(var(--text-muted))]">Conteo solo para sesiones registradas desde este módulo (no retroactivo).</p>
+              </div>
+              {paqueteActivo && <span className="text-[10px] px-2 py-1 rounded-full bg-[rgba(var(--info),0.12)] text-[rgb(var(--info))] border border-[rgba(var(--info),0.25)]">Activo</span>}
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] p-3">
+                  <p className="text-xs text-[rgb(var(--text-muted))]">Compradas</p>
+                  <p className="text-xl font-bold text-[rgb(var(--text-primary))]">{sesionesCompradas}</p>
+                </div>
+                <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] p-3">
+                  <p className="text-xs text-[rgb(var(--text-muted))]">Realizadas</p>
+                  <p className="text-xl font-bold text-[rgb(var(--accent))]">{sesionesRealizadas}</p>
+                </div>
+                <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] p-3">
+                  <p className="text-xs text-[rgb(var(--text-muted))]">Restantes</p>
+                  <p className="text-xl font-bold text-[rgb(var(--danger))]">{sesionesRestantes}</p>
+                </div>
+              </div>
+
+              {paqueteActivo ? (
+                <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] p-4 space-y-3">
+                  <h4 className="text-sm font-semibold text-[rgb(var(--text-primary))]">Registrar sesión</h4>
+                  <RegisterCoachSessionForm paqueteId={paqueteActivo.id} disabled={false} />
+                </div>
+              ) : (
+                <p className="text-sm text-[rgb(var(--text-muted))]">
+                  No hay paquetes coach con sesiones pendientes.
+                </p>
+              )}
+
+              <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] p-4 space-y-3">
+                <h4 className="text-sm font-semibold text-[rgb(var(--text-primary))]">Exportar PDF</h4>
+                <CoachSessionsPdf
+                  asistenteNombre={asistente.nombre}
+                  sesionesCompradas={sesionesCompradas}
+                  sesionesRealizadas={sesionesRealizadas}
+                  sesionesRestantes={sesionesRestantes}
+                  sesiones={sesionesLista.map((s) => ({ fecha: s.fecha, notas: s.notas || '' }))}
+                />
               </div>
             </div>
           </div>

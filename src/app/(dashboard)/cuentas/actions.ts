@@ -24,9 +24,12 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
   const fecha_emision = formData.get('fecha_emision') as string
   const abono_inicial_str = formData.get('abono_inicial') as string
   const metodo_pago = formData.get('metodo_pago') as string
+  const tipo_cuenta = (formData.get('tipo_cuenta') as string) || 'general'
+  const sesiones_coach_str = formData.get('sesiones_coach') as string | null
 
   const valor_total = Math.round(parseFloat(valor_total_str))
   const abono_inicial = abono_inicial_str ? Math.round(parseFloat(abono_inicial_str)) : 0
+  const sesiones_coach = sesiones_coach_str ? parseInt(sesiones_coach_str, 10) : null
 
   if (!asistente_id || !concepto || !valor_total_str || !fecha_emision) {
     return { error: 'Todos los campos son obligatorios' }
@@ -44,11 +47,21 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
     return { error: 'El abono inicial no puede ser mayor al valor total' }
   }
 
+  if (tipo_cuenta === 'coach') {
+    if (!sesiones_coach || isNaN(sesiones_coach) || sesiones_coach <= 0) {
+      return { error: 'Debes indicar cuántas sesiones compradas (mayor a 0)' }
+    }
+  }
+
   const estado = calcularEstadoCuenta(valor_total, abono_inicial)
+
+  const conceptoFinal = tipo_cuenta === 'coach' && concepto.trim().length === 0
+    ? `Sesión guía coach - ${sesiones_coach} sesiones`
+    : concepto
 
   const { data: cuenta, error: cuentaError } = await supabase.from('cuentas_por_cobrar').insert([{
     asistente_id,
-    concepto,
+    concepto: conceptoFinal,
     valor_total,
     fecha_emision,
     estado
@@ -73,6 +86,17 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
     }
   }
 
+  if (tipo_cuenta === 'coach' && cuenta) {
+    const { error: coachError } = await supabase.from('coach_paquetes').insert([{
+      cuenta_id: cuenta.id,
+      asistente_id,
+      sesiones_compradas: sesiones_coach
+    }])
+    if (coachError) {
+      return { error: 'Cuenta creada, pero error creando paquete coach: ' + coachError.message }
+    }
+  }
+
   revalidatePath('/cuentas')
   redirect('/cuentas')
 }
@@ -93,6 +117,23 @@ export async function deleteCuenta(cuenta_id: string): Promise<ActionState> {
   if (pagosError) return { error: pagosError.message }
   if ((pagosCount ?? 0) > 0) {
     return { error: 'No se puede eliminar la cuenta porque tiene pagos registrados. Anula o elimina los pagos primero.' }
+  }
+
+  // Bloquear si tiene sesiones coach registradas
+  const { data: paquete } = await supabase
+    .from('coach_paquetes')
+    .select('id')
+    .eq('cuenta_id', cuenta_id)
+    .single()
+
+  if (paquete) {
+    const { count: sesionesCount } = await supabase
+      .from('coach_sesiones')
+      .select('*', { count: 'exact', head: true })
+      .eq('paquete_id', paquete.id)
+    if ((sesionesCount ?? 0) > 0) {
+      return { error: 'No se puede eliminar la cuenta porque tiene sesiones coach registradas.' }
+    }
   }
 
   const { error: deleteError } = await supabase
