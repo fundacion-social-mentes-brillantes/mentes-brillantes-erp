@@ -223,27 +223,7 @@ export async function Dashboard({ month }: { month?: string }) {
     };
   }) || [];
 
-  const periodStats = [
-    {
-      name: "Ingresos de Cartera",
-      value: `$${ingresosMes.toLocaleString()}`,
-      trend: ingresosTrend,
-      goodIsUp: true,
-      icon: Banknote,
-      color: "text-[rgb(var(--success))]",
-      bg: "bg-[rgba(var(--success),0.12)]",
-      tooltip: "Pagos y abonos recibidos (sin saldo a favor) en el mes."
-    },
-    {
-      name: "Donaciones",
-      value: `$${donacionesMes.toLocaleString()}`,
-      trend: donacionesTrend,
-      goodIsUp: true,
-      icon: Wallet,
-      color: "text-[rgb(var(--info))]",
-      bg: "bg-[rgba(var(--info),0.12)]",
-      tooltip: "Donaciones voluntarias registradas en el mes."
-    },
+  const mainStats = [
     {
       name: "Ingresos Totales",
       value: `$${ingresosTotales.toLocaleString()}`,
@@ -251,8 +231,8 @@ export async function Dashboard({ month }: { month?: string }) {
       goodIsUp: true,
       icon: Banknote,
       color: "text-[rgb(var(--success))]",
-      bg: "bg-[rgba(var(--success),0.12)]",
-      tooltip: "Ingresos de cartera + donaciones del mes."
+      bg: "bg-[rgba(var(--success),0.1)]",
+      help: "Ingresos de cartera + donaciones del mes."
     },
     {
       name: "Egresos del Período",
@@ -261,8 +241,8 @@ export async function Dashboard({ month }: { month?: string }) {
       goodIsUp: false,
       icon: ShoppingCart,
       color: "text-[rgb(var(--danger))]",
-      bg: "bg-[rgba(var(--danger),0.12)]",
-      tooltip: "Suma de los gastos registrados dentro del mes seleccionado."
+      bg: "bg-[rgba(var(--danger),0.1)]",
+      help: "Gastos registrados dentro del mes seleccionado."
     },
     {
       name: "Utilidad del Período",
@@ -271,18 +251,8 @@ export async function Dashboard({ month }: { month?: string }) {
       goodIsUp: true,
       icon: Wallet,
       color: utilidadMes >= 0 ? "text-[rgb(var(--info))]" : "text-[rgb(var(--danger))]",
-      bg: utilidadMes >= 0 ? "bg-[rgba(var(--info),0.12)]" : "bg-[rgba(var(--danger),0.12)]",
-      tooltip: "Ingresos totales menos egresos del período."
-    },
-    {
-      name: "Facturado del Período",
-      value: `$${facturadoMes.toLocaleString()}`,
-      trend: facturadoTrend,
-      goodIsUp: true,
-      icon: Receipt,
-      color: "text-[rgb(var(--info))]",
-      bg: "bg-[rgba(var(--info),0.12)]",
-      tooltip: "Valor total de las cuentas por cobrar creadas en ese mes, aunque no se hayan pagado todavía."
+      bg: utilidadMes >= 0 ? "bg-[rgba(var(--info),0.1)]" : "bg-[rgba(var(--danger),0.1)]",
+      help: "Ingresos totales menos egresos del período."
     },
     {
       name: "Pendiente del Período",
@@ -291,8 +261,41 @@ export async function Dashboard({ month }: { month?: string }) {
       goodIsUp: false,
       icon: AlertCircle,
       color: "text-[rgb(var(--warning))]",
-      bg: "bg-[rgba(var(--warning),0.14)]",
-      tooltip: "Saldo que aún falta por cobrar, pero solo de las cuentas creadas en ese mes."
+      bg: "bg-[rgba(var(--warning),0.12)]",
+      help: "Saldo por cobrar de las cuentas creadas en el mes."
+    },
+  ];
+
+  const detailStats = [
+    {
+      name: "Ingresos de Cartera",
+      value: `$${ingresosMes.toLocaleString()}`,
+      trend: ingresosTrend,
+      goodIsUp: true,
+      icon: Banknote,
+      color: "text-[rgb(var(--success))]",
+      bg: "bg-[rgba(var(--success),0.08)]",
+      help: "Pagos y abonos recibidos (sin saldo a favor) en el mes."
+    },
+    {
+      name: "Donaciones",
+      value: `$${donacionesMes.toLocaleString()}`,
+      trend: donacionesTrend,
+      goodIsUp: true,
+      icon: Wallet,
+      color: "text-[rgb(var(--info))]",
+      bg: "bg-[rgba(var(--info),0.08)]",
+      help: "Donaciones voluntarias registradas en el mes."
+    },
+    {
+      name: "Facturado del Período",
+      value: `$${facturadoMes.toLocaleString()}`,
+      trend: facturadoTrend,
+      goodIsUp: true,
+      icon: Receipt,
+      color: "text-[rgb(var(--info))]",
+      bg: "bg-[rgba(var(--info),0.08)]",
+      help: "Valor total de cuentas por cobrar creadas en el mes (pagadas o no)."
     },
   ];
   
@@ -338,63 +341,117 @@ export async function Dashboard({ month }: { month?: string }) {
         </div>
       </div>
 
-      {/* 1. INDICADORES DEL PERÃODO */}
+      {/* Resumen del mes */}
       <section className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <h2 className="text-lg font-semibold text-[rgb(var(--text-primary))] border-b border-[rgb(var(--border))] pb-2">
-          Indicadores del PerÃ­odo <span className="text-[rgb(var(--text-muted))] font-normal text-sm ml-2 capitalize">({displayMonthName})</span>
-        </h2>
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
-          {periodStats.map((stat) => {
+        <div className="flex flex-col gap-1">
+          <h2 className="text-lg font-semibold text-[rgb(var(--text-primary))]">
+            Resumen del mes <span className="text-[rgb(var(--text-muted))] font-normal text-sm ml-2 capitalize">({displayMonthName})</span>
+          </h2>
+          <p className="text-sm text-[rgb(var(--text-muted))]">Cuatro KPIs clave y, debajo, el detalle financiero del período.</p>
+        </div>
+
+        {/* Top 4 tarjetas principales */}
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {mainStats.map((stat) => {
             const isTrendPositive = stat.trend > 0;
             const isTrendNeutral = stat.trend === 0;
             const trendIsGood = (isTrendPositive && stat.goodIsUp) || (!isTrendPositive && !stat.goodIsUp);
-            
             return (
               <div
                 key={stat.name}
-                className="relative overflow-hidden rounded-2xl border border-[rgba(var(--border),0.5)] bg-[rgba(var(--surface-1),0.6)] backdrop-blur-xl p-5 shadow-sm transition-all hover:shadow-md hover:-translate-y-1"
+                className="rounded-2xl border border-[rgba(var(--border),0.6)] bg-[rgba(var(--surface-1),0.7)] backdrop-blur-xl p-5 shadow-sm"
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-xs font-medium text-[rgb(var(--text-muted))]">{stat.name}</p>
-                    <div className="group relative flex items-center">
-                      <Info className="w-3.5 h-3.5 text-[rgb(var(--text-muted))] cursor-help outline-none" tabIndex={0} />
-                      <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 bg-[rgba(var(--surface-3),0.9)] backdrop-blur text-white text-xs rounded-lg p-2.5 shadow-xl z-20 text-center">
-                        {stat.tooltip}
-                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[rgba(var(--surface-3),0.9)]"></div>
-                      </div>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-medium uppercase tracking-wide text-[rgb(var(--text-muted))]">{stat.name}</p>
+                      <details className="group">
+                        <summary className="list-none cursor-pointer text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))]">
+                          <Info className="w-3.5 h-3.5 inline-block align-middle" />
+                        </summary>
+                        <div className="mt-2 text-xs text-[rgb(var(--text-primary))] bg-[rgb(var(--surface-2))] border border-[rgb(var(--border))] rounded-lg p-2.5 shadow-lg w-56">
+                          {stat.help}
+                        </div>
+                      </details>
                     </div>
+                    <p className="text-2xl font-bold tracking-tight text-[rgb(var(--text-primary))]">{stat.value}</p>
                   </div>
-                  <div className={`p-2 rounded-xl ${stat.bg} backdrop-blur-md`}>
+                  <div className={`p-2 rounded-xl ${stat.bg}`}>
                     <stat.icon className={`h-4 w-4 ${stat.color}`} />
                   </div>
                 </div>
-                <div className="mt-3 flex items-end justify-between">
-                  <p className="text-2xl font-bold tracking-tight text-[rgb(var(--text-primary))]">{stat.value}</p>
-                  
-                  {!isTrendNeutral && (
-                    <div className={`flex items-center gap-1 text-xs font-medium ${trendIsGood ? 'text-[rgb(var(--success))] bg-[rgba(var(--success),0.12)]' : 'text-[rgb(var(--danger-strong))] bg-[rgba(var(--danger),0.12)]'} px-1.5 py-0.5 rounded-md`}>
+                <div className="mt-3 flex items-center gap-2">
+                  {isTrendNeutral ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-[rgb(var(--text-muted))] bg-[rgb(var(--muted-surface))] px-2 py-1 rounded-md">
+                      <Minus className="w-3 h-3" /> 0%
+                    </span>
+                  ) : (
+                    <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-md ${trendIsGood ? 'text-[rgb(var(--success))] bg-[rgba(var(--success),0.12)]' : 'text-[rgb(var(--danger-strong))] bg-[rgba(var(--danger),0.12)]'}`}>
                       {isTrendPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                       {Math.abs(stat.trend)}%
-                    </div>
-                  )}
-                  {isTrendNeutral && (
-                    <div className="flex items-center gap-1 text-xs font-medium text-[rgb(var(--text-muted))] bg-[rgb(var(--muted-surface))] px-1.5 py-0.5 rounded-md">
-                      <Minus className="w-3 h-3" />
-                      0%
-                    </div>
+                    </span>
                   )}
                 </div>
               </div>
             );
           })}
         </div>
+
+        {/* Detalle del período */}
+        <div className="rounded-2xl border border-[rgba(var(--border),0.6)] bg-[rgba(var(--surface-1),0.7)] backdrop-blur-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-[rgb(var(--text-primary))]">Detalle del período</h3>
+            <span className="text-xs text-[rgb(var(--text-muted))]">Ingresos de cartera, donaciones y facturado</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {detailStats.map((stat) => {
+              const isTrendPositive = stat.trend > 0;
+              const isTrendNeutral = stat.trend === 0;
+              const trendIsGood = (isTrendPositive && stat.goodIsUp) || (!isTrendPositive && !stat.goodIsUp);
+              return (
+                <div key={stat.name} className="rounded-xl border border-[rgba(var(--border),0.6)] bg-[rgba(var(--surface-2),0.8)] p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-medium text-[rgb(var(--text-muted))]">{stat.name}</p>
+                        <details className="group">
+                          <summary className="list-none cursor-pointer text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))]">
+                            <Info className="w-3 h-3 inline-block align-middle" />
+                          </summary>
+                          <div className="mt-2 text-xs text-[rgb(var(--text-primary))] bg-[rgb(var(--surface-2))] border border-[rgb(var(--border))] rounded-lg p-2 shadow-lg w-52">
+                            {stat.help}
+                          </div>
+                        </details>
+                      </div>
+                      <p className="text-lg font-semibold text-[rgb(var(--text-primary))]">{stat.value}</p>
+                    </div>
+                    <div className={`p-2 rounded-lg ${stat.bg}`}>
+                      <stat.icon className={`h-4 w-4 ${stat.color}`} />
+                    </div>
+                  </div>
+                  <div className="mt-2">
+                    {isTrendNeutral ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[rgb(var(--text-muted))] bg-[rgb(var(--muted-surface))] px-2 py-1 rounded-md">
+                        <Minus className="w-3 h-3" /> 0%
+                      </span>
+                    ) : (
+                      <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-md ${trendIsGood ? 'text-[rgb(var(--success))] bg-[rgba(var(--success),0.12)]' : 'text-[rgb(var(--danger-strong))] bg-[rgba(var(--danger),0.12)]'}`}>
+                        {isTrendPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                        {Math.abs(stat.trend)}%
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </section>
 
-      {/* 2. INDICADORES HISTÃ“RICOS */}
+      {/* Indicadores históricos / cartera */}
       <section className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
         <h2 className="text-lg font-semibold text-[rgb(var(--text-primary))] border-b border-[rgb(var(--border))] pb-2">
-          Indicadores HistÃ³ricos <span className="text-[rgb(var(--text-muted))] font-normal text-sm ml-2">(Acumulado General)</span>
+          Indicadores históricos y cartera <span className="text-[rgb(var(--text-muted))] font-normal text-sm ml-2">(Acumulado general)</span>
         </h2>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
           {historicalStats.map((stat) => (
