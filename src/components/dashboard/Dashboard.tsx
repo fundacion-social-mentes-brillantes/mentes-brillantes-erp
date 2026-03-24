@@ -111,13 +111,14 @@ export async function Dashboard({ month }: { month?: string }) {
   // Facturado y Pendiente del Mes
   const { data: cuentasPeriodoData } = await supabase
     .from('cuentas_por_cobrar')
-    .select('valor_total, pagos_abonos(monto)')
+    .select('valor_total, pagos_abonos(monto, estado, notas)')
     .gte('fecha_emision', firstDayOfMonth)
     .lte('fecha_emision', lastDayOfMonth);
     
   const facturadoMes = Math.round(cuentasPeriodoData?.reduce((acc, curr) => acc + Number(curr.valor_total), 0) || 0);
   const pendienteMes = Math.round(cuentasPeriodoData?.reduce((acc, curr) => {
-    const abonado = curr.pagos_abonos?.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0) || 0;
+    const pagosValidos = filtrarPagosValidosCuentas(curr.pagos_abonos || []);
+    const abonado = pagosValidos.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0);
     return acc + (Number(curr.valor_total) - abonado);
   }, 0) || 0);
 
