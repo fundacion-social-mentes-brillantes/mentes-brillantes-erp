@@ -8,7 +8,7 @@ import { AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import { SearchableAsistenteSelect } from '@/components/SearchableAsistenteSelect'
 
-export function CuentaForm({ asistentes }: { asistentes: any[] }) {
+export function CuentaForm({ asistentes, asistenteInicial }: { asistentes: any[], asistenteInicial?: string }) {
   const [state, formAction, isPending] = useActionState(saveCuenta, null)
   const [tipo, setTipo] = useState<'general' | 'coach'>('general')
   const [sesiones, setSesiones] = useState<number>(1)
@@ -35,7 +35,7 @@ export function CuentaForm({ asistentes }: { asistentes: any[] }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2 md:col-span-2">
           <label className="text-sm font-medium text-zinc-900">Asistente *</label>
-          <SearchableAsistenteSelect asistentes={asistentes} disabled={isPending} />
+          <SearchableAsistenteSelect asistentes={asistentes} disabled={isPending} initialSelectedId={asistenteInicial} />
         </div>
 
         <div className="space-y-2 md:col-span-2">
