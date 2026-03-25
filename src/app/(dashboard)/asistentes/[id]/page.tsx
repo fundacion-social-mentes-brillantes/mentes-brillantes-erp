@@ -284,79 +284,6 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
             </div>
           </div>
 
-          {/* Sesiones coach */}
-          <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] shadow-soft overflow-hidden">
-            <div className="px-5 py-4 border-b border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] flex items-center justify-between">
-              <div>
-                <h3 className="font-medium text-[rgb(var(--text-primary))]">Sesiones guía coach</h3>
-                <p className="text-xs text-[rgb(var(--text-muted))]">Conteo solo para sesiones registradas desde este módulo (no retroactivo).</p>
-              </div>
-              {paqueteActivo && <span className="text-[10px] px-2 py-1 rounded-full bg-[rgba(var(--info),0.12)] text-[rgb(var(--info))] border border-[rgba(var(--info),0.25)]">Activo</span>}
-            </div>
-            <div className="p-5 space-y-4">
-              <div className="grid grid-cols-3 gap-3 text-center">
-                <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] p-3">
-                  <p className="text-xs text-[rgb(var(--text-muted))]">Compradas</p>
-                  <p className="text-xl font-bold text-[rgb(var(--text-primary))]">{sesionesCompradas}</p>
-                </div>
-                <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] p-3">
-                  <p className="text-xs text-[rgb(var(--text-muted))]">Realizadas</p>
-                  <p className="text-xl font-bold text-[rgb(var(--accent))]">{sesionesRealizadas}</p>
-                </div>
-                <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] p-3">
-                  <p className="text-xs text-[rgb(var(--text-muted))]">Restantes</p>
-                  <p className="text-xl font-bold text-[rgb(var(--danger))]">{sesionesRestantes}</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] p-4 space-y-3">
-                  <h4 className="text-sm font-semibold text-[rgb(var(--text-primary))]">Registrar sesión</h4>
-                  {paqueteActivo ? (
-                    <RegisterCoachSessionForm paqueteId={paqueteActivo.id} disabled={false} />
-                  ) : (
-                    <p className="text-sm text-[rgb(var(--text-muted))]">
-                      No hay paquetes coach con sesiones pendientes.
-                    </p>
-                  )}
-                </div>
-                <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] p-4 space-y-3">
-                  <h4 className="text-sm font-semibold text-[rgb(var(--text-primary))]">Historial de sesiones coach</h4>
-                  <p className="text-xs text-[rgb(var(--text-muted))]">Solo sesiones registradas desde este módulo.</p>
-                  <div className="divide-y divide-[rgb(var(--border))] border border-[rgb(var(--border))] rounded-md max-h-72 overflow-y-auto">
-                    {sesionesLista.length === 0 ? (
-                      <div className="px-4 py-3 text-sm text-[rgb(var(--text-muted))]">Aún no hay sesiones registradas.</div>
-                    ) : (
-                      sesionesLista.map((s: any, idx: number) => (
-                        <div key={`${s.paquete_id}-${idx}-${s.fecha}`} className="px-4 py-3 text-sm flex justify-between gap-3">
-                          <div className="space-y-1">
-                            <span className="block text-[rgb(var(--text-primary))]">{new Date(s.fecha).toLocaleDateString('es-CO')}</span>
-                            <span className="block text-[rgb(var(--text-muted))]">{s.notas || 'Sin notas'}</span>
-                          </div>
-                          <div className="text-right text-[rgb(var(--text-muted))] text-xs">
-                            {s.cuenta_id ? <Link href={`/cuentas/${s.cuenta_id}`} className="text-[rgb(var(--info))] hover:underline">Ver cuenta</Link> : 'Sin cuenta'}
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] p-4 space-y-3">
-                <h4 className="text-sm font-semibold text-[rgb(var(--text-primary))]">Exportar PDF</h4>
-                <CoachSessionsPdf
-                  asistenteNombre={asistente.nombre}
-                  sesionesCompradas={sesionesCompradas}
-                  sesionesRealizadas={sesionesRealizadas}
-                  sesionesRestantes={sesionesRestantes}
-                  sesiones={sesionesLista.map((s) => ({ fecha: s.fecha, notas: s.notas || '' }))}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* Right Column: History */}
         <div className="space-y-6 md:col-span-2">
           {!hasMovements ? (
@@ -580,6 +507,91 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
               )}
             </>
           )}
+        </div>
+      </div>
+    </div>
+
+    {/* Sesiones guía coach - sección ancha */}
+    <div className="space-y-4 mt-10">
+      <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] shadow-soft overflow-hidden">
+        <div className="px-6 py-4 border-b border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h3 className="font-medium text-[rgb(var(--text-primary))]">Sesiones guía coach</h3>
+            <p className="text-xs text-[rgb(var(--text-muted))]">Conteo solo para sesiones registradas desde este módulo (no retroactivo).</p>
+          </div>
+          {paqueteActivo && (
+            <span className="text-[10px] px-2 py-1 rounded-full bg-[rgba(var(--info),0.12)] text-[rgb(var(--info))] border border-[rgba(var(--info),0.25)]">
+              Activo
+            </span>
+          )}
+        </div>
+
+        <div className="p-6 space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+            <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] p-3">
+              <p className="text-xs text-[rgb(var(--text-muted))]">Compradas</p>
+              <p className="text-2xl font-bold text-[rgb(var(--text-primary))]">{sesionesCompradas}</p>
+            </div>
+            <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] p-3">
+              <p className="text-xs text-[rgb(var(--text-muted))]">Realizadas</p>
+              <p className="text-2xl font-bold text-[rgb(var(--accent))]">{sesionesRealizadas}</p>
+            </div>
+            <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] p-3">
+              <p className="text-xs text-[rgb(var(--text-muted))]">Restantes</p>
+              <p className="text-2xl font-bold text-[rgb(var(--danger))]">{sesionesRestantes}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+            <div className="lg:col-span-4 space-y-4">
+              <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] p-4 space-y-3">
+                <h4 className="text-sm font-semibold text-[rgb(var(--text-primary))]">Registrar sesión</h4>
+                {paqueteActivo ? (
+                  <RegisterCoachSessionForm paqueteId={paqueteActivo.id} disabled={false} />
+                ) : (
+                  <p className="text-sm text-[rgb(var(--text-muted))]">
+                    No hay paquetes coach con sesiones pendientes.
+                  </p>
+                )}
+              </div>
+              <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] p-4 space-y-3">
+                <h4 className="text-sm font-semibold text-[rgb(var(--text-primary))]">Exportar PDF</h4>
+                <CoachSessionsPdf
+                  asistenteNombre={asistente.nombre}
+                  sesionesCompradas={sesionesCompradas}
+                  sesionesRealizadas={sesionesRealizadas}
+                  sesionesRestantes={sesionesRestantes}
+                  sesiones={sesionesLista.map((s) => ({ fecha: s.fecha, notas: s.notas || '' }))}
+                />
+              </div>
+            </div>
+
+            <div className="lg:col-span-8 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-3))] p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <h4 className="text-sm font-semibold text-[rgb(var(--text-primary))]">Historial de sesiones coach</h4>
+                  <p className="text-xs text-[rgb(var(--text-muted))]">Sesiones registradas desde este módulo.</p>
+                </div>
+              </div>
+              <div className="divide-y divide-[rgb(var(--border))] border border-[rgb(var(--border))] rounded-md max-h-80 overflow-y-auto">
+                {sesionesLista.length === 0 ? (
+                  <div className="px-4 py-3 text-sm text-[rgb(var(--text-muted))]">Aún no hay sesiones registradas.</div>
+                ) : (
+                  sesionesLista.map((s: any, idx: number) => (
+                    <div key={`${s.paquete_id}-${idx}-${s.fecha}`} className="px-4 py-3 text-sm flex items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <span className="block text-[rgb(var(--text-primary))]">{new Date(s.fecha).toLocaleDateString('es-CO')}</span>
+                        <span className="block text-[rgb(var(--text-muted))]">{s.notas || 'Sin notas'}</span>
+                      </div>
+                      <div className="text-right text-[rgb(var(--text-muted))] text-xs shrink-0">
+                        {s.cuenta_id ? <Link href={`/cuentas/${s.cuenta_id}`} className="text-[rgb(var(--info))] hover:underline">Ver cuenta</Link> : 'Sin cuenta'}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
