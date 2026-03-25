@@ -109,6 +109,17 @@ export function CuentaForm({ asistentes, asistenteInicial }: { asistentes: any[]
                 disabled={isPending}
               />
             </div>
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-medium text-zinc-900">Fecha sesiÃ³n coach (opcional)</label>
+              <Input
+                name="fecha_sesion_coach"
+                type="date"
+                disabled={isPending}
+              />
+              <p className="text-xs text-zinc-500">
+                Si esta cuenta corresponde a una sesiÃ³n ya tomada, puedes registrarla aquÃ­. Si no conoces la fecha ahora, dÃ©jalo vacÃ­o y agrÃ©gala despuÃ©s desde el asistente o el detalle de la cuenta.
+              </p>
+            </div>
             <div className="space-y-1 md:col-span-2">
               <p className="text-xs text-zinc-500">
                 El valor total es pactado libremente; no se calcula por sesión. El paquete puede tener saldo pendiente aunque todas las sesiones no se hayan usado.

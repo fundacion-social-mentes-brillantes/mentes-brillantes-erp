@@ -26,10 +26,12 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
   const metodo_pago = formData.get('metodo_pago') as string
   const tipo_cuenta = (formData.get('tipo_cuenta') as string) || 'general'
   const sesiones_coach_str = formData.get('sesiones_coach') as string | null
+  const fecha_sesion_coach_raw = formData.get('fecha_sesion_coach') as string | null
 
   const valor_total = Math.round(parseFloat(valor_total_str))
   const abono_inicial = abono_inicial_str ? Math.round(parseFloat(abono_inicial_str)) : 0
   const sesiones_coach = sesiones_coach_str ? parseInt(sesiones_coach_str, 10) : null
+  const fecha_sesion_coach = fecha_sesion_coach_raw && fecha_sesion_coach_raw.trim() !== '' ? fecha_sesion_coach_raw : null
 
   if (!asistente_id || !concepto || !valor_total_str || !fecha_emision) {
     return { error: 'Todos los campos son obligatorios' }
@@ -50,6 +52,9 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
   if (tipo_cuenta === 'coach') {
     if (!sesiones_coach || isNaN(sesiones_coach) || sesiones_coach <= 0) {
       return { error: 'Debes indicar cuántas sesiones compradas (mayor a 0)' }
+    }
+    if (fecha_sesion_coach && isNaN(Date.parse(fecha_sesion_coach))) {
+      return { error: 'La fecha de la sesión coach no es válida' }
     }
   }
 
@@ -87,17 +92,36 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
   }
 
   if (tipo_cuenta === 'coach' && cuenta) {
-    const { error: coachError } = await supabase.from('coach_paquetes').insert([{
+    const { data: paquete, error: coachError } = await supabase.from('coach_paquetes').insert([{
       cuenta_id: cuenta.id,
       asistente_id,
       sesiones_compradas: sesiones_coach
-    }])
+    }]).select().single()
     if (coachError) {
       return { error: 'Cuenta creada, pero error creando paquete coach: ' + coachError.message }
+    }
+
+    if (paquete && fecha_sesion_coach && (sesiones_coach ?? 0) > 0) {
+      const { error: sesionError } = await supabase.from('coach_sesiones').insert([{
+        paquete_id: paquete.id,
+        asistente_id,
+        fecha: fecha_sesion_coach,
+        notas: null
+      }])
+
+      if (sesionError) {
+        return { error: 'Cuenta y paquete creados, pero no se pudo registrar la sesión coach: ' + sesionError.message }
+      }
     }
   }
 
   revalidatePath('/cuentas')
+  if (cuenta?.id) {
+    revalidatePath(`/cuentas/${cuenta.id}`)
+  }
+  if (asistente_id) {
+    revalidatePath(`/asistentes/${asistente_id}`)
+  }
   redirect('/cuentas')
 }
 
