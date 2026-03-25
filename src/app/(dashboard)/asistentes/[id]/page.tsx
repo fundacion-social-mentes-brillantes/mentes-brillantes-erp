@@ -283,6 +283,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
               </div>
             </div>
           </div>
+        </div>
 
         {/* Right Column: History */}
         <div className="space-y-6 md:col-span-2">
@@ -509,7 +510,6 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
           )}
         </div>
       </div>
-    </div>
 
     {/* Sesiones guía coach - sección ancha */}
     <div className="space-y-4 mt-10">
@@ -595,5 +595,6 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
         </div>
       </div>
     </div>
+  </div>
   )
 }
