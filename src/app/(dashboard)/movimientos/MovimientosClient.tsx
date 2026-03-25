@@ -276,77 +276,77 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
       )}
 
       {/* Filters (same as before) */}
-      <div className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm space-y-4">
-        <div className="flex items-center gap-2 text-sm font-medium text-zinc-700 mb-2">
+      <div className="bg-[rgb(var(--surface-1))] p-4 rounded-xl border border-[rgb(var(--border))] shadow-sm space-y-4">
+        <div className="flex items-center gap-2 text-sm font-medium text-[rgb(var(--text-primary))] mb-2">
           <Filter className="w-4 h-4" /> Filtros
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-500">Periodo</label>
+            <label className="text-xs font-medium text-[rgb(var(--text-muted))]">Periodo</label>
             <select
               value={rangoFecha}
               onChange={(e) => setRangoFecha(e.target.value as any)}
-              className="w-full h-9 rounded-md border border-zinc-300 bg-white px-3 py-1 text-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+              className="w-full h-9 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] px-3 py-1 text-sm text-[rgb(var(--text-primary))] focus:border-[rgb(var(--accent))] focus:outline-none focus:ring-2 focus:ring-[rgba(var(--accent),0.35)]"
             >
-              <option value="este_mes">Este mes</option>
-              <option value="mes_pasado">Mes pasado</option>
-              <option value="todos">Todos los tiempos</option>
-              <option value="custom">Personalizado</option>
+              <option className="bg-[rgb(var(--surface-2))] text-[rgb(var(--text-primary))]" value="este_mes">Este mes</option>
+              <option className="bg-[rgb(var(--surface-2))] text-[rgb(var(--text-primary))]" value="mes_pasado">Mes pasado</option>
+              <option className="bg-[rgb(var(--surface-2))] text-[rgb(var(--text-primary))]" value="todos">Todos los tiempos</option>
+              <option className="bg-[rgb(var(--surface-2))] text-[rgb(var(--text-primary))]" value="custom">Personalizado</option>
             </select>
           </div>
 
           {rangoFecha === 'custom' && (
             <div className="space-y-1.5 lg:col-span-2 grid grid-cols-2 gap-2">
               <div>
-                <label className="text-xs font-medium text-zinc-500">Desde</label>
-                <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="w-full h-9 rounded-md border border-zinc-300 bg-white px-3 py-1 text-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500" />
+                <label className="text-xs font-medium text-[rgb(var(--text-muted))]">Desde</label>
+                <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="w-full h-9 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] px-3 py-1 text-sm text-[rgb(var(--text-primary))] focus:border-[rgb(var(--accent))] focus:outline-none focus:ring-2 focus:ring-[rgba(var(--accent),0.35)]" />
               </div>
               <div>
-                <label className="text-xs font-medium text-zinc-500">Hasta</label>
-                <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="w-full h-9 rounded-md border border-zinc-300 bg-white px-3 py-1 text-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500" />
+                <label className="text-xs font-medium text-[rgb(var(--text-muted))]">Hasta</label>
+                <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="w-full h-9 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] px-3 py-1 text-sm text-[rgb(var(--text-primary))] focus:border-[rgb(var(--accent))] focus:outline-none focus:ring-2 focus:ring-[rgba(var(--accent),0.35)]" />
               </div>
             </div>
           )}
 
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-500">Tipo</label>
-            <select value={tipoFiltro} onChange={(e) => setTipoFiltro(e.target.value)} className="w-full h-9 rounded-md border border-zinc-300 bg-white px-3 py-1 text-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500">
-              <option value="todos">Todos los tipos</option>
-              <option value="cuenta_cobrar">Cuentas por Cobrar</option>
-              <option value="abono">Abonos / Ingresos</option>
-              <option value="anticipo">Anticipos</option>
-              <option value="aplicacion_saldo">Aplicación de Saldo</option>
-              <option value="donacion">Donaciones</option>
-              <option value="egreso">Egresos</option>
+            <label className="text-xs font-medium text-[rgb(var(--text-muted))]">Tipo</label>
+            <select value={tipoFiltro} onChange={(e) => setTipoFiltro(e.target.value)} className="w-full h-9 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] px-3 py-1 text-sm text-[rgb(var(--text-primary))] focus:border-[rgb(var(--accent))] focus:outline-none focus:ring-2 focus:ring-[rgba(var(--accent),0.35)]">
+              <option className="bg-[rgb(var(--surface-2))] text-[rgb(var(--text-primary))]" value="todos">Todos los tipos</option>
+              <option className="bg-[rgb(var(--surface-2))] text-[rgb(var(--text-primary))]" value="cuenta_cobrar">Cuentas por Cobrar</option>
+              <option className="bg-[rgb(var(--surface-2))] text-[rgb(var(--text-primary))]" value="abono">Abonos / Ingresos</option>
+              <option className="bg-[rgb(var(--surface-2))] text-[rgb(var(--text-primary))]" value="anticipo">Anticipos</option>
+              <option className="bg-[rgb(var(--surface-2))] text-[rgb(var(--text-primary))]" value="aplicacion_saldo">Aplicación de Saldo</option>
+              <option className="bg-[rgb(var(--surface-2))] text-[rgb(var(--text-primary))]" value="donacion">Donaciones</option>
+              <option className="bg-[rgb(var(--surface-2))] text-[rgb(var(--text-primary))]" value="egreso">Egresos</option>
             </select>
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-500">Asistente</label>
-            <select value={asistenteFiltro} onChange={(e) => setAsistenteFiltro(e.target.value)} className="w-full h-9 rounded-md border border-zinc-300 bg-white px-3 py-1 text-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500">
-              <option value="todos">Todos los asistentes</option>
-              {asistentes.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+            <label className="text-xs font-medium text-[rgb(var(--text-muted))]">Asistente</label>
+            <select value={asistenteFiltro} onChange={(e) => setAsistenteFiltro(e.target.value)} className="w-full h-9 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] px-3 py-1 text-sm text-[rgb(var(--text-primary))] focus:border-[rgb(var(--accent))] focus:outline-none focus:ring-2 focus:ring-[rgba(var(--accent),0.35)]">
+              <option className="bg-[rgb(var(--surface-2))] text-[rgb(var(--text-primary))]" value="todos">Todos los asistentes</option>
+              {asistentes.map(a => <option className="bg-[rgb(var(--surface-2))] text-[rgb(var(--text-primary))]" key={a.id} value={a.id}>{a.nombre}</option>)}
             </select>
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-500">Método de Pago</label>
-            <select value={metodoFiltro} onChange={(e) => setMetodoFiltro(e.target.value)} className="w-full h-9 rounded-md border border-zinc-300 bg-white px-3 py-1 text-sm focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500">
-              <option value="todos">Todos los métodos</option>
-              <option value="efectivo">Efectivo</option>
-              <option value="nequi">Nequi</option>
-              <option value="daviplata">Daviplata</option>
-              {mostrarAplicaciones && <option value="saldo_a_favor">Saldo a Favor</option>}
-              <option value="otro">Otro</option>
+            <label className="text-xs font-medium text-[rgb(var(--text-muted))]">Método de Pago</label>
+            <select value={metodoFiltro} onChange={(e) => setMetodoFiltro(e.target.value)} className="w-full h-9 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] px-3 py-1 text-sm text-[rgb(var(--text-primary))] focus:border-[rgb(var(--accent))] focus:outline-none focus:ring-2 focus:ring-[rgba(var(--accent),0.35)]">
+              <option className="bg-[rgb(var(--surface-2))] text-[rgb(var(--text-primary))]" value="todos">Todos los métodos</option>
+              <option className="bg-[rgb(var(--surface-2))] text-[rgb(var(--text-primary))]" value="efectivo">Efectivo</option>
+              <option className="bg-[rgb(var(--surface-2))] text-[rgb(var(--text-primary))]" value="nequi">Nequi</option>
+              <option className="bg-[rgb(var(--surface-2))] text-[rgb(var(--text-primary))]" value="daviplata">Daviplata</option>
+              {mostrarAplicaciones && <option className="bg-[rgb(var(--surface-2))] text-[rgb(var(--text-primary))]" value="saldo_a_favor">Saldo a Favor</option>}
+              <option className="bg-[rgb(var(--surface-2))] text-[rgb(var(--text-primary))]" value="otro">Otro</option>
             </select>
           </div>
 
-          <div className="lg:col-span-5 flex items-center justify-end mt-2 pt-4 border-t border-zinc-100">
+          <div className="lg:col-span-5 flex items-center justify-end mt-2 pt-4 border-t border-[rgb(var(--border))]">
             <label className="flex items-center gap-2 cursor-pointer relative">
               <input type="checkbox" className="sr-only peer" checked={mostrarAplicaciones} onChange={(e) => setMostrarAplicaciones(e.target.checked)} />
-              <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none ring-offset-2 peer-focus:ring-2 peer-focus:ring-zinc-900 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-zinc-900"></div>
-              <span className="text-sm font-medium text-zinc-700">Mostrar aplicaciones de saldo</span>
+              <div className="w-9 h-5 bg-[rgb(var(--surface-3))] peer-focus:outline-none ring-offset-2 peer-focus:ring-2 peer-focus:ring-[rgb(var(--accent))] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[rgb(var(--accent))]"></div>
+              <span className="text-sm font-medium text-[rgb(var(--text-primary))]">Mostrar aplicaciones de saldo</span>
             </label>
           </div>
         </div>

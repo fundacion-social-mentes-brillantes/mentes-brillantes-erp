@@ -422,7 +422,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                           {cuenta.estado !== 'pagado' && (
                             <Link 
                               href={`/cuentas/${cuenta.id}`} 
-                              className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-xs font-medium transition-colors bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 h-7 px-2.5 ml-1"
+                              className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-xs font-medium transition-colors h-7 px-2.5 ml-1 border border-[rgba(var(--success),0.35)] bg-[rgba(var(--success),0.12)] text-[rgb(var(--success))] hover:bg-[rgba(var(--success),0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--accent),0.35)]"
                               title="Registrar abono"
                             >
                               Registrar abono
