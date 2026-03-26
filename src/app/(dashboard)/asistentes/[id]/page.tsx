@@ -320,7 +320,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                     + Nueva
                   </Link>
                 </div>
-                <div className="divide-y divide-zinc-100">
+                <div className="divide-y divide-zinc-100 max-h-80 overflow-y-auto">
                   {cuentasProcesadas.map((cuenta) => (
                     <div key={cuenta.id} className="p-5 hover:bg-zinc-50/50 transition-colors">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
@@ -426,7 +426,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                     </h3>
                   </div>
                   <div className="p-0">
-                    <div className="divide-y divide-zinc-100">
+                    <div className="divide-y divide-zinc-100 max-h-80 overflow-y-auto">
                       {todosLosAbonos.map((pago) => (
                         <div key={pago.id} className="p-5 hover:bg-zinc-50/50 transition-colors flex items-start gap-4">
                           <div className="flex items-center justify-center w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 shrink-0 mt-0.5">
@@ -598,3 +598,5 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
   </div>
   )
 }
+
+
