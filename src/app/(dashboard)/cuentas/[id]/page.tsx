@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { requireRoles } from '@/lib/utils/authz'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, CreditCard, Wallet, HeartHandshake } from 'lucide-react'
@@ -13,9 +13,7 @@ import { CoachSessionActions } from '@/components/coach/CoachSessionActions'
 
 export default async function DetalleCuentaPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
-  
-  if (!supabase) return null
+  const { supabase } = await requireRoles(['admin', 'caja'])
 
   const { data: cuenta, error } = await supabase
     .from('cuentas_por_cobrar')

@@ -1,17 +1,10 @@
-import { createClient } from '@/lib/supabase/server'
 import { MigracionForm } from './MigracionForm'
 import { EmpresaForm } from '@/components/configuracion/EmpresaForm'
+import { requireRoles } from '@/lib/utils/authz'
 
 export default async function ConfiguracionPage() {
-  const supabase = await createClient()
-  
-  // Get user role
-  const { data: { user } } = await supabase?.auth.getUser() || { data: { user: null } }
-  let isAdmin = false
-  if (user) {
-    const { data: userData } = await supabase?.from('perfiles').select('rol').eq('id', user.id).single() || { data: null }
-    isAdmin = userData?.rol === 'admin'
-  }
+  const { supabase } = await requireRoles(['admin'])
+  const isAdmin = true
 
   // Get company config
   const { data: empresaData } = await supabase?.from('configuracion_empresa').select('*').eq('id', 1).single() || { data: null }

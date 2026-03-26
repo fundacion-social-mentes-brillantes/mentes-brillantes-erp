@@ -1,6 +1,8 @@
 import { EgresoForm } from '../EgresoForm'
+import { requireRoles } from '@/lib/utils/authz'
 
-export default function NuevoEgresoPage() {
+export default async function NuevoEgresoPage() {
+  await requireRoles(['admin'])
   return (
     <div className="space-y-6">
       <div>

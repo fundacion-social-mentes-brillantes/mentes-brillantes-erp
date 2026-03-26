@@ -3,37 +3,38 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { calcularEstadoCuenta } from '../../../lib/utils/cuentas'
-import { requireAdmin } from '../../../lib/utils/authz'
+import { requireAdmin, requireRoles } from '../../../lib/utils/authz'
 
 export type ActionState = {
-  error?: string;
-  success?: boolean;
-} | null;
+  error?: string
+  success?: boolean
+} | null
 
 export async function saveCuenta(prevState: ActionState, formData: FormData): Promise<ActionState> {
   let supabase, user
   try {
-    ({ supabase, user } = await requireAdmin())
+    ;({ supabase, user } = await requireRoles(['admin', 'caja']))
   } catch (e: any) {
     return { error: e?.message || 'Acceso denegado' }
   }
 
   const asistente_id = formData.get('asistente_id') as string
-  const concepto = formData.get('concepto') as string
+  const concepto = (formData.get('concepto') as string) || ''
   const valor_total_str = formData.get('valor_total') as string
   const fecha_emision = formData.get('fecha_emision') as string
   const abono_inicial_str = formData.get('abono_inicial') as string
   const metodo_pago = formData.get('metodo_pago') as string
-  const tipo_cuenta = (formData.get('tipo_cuenta') as string) || 'general'
+  const tipo_cuenta = ((formData.get('tipo_cuenta') as string) || 'general').toLowerCase()
   const sesiones_coach_str = formData.get('sesiones_coach') as string | null
   const fecha_sesion_coach_raw = formData.get('fecha_sesion_coach') as string | null
 
   const valor_total = Math.round(parseFloat(valor_total_str))
   const abono_inicial = abono_inicial_str ? Math.round(parseFloat(abono_inicial_str)) : 0
   const sesiones_coach = sesiones_coach_str ? parseInt(sesiones_coach_str, 10) : null
-  const fecha_sesion_coach = fecha_sesion_coach_raw && fecha_sesion_coach_raw.trim() !== '' ? fecha_sesion_coach_raw : null
+  const fecha_sesion_coach =
+    fecha_sesion_coach_raw && fecha_sesion_coach_raw.trim() !== '' ? fecha_sesion_coach_raw : null
 
-  if (!asistente_id || !concepto || !valor_total_str || !fecha_emision) {
+  if (!asistente_id || !valor_total_str || !fecha_emision) {
     return { error: 'Todos los campos son obligatorios' }
   }
 
@@ -60,31 +61,40 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
 
   const estado = calcularEstadoCuenta(valor_total, abono_inicial)
 
-  const conceptoFinal = tipo_cuenta === 'coach' && concepto.trim().length === 0
-    ? `Sesión guía coach - ${sesiones_coach} sesiones`
-    : concepto
+  const conceptoFinal =
+    tipo_cuenta === 'coach' && concepto.trim().length === 0
+      ? `Sesión guía coach - ${sesiones_coach} sesiones`
+      : concepto
 
-  const { data: cuenta, error: cuentaError } = await supabase.from('cuentas_por_cobrar').insert([{
-    asistente_id,
-    concepto: conceptoFinal,
-    valor_total,
-    fecha_emision,
-    estado
-  }]).select().single()
+  const { data: cuenta, error: cuentaError } = await supabase
+    .from('cuentas_por_cobrar')
+    .insert([
+      {
+        asistente_id,
+        concepto: conceptoFinal,
+        valor_total,
+        fecha_emision,
+        estado,
+      },
+    ])
+    .select()
+    .single()
 
   if (cuentaError) {
     return { error: cuentaError.message }
   }
 
   if (abono_inicial > 0 && cuenta) {
-    const { error: abonoError } = await supabase.from('pagos_abonos').insert([{
-      cuenta_id: cuenta.id,
-      monto: abono_inicial,
-      metodo_pago: metodo_pago || 'efectivo',
-      origen_fondos: 'pago_directo',
-      fecha_pago: fecha_emision,
-      notas: 'Abono inicial'
-    }])
+    const { error: abonoError } = await supabase.from('pagos_abonos').insert([
+      {
+        cuenta_id: cuenta.id,
+        monto: abono_inicial,
+        metodo_pago: metodo_pago || 'efectivo',
+        origen_fondos: 'pago_directo',
+        fecha_pago: fecha_emision,
+        notas: 'Abono inicial',
+      },
+    ])
 
     if (abonoError) {
       return { error: 'Cuenta creada, pero hubo un error al registrar el abono inicial: ' + abonoError.message }
@@ -92,25 +102,35 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
   }
 
   if (tipo_cuenta === 'coach' && cuenta) {
-    const { data: paquete, error: coachError } = await supabase.from('coach_paquetes').insert([{
-      cuenta_id: cuenta.id,
-      asistente_id,
-      sesiones_compradas: sesiones_coach
-    }]).select().single()
+    const { data: paquete, error: coachError } = await supabase
+      .from('coach_paquetes')
+      .insert([
+        {
+          cuenta_id: cuenta.id,
+          asistente_id,
+          sesiones_compradas: sesiones_coach,
+        },
+      ])
+      .select()
+      .single()
     if (coachError) {
       return { error: 'Cuenta creada, pero error creando paquete coach: ' + coachError.message }
     }
 
     if (paquete && fecha_sesion_coach && (sesiones_coach ?? 0) > 0) {
-      const { error: sesionError } = await supabase.from('coach_sesiones').insert([{
-        paquete_id: paquete.id,
-        asistente_id,
-        fecha: fecha_sesion_coach,
-        notas: null
-      }])
+      const { error: sesionError } = await supabase.from('coach_sesiones').insert([
+        {
+          paquete_id: paquete.id,
+          asistente_id,
+          fecha: fecha_sesion_coach,
+          notas: null,
+        },
+      ])
 
       if (sesionError) {
-        return { error: 'Cuenta y paquete creados, pero no se pudo registrar la sesión coach: ' + sesionError.message }
+        return {
+          error: 'Cuenta y paquete creados, pero no se pudo registrar la sesión coach: ' + sesionError.message,
+        }
       }
     }
   }
@@ -126,9 +146,9 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
 }
 
 export async function deleteCuenta(cuenta_id: string): Promise<ActionState> {
-  let supabase, user
+  let supabase
   try {
-    ({ supabase, user } = await requireAdmin())
+    ;({ supabase } = await requireAdmin())
   } catch (e: any) {
     return { error: e?.message || 'Acceso denegado' }
   }
@@ -143,12 +163,7 @@ export async function deleteCuenta(cuenta_id: string): Promise<ActionState> {
     return { error: 'No se puede eliminar la cuenta porque tiene pagos registrados. Anula o elimina los pagos primero.' }
   }
 
-  // Bloquear si tiene sesiones coach registradas
-  const { data: paquete } = await supabase
-    .from('coach_paquetes')
-    .select('id')
-    .eq('cuenta_id', cuenta_id)
-    .single()
+  const { data: paquete } = await supabase.from('coach_paquetes').select('id').eq('cuenta_id', cuenta_id).single()
 
   if (paquete) {
     const { count: sesionesCount } = await supabase
@@ -160,10 +175,7 @@ export async function deleteCuenta(cuenta_id: string): Promise<ActionState> {
     }
   }
 
-  const { error: deleteError } = await supabase
-    .from('cuentas_por_cobrar')
-    .delete()
-    .eq('id', cuenta_id)
+  const { error: deleteError } = await supabase.from('cuentas_por_cobrar').delete().eq('id', cuenta_id)
 
   if (deleteError) return { error: deleteError.message }
 
@@ -174,7 +186,7 @@ export async function deleteCuenta(cuenta_id: string): Promise<ActionState> {
 export async function saveAbono(cuenta_id: string, prevState: ActionState, formData: FormData): Promise<ActionState> {
   let supabase
   try {
-    ({ supabase } = await requireAdmin())
+    ;({ supabase } = await requireRoles(['admin', 'caja']))
   } catch (e: any) {
     return { error: e?.message || 'Acceso denegado' }
   }
@@ -194,7 +206,6 @@ export async function saveAbono(cuenta_id: string, prevState: ActionState, formD
     return { error: 'El monto debe ser mayor a 0' }
   }
 
-  // Verificar que el abono no supere el saldo pendiente
   const { data: cuentaData } = await supabase
     .from('cuentas_por_cobrar')
     .select('valor_total, pagos_abonos(monto, notas)')
@@ -212,20 +223,21 @@ export async function saveAbono(cuenta_id: string, prevState: ActionState, formD
     }
   }
 
-  const { error } = await supabase.from('pagos_abonos').insert([{
-    cuenta_id,
-    monto,
-    metodo_pago,
-    origen_fondos: 'pago_directo',
-    fecha_pago,
-    notas: notas || null
-  }])
+  const { error } = await supabase.from('pagos_abonos').insert([
+    {
+      cuenta_id,
+      monto,
+      metodo_pago,
+      origen_fondos: 'pago_directo',
+      fecha_pago,
+      notas: notas || null,
+    },
+  ])
 
   if (error) {
     return { error: error.message }
   }
 
-  // Actualizar estado de la cuenta
   if (cuentaData) {
     const valor_total = Number(cuentaData.valor_total)
     const pagosValidos = cuentaData.pagos_abonos?.filter((p: any) => !p.notas?.includes('[ANULADO]')) || []
@@ -241,10 +253,16 @@ export async function saveAbono(cuenta_id: string, prevState: ActionState, formD
   return { success: true }
 }
 
-export async function aplicarSaldoFavor(cuenta_id: string, asistente_id: string, maxMontoAplicable: string, prevState: ActionState, formData: FormData): Promise<ActionState> {
+export async function aplicarSaldoFavor(
+  cuenta_id: string,
+  asistente_id: string,
+  maxMontoAplicable: string,
+  prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
   let supabase
   try {
-    ({ supabase } = await requireAdmin())
+    ;({ supabase } = await requireAdmin())
   } catch (e: any) {
     return { error: e?.message || 'Acceso denegado' }
   }
@@ -255,11 +273,10 @@ export async function aplicarSaldoFavor(cuenta_id: string, asistente_id: string,
   if (isNaN(monto) || monto <= 0) return { error: 'El monto debe ser mayor a 0' }
   if (monto > maxMonto) return { error: `El monto no puede superar $${maxMonto.toLocaleString()}` }
 
-  // Usar RPC para garantizar operación atómica
   const { error } = await supabase.rpc('aplicar_saldo_favor_trx', {
     p_cuenta_id: cuenta_id,
     p_asistente_id: asistente_id,
-    p_monto: monto
+    p_monto: monto,
   })
 
   if (error) {
@@ -272,10 +289,15 @@ export async function aplicarSaldoFavor(cuenta_id: string, asistente_id: string,
   return { success: true }
 }
 
-export async function editValorCuenta(cuenta_id: string, valor_anterior: number, prevState: ActionState, formData: FormData): Promise<ActionState> {
+export async function editValorCuenta(
+  cuenta_id: string,
+  valor_anterior: number,
+  prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
   let supabase, user
   try {
-    ({ supabase, user } = await requireAdmin())
+    ;({ supabase, user } = await requireAdmin())
   } catch (e: any) {
     return { error: e?.message || 'Acceso denegado' }
   }
@@ -295,15 +317,17 @@ export async function editValorCuenta(cuenta_id: string, valor_anterior: number,
 
   if (updateError) return { error: updateError.message }
 
-  await supabase.from('auditoria_financiera').insert([{
-    tabla_afectada: 'cuentas_por_cobrar',
-    registro_id: cuenta_id,
-    usuario_id: user.id,
-    accion: 'edicion_valor',
-    valor_anterior,
-    valor_nuevo,
-    motivo
-  }])
+  await supabase.from('auditoria_financiera').insert([
+    {
+      tabla_afectada: 'cuentas_por_cobrar',
+      registro_id: cuenta_id,
+      usuario_id: user.id,
+      accion: 'edicion_valor',
+      valor_anterior,
+      valor_nuevo,
+      motivo,
+    },
+  ])
 
   const { data: cuentaData } = await supabase
     .from('cuentas_por_cobrar')
@@ -323,10 +347,16 @@ export async function editValorCuenta(cuenta_id: string, valor_anterior: number,
   return { success: true }
 }
 
-export async function editMontoAbono(abono_id: string, cuenta_id: string, valor_anterior: number, prevState: ActionState, formData: FormData): Promise<ActionState> {
+export async function editMontoAbono(
+  abono_id: string,
+  cuenta_id: string,
+  valor_anterior: number,
+  prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
   let supabase, user
   try {
-    ({ supabase, user } = await requireAdmin())
+    ;({ supabase, user } = await requireAdmin())
   } catch (e: any) {
     return { error: e?.message || 'Acceso denegado' }
   }
@@ -345,22 +375,25 @@ export async function editMontoAbono(abono_id: string, cuenta_id: string, valor_
   if (updateError) return { error: updateError.message }
 
   if (abono?.origen_fondos === 'saldo_a_favor') {
-     await supabase.from('movimientos_saldo_favor')
-       .update({ monto: valor_nuevo })
-       .eq('cuenta_id', cuenta_id)
-       .eq('tipo', 'aplicacion')
-       .eq('monto', valor_anterior)
+    await supabase
+      .from('movimientos_saldo_favor')
+      .update({ monto: valor_nuevo })
+      .eq('cuenta_id', cuenta_id)
+      .eq('tipo', 'aplicacion')
+      .eq('monto', valor_anterior)
   }
 
-  await supabase.from('auditoria_financiera').insert([{
-    tabla_afectada: 'pagos_abonos',
-    registro_id: abono_id,
-    usuario_id: user.id,
-    accion: 'edicion_abono',
-    valor_anterior,
-    valor_nuevo,
-    motivo
-  }])
+  await supabase.from('auditoria_financiera').insert([
+    {
+      tabla_afectada: 'pagos_abonos',
+      registro_id: abono_id,
+      usuario_id: user.id,
+      accion: 'edicion_abono',
+      valor_anterior,
+      valor_nuevo,
+      motivo,
+    },
+  ])
 
   const { data: cuentaData } = await supabase
     .from('cuentas_por_cobrar')

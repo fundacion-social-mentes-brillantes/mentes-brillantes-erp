@@ -1,10 +1,10 @@
-import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { Plus, Edit2 } from 'lucide-react'
 import { DeleteEgresoButton } from './DeleteEgresoButton'
+import { requireRoles } from '@/lib/utils/authz'
 
 export default async function EgresosPage() {
-  const supabase = await createClient()
+  const { supabase } = await requireRoles(['admin', 'caja'])
   const { data: egresos } = await supabase?.from('egresos').select('*').order('fecha', { ascending: false }) || { data: [] }
 
   return (

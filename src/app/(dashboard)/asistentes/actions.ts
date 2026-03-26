@@ -3,16 +3,20 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { requireAdmin } from '@/lib/utils/authz'
+import { requireAdmin, requireRoles } from '@/lib/utils/authz'
 
 export type ActionState = {
-  error?: string;
-  success?: boolean;
-} | null;
+  error?: string
+  success?: boolean
+} | null
 
 export async function saveAsistente(id: string | null, prevState: ActionState, formData: FormData): Promise<ActionState> {
-  const supabase = await createClient()
-  if (!supabase) return { error: 'Supabase no configurado' }
+  let supabase
+  try {
+    ;({ supabase } = await requireRoles(['admin', 'caja']))
+  } catch (e: any) {
+    return { error: e?.message || 'Acceso denegado' }
+  }
 
   const nombre = formData.get('nombre') as string
   const cedula = formData.get('cedula') as string
@@ -29,7 +33,7 @@ export async function saveAsistente(id: string | null, prevState: ActionState, f
     cedula: cedula || null,
     correo: correo || null,
     telefono: telefono || null,
-    codigo: codigo || null
+    codigo: codigo || null,
   }
 
   if (id) {
@@ -51,8 +55,12 @@ export async function saveAsistente(id: string | null, prevState: ActionState, f
 }
 
 export async function toggleAsistenteEstado(id: string, activo: boolean) {
-  const supabase = await createClient()
-  if (!supabase) return
+  let supabase
+  try {
+    ;({ supabase } = await requireAdmin())
+  } catch {
+    return
+  }
   await supabase.from('asistentes').update({ activo }).eq('id', id)
   revalidatePath('/asistentes')
 }
@@ -60,7 +68,7 @@ export async function toggleAsistenteEstado(id: string, activo: boolean) {
 export async function saveAnticipo(asistente_id: string, prevState: ActionState, formData: FormData): Promise<ActionState> {
   let supabase
   try {
-    ({ supabase } = await requireAdmin())
+    ;({ supabase } = await requireRoles(['admin', 'caja']))
   } catch (e: any) {
     return { error: e?.message || 'Acceso denegado' }
   }
@@ -73,14 +81,16 @@ export async function saveAnticipo(asistente_id: string, prevState: ActionState,
   if (isNaN(monto) || monto <= 0) return { error: 'El monto debe ser mayor a 0' }
   if (!metodo_pago || !fecha) return { error: 'Método y fecha son obligatorios' }
 
-  const { error } = await supabase.from('movimientos_saldo_favor').insert([{
-    asistente_id,
-    tipo: 'ingreso',
-    monto,
-    fecha,
-    metodo_pago,
-    notas: notas || null
-  }])
+  const { error } = await supabase.from('movimientos_saldo_favor').insert([
+    {
+      asistente_id,
+      tipo: 'ingreso',
+      monto,
+      fecha,
+      metodo_pago,
+      notas: notas || null,
+    },
+  ])
 
   if (error) return { error: error.message }
 
@@ -91,27 +101,29 @@ export async function saveAnticipo(asistente_id: string, prevState: ActionState,
 export async function deleteAsistente(id: string) {
   let supabase
   try {
-    ({ supabase } = await requireAdmin())
+    ;({ supabase } = await requireAdmin())
   } catch (e: any) {
     return { error: e?.message || 'Acceso denegado' }
   }
 
-  // Verificar si tiene cuentas por cobrar asociadas
   const { count: cuentasCount, error: cuentasError } = await supabase
     .from('cuentas_por_cobrar')
     .select('*', { count: 'exact', head: true })
     .eq('asistente_id', id)
-  
+
   if (cuentasError) {
     return { error: 'Error al verificar relaciones del asistente.' }
   }
 
   if (cuentasCount && cuentasCount > 0) {
-    return { error: 'No se puede eliminar este asistente porque tiene cuentas por cobrar asociadas. Se recomienda desactivarlo en su lugar para mantener el historial.' }
+    return {
+      error:
+        'No se puede eliminar este asistente porque tiene cuentas por cobrar asociadas. Se recomienda desactivarlo en su lugar para mantener el historial.',
+    }
   }
 
   const { error } = await supabase.from('asistentes').delete().eq('id', id)
-  
+
   if (error) {
     if (error.code === '23503') {
       return { error: 'No se puede eliminar el asistente porque tiene registros financieros o históricos asociados.' }
@@ -125,12 +137,11 @@ export async function deleteAsistente(id: string) {
 export async function pagarDeudasConSaldo(asistente_id: string): Promise<ActionState> {
   let supabase
   try {
-    ({ supabase } = await requireAdmin())
+    ;({ supabase } = await requireAdmin())
   } catch (e: any) {
     return { error: e?.message || 'Acceso denegado' }
   }
 
-  // Obtener saldo a favor actual
   const { data: movimientosSaldo } = await supabase
     .from('movimientos_saldo_favor')
     .select('tipo, monto')
@@ -138,27 +149,28 @@ export async function pagarDeudasConSaldo(asistente_id: string): Promise<ActionS
 
   let totalIngresos = 0
   let totalAplicado = 0
-  
-  ;(movimientosSaldo || []).forEach(m => {
+
+  ;(movimientosSaldo || []).forEach((m) => {
     if (m.tipo === 'ingreso') totalIngresos += Number(m.monto)
     if (m.tipo === 'aplicacion') totalAplicado += Number(m.monto)
   })
-  
+
   let saldoDisponible = Math.round(totalIngresos - totalAplicado)
 
   if (saldoDisponible <= 0) {
     return { error: 'No hay saldo a favor disponible para aplicar' }
   }
 
-  // Obtener cuentas pendientes ordenadas por fecha (FIFO)
   const { data: cuentas } = await supabase
     .from('cuentas_por_cobrar')
-    .select(`
+    .select(
+      `
       id,
       valor_total,
       fecha_emision,
       pagos_abonos (monto, notas)
-    `)
+    `
+    )
     .eq('asistente_id', asistente_id)
     .neq('estado', 'pagado')
     .order('fecha_emision', { ascending: true })
@@ -167,56 +179,52 @@ export async function pagarDeudasConSaldo(asistente_id: string): Promise<ActionS
     return { error: 'No hay deudas pendientes para pagar' }
   }
 
-  let pagosRealizados = 0;
+  let pagosRealizados = 0
 
   for (const cuenta of cuentas) {
-    if (saldoDisponible <= 0) break;
+    if (saldoDisponible <= 0) break
 
     const abonado = Math.round(
       cuenta.pagos_abonos?.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0) || 0
-    );
-    const pendiente = Math.round(Number(cuenta.valor_total) - abonado);
+    )
+    const pendiente = Math.round(Number(cuenta.valor_total) - abonado)
 
-    if (pendiente <= 0) continue;
+    if (pendiente <= 0) continue
 
-    const montoAPagar = Math.min(saldoDisponible, pendiente);
+    const montoAPagar = Math.min(saldoDisponible, pendiente)
 
     const { error } = await supabase.rpc('aplicar_saldo_favor_trx', {
       p_cuenta_id: cuenta.id,
       p_asistente_id: asistente_id,
-      p_monto: montoAPagar
-    });
+      p_monto: montoAPagar,
+    })
 
     if (error) {
-      return { error: `Error al pagar cuenta: ${error.message}` };
+      return { error: `Error al pagar cuenta: ${error.message}` }
     }
 
-    saldoDisponible -= montoAPagar;
-    pagosRealizados++;
+    saldoDisponible -= montoAPagar
+    pagosRealizados++
   }
 
   if (pagosRealizados === 0) {
-    return { error: 'No se procesó ningún pago. Verifica el saldo y las deudas.' };
+    return { error: 'No se procesó ningún pago. Verifica el saldo y las deudas.' }
   }
 
-  revalidatePath(`/asistentes/${asistente_id}`);
-  revalidatePath('/cuentas');
-  return { success: true };
+  revalidatePath(`/asistentes/${asistente_id}`)
+  revalidatePath('/cuentas')
+  return { success: true }
 }
 
 export async function obtenerSiguienteCodigoAsistente(): Promise<number> {
   const supabase = await createClient()
   if (!supabase) return 1
 
-  const { data } = await supabase
-    .from('asistentes')
-    .select('codigo')
+  const { data } = await supabase.from('asistentes').select('codigo')
 
   if (!data || data.length === 0) return 1
 
-  const codigos = data
-    .map(item => parseInt(item.codigo))
-    .filter(n => !isNaN(n))
+  const codigos = data.map((item) => parseInt(item.codigo)).filter((n) => !isNaN(n))
 
   const maxCodigo = codigos.length > 0 ? Math.max(...codigos) : 0
   return maxCodigo + 1

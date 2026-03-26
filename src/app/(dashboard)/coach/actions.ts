@@ -1,14 +1,14 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { requireAdmin } from '@/lib/utils/authz'
+import { requireAdmin, requireRoles } from '@/lib/utils/authz'
 
 export type CoachActionState = { error?: string; success?: boolean } | null
 
 export async function registrarSesion(prev: CoachActionState, formData: FormData): Promise<CoachActionState> {
   let supabase
   try {
-    ({ supabase } = await requireAdmin())
+    ({ supabase } = await requireRoles(['admin', 'caja']))
   } catch (e: any) {
     return { error: e?.message || 'Acceso denegado' }
   }
@@ -36,7 +36,7 @@ export async function registrarSesion(prev: CoachActionState, formData: FormData
     paquete_id,
     asistente_id: paquete.asistente_id,
     fecha,
-    notas
+    notas,
   }])
 
   if (error) return { error: error.message }
@@ -112,7 +112,7 @@ export async function eliminarSesion(prev: CoachActionState, formData: FormData)
 }
 
 export async function getCoachSummary(asistente_id: string) {
-  const supabase = await import('@/lib/supabase/server').then(m => m.createClient())
+  const supabase = await import('@/lib/supabase/server').then((m) => m.createClient())
   if (!supabase) return null
 
   const { data: paquetes } = await supabase

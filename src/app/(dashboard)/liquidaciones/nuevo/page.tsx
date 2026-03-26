@@ -1,6 +1,8 @@
 import { PeriodoForm } from './PeriodoForm'
+import { requireRoles } from '@/lib/utils/authz'
 
-export default function NuevoPeriodoPage() {
+export default async function NuevoPeriodoPage() {
+  await requireRoles(['admin'])
   return (
     <div className="space-y-6">
       <div>

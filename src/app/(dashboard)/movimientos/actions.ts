@@ -4,9 +4,9 @@ import { revalidatePath } from 'next/cache'
 import { requireAdmin } from '../../../lib/utils/authz'
 
 export type ActionState = {
-  error?: string;
-  success?: boolean;
-} | null;
+  error?: string
+  success?: boolean
+} | null
 
 export async function anularMovimiento(
   movimiento_id: string,
@@ -16,12 +16,11 @@ export async function anularMovimiento(
 ): Promise<ActionState> {
   let supabase, user
   try {
-    ({ supabase, user } = await requireAdmin())
+    ;({ supabase, user } = await requireAdmin())
   } catch (e: any) {
     return { error: e?.message || 'Acceso denegado' }
   }
 
-  // 1. Identificar la tabla
   let tablaDestino = ''
   switch (tipo_movimiento) {
     case 'abono':
@@ -41,7 +40,6 @@ export async function anularMovimiento(
       return { error: 'Tipo de movimiento no soportado para anulación directa.' }
   }
 
-  // 2. Obtener notas y origen para bloqueo saldo a favor
   const { data: recordData } = await supabase
     .from(tablaDestino)
     .select('notas, origen_fondos, metodo_pago')
@@ -51,48 +49,48 @@ export async function anularMovimiento(
   const currentNotas = recordData?.notas || ''
   const newNotas = `[ANULADO] ${currentNotas}`.trim()
 
-  // Bloqueo para pagos provenientes de saldo a favor
   if (tablaDestino === 'pagos_abonos') {
     const origenFondos = recordData?.origen_fondos?.toLowerCase?.()
     const metodoPago = recordData?.metodo_pago?.toLowerCase?.()
     const esSaldoFavor = origenFondos === 'saldo_a_favor' || metodoPago === 'saldo_a_favor'
     if (esSaldoFavor) {
-      return { error: 'No se puede anular este pago porque proviene de saldo a favor. Usa el flujo de devolución de saldo cuando esté disponible.' }
+      return {
+        error:
+          'No se puede anular este pago porque proviene de saldo a favor. Usa el flujo de devolución de saldo cuando esté disponible.',
+      }
     }
   }
 
-  // 3. Marcar como anulado
-  const { error: updateError } = await supabase
-    .from(tablaDestino)
-    .update({ estado: 'anulado', notas: newNotas })
-    .eq('id', movimiento_id)
+  const { error: updateError } = await supabase.from(tablaDestino).update({ estado: 'anulado', notas: newNotas }).eq('id', movimiento_id)
 
   if (updateError) {
     return { error: updateError.message }
   }
 
-  // 4. Revertir saldo_favor para aplicaciones o anticipos
   if (tipo_movimiento === 'aplicacion_saldo' && asistente_id) {
-    await supabase.from('movimientos_saldo_favor').insert([{
-      asistente_id,
-      tipo: 'ingreso',
-      monto: valor_ingreso,
-      fecha: new Date().toISOString().split('T')[0],
-      metodo_pago: 'saldo_a_favor',
-      notas: `Reversión automática por anulación del movimiento: ${movimiento_id}`
-    }])
+    await supabase.from('movimientos_saldo_favor').insert([
+      {
+        asistente_id,
+        tipo: 'ingreso',
+        monto: valor_ingreso,
+        fecha: new Date().toISOString().split('T')[0],
+        metodo_pago: 'saldo_a_favor',
+        notas: `Reversión automática por anulación del movimiento: ${movimiento_id}`,
+      },
+    ])
   } else if (tipo_movimiento === 'anticipo' && asistente_id) {
-    await supabase.from('movimientos_saldo_favor').insert([{
-      asistente_id,
-      tipo: 'aplicacion',
-      monto: valor_ingreso,
-      fecha: new Date().toISOString().split('T')[0],
-      metodo_pago: 'saldo_a_favor',
-      notas: `Reversión automática por anulación del anticipo: ${movimiento_id}`
-    }])
+    await supabase.from('movimientos_saldo_favor').insert([
+      {
+        asistente_id,
+        tipo: 'aplicacion',
+        monto: valor_ingreso,
+        fecha: new Date().toISOString().split('T')[0],
+        metodo_pago: 'saldo_a_favor',
+        notas: `Reversión automática por anulación del anticipo: ${movimiento_id}`,
+      },
+    ])
   }
 
-  // 5. Recalcular cuenta si es pago
   if ((tipo_movimiento === 'abono' || tipo_movimiento === 'aplicacion_saldo') && tablaDestino === 'pagos_abonos') {
     const { data: pago } = await supabase.from('pagos_abonos').select('cuenta_id').eq('id', movimiento_id).single()
     if (pago?.cuenta_id) {
@@ -103,9 +101,10 @@ export async function anularMovimiento(
         .single()
 
       if (cuentaData) {
-        const pagosValidos = cuentaData.pagos_abonos?.filter(
-          (p: any) => p.estado !== 'anulado' && !p.notas?.includes('[ANULADO]')
-        ) || []
+        const pagosValidos =
+          cuentaData.pagos_abonos?.filter(
+            (p: any) => p.estado !== 'anulado' && !p.notas?.includes('[ANULADO]')
+          ) || []
         const total_abonado = pagosValidos.reduce((sum: number, p: any) => sum + Number(p.monto), 0)
 
         const valor_total = Number(cuentaData.valor_total)
@@ -121,16 +120,17 @@ export async function anularMovimiento(
     }
   }
 
-  // 6. Auditoría
-  await supabase.from('auditoria_financiera').insert([{
-    tabla_afectada: tablaDestino,
-    registro_id: movimiento_id,
-    usuario_id: user.id,
-    accion: 'anulacion_movimiento',
-    valor_anterior: valor_ingreso,
-    valor_nuevo: 0,
-    motivo: 'Anulación solicitada por el administrador via Interfaz.'
-  }])
+  await supabase.from('auditoria_financiera').insert([
+    {
+      tabla_afectada: tablaDestino,
+      registro_id: movimiento_id,
+      usuario_id: user.id,
+      accion: 'anulacion_movimiento',
+      valor_anterior: valor_ingreso,
+      valor_nuevo: 0,
+      motivo: 'Anulación solicitada por el administrador via interfaz.',
+    },
+  ])
 
   revalidatePath('/movimientos')
   revalidatePath('/dashboard')
@@ -149,7 +149,7 @@ export async function editarMovimiento(
 ): Promise<ActionState> {
   let supabase
   try {
-    ({ supabase } = await requireAdmin())
+    ;({ supabase } = await requireAdmin())
   } catch (e: any) {
     return { error: e?.message || 'Acceso denegado' }
   }
@@ -198,29 +198,26 @@ export async function editarMovimiento(
       return { error: 'Tipo de movimiento no soportado para edición.' }
   }
 
-  const { error } = await supabase
-    .from(tablaDestino)
-    .update(updatePayload)
-    .eq('id', movimiento_id)
+  const { error: updateError } = await supabase.from(tablaDestino).update(updatePayload).eq('id', movimiento_id)
+  if (updateError) return { error: updateError.message }
 
-  if (error) return { error: error.message }
-
-  // Recalcular estado de cuenta si aplica
-  if ((tipo_movimiento === 'abono' || tipo_movimiento === 'aplicacion_saldo') && newData.monto !== undefined) {
+  // Recalcular estado de cuenta si es abono o aplicación de saldo
+  if ((tipo_movimiento === 'abono' || tipo_movimiento === 'aplicacion_saldo') && tablaDestino === 'pagos_abonos') {
     const { data: pago } = await supabase.from('pagos_abonos').select('cuenta_id').eq('id', movimiento_id).single()
-    if (pago?.cuenta_id) {
+    const cuentaId = pago?.cuenta_id
+    if (cuentaId) {
       const { data: cuentaData } = await supabase
         .from('cuentas_por_cobrar')
         .select('valor_total, pagos_abonos(id, monto, estado, notas)')
-        .eq('id', pago.cuenta_id)
+        .eq('id', cuentaId)
         .single()
 
       if (cuentaData) {
-        const pagosValidos = cuentaData.pagos_abonos?.filter(
-          (p: any) => p.estado !== 'anulado' && !p.notas?.includes('[ANULADO]')
-        ) || []
+        const pagosValidos =
+          cuentaData.pagos_abonos?.filter(
+            (p: any) => p.estado !== 'anulado' && !p.notas?.includes('[ANULADO]')
+          ) || []
         const total_abonado = pagosValidos.reduce((sum: number, p: any) => sum + Number(p.monto), 0)
-
         const valor_total = Number(cuentaData.valor_total)
         let nuevo_estado = 'pendiente'
         if (total_abonado >= valor_total) {
@@ -228,8 +225,7 @@ export async function editarMovimiento(
         } else if (total_abonado > 0) {
           nuevo_estado = 'parcial'
         }
-
-        await supabase.from('cuentas_por_cobrar').update({ estado: nuevo_estado }).eq('id', pago.cuenta_id)
+        await supabase.from('cuentas_por_cobrar').update({ estado: nuevo_estado }).eq('id', cuentaId)
       }
     }
   }
@@ -252,7 +248,7 @@ export async function eliminarMovimiento(
 ): Promise<ActionState> {
   let supabase
   try {
-    ({ supabase } = await requireAdmin())
+    ;({ supabase } = await requireAdmin())
   } catch (e: any) {
     return { error: e?.message || 'Acceso denegado' }
   }
@@ -276,38 +272,37 @@ export async function eliminarMovimiento(
       return { error: 'Tipo de movimiento no soportado para el borrado duro.' }
   }
 
-  // Reversas de saldo a favor
   if (tipo_movimiento === 'aplicacion_saldo' && asistente_id) {
-    await supabase.from('movimientos_saldo_favor').insert([{
-      asistente_id,
-      tipo: 'ingreso',
-      monto: valor_ingreso,
-      fecha: new Date().toISOString().split('T')[0],
-      metodo_pago: 'saldo_a_favor',
-      notas: `Reversión automática por ELIMINACIÓN del movimiento: ${movimiento_id}`
-    }])
+    await supabase.from('movimientos_saldo_favor').insert([
+      {
+        asistente_id,
+        tipo: 'ingreso',
+        monto: valor_ingreso,
+        fecha: new Date().toISOString().split('T')[0],
+        metodo_pago: 'saldo_a_favor',
+        notas: `Reversión automática por ELIMINACIÓN del movimiento: ${movimiento_id}`,
+      },
+    ])
   } else if (tipo_movimiento === 'anticipo' && asistente_id) {
-    await supabase.from('movimientos_saldo_favor').insert([{
-      asistente_id,
-      tipo: 'aplicacion',
-      monto: valor_ingreso,
-      fecha: new Date().toISOString().split('T')[0],
-      metodo_pago: 'saldo_a_favor',
-      notas: `Reversión automática por ELIMINACIÓN del anticipo: ${movimiento_id}`
-    }])
+    await supabase.from('movimientos_saldo_favor').insert([
+      {
+        asistente_id,
+        tipo: 'aplicacion',
+        monto: valor_ingreso,
+        fecha: new Date().toISOString().split('T')[0],
+        metodo_pago: 'saldo_a_favor',
+        notas: `Reversión automática por ELIMINACIÓN del anticipo: ${movimiento_id}`,
+      },
+    ])
   }
 
-  // Guardar cuenta para recalcular
   let cuentaToRecalculate: string | null = null
   if ((tipo_movimiento === 'abono' || tipo_movimiento === 'aplicacion_saldo') && tablaDestino === 'pagos_abonos') {
     const { data: pago } = await supabase.from('pagos_abonos').select('cuenta_id').eq('id', movimiento_id).single()
     cuentaToRecalculate = pago?.cuenta_id || null
   }
 
-  const { error: deleteError } = await supabase
-    .from(tablaDestino)
-    .delete()
-    .eq('id', movimiento_id)
+  const { error: deleteError } = await supabase.from(tablaDestino).delete().eq('id', movimiento_id)
 
   if (deleteError) {
     return { error: deleteError.message }
@@ -321,9 +316,10 @@ export async function eliminarMovimiento(
       .single()
 
     if (cuentaData) {
-      const pagosValidos = cuentaData.pagos_abonos?.filter(
-        (p: any) => p.estado !== 'anulado' && !p.notas?.includes('[ANULADO]')
-      ) || []
+      const pagosValidos =
+        cuentaData.pagos_abonos?.filter(
+          (p: any) => p.estado !== 'anulado' && !p.notas?.includes('[ANULADO]')
+        ) || []
       const total_abonado = pagosValidos.reduce((sum: number, p: any) => sum + Number(p.monto), 0)
 
       const valor_total = Number(cuentaData.valor_total)

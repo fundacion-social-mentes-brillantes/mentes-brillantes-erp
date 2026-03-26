@@ -1,4 +1,3 @@
-import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { ArrowLeft, Edit2, Calendar, FileText, CreditCard, CheckCircle2, Clock, AlertCircle, Plus, Wallet, HeartHandshake } from 'lucide-react'
 import { notFound } from 'next/navigation'
@@ -9,21 +8,12 @@ import { DonacionForm } from './DonacionForm'
 import { DonacionActionsMenu } from './DonacionActionsMenu'
 import { RegisterCoachSessionForm } from '@/components/coach/RegisterCoachSessionForm'
 import { CoachSessionsPdf } from '@/components/coach/CoachSessionsPdf'
+import { requireRoles } from '@/lib/utils/authz'
 
 export default async function AsistenteDetallePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const supabase = await createClient()
-  
-  if (!supabase) return null
-
-  // Perfil de usuario y rol
-  const { data: userData } = await supabase.auth.getUser()
-  let userRole: string | null = null
-  if (userData?.user) {
-    const { data: perfil } = await supabase.from('perfiles').select('rol').eq('id', userData.user.id).single()
-    userRole = perfil?.rol || null
-  }
-  const isAdmin = userRole === 'admin'
+  const { supabase, perfil } = await requireRoles(['admin', 'caja'])
+  const isAdmin = perfil.rol === 'admin'
 
   // Fetch asistente
   const { data: asistente } = await supabase

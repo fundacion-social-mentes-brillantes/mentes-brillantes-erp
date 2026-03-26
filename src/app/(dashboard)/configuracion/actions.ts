@@ -1,11 +1,11 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import Papa from 'papaparse'
 import { revalidatePath } from 'next/cache'
+import { requireAdmin } from '@/lib/utils/authz'
 
 export async function actualizarConfiguracionEmpresa(formData: FormData) {
-  const supabase = await createClient()
+  const { supabase } = await requireAdmin()
   if (!supabase) throw new Error('Supabase no configurado')
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -43,8 +43,7 @@ export async function actualizarConfiguracionEmpresa(formData: FormData) {
 }
 
 export async function procesarMigracion(tipo: string, rows: any[]) {
-  const supabase = await createClient()
-  if (!supabase) return { success: false, message: 'Supabase no configurado' }
+  const { supabase } = await requireAdmin()
 
   if (!tipo || !rows || !Array.isArray(rows)) {
     return { success: false, message: 'Faltan datos o formato inválido' }
@@ -384,3 +383,4 @@ export async function procesarMigracion(tipo: string, rows: any[]) {
     errors: errorMsgs.slice(0, 10)
   }
 }
+

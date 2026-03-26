@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { requireRoles } from '@/lib/utils/authz'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Wallet, Lock, Calculator } from 'lucide-react'
@@ -11,8 +11,7 @@ export const revalidate = 0
 
 export default async function DetallePeriodoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
-  if (!supabase) return <div>Error de conexión a la base de datos</div>
+  const { supabase } = await requireRoles(['admin'])\r
   
   const { data: periodo } = await supabase?.from('periodos').select('*').eq('id', id).single() || { data: null }
   if (!periodo) notFound()
@@ -312,3 +311,4 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
     </div>
   )
 }
+

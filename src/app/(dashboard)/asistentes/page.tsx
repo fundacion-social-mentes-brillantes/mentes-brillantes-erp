@@ -1,13 +1,13 @@
-import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { Plus, Edit2, UserX, UserCheck, Search, Eye } from 'lucide-react'
 import { toggleAsistenteEstado } from './actions'
 import { DeleteButton } from './DeleteButton'
+import { requireRoles } from '@/lib/utils/authz'
 
 export default async function AsistentesPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const params = await searchParams;
   const q = params.q || '';
-  const supabase = await createClient()
+  const { supabase } = await requireRoles(['admin', 'caja'])
   
   let query = supabase?.from('asistentes').select('*')
   

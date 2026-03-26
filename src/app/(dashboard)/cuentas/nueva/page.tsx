@@ -1,5 +1,5 @@
-import { createClient } from '@/lib/supabase/server'
 import { CuentaForm } from './CuentaForm'
+import { requireRoles } from '@/lib/utils/authz'
 
 type SearchParams = { asistente?: string | string[] }
 
@@ -12,8 +12,12 @@ export default async function NuevaCuentaPage({ searchParams }: { searchParams?:
     ? resolvedParams.asistente[0]
     : resolvedParams.asistente || undefined
 
-  const supabase = await createClient()
-  const { data: asistentes } = await supabase?.from('asistentes').select('id, nombre, codigo').eq('activo', true).order('nombre') || { data: [] }
+  const { supabase } = await requireRoles(['admin', 'caja'])
+  const { data: asistentes } = await supabase
+    ?.from('asistentes')
+    .select('id, nombre, codigo')
+    .eq('activo', true)
+    .order('nombre') || { data: [] }
 
   return (
     <div className="space-y-6">

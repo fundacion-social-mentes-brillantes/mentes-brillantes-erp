@@ -1,10 +1,10 @@
-import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { Plus, Edit2, UserX, UserCheck } from 'lucide-react'
 import { toggleSocioEstado } from './actions'
+import { requireRoles } from '@/lib/utils/authz'
 
 export default async function SociosPage() {
-  const supabase = await createClient()
+  const { supabase } = await requireRoles(['admin'])
   const { data: socios } = await supabase?.from('socios').select('*').order('nombre') || { data: [] }
 
   return (

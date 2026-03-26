@@ -1,7 +1,9 @@
 import { AsistenteForm } from '../AsistenteForm'
 import { obtenerSiguienteCodigoAsistente } from '../actions'
+import { requireRoles } from '@/lib/utils/authz'
 
 export default async function NuevoAsistentePage() {
+  await requireRoles(['admin', 'caja'])
   const codigoSugerido = await obtenerSiguienteCodigoAsistente()
 
   return (

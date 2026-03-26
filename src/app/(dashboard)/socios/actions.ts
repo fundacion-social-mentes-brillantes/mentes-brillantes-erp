@@ -1,17 +1,21 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { requireAdmin } from '@/lib/utils/authz'
 
 export type ActionState = {
-  error?: string;
-  success?: boolean;
-} | null;
+  error?: string
+  success?: boolean
+} | null
 
 export async function saveSocio(id: string | null, prevState: ActionState, formData: FormData): Promise<ActionState> {
-  const supabase = await createClient()
-  if (!supabase) return { error: 'Supabase no configurado' }
+  let supabase
+  try {
+    ;({ supabase } = await requireAdmin())
+  } catch (e: any) {
+    return { error: e?.message || 'Acceso denegado' }
+  }
 
   const nombre = formData.get('nombre') as string
   const porcentajeStr = formData.get('porcentaje_participacion') as string
@@ -24,7 +28,7 @@ export async function saveSocio(id: string | null, prevState: ActionState, formD
 
   const data = {
     nombre,
-    porcentaje_participacion: porcentaje
+    porcentaje_participacion: porcentaje,
   }
 
   if (id) {
@@ -40,8 +44,12 @@ export async function saveSocio(id: string | null, prevState: ActionState, formD
 }
 
 export async function toggleSocioEstado(id: string, activo: boolean) {
-  const supabase = await createClient()
-  if (!supabase) return
+  let supabase
+  try {
+    ;({ supabase } = await requireAdmin())
+  } catch {
+    return
+  }
   await supabase.from('socios').update({ activo }).eq('id', id)
   revalidatePath('/socios')
 }

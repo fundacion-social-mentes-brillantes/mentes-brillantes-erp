@@ -1,10 +1,10 @@
-import { createClient } from '@/lib/supabase/server'
 import { SocioForm } from '../../SocioForm'
 import { notFound } from 'next/navigation'
+import { requireRoles } from '@/lib/utils/authz'
 
 export default async function EditarSocioPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
+  const { supabase } = await requireRoles(['admin'])
   const { data: socio } = await supabase?.from('socios').select('*').eq('id', id).single() || { data: null }
 
   if (!socio) {

@@ -1,6 +1,8 @@
 import { SocioForm } from '../SocioForm'
+import { requireRoles } from '@/lib/utils/authz'
 
-export default function NuevoSocioPage() {
+export default async function NuevoSocioPage() {
+  await requireRoles(['admin'])
   return (
     <div className="space-y-6">
       <div>

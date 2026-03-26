@@ -1,0 +1,20 @@
+{
+  "node": {
+    "60e9f154b36a42f58670bb4d12ce354c082a2e96e7": {
+      "workers": {
+        "app/(dashboard)/configuracion/usuarios/page": {
+          "moduleId": 58084,
+          "async": false,
+          "exportedName": "actualizarUsuario",
+          "filename": "src/app/(dashboard)/configuracion/usuarios/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/configuracion/usuarios/page": "rsc"
+      },
+      "exportedName": "actualizarUsuario",
+      "filename": "src/app/(dashboard)/configuracion/usuarios/actions.ts"
+    }
+  },
+  "edge": {}
+}

@@ -11,6 +11,7 @@ CREATE TABLE perfiles (
   id UUID REFERENCES auth.users(id) PRIMARY KEY,
   nombre TEXT NOT NULL,
   rol rol_usuario DEFAULT 'consulta' NOT NULL,
+  asistente_id UUID UNIQUE REFERENCES asistentes(id),
   creado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

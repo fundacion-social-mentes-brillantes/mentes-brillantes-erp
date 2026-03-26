@@ -1,10 +1,10 @@
-import { createClient } from '@/lib/supabase/server'
 import { EgresoForm } from '../../EgresoForm'
 import { notFound } from 'next/navigation'
+import { requireRoles } from '@/lib/utils/authz'
 
 export default async function EditarEgresoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
+  const { supabase } = await requireRoles(['admin'])
   const { data: egreso } = await supabase?.from('egresos').select('*').eq('id', id).single() || { data: null }
 
   if (!egreso) notFound()

@@ -1,9 +1,9 @@
-import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { Plus, Eye, Lock } from 'lucide-react'
+import { requireRoles } from '@/lib/utils/authz'
 
 export default async function LiquidacionesPage() {
-  const supabase = await createClient()
+  const { supabase } = await requireRoles(['admin'])
   const { data: periodos } = await supabase?.from('periodos').select('*').order('fecha_inicio', { ascending: false }) || { data: [] }
 
   return (

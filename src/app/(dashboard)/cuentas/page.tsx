@@ -1,25 +1,12 @@
-import { createClient } from '@/lib/supabase/server'
+import { requireRoles } from '@/lib/utils/authz'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import { CuentasClient } from './CuentasClient'
 import { filtrarPagosValidos, sumarMontos } from '@/lib/utils/contable'
 
 export default async function CuentasPage() {
-  const supabase = await createClient()
-
-  if (!supabase) return null
-
-  // Rol del usuario
-  let isAdmin = false
-  try {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      const { data: perfil } = await supabase.from('perfiles').select('rol').eq('id', user.id).single()
-      isAdmin = perfil?.rol === 'admin'
-    }
-  } catch (e) {
-    isAdmin = false
-  }
+  const { supabase, perfil } = await requireRoles(['admin', 'caja'])
+  const isAdmin = perfil.rol === 'admin'
 
   const { data: cuentasData } = await supabase
     .from('cuentas_por_cobrar')
@@ -57,17 +44,17 @@ export default async function CuentasPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Cuentas por Cobrar</h1>
-          <p className="text-zinc-500 text-sm">Gestiona las deudas de los asistentes y sus pagos.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-[rgb(var(--text-primary))]">Cuentas por Cobrar</h1>
+          <p className="text-[rgb(var(--text-muted))] text-sm">Gestiona las deudas de los asistentes y sus pagos.</p>
         </div>
         <Link
           href="/cuentas/nueva"
-          className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors bg-zinc-900 text-zinc-50 hover:bg-zinc-900/90 h-10 px-4 py-2 w-full sm:w-auto"
+          className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors bg-[rgb(var(--surface-3))] text-[rgb(var(--text-primary))] border border-[rgb(var(--border))] hover:bg-[rgb(var(--surface-2))] h-10 px-4 py-2 w-full sm:w-auto"
         >
           <Plus className="w-4 h-4" />
           Nueva Cuenta
         </Link>
-    </div>
+      </div>
 
       <CuentasClient cuentas={cuentas} isAdmin={isAdmin} />
     </div>

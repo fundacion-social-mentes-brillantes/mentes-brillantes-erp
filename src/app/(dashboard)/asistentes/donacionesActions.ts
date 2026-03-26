@@ -1,24 +1,34 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { requireAdmin } from '@/lib/utils/authz'
+import { requireAdmin, requireRoles } from '@/lib/utils/authz'
 
 export type DonacionState = { error?: string; success?: boolean } | null
 
 const TABLE = 'donaciones_asistentes'
 
-async function audit(supabase: any, userId: string, accion: string, registroId: string, valorAnterior: number | null, valorNuevo: number | null, motivo?: string) {
+async function audit(
+  supabase: any,
+  userId: string,
+  accion: string,
+  registroId: string,
+  valorAnterior: number | null,
+  valorNuevo: number | null,
+  motivo?: string
+) {
   try {
-    await supabase.from('auditoria_financiera').insert([{
-      tabla_afectada: TABLE,
-      registro_id: registroId,
-      usuario_id: userId,
-      accion,
-      valor_anterior: valorAnterior,
-      valor_nuevo: valorNuevo,
-      motivo: motivo || null
-    }])
-  } catch (e) {
+    await supabase.from('auditoria_financiera').insert([
+      {
+        tabla_afectada: TABLE,
+        registro_id: registroId,
+        usuario_id: userId,
+        accion,
+        valor_anterior: valorAnterior,
+        valor_nuevo: valorNuevo,
+        motivo: motivo || null,
+      },
+    ])
+  } catch (_) {
     // auditoría best-effort
   }
 }
@@ -26,7 +36,7 @@ async function audit(supabase: any, userId: string, accion: string, registroId: 
 export async function crearDonacion(asistente_id: string, formData: FormData): Promise<DonacionState> {
   let supabase, user
   try {
-    ({ supabase, user } = await requireAdmin())
+    ({ supabase, user } = await requireRoles(['admin', 'caja']))
   } catch (e: any) {
     return { error: e?.message || 'Acceso denegado' }
   }
@@ -40,13 +50,19 @@ export async function crearDonacion(asistente_id: string, formData: FormData): P
     return { error: 'Monto y método de pago son obligatorios y el monto debe ser mayor a 0.' }
   }
 
-  const { data, error } = await supabase.from(TABLE).insert([{
-    asistente_id,
-    monto,
-    metodo_pago,
-    fecha,
-    notas
-  }]).select('id').single()
+  const { data, error } = await supabase
+    .from(TABLE)
+    .insert([
+      {
+        asistente_id,
+        monto,
+        metodo_pago,
+        fecha,
+        notas,
+      },
+    ])
+    .select('id')
+    .single()
 
   if (error) return { error: error.message }
 
@@ -58,7 +74,11 @@ export async function crearDonacion(asistente_id: string, formData: FormData): P
   return { success: true }
 }
 
-export async function editarDonacion(id: string, asistente_id: string, payload: { monto?: number; metodo_pago?: string; fecha?: string; notas?: string }): Promise<DonacionState> {
+export async function editarDonacion(
+  id: string,
+  asistente_id: string,
+  payload: { monto?: number; metodo_pago?: string; fecha?: string; notas?: string }
+): Promise<DonacionState> {
   let supabase, user
   try {
     ({ supabase, user } = await requireAdmin())
@@ -96,10 +116,13 @@ export async function anularDonacion(id: string, asistente_id: string, motivo?: 
 
   const { data: registro } = await supabase.from(TABLE).select('monto, notas').eq('id', id).single()
 
-  const { error } = await supabase.from(TABLE).update({
-    estado: 'anulado',
-    notas: registro?.notas ? `[ANULADO] ${registro.notas}` : '[ANULADO]'
-  }).eq('id', id)
+  const { error } = await supabase
+    .from(TABLE)
+    .update({
+      estado: 'anulado',
+      notas: registro?.notas ? `[ANULADO] ${registro.notas}` : '[ANULADO]',
+    })
+    .eq('id', id)
 
   if (error) return { error: error.message }
 
@@ -144,7 +167,7 @@ export async function editarDonacionForm(prev: DonacionState, formData: FormData
     monto: monto ? parseFloat(monto as string) : undefined,
     metodo_pago: metodo_pago || undefined,
     fecha: fecha || undefined,
-    notas: notas ?? undefined
+    notas: notas ?? undefined,
   })
 }
 
