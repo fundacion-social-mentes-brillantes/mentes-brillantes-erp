@@ -11,8 +11,8 @@ export const revalidate = 0
 
 export default async function DetallePeriodoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const { supabase } = await requireRoles(['admin'])\r
-  
+  const { supabase } = await requireRoles(['admin'])
+
   const { data: periodo } = await supabase?.from('periodos').select('*').eq('id', id).single() || { data: null }
   if (!periodo) notFound()
 

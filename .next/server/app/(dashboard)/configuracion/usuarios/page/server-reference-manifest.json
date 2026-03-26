@@ -10,7 +10,7 @@
         }
       },
       "layer": {
-        "app/(dashboard)/configuracion/usuarios/page": "rsc"
+        "app/(dashboard)/configuracion/usuarios/page": "action-browser"
       },
       "exportedName": "actualizarUsuario",
       "filename": "src/app/(dashboard)/configuracion/usuarios/actions.ts"
