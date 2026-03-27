@@ -29,7 +29,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
     .order('fecha', { ascending: false }) || { data: [] }
   const adelantos = adelantosData || []
 
-  // Liquidaciones (si estÃ¡ cerrado)
+  // Liquidaciones (si está cerrado)
   const { data: liquidacionesData } = await supabase
     ?.from('liquidaciones_socios')
     .select('*, socios(nombre)')
@@ -158,14 +158,14 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
   console.log('Datos de empresa obtenidos de BD en Liquidaciones:', empresaData)
 
   const empresa = empresaData || {
-    nombre: 'FALLBACK - REVISAR BD O CACHÃ‰',
+    nombre: 'FALLBACK - REVISAR BD O CACHÉ',
     nit: '000000000-0',
     correo: null,
     telefono: null,
     ciudad: null
   }
 
-  // Preparar datos para exportaciÃ³n
+  // Preparar datos para exportación
   const sociosExportData = periodo.estado === 'abierto' 
     ? socios?.map(socio => {
         const porcentaje = Number(socio.porcentaje_participacion)
@@ -251,7 +251,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
           <p className="text-2xl font-semibold text-emerald-700 mt-2">${ingresos_operativos.toLocaleString()}</p>
         </div>
         <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
-          <p className="text-sm text-zinc-500">Egresos del PerÃ­odo</p>
+          <p className="text-sm text-zinc-500">Egresos del Período</p>
           <p className="text-2xl font-semibold text-red-600 mt-2">${egresos_periodo.toLocaleString()}</p>
         </div>
         <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
@@ -320,8 +320,8 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
           ) : (
             <div className="bg-zinc-50 p-6 rounded-xl border border-zinc-200 text-center">
               <Lock className="w-8 h-8 text-zinc-400 mx-auto mb-3" />
-              <h3 className="font-semibold text-zinc-900 mb-1">PerÃ­odo Cerrado</h3>
-              <p className="text-sm text-zinc-500">No se pueden registrar mÃ¡s adelantos en este perÃ­odo.</p>
+              <h3 className="font-semibold text-zinc-900 mb-1">Período Cerrado</h3>
+              <p className="text-sm text-zinc-500">No se pueden registrar más adelantos en este Período.</p>
             </div>
           )}
 
@@ -349,20 +349,20 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
               ))}
               {!adelantos.length && (
                 <div className="p-8 text-center text-sm text-zinc-500">
-                  No hay adelantos en este perÃ­odo.
+                  No hay adelantos en este Período.
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* Columna Derecha: ProyecciÃ³n / LiquidaciÃ³n Final */}
+        {/* Columna Derecha: Proyección / Liquidación Final */}
         <div className="lg:col-span-2">
           <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden h-full flex flex-col">
             <div className="p-6 border-b border-zinc-200 bg-zinc-50 flex items-center gap-2">
               <Calculator className="w-5 h-5 text-zinc-400" />
               <h3 className="font-semibold text-zinc-900">
-                {periodo.estado === 'abierto' ? 'ProyecciÃ³n de LiquidaciÃ³n' : 'LiquidaciÃ³n Final'}
+                {periodo.estado === 'abierto' ? 'Proyección de Liquidación' : 'Liquidación Final'}
               </h3>
             </div>
             <div className="p-6 flex-1 overflow-x-auto">
@@ -378,7 +378,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                 </thead>
                 <tbody className="divide-y divide-zinc-100">
                   {periodo.estado === 'abierto' ? (
-                    // ProyecciÃ³n en vivo
+                    // Proyección en vivo
                     socios?.map(socio => {
                       const porcentaje = Number(socio.porcentaje_participacion)
                       const corresponde = (utilidad_neta * porcentaje) / 100
@@ -399,7 +399,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                       )
                     })
                   ) : (
-                    // LiquidaciÃ³n Guardada
+                    // Liquidación Guardada
                     liquidaciones?.map((liq: any) => (
                       <tr key={liq.id}>
                         <td className="py-4 font-medium text-zinc-900">{liq.socios?.nombre}</td>
@@ -421,5 +421,8 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
     </div>
   )
 }
+
+
+
 
 
