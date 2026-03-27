@@ -140,7 +140,11 @@ DECLARE
   v_abonado DECIMAL;
 BEGIN
   SELECT valor_total INTO v_total FROM cuentas_por_cobrar WHERE id = COALESCE(NEW.cuenta_id, OLD.cuenta_id);
-  SELECT COALESCE(SUM(monto), 0) INTO v_abonado FROM pagos_abonos WHERE cuenta_id = COALESCE(NEW.cuenta_id, OLD.cuenta_id);
+  SELECT COALESCE(SUM(monto), 0) INTO v_abonado
+  FROM pagos_abonos
+  WHERE cuenta_id = COALESCE(NEW.cuenta_id, OLD.cuenta_id)
+    AND estado <> 'anulado'
+    AND (notas IS NULL OR notas NOT ILIKE '%[ANULADO]%');
   
   IF v_abonado >= v_total THEN
     UPDATE cuentas_por_cobrar SET estado = 'pagado' WHERE id = COALESCE(NEW.cuenta_id, OLD.cuenta_id);
