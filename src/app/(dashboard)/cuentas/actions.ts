@@ -132,6 +132,12 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
           error: 'Cuenta y paquete creados, pero no se pudo registrar la sesión coach: ' + sesionError.message,
         }
       }
+
+      await supabase
+        .from('asistentes')
+        .update({ fecha_inicio_proceso: fecha_sesion_coach })
+        .eq('id', asistente_id)
+        .is('fecha_inicio_proceso', null)
     }
   }
 

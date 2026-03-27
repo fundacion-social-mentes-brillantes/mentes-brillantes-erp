@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useActionState, useState } from 'react'
 import { saveAsistente } from './actions'
@@ -7,17 +7,10 @@ import { Input } from '@/components/ui/input'
 import { AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 
-export function AsistenteForm({
-  asistente,
-  codigoSugerido,
-}: {
-  asistente?: any
-  codigoSugerido?: number
-}) {
+export function AsistenteForm({ asistente, codigoSugerido, readOnlyDates = false }: { asistente?: any; codigoSugerido?: number; readOnlyDates?: boolean }) {
   const actionWithId = saveAsistente.bind(null, asistente?.id || null)
   const [state, formAction, isPending] = useActionState(actionWithId, null)
 
-  // Inicializa con el código existente (modo edición) o el sugerido por el servidor (modo creación)
   const [codigoInterno, setCodigoInterno] = useState<string>(
     asistente?.codigo != null
       ? String(asistente.codigo)
@@ -59,6 +52,24 @@ export function AsistenteForm({
             value={codigoInterno}
             onChange={(e) => setCodigoInterno(e.target.value)}
             disabled={isPending}
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-zinc-900">Fecha de registro</label>
+          <Input
+            name="fecha_registro"
+            type="date"
+            defaultValue={asistente?.fecha_registro || ''}
+            disabled={isPending || readOnlyDates}
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-zinc-900">Fecha de inicio de proceso</label>
+          <Input
+            name="fecha_inicio_proceso"
+            type="date"
+            defaultValue={asistente?.fecha_inicio_proceso || ''}
+            disabled={isPending || readOnlyDates}
           />
         </div>
       </div>

@@ -23,6 +23,8 @@ export async function saveAsistente(id: string | null, prevState: ActionState, f
   const correo = formData.get('correo') as string
   const telefono = formData.get('telefono') as string
   const codigo = formData.get('codigo') as string
+  const fecha_registro = (formData.get('fecha_registro') as string) || null
+  const fecha_inicio_proceso = (formData.get('fecha_inicio_proceso') as string) || null
 
   if (!nombre) {
     return { error: 'El nombre es obligatorio' }
@@ -34,6 +36,8 @@ export async function saveAsistente(id: string | null, prevState: ActionState, f
     correo: correo || null,
     telefono: telefono || null,
     codigo: codigo || null,
+    fecha_registro: fecha_registro || null,
+    fecha_inicio_proceso: fecha_inicio_proceso || null,
   }
 
   if (id) {

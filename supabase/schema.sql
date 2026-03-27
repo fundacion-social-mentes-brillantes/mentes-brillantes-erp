@@ -25,6 +25,8 @@ CREATE TABLE asistentes (
   cedula TEXT UNIQUE,
   correo TEXT,
   telefono TEXT,
+  fecha_registro DATE,
+  fecha_inicio_proceso DATE,
   activo BOOLEAN DEFAULT true,
   creado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

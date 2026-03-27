@@ -41,6 +41,15 @@ export async function registrarSesion(prev: CoachActionState, formData: FormData
 
   if (error) return { error: error.message }
 
+  // Autocompletar fecha_inicio_proceso si es la primera sesión
+  if (!paquete.coach_sesiones || paquete.coach_sesiones.length === 0) {
+    await supabase
+      .from('asistentes')
+      .update({ fecha_inicio_proceso: fecha })
+      .eq('id', paquete.asistente_id)
+      .is('fecha_inicio_proceso', null)
+  }
+
   revalidatePath(`/cuentas/${paquete.cuenta_id}`)
   revalidatePath(`/asistentes/${paquete.asistente_id}`)
   return { success: true }

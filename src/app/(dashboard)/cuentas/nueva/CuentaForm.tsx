@@ -91,7 +91,7 @@ export function CuentaForm({ asistentes, asistenteInicial }: { asistentes: any[]
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium text-zinc-900">Fecha de Emisión *</label>
+          <label className="text-sm font-medium text-zinc-900">Fecha de emisión *</label>
           <Input name="fecha_emision" type="date" defaultValue={new Date().toISOString().split('T')[0]} required disabled={isPending} />
         </div>
 
@@ -110,14 +110,14 @@ export function CuentaForm({ asistentes, asistenteInicial }: { asistentes: any[]
               />
             </div>
             <div className="space-y-2 md:col-span-2">
-              <label className="text-sm font-medium text-zinc-900">Fecha sesiÃ³n coach (opcional)</label>
+              <label className="text-sm font-medium text-zinc-900">Fecha de sesión coach (opcional)</label>
               <Input
                 name="fecha_sesion_coach"
                 type="date"
                 disabled={isPending}
               />
               <p className="text-xs text-zinc-500">
-                Si esta cuenta corresponde a una sesiÃ³n ya tomada, puedes registrarla aquÃ­. Si no conoces la fecha ahora, dÃ©jalo vacÃ­o y agrÃ©gala despuÃ©s desde el asistente o el detalle de la cuenta.
+                Si esta cuenta corresponde a una sesión ya tomada, puedes registrarla aquí. Si no conoces la fecha ahora, déjalo vacío y agrégala después desde el asistente o el detalle de la cuenta.
               </p>
             </div>
             <div className="space-y-1 md:col-span-2">
@@ -164,3 +164,7 @@ export function CuentaForm({ asistentes, asistenteInicial }: { asistentes: any[]
     </form>
   )
 }
+
+
+
+
