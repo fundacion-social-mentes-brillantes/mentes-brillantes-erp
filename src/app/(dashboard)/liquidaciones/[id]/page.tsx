@@ -5,6 +5,7 @@ import { ArrowLeft, Wallet, Lock, Calculator } from 'lucide-react'
 import { AdelantoForm } from './AdelantoForm'
 import { GenerarLiquidacionBtn } from './GenerarLiquidacionBtn'
 import { ExportarLiquidacion } from '@/components/liquidaciones/ExportarLiquidacion'
+import { agruparPorMetodo, MetodoPago } from '@/lib/utils/liquidaciones'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -39,17 +40,22 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
   let donaciones_periodo = 0;
   let ingresos_operativos = 0;
   let egresos_periodo = 0;
+  let ingresosData: any[] = [];
+  let donacionesValidas: any[] = [];
+  let egresosData: any[] = [];
+  let resumenPorCuenta: { metodo_pago: MetodoPago; total_ingresos: number; total_salidas: number; saldo_neto_periodo: number; ingresos_abonos?: number; ingresos_donaciones?: number; salidas_egresos?: number; salidas_adelantos?: number; }[] = [];
+  let resumenTotales = { total_ingresos: 0, total_salidas: 0, saldo_neto_periodo: 0 };
 
   if (periodo.estado === 'abierto') {
     // Misma lógica de filtrado que el Dashboard para garantizar sincronización
     const { data: rawIngresosData } = await supabase
       ?.from('pagos_abonos')
-      .select('monto, metodo_pago, origen_fondos, estado, notas')
+      .select('monto, metodo_pago, origen_fondos, estado, notas, tipo')
       .gte('fecha_pago', periodo.fecha_inicio)
       .lte('fecha_pago', periodo.fecha_fin) || { data: [] }
 
     // Excluir saldo_a_favor (para no duplicar) y anulados (igual que el Dashboard)
-    const ingresosData = rawIngresosData?.filter(item =>
+    ingresosData = rawIngresosData?.filter(item =>
       item.metodo_pago !== 'Saldo_a_favor' &&
       item.metodo_pago !== 'saldo_a_favor' &&
       item.origen_fondos !== 'saldo_a_favor' &&
@@ -60,32 +66,78 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
 
     const { data: rawDonaciones } = await supabase
       ?.from('donaciones_asistentes')
-      .select('monto, estado, notas')
+      .select('monto, estado, notas, metodo_pago')
       .gte('fecha', periodo.fecha_inicio)
       .lte('fecha', periodo.fecha_fin) || { data: [] }
 
-    const donacionesValidas = (rawDonaciones || []).filter(d => d.estado !== 'anulado' && !d.notas?.includes('[ANULADO]'))
+    donacionesValidas = (rawDonaciones || []).filter(d => d.estado !== 'anulado' && !d.notas?.includes('[ANULADO]'))
     donaciones_periodo = Math.round(donacionesValidas.reduce((acc: number, curr: any) => acc + Number(curr.monto), 0))
 
     const { data: rawEgresosData } = await supabase
       ?.from('egresos')
-      .select('monto, estado, notas')
+      .select('monto, estado, notas, metodo_pago')
       .gte('fecha', periodo.fecha_inicio)
       .lte('fecha', periodo.fecha_fin) || { data: [] }
 
     // Excluir egresos anulados (igual que el Dashboard)
-    const egresosData = rawEgresosData?.filter(item =>
+    egresosData = rawEgresosData?.filter(item =>
       !item.notas?.includes('[ANULADO]') &&
       item.estado !== 'anulado'
     ) || []
     egresos_periodo = Math.round(egresosData.reduce((acc, curr) => acc + Number(curr.monto), 0))
 
     ingresos_operativos = ingresos_cobrados + donaciones_periodo
+
+    const { resumen, totales } = agruparPorMetodo({
+      abonos: ingresosData,
+      donaciones: donacionesValidas,
+      egresos: egresosData,
+      adelantos,
+    })
+    resumenPorCuenta = resumen
+    resumenTotales = {
+      total_ingresos: totales.total_ingresos,
+      total_salidas: totales.total_salidas,
+      saldo_neto_periodo: totales.saldo_neto_periodo,
+    }
   } else if (liquidaciones && liquidaciones.length > 0) {
     ingresos_cobrados = Math.round(Number(liquidaciones[0].ingresos_cobrados))
     donaciones_periodo = Math.round(Number(liquidaciones[0].donaciones_periodo ?? 0))
     ingresos_operativos = Math.round(Number(liquidaciones[0].ingresos_operativos ?? ingresos_cobrados + donaciones_periodo))
     egresos_periodo = Math.round(Number(liquidaciones[0].egresos_periodo))
+
+    const { data: resumenDb } = await supabase
+      ?.from('liquidaciones_resumen_cuentas')
+      .select('*')
+      .eq('periodo_id', id)
+      .order('metodo_pago') || { data: [] }
+
+    const metodos: MetodoPago[] = ['efectivo', 'nequi', 'daviplata', 'otro']
+    const base = metodos.map((m) => ({
+      metodo_pago: m,
+      total_ingresos: 0,
+      total_salidas: 0,
+      saldo_neto_periodo: 0,
+    }))
+    resumenPorCuenta = base.map((item) => {
+      const row = (resumenDb || []).find((r: any) => r.metodo_pago === item.metodo_pago)
+      return row
+        ? {
+            metodo_pago: item.metodo_pago,
+            total_ingresos: Number(row.total_ingresos),
+            total_salidas: Number(row.total_salidas),
+            saldo_neto_periodo: Number(row.saldo_neto_periodo),
+          }
+        : item
+    })
+    resumenTotales = resumenPorCuenta.reduce(
+      (acc, r) => ({
+        total_ingresos: acc.total_ingresos + r.total_ingresos,
+        total_salidas: acc.total_salidas + r.total_salidas,
+        saldo_neto_periodo: acc.saldo_neto_periodo + r.saldo_neto_periodo,
+      }),
+      { total_ingresos: 0, total_salidas: 0, saldo_neto_periodo: 0 }
+    )
   }
 
   const utilidad_neta = Math.round(ingresos_operativos - egresos_periodo)
@@ -201,6 +253,52 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
         </div>
       </div>
 
+      {/* Resumen por cuenta (solo admin) */}
+      <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-zinc-200 bg-zinc-50 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Wallet className="w-4 h-4 text-zinc-400" />
+            <h3 className="font-semibold text-zinc-900">Resumen por cuenta</h3>
+          </div>
+          <span className="text-xs text-zinc-500">
+            {periodo.estado === 'abierto' ? 'Proyección en vivo' : 'Datos congelados'}
+          </span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-left">
+            <thead className="text-zinc-500 font-medium border-b border-zinc-200 bg-zinc-50">
+              <tr>
+                <th className="px-4 py-3">Método</th>
+                <th className="px-4 py-3 text-right">Ingresos</th>
+                <th className="px-4 py-3 text-right">Salidas</th>
+                <th className="px-4 py-3 text-right">Saldo neto del período</th>
+                <th className="px-4 py-3 text-right">Valor esperado en cuenta</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100">
+              {resumenPorCuenta.map((row) => (
+                <tr key={row.metodo_pago}>
+                  <td className="px-4 py-3 font-medium text-zinc-900 capitalize">{row.metodo_pago}</td>
+                  <td className="px-4 py-3 text-right text-emerald-700">${row.total_ingresos.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-right text-red-600">-${row.total_salidas.toLocaleString()}</td>
+                  <td className={`px-4 py-3 text-right font-semibold ${row.saldo_neto_periodo >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                    ${row.saldo_neto_periodo.toLocaleString()}
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold">${row.saldo_neto_periodo.toLocaleString()}</td>
+                </tr>
+              ))}
+              <tr className="bg-zinc-50 font-semibold">
+                <td className="px-4 py-3">Total</td>
+                <td className="px-4 py-3 text-right text-emerald-700">${resumenTotales.total_ingresos.toLocaleString()}</td>
+                <td className="px-4 py-3 text-right text-red-600">-${resumenTotales.total_salidas.toLocaleString()}</td>
+                <td className="px-4 py-3 text-right">${resumenTotales.saldo_neto_periodo.toLocaleString()}</td>
+                <td className="px-4 py-3 text-right">${resumenTotales.saldo_neto_periodo.toLocaleString()}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Columna Izquierda: Adelantos y Formulario */}
         <div className="lg:col-span-1 space-y-6">
@@ -233,7 +331,10 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                   </div>
                   <div className="flex justify-between items-center text-xs text-zinc-500">
                     <p>{new Date(adelanto.fecha).toLocaleDateString()}</p>
-                    <p className="truncate max-w-[120px]">{adelanto.notas}</p>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600 border border-zinc-200">{adelanto.metodo_pago || 'otro'}</span>
+                      <p className="truncate max-w-[120px]">{adelanto.notas}</p>
+                    </div>
                   </div>
                 </div>
               ))}
