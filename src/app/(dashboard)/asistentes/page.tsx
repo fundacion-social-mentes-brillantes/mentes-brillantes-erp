@@ -75,9 +75,9 @@ export default async function AsistentesPage({ searchParams }: { searchParams: P
       </div>
 
       <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
           <table className="w-full text-sm text-left">
-            <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 font-medium">
+            <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 font-medium sticky top-0 z-10">
               <tr>
                 <th className="px-6 py-4">Código</th>
                 <th className="px-6 py-4">Nombre</th>
@@ -108,13 +108,15 @@ export default async function AsistentesPage({ searchParams }: { searchParams: P
                     <td className="px-6 py-4">
                       <div className="flex flex-col gap-1">
                         <span
-                          className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                            asistente.activo_visible ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-600'
+                          className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${
+                            asistente.activo_visible
+                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200'
+                              : 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-200'
                           }`}
                         >
                           {asistente.activo_visible ? 'Activo' : 'Inactivo'}
                         </span>
-                        <span className="text-[11px] text-zinc-500">Última actividad: {ultimaActividadTexto}</span>
+                        <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Última actividad: {ultimaActividadTexto}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right space-x-1">

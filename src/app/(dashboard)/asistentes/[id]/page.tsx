@@ -128,7 +128,13 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-zinc-900 flex items-center gap-3">
               {asistente.nombre}
-              <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${actividad.activo ? "bg-emerald-100 text-emerald-700" : "bg-zinc-100 text-zinc-600"}`}>
+              <span
+                className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${
+                  actividad.activo
+                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200"
+                    : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-200"
+                }`}
+              >
                 {actividad.activo ? "Activo" : "Inactivo"}
               </span>
             </h1>
@@ -137,7 +143,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                 <span className="font-mono bg-zinc-100 px-1.5 py-0.5 rounded text-xs text-zinc-600">#{asistente.codigo}</span>
               )}
               {asistente.cedula && <span>CC: {asistente.cedula}</span>}
-              <span className="text-xs text-zinc-500">Última actividad: {ultimaActividadTexto}</span>
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">Última actividad: {ultimaActividadTexto}</span>
             </p>
           </div>
         </div>
