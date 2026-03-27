@@ -98,7 +98,6 @@ CREATE TABLE adelantos_socios (
   legacy_row_id TEXT UNIQUE,
   monto DECIMAL(12,2) NOT NULL CHECK (monto > 0),
   fecha DATE NOT NULL DEFAULT CURRENT_DATE,
-  metodo_pago metodo_pago NOT NULL DEFAULT 'otro',
   notas TEXT,
   creado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -119,23 +118,6 @@ CREATE TABLE liquidaciones_socios (
   valor_neto_pagar DECIMAL(12,2) NOT NULL,
   generado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   UNIQUE(periodo_id, socio_id)
-);
-
--- RESUMEN POR CUENTA (snapshot al cierre de liquidación)
-CREATE TABLE IF NOT EXISTS liquidaciones_resumen_cuentas (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  periodo_id UUID NOT NULL REFERENCES periodos(id) ON DELETE RESTRICT,
-  metodo_pago metodo_pago NOT NULL,
-  total_ingresos DECIMAL(12,2) NOT NULL DEFAULT 0,
-  total_salidas DECIMAL(12,2) NOT NULL DEFAULT 0,
-  saldo_neto_periodo DECIMAL(12,2) NOT NULL DEFAULT 0,
-  ingresos_abonos DECIMAL(12,2) NOT NULL DEFAULT 0,
-  ingresos_donaciones DECIMAL(12,2) NOT NULL DEFAULT 0,
-  salidas_egresos DECIMAL(12,2) NOT NULL DEFAULT 0,
-  salidas_adelantos DECIMAL(12,2) NOT NULL DEFAULT 0,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(periodo_id, metodo_pago)
 );
 
 -- VISTA PARA RESOLVER EL "MONTO PENDIENTE" (Ej: 168000)
@@ -318,7 +300,7 @@ SELECT
 FROM donaciones_asistentes d
 LEFT JOIN asistentes a ON a.id = d.asistente_id;
 
--- FUNCIÓN TRANSACCIONAL PARA CERRAR LIQUIDACIÓN CON RESUMEN POR CUENTA
+-- FUNCIÓN TRANSACCIONAL PARA CERRAR LIQUIDACIÓN CON SNAPSHOT POR CUENTA
 CREATE OR REPLACE FUNCTION fn_cerrar_liquidacion(p_periodo_id UUID)
 RETURNS void
 LANGUAGE plpgsql
@@ -340,44 +322,30 @@ BEGIN
   END IF;
 
   IF v_estado <> 'abierto' THEN
-    -- nada que hacer si ya está cerrado
     RETURN;
   END IF;
 
-  -- Calcular ingresos por abonos válidos
-  WITH pagos_validos AS (
-    SELECT
-      LOWER(COALESCE(metodo_pago::text, 'otro')) AS metodo_pago,
-      monto
-    FROM pagos_abonos
-    WHERE fecha_pago BETWEEN v_inicio AND v_fin
-      AND estado <> 'anulado'
-      AND notas NOT ILIKE '%[ANULADO]%'
-      AND LOWER(COALESCE(metodo_pago::text,'')) <> 'saldo_a_favor'
-      AND LOWER(COALESCE(origen_fondos::text,'')) <> 'saldo_a_favor'
+  WITH abonos_vista AS (
+    SELECT LOWER(COALESCE(metodo_pago::text, 'otro')) AS metodo_pago, valor_ingreso AS monto
+    FROM vw_movimientos_generales
+    WHERE tipo_movimiento = 'abono'
+      AND fecha BETWEEN v_inicio AND v_fin
   ),
-  donaciones_validas AS (
-    SELECT
-      LOWER(COALESCE(metodo_pago::text, 'otro')) AS metodo_pago,
-      monto
-    FROM donaciones_asistentes
-    WHERE fecha BETWEEN v_inicio AND v_fin
-      AND estado <> 'anulado'
-      AND notas NOT ILIKE '%[ANULADO]%'
+  donaciones_vista AS (
+    SELECT LOWER(COALESCE(metodo_pago::text, 'otro')) AS metodo_pago, valor_ingreso AS monto
+    FROM vw_movimientos_generales
+    WHERE tipo_movimiento = 'donacion'
+      AND fecha BETWEEN v_inicio AND v_fin
   ),
   egresos_validos AS (
-    SELECT
-      LOWER(COALESCE(metodo_pago::text, 'otro')) AS metodo_pago,
-      monto
+    SELECT LOWER(COALESCE(metodo_pago::text, 'otro')) AS metodo_pago, monto
     FROM egresos
     WHERE fecha BETWEEN v_inicio AND v_fin
       AND estado <> 'anulado'
       AND notas NOT ILIKE '%[ANULADO]%'
   ),
   adelantos_validos AS (
-    SELECT
-      LOWER(COALESCE(metodo_pago::text, 'otro')) AS metodo_pago,
-      monto
+    SELECT LOWER(COALESCE(metodo_pago::text, 'otro')) AS metodo_pago, monto
     FROM adelantos_socios
     WHERE fecha BETWEEN v_inicio AND v_fin
   ),
@@ -387,13 +355,13 @@ BEGIN
   resumen AS (
     SELECT
       m.metodo_pago::metodo_pago AS metodo_pago,
-      COALESCE(SUM(pa.monto),0) AS ingresos_abonos,
+      COALESCE(SUM(ab.monto),0) AS ingresos_abonos,
       COALESCE(SUM(d.monto),0) AS ingresos_donaciones,
       COALESCE(SUM(e.monto),0) AS salidas_egresos,
       COALESCE(SUM(ad.monto),0) AS salidas_adelantos
     FROM metodos m
-    LEFT JOIN pagos_validos pa ON pa.metodo_pago = m.metodo_pago
-    LEFT JOIN donaciones_validas d ON d.metodo_pago = m.metodo_pago
+    LEFT JOIN abonos_vista ab ON ab.metodo_pago = m.metodo_pago
+    LEFT JOIN donaciones_vista d ON d.metodo_pago = m.metodo_pago
     LEFT JOIN egresos_validos e ON e.metodo_pago = m.metodo_pago
     LEFT JOIN adelantos_validos ad ON ad.metodo_pago = m.metodo_pago
     GROUP BY m.metodo_pago
@@ -426,7 +394,6 @@ BEGIN
     salidas_adelantos = EXCLUDED.salidas_adelantos,
     updated_at = NOW();
 
-  -- Calcular totales para liquidación socios (mismo criterio actual)
   SELECT
     SUM(r.ingresos_abonos + r.ingresos_donaciones),
     SUM(r.salidas_egresos + r.salidas_adelantos),
@@ -437,7 +404,6 @@ BEGIN
 
   v_utilidad_neta := COALESCE(v_ingresos_operativos,0) - COALESCE(v_egresos_periodo,0);
 
-  -- generar liquidaciones_socios
   INSERT INTO liquidaciones_socios (
     periodo_id, socio_id, ingresos_cobrados, donaciones_periodo, ingresos_operativos,
     egresos_periodo, utilidad_neta, porcentaje_aplicado, valor_correspondiente,
@@ -475,7 +441,6 @@ BEGIN
     adelantos_descontados = EXCLUDED.adelantos_descontados,
     valor_neto_pagar = EXCLUDED.valor_neto_pagar;
 
-  -- cerrar período
   UPDATE periodos SET estado = 'cerrado' WHERE id = p_periodo_id;
 END;
 $$;
