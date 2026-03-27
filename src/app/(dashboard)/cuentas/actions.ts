@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { calcularEstadoCuenta } from '../../../lib/utils/cuentas'
+import { filtrarPagosValidosCuentas, calcularPendienteDespuesDeAbono } from '@/lib/utils/contable'
 import { requireAdmin, requireRoles } from '../../../lib/utils/authz'
 
 export type ActionState = {
@@ -377,6 +378,21 @@ export async function editMontoAbono(
 
   const { data: abono } = await supabase.from('pagos_abonos').select('origen_fondos').eq('id', abono_id).single()
 
+  // Validar sobrepago antes de actualizar
+  const { data: cuentaData } = await supabase
+    .from('cuentas_por_cobrar')
+    .select('valor_total, pagos_abonos(id, monto, notas, estado)')
+    .eq('id', cuenta_id)
+    .single()
+
+  if (cuentaData) {
+    const valor_total = Number(cuentaData.valor_total)
+    const { pendiente, excede } = calcularPendienteDespuesDeAbono(valor_total, cuentaData.pagos_abonos || [], abono_id, valor_nuevo)
+    if (excede) {
+      return { error: `El abono no puede superar el saldo pendiente ($${pendiente.toLocaleString()})` }
+    }
+  }
+
   const { error: updateError } = await supabase.from('pagos_abonos').update({ monto: valor_nuevo }).eq('id', abono_id)
   if (updateError) return { error: updateError.message }
 
@@ -401,14 +417,8 @@ export async function editMontoAbono(
     },
   ])
 
-  const { data: cuentaData } = await supabase
-    .from('cuentas_por_cobrar')
-    .select('valor_total, pagos_abonos(monto, notas)')
-    .eq('id', cuenta_id)
-    .single()
-
   if (cuentaData) {
-    const pagosValidos = cuentaData.pagos_abonos?.filter((p: any) => !p.notas?.includes('[ANULADO]')) || []
+    const pagosValidos = filtrarPagosValidosCuentas(cuentaData.pagos_abonos || [])
     const total_abonado = pagosValidos.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0)
     const nuevo_estado = calcularEstadoCuenta(Number(cuentaData.valor_total), total_abonado)
     await supabase.from('cuentas_por_cobrar').update({ estado: nuevo_estado }).eq('id', cuenta_id)
