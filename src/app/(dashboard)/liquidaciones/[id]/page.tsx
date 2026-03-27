@@ -44,6 +44,17 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
   let ingresosData: any[] = []
   let donacionesValidas: any[] = []
   let egresosData: any[] = []
+  let resumenPorCuenta: {
+    metodo_pago: MetodoPago
+    total_ingresos: number
+    total_salidas: number
+    saldo_neto_periodo: number
+    ingresos_abonos?: number
+    ingresos_donaciones?: number
+    salidas_egresos?: number
+    salidas_adelantos?: number
+  }[] = []
+  let resumenTotales = { total_ingresos: 0, total_salidas: 0, saldo_neto_periodo: 0 }
 
   if (periodo.estado === 'abierto') {
     const { data: abonosVista, error: abonosError } = await supabase
