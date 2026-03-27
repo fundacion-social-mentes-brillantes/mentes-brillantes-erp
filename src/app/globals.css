@@ -158,3 +158,18 @@ td {
 ::-webkit-scrollbar-track {
   background: rgba(var(--surface-2), 0.8);
 }
+.visible-scrollbar {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--text-muted), 0.45) rgba(var(--surface-2), 0.75);
+}
+.visible-scrollbar::-webkit-scrollbar {
+  width: 10px;
+}
+.visible-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(var(--text-muted), 0.45);
+  border-radius: 999px;
+}
+.visible-scrollbar::-webkit-scrollbar-track {
+  background: rgba(var(--surface-2), 0.85);
+}

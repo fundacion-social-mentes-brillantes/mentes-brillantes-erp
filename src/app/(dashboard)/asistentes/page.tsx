@@ -75,7 +75,7 @@ export default async function AsistentesPage({ searchParams }: { searchParams: P
       </div>
 
       <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
-        <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
+        <div className="overflow-x-auto max-h-[70vh] overflow-y-scroll visible-scrollbar">
           <table className="w-full text-sm text-left">
             <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 font-medium sticky top-0 z-10">
               <tr>
