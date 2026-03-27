@@ -2,7 +2,6 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { filtrarIngresosOperativos, esAnuladoCompleto, sumarMontos } from '@/lib/utils/contable'
 import { requireAdmin } from '@/lib/utils/authz'
 
 export type ActionState = {
@@ -64,11 +63,12 @@ export async function saveAdelanto(periodo_id: string, prevState: ActionState, f
   const monto_str = formData.get('monto') as string
   const fecha = formData.get('fecha') as string
   const notas = formData.get('notas') as string
+   const metodo_pago = (formData.get('metodo_pago') as string) || 'otro'
 
   const monto = parseFloat(monto_str)
 
-  if (!socio_id || !monto_str || !fecha) {
-    return { error: 'Socio, monto y fecha son obligatorios' }
+  if (!socio_id || !monto_str || !fecha || !metodo_pago) {
+    return { error: 'Socio, monto, fecha y método de pago son obligatorios' }
   }
 
   if (isNaN(monto) || monto <= 0) {
@@ -81,6 +81,7 @@ export async function saveAdelanto(periodo_id: string, prevState: ActionState, f
       periodo_id,
       monto,
       fecha,
+      metodo_pago,
       notas: notas || null,
     },
   ])
@@ -101,74 +102,14 @@ export async function generarLiquidacion(periodo_id: string) {
     return
   }
 
-  const { data: periodo } = await supabase.from('periodos').select('*').eq('id', periodo_id).single()
+  const { data: periodo } = await supabase.from('periodos').select('estado').eq('id', periodo_id).single()
   if (!periodo || periodo.estado !== 'abierto') return
 
-  const { data: rawIngresosData } = await supabase
-    .from('pagos_abonos')
-    .select('monto, metodo_pago, origen_fondos, estado, notas')
-    .gte('fecha_pago', periodo.fecha_inicio)
-    .lte('fecha_pago', periodo.fecha_fin)
-
-  const ingresosValidos = filtrarIngresosOperativos(rawIngresosData ?? [], {
-    excluirSaldoAFavor: true,
-    excluirAplicacionSaldo: true,
-  })
-  const ingresos_cobrados = Math.round(sumarMontos(ingresosValidos))
-
-  const { data: rawDonaciones } = await supabase
-    .from('donaciones_asistentes')
-    .select('monto, estado, notas')
-    .gte('fecha', periodo.fecha_inicio)
-    .lte('fecha', periodo.fecha_fin)
-
-  const donacionesValidas =
-    rawDonaciones?.filter((d) => d.estado !== 'anulado' && !d.notas?.includes('[ANULADO]')) || []
-  const donaciones_periodo = Math.round(sumarMontos(donacionesValidas))
-  const ingresos_operativos = ingresos_cobrados + donaciones_periodo
-
-  const { data: rawEgresosData } = await supabase
-    .from('egresos')
-    .select('monto, estado, notas')
-    .gte('fecha', periodo.fecha_inicio)
-    .lte('fecha', periodo.fecha_fin)
-
-  const egresosValidos = (rawEgresosData ?? []).filter((item) => !esAnuladoCompleto(item))
-  const egresos_periodo = Math.round(sumarMontos(egresosValidos))
-
-  const utilidad_neta = ingresos_operativos - egresos_periodo
-
-  const { data: socios } = await supabase.from('socios').select('*').eq('activo', true)
-  if (!socios) return
-
-  const { data: adelantosData } = await supabase.from('adelantos_socios').select('*').eq('periodo_id', periodo_id)
-
-  const liquidaciones = socios.map((socio) => {
-    const porcentaje_aplicado = Number(socio.porcentaje_participacion)
-    const valor_correspondiente = Math.round((utilidad_neta * porcentaje_aplicado) / 100)
-
-    const adelantos_socio = adelantosData?.filter((a) => a.socio_id === socio.id) || []
-    const adelantos_descontados = Math.round(adelantos_socio.reduce((acc, curr) => acc + Number(curr.monto), 0))
-
-    const valor_neto_pagar = Math.round(valor_correspondiente - adelantos_descontados)
-
-    return {
-      periodo_id,
-      socio_id: socio.id,
-      ingresos_cobrados,
-      donaciones_periodo,
-      ingresos_operativos,
-      egresos_periodo,
-      utilidad_neta,
-      porcentaje_aplicado,
-      valor_correspondiente,
-      adelantos_descontados,
-      valor_neto_pagar,
-    }
-  })
-
-  await supabase.from('liquidaciones_socios').insert(liquidaciones)
-  await supabase.from('periodos').update({ estado: 'cerrado' }).eq('id', periodo_id)
+  const { error } = await supabase.rpc('fn_cerrar_liquidacion', { p_periodo_id: periodo_id })
+  if (error) {
+    console.error('Error RPC fn_cerrar_liquidacion:', error)
+    return
+  }
 
   revalidatePath('/liquidaciones')
   revalidatePath(`/liquidaciones/${periodo_id}`)

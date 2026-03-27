@@ -10,6 +10,8 @@ export function AdelantoForm({ periodoId, socios }: { periodoId: string, socios:
   const actionWithId = saveAdelanto.bind(null, periodoId)
   const [state, formAction, isPending] = useActionState(actionWithId, null)
   const formRef = useRef<HTMLFormElement>(null)
+  const selectClass =
+    "flex h-10 w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--input-bg))] px-3 py-2 text-sm text-[rgb(var(--text-primary))] ring-offset-[rgb(var(--surface-1))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--accent))] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:[color-scheme:dark]"
 
   if (state?.success && formRef.current) {
     formRef.current.reset()
@@ -32,12 +34,12 @@ export function AdelantoForm({ periodoId, socios }: { periodoId: string, socios:
       )}
 
       <div className="space-y-2">
-        <label className="text-sm font-medium text-zinc-900">Socio *</label>
-        <select 
-          name="socio_id" 
-          required 
+        <label className="text-sm font-medium text-[rgb(var(--text-primary))]">Socio *</label>
+        <select
+          name="socio_id"
+          required
           disabled={isPending}
-          className="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className={selectClass}
         >
           <option value="">Seleccione...</option>
           {socios.map(s => (
@@ -47,18 +49,36 @@ export function AdelantoForm({ periodoId, socios }: { periodoId: string, socios:
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium text-zinc-900">Monto ($) *</label>
-        <Input name="monto" type="number" step="0.01" min="0.01" required disabled={isPending} />
+        <label className="text-sm font-medium text-[rgb(var(--text-primary))]">Monto ($) *</label>
+        <Input name="monto" type="number" step="0.01" min="0.01" required disabled={isPending}
+          className="bg-[rgb(var(--input-bg))] text-[rgb(var(--text-primary))]" />
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium text-zinc-900">Fecha *</label>
-        <Input name="fecha" type="date" defaultValue={new Date().toISOString().split('T')[0]} required disabled={isPending} />
+        <label className="text-sm font-medium text-[rgb(var(--text-primary))]">Fecha *</label>
+        <Input name="fecha" type="date" defaultValue={new Date().toISOString().split('T')[0]} required disabled={isPending}
+          className="bg-[rgb(var(--input-bg))] text-[rgb(var(--text-primary))] dark:[color-scheme:dark]" />
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium text-zinc-900">Notas</label>
-        <Input name="notas" placeholder="Opcional" disabled={isPending} />
+        <label className="text-sm font-medium text-[rgb(var(--text-primary))]">Método de Pago *</label>
+        <select
+          name="metodo_pago"
+          required
+          disabled={isPending}
+          className={selectClass}
+        >
+          <option value="efectivo">Efectivo</option>
+          <option value="nequi">Nequi</option>
+          <option value="daviplata">Daviplata</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-sm font-medium text-[rgb(var(--text-primary))]">Notas</label>
+        <Input name="notas" placeholder="Opcional" disabled={isPending}
+          className="bg-[rgb(var(--input-bg))] text-[rgb(var(--text-primary))]" />
       </div>
 
       <Button type="submit" className="w-full" disabled={isPending}>
