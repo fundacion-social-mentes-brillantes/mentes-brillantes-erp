@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useActionState } from 'react'
 import { saveEgreso } from './actions'
@@ -11,8 +11,14 @@ export function EgresoForm({ egreso }: { egreso?: any }) {
   const actionWithId = saveEgreso.bind(null, egreso?.id || null)
   const [state, formAction, isPending] = useActionState(actionWithId, null)
 
+  const selectClass =
+    'flex h-10 w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--input-bg))] px-3 py-2 text-sm text-[rgb(var(--text-primary))] ring-offset-[rgb(var(--surface-1))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--accent))] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:[color-scheme:dark]'
+
   return (
-    <form action={formAction} className="space-y-6 max-w-2xl bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
+    <form
+      action={formAction}
+      className="space-y-6 max-w-2xl bg-[rgb(var(--surface-1))] p-6 rounded-xl border border-[rgb(var(--border))] shadow-sm text-[rgb(var(--text-primary))]"
+    >
       {state?.error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-red-600">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
@@ -22,29 +28,46 @@ export function EgresoForm({ egreso }: { egreso?: any }) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2 md:col-span-2">
-          <label className="text-sm font-medium text-zinc-900">Concepto *</label>
-          <Input name="concepto" defaultValue={egreso?.concepto} placeholder="Ej: Pago de arriendo" required disabled={isPending} />
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-zinc-900">Monto ($) *</label>
-          <Input name="monto" type="number" step="0.01" min="0.01" defaultValue={egreso?.monto} required disabled={isPending} />
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-zinc-900">Fecha *</label>
-          <Input name="fecha" type="date" defaultValue={egreso?.fecha || new Date().toISOString().split('T')[0]} required disabled={isPending} />
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-zinc-900">Categoría *</label>
-          <select 
-            name="categoria" 
-            defaultValue={egreso?.categoria || ''}
-            required 
+          <label className="text-sm font-medium text-[rgb(var(--text-primary))]">Concepto *</label>
+          <Input
+            name="concepto"
+            defaultValue={egreso?.concepto}
+            placeholder="Ej: Pago de arriendo"
+            required
             disabled={isPending}
-            className="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-          >
+            className="bg-[rgb(var(--input-bg))] text-[rgb(var(--text-primary))]"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-[rgb(var(--text-primary))]">Monto ($) *</label>
+          <Input
+            name="monto"
+            type="number"
+            step="0.01"
+            min="0.01"
+            defaultValue={egreso?.monto}
+            required
+            disabled={isPending}
+            className="bg-[rgb(var(--input-bg))] text-[rgb(var(--text-primary))]"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-[rgb(var(--text-primary))]">Fecha *</label>
+          <Input
+            name="fecha"
+            type="date"
+            defaultValue={egreso?.fecha || new Date().toISOString().split('T')[0]}
+            required
+            disabled={isPending}
+            className="bg-[rgb(var(--input-bg))] text-[rgb(var(--text-primary))] dark:[color-scheme:dark]"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-[rgb(var(--text-primary))]">Categoría *</label>
+          <select name="categoria" defaultValue={egreso?.categoria || ''} required disabled={isPending} className={selectClass}>
             <option value="">Seleccione...</option>
             <option value="Operativo">Operativo</option>
             <option value="Administrativo">Administrativo</option>
@@ -56,13 +79,13 @@ export function EgresoForm({ egreso }: { egreso?: any }) {
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium text-zinc-900">Método de Pago *</label>
-          <select 
-            name="metodo_pago" 
+          <label className="text-sm font-medium text-[rgb(var(--text-primary))]">Método de Pago *</label>
+          <select
+            name="metodo_pago"
             defaultValue={egreso?.metodo_pago || 'efectivo'}
-            required 
+            required
             disabled={isPending}
-            className="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className={selectClass}
           >
             <option value="efectivo">Efectivo</option>
             <option value="nequi">Nequi</option>
@@ -72,13 +95,22 @@ export function EgresoForm({ egreso }: { egreso?: any }) {
         </div>
 
         <div className="space-y-2 md:col-span-2">
-          <label className="text-sm font-medium text-zinc-900">Notas (Opcional)</label>
-          <Input name="notas" defaultValue={egreso?.notas} placeholder="Referencia o detalle adicional" disabled={isPending} />
+          <label className="text-sm font-medium text-[rgb(var(--text-primary))]">Notas (Opcional)</label>
+          <Input
+            name="notas"
+            defaultValue={egreso?.notas}
+            placeholder="Referencia o detalle adicional"
+            disabled={isPending}
+            className="bg-[rgb(var(--input-bg))] text-[rgb(var(--text-primary))]"
+          />
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-4 pt-4 border-t border-zinc-100">
-        <Link href="/egresos" className="text-sm font-medium text-zinc-500 hover:text-zinc-900">
+      <div className="flex items-center justify-end gap-4 pt-4 border-t border-[rgb(var(--border))]">
+        <Link
+          href="/egresos"
+          className="text-sm font-medium text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))]"
+        >
           Cancelar
         </Link>
         <Button type="submit" disabled={isPending}>
@@ -88,3 +120,4 @@ export function EgresoForm({ egreso }: { egreso?: any }) {
     </form>
   )
 }
+
