@@ -223,7 +223,30 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                 <span className="font-medium text-zinc-900">{cantidadDonaciones}</span>
               </div>
               <DonacionForm asistenteId={asistente.id} disabled={!isAdmin} />
-              {!!donaciones.length && <DonacionActionsMenu donaciones={donaciones} isAdmin={isAdmin} />}
+              {donaciones.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs text-[rgb(var(--text-muted))]">Historial de donaciones</p>
+                  <div className="space-y-2">
+                    {donaciones.map((donacion) => (
+                      <div
+                        key={donacion.id}
+                        className="flex items-center justify-between rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] px-3 py-2"
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-[rgb(var(--text-primary))]">
+                            ${Number(donacion.monto).toLocaleString("es-CO")} · {donacion.metodo_pago}
+                          </p>
+                          <p className="text-[11px] text-[rgb(var(--text-muted))]">
+                            {new Date(donacion.fecha).toLocaleDateString("es-CO")}
+                            {donacion.notas ? ` · ${donacion.notas}` : ""}
+                          </p>
+                        </div>
+                        <DonacionActionsMenu donacion={donacion} isAdmin={isAdmin} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -339,11 +362,11 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
               )}
               <div className="pt-2">
                 <CoachSessionsPdf
-                  sesiones={sesionesLista}
+                  sesiones={sesionesLista.map((s) => ({ fecha: s.fecha, notas: s.notas }))}
                   asistenteNombre={asistente.nombre}
-                  asistenteId={asistente.id}
-                  totalCompradas={sesionesCompradas}
-                  totalRealizadas={sesionesRealizadas}
+                  sesionesCompradas={sesionesCompradas}
+                  sesionesRealizadas={sesionesRealizadas}
+                  sesionesRestantes={sesionesRestantes}
                 />
               </div>
               <div className="space-y-2">

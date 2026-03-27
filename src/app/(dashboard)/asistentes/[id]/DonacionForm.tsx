@@ -3,12 +3,12 @@
 import { useFormState, useFormStatus } from 'react-dom'
 import { crearDonacion } from '../donacionesActions'
 
-function SubmitButton() {
+function SubmitButton({ disabled = false }: { disabled?: boolean }) {
   const { pending } = useFormStatus()
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={pending || disabled}
       className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))] px-4 py-2 text-sm font-medium hover:bg-[rgb(var(--accent-strong))] transition-colors disabled:opacity-60"
     >
       {pending ? 'Guardando...' : 'Registrar Donación'}
@@ -16,8 +16,13 @@ function SubmitButton() {
   )
 }
 
-export function DonacionForm({ asistenteId }: { asistenteId: string }) {
-  const [state, action] = useFormState(async (prev: any, formData: FormData) => {
+type DonacionFormProps = {
+  asistenteId: string
+  disabled?: boolean
+}
+
+export function DonacionForm({ asistenteId, disabled = false }: DonacionFormProps) {
+  const [state, action] = useFormState(async (_prev: any, formData: FormData) => {
     return await crearDonacion(asistenteId, formData)
   }, null)
 
@@ -31,6 +36,7 @@ export function DonacionForm({ asistenteId }: { asistenteId: string }) {
           step="0.01"
           min="0"
           required
+          disabled={disabled}
           className="w-full h-10 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--input-bg))] px-3 text-sm text-[rgb(var(--text-primary))] focus:border-[rgb(var(--accent))] focus:ring-1 focus:ring-[rgb(var(--accent))]"
           placeholder="Ej: 50000"
         />
@@ -40,6 +46,7 @@ export function DonacionForm({ asistenteId }: { asistenteId: string }) {
         <select
           name="metodo_pago"
           required
+          disabled={disabled}
           className="w-full h-10 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--input-bg))] px-3 text-sm text-[rgb(var(--text-primary))] focus:border-[rgb(var(--accent))] focus:ring-1 focus:ring-[rgb(var(--accent))]"
         >
           <option value="efectivo">Efectivo</option>
@@ -53,6 +60,7 @@ export function DonacionForm({ asistenteId }: { asistenteId: string }) {
         <input
           name="fecha"
           type="date"
+          disabled={disabled}
           className="w-full h-10 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--input-bg))] px-3 text-sm text-[rgb(var(--text-primary))] focus:border-[rgb(var(--accent))] focus:ring-1 focus:ring-[rgb(var(--accent))]"
         />
       </div>
@@ -61,6 +69,7 @@ export function DonacionForm({ asistenteId }: { asistenteId: string }) {
         <textarea
           name="notas"
           rows={2}
+          disabled={disabled}
           className="w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--input-bg))] px-3 py-2 text-sm text-[rgb(var(--text-primary))] focus:border-[rgb(var(--accent))] focus:ring-1 focus:ring-[rgb(var(--accent))]"
           placeholder="Opcional"
         />
@@ -78,7 +87,11 @@ export function DonacionForm({ asistenteId }: { asistenteId: string }) {
         </div>
       )}
 
-      <SubmitButton />
+      {disabled && (
+        <p className="text-[11px] text-[rgb(var(--text-muted))]">Solo administradores pueden registrar donaciones.</p>
+      )}
+
+      <SubmitButton disabled={disabled} />
     </form>
   )
 }

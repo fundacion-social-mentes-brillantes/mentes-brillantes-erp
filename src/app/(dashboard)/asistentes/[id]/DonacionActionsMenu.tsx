@@ -14,9 +14,12 @@ type Props = {
     fecha: string
     notas?: string | null
   }
+  isAdmin?: boolean
 }
 
-export function DonacionActionsMenu({ donacion }: Props) {
+export function DonacionActionsMenu({ donacion, isAdmin = true }: Props) {
+  if (!isAdmin) return null
+
   const [open, setOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editState, editAction] = useFormState(editarDonacionForm, null)
@@ -57,9 +60,13 @@ export function DonacionActionsMenu({ donacion }: Props) {
                 </button>
                 {anularState?.error && <p className="text-xs text-red-500">{anularState.error}</p>}
               </form>
-              <form action={eliminarAction} className="space-y-1" onSubmit={(e) => {
-                if (!confirm('¿Seguro que deseas eliminar esta donación de forma permanente?')) e.preventDefault()
-              }}>
+              <form
+                action={eliminarAction}
+                className="space-y-1"
+                onSubmit={(e) => {
+                  if (!confirm('¿Seguro que deseas eliminar esta donación de forma permanente?')) e.preventDefault()
+                }}
+              >
                 <input type="hidden" name="id" value={donacion.id} />
                 <input type="hidden" name="asistente_id" value={donacion.asistente_id} />
                 <button
