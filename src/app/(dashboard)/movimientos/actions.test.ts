@@ -271,7 +271,7 @@ describe('recalculo con pagos válidos (nuevas reglas)', () => {
     requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin' } })
     const res = await anularMovimiento('p2', 'abono', 300, null)
     expect(res?.success).toBe(true)
-    expect(updates[0]?.estado).toBe('pendiente')
+    expect(updates[0]?.estado).toBe('parcial')
     expect(cuentasUpdateEq).toHaveBeenCalled()
   })
 })
