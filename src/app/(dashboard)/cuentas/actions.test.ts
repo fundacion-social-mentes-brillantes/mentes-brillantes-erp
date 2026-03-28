@@ -210,7 +210,7 @@ describe('editMontoAbono', () => {
     const auditInsert = vi.fn().mockResolvedValue({ error: null })
 
     const cuentaSelectSingle = vi.fn().mockResolvedValue({
-      data: { valor_total: 1000, pagos_abonos: [{ monto: 600 }] },
+      data: { valor_total: 1000, pagos_abonos: [{ id: 'abono-1', monto: 300 }] },
     })
     const cuentaSelect = vi.fn(() => ({ single: cuentaSelectSingle, eq: vi.fn(() => ({ single: cuentaSelectSingle })) }))
     const cuentaUpdateEq = vi.fn().mockResolvedValue({ error: null })
@@ -296,6 +296,8 @@ describe('cuentas/actions sobrepago (reglas nuevas)', () => {
   it('editMontoAbono bloquea sobrepago', async () => {
     const abonoUpdateEq = vi.fn().mockResolvedValue({ error: null })
     const abonoUpdate = vi.fn(() => ({ eq: abonoUpdateEq }))
+    const cuentaUpdateEq = vi.fn().mockResolvedValue({ error: null })
+    const cuentaUpdate = vi.fn(() => ({ eq: cuentaUpdateEq }))
 
     const supabase = {
       from: vi.fn((table: string) => {
@@ -325,6 +327,7 @@ describe('cuentas/actions sobrepago (reglas nuevas)', () => {
                 }),
               }),
             }),
+            update: cuentaUpdate,
           }
         }
         if (table === 'auditoria_financiera') {
@@ -341,5 +344,6 @@ describe('cuentas/actions sobrepago (reglas nuevas)', () => {
 
     const result = await editMontoAbono('a1', 'cuenta1', 950, null, form)
     expect(result?.error).toMatch(/no puede superar el saldo pendiente/i)
+    expect(cuentaUpdateEq).not.toHaveBeenCalled() // no debe intentar update estado cuando sobrepago bloquea
   })
 })

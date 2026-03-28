@@ -230,6 +230,7 @@ describe('eliminarMovimiento', () => {
 describe('recalculo con pagos válidos (nuevas reglas)', () => {
   it('anularMovimiento recalcula estado con pagos válidos', async () => {
     const updates: any[] = []
+    const cuentasUpdateEq = vi.fn().mockResolvedValue({ error: null })
     const supabase = buildSupabase({
       pagos_abonos: {
         select: (cols: string) => ({
@@ -257,9 +258,9 @@ describe('recalculo con pagos válidos (nuevas reglas)', () => {
             }),
           }),
         }),
-        update: async (payload: any) => {
+        update: (payload: any) => {
           updates.push(payload)
-          return { error: null }
+          return { eq: cuentasUpdateEq }
         },
       },
       auditoria_financiera: { insert: async () => ({ error: null }) },
@@ -270,5 +271,6 @@ describe('recalculo con pagos válidos (nuevas reglas)', () => {
     const res = await anularMovimiento('p2', 'abono', 300, null)
     expect(res?.success).toBe(true)
     expect(updates[0]?.estado).toBe('pendiente')
+    expect(cuentasUpdateEq).toHaveBeenCalled()
   })
 })
