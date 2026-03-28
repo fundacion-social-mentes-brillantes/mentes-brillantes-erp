@@ -40,6 +40,27 @@ export async function loginAction(prevState: LoginState, formData: FormData): Pr
     return { error: 'Ocurrió un error inesperado al intentar iniciar sesión.', email, password }
   }
 
+  // Obtener rol para redirigir correctamente
+  const { data: userData } = await supabase.auth.getUser()
+  const userId = userData?.user?.id
+  if (!userId) {
+    return { error: 'No se pudo validar la sesión.', email, password }
+  }
+
+  const { data: perfil, error: perfilError } = await supabase
+    .from('perfiles')
+    .select('rol')
+    .eq('id', userId)
+    .single()
+
+  if (perfilError || !perfil?.rol) {
+    return { error: 'No se pudo obtener el perfil del usuario.', email, password }
+  }
+
   revalidatePath('/', 'layout')
-  redirect('/')
+  if (perfil.rol === 'consulta') {
+    redirect('/mi-estado')
+  } else {
+    redirect('/')
+  }
 }
