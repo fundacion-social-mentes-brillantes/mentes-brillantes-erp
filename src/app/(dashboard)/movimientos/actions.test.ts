@@ -260,7 +260,7 @@ describe('recalculo con pagos válidos (nuevas reglas)', () => {
         }),
         update: (payload: any) => {
           updates.push(payload)
-          return { eq: cuentasUpdateEq }
+          return { eq: () => ({ eq: cuentasUpdateEq }) }
         },
       },
       auditoria_financiera: { insert: async () => ({ error: null }) },
