@@ -20,6 +20,13 @@ import { CoachSessionsPdf } from "@/components/coach/CoachSessionsPdf"
 import { requireRoles } from "@/lib/utils/authz"
 import { estadoPorActividad } from "@/lib/utils/asistentes"
 
+const cardContainer =
+  "rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] shadow-sm overflow-hidden"
+const cardHeader =
+  "flex items-center gap-2 px-5 py-4 bg-[rgb(var(--surface-2))] border-b border-[rgb(var(--border))]"
+const cardTitle = "text-sm font-semibold text-[rgb(var(--text-primary))] tracking-wide"
+const headerAccent = "w-1 h-5 rounded-full bg-[rgb(var(--accent))]"
+
 export default async function AsistenteDetallePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const { supabase, perfil } = await requireRoles(["admin", "caja"])
@@ -177,9 +184,10 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
             <div className="rounded-xl border border-amber-200 bg-amber-50 text-amber-800 p-4 text-sm">{saldoFavorError}</div>
           )}
 
-          <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50">
-              <h3 className="font-medium text-zinc-900">Información de Contacto</h3>
+          <div className={cardContainer}>
+            <div className={cardHeader}>
+              <span className={headerAccent} aria-hidden />
+              <h3 className={cardTitle}>Información de Contacto</h3>
             </div>
             <div className="p-5 space-y-4">
               <div>
@@ -209,9 +217,10 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
             </div>
           </div>
 
-          <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50">
-              <h3 className="font-medium text-zinc-900">Resumen Financiero</h3>
+          <div className={cardContainer}>
+            <div className={cardHeader}>
+              <span className={headerAccent} aria-hidden />
+              <h3 className={cardTitle}>Resumen Financiero</h3>
             </div>
             <div className="p-5 space-y-5">
               <div>
@@ -235,10 +244,11 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
             </div>
           </div>
 
-          <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center gap-2">
-              <HeartHandshake className="w-4 h-4 text-zinc-400" />
-              <h3 className="font-medium text-zinc-900">Donaciones</h3>
+          <div className={cardContainer}>
+            <div className={cardHeader + " flex items-center"}>
+              <span className={headerAccent} aria-hidden />
+              <HeartHandshake className="w-4 h-4 text-[rgb(var(--text-muted))]" />
+              <h3 className={cardTitle}>Donaciones</h3>
             </div>
             <div className="p-5 space-y-3">
               <div className="flex items-center justify-between text-sm">
@@ -277,20 +287,22 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
             </div>
           </div>
 
-          <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-zinc-400" />
-              <h3 className="font-medium text-zinc-900">Documentos</h3>
+          <div className={cardContainer}>
+            <div className={cardHeader + " flex items-center"}>
+              <span className={headerAccent} aria-hidden />
+              <FileText className="w-4 h-4 text-[rgb(var(--text-muted))]" />
+              <h3 className={cardTitle}>Documentos</h3>
             </div>
             <div className="p-5 space-y-3 text-sm text-zinc-600">
               <p>No hay documentos cargados.</p>
             </div>
           </div>
 
-          <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center gap-2">
-              <Wallet className="w-4 h-4 text-zinc-400" />
-              <h3 className="font-medium text-zinc-900">Saldo a Favor</h3>
+          <div className={cardContainer}>
+            <div className={cardHeader + " flex items-center"}>
+              <span className={headerAccent} aria-hidden />
+              <Wallet className="w-4 h-4 text-[rgb(var(--text-muted))]" />
+              <h3 className={cardTitle}>Saldo a Favor</h3>
             </div>
             <div className="p-5 space-y-3">
               <p className="text-sm text-zinc-700">Saldo disponible: ${toSafeNumber(saldoAFavor).toLocaleString("es-CO")}</p>
@@ -299,10 +311,11 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
             </div>
           </div>
 
-          <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center gap-2">
-              <HeartHandshake className="w-4 h-4 text-zinc-400" />
-              <h3 className="font-medium text-zinc-900">Sesiones guía coach</h3>
+          <div className={cardContainer}>
+            <div className={cardHeader + " flex items-center"}>
+              <span className={headerAccent} aria-hidden />
+              <HeartHandshake className="w-4 h-4 text-[rgb(var(--text-muted))]" />
+              <h3 className={cardTitle}>Sesiones guía coach</h3>
             </div>
             <div className="p-5 space-y-3">
               <div className="flex items-center justify-between text-sm">
@@ -337,10 +350,11 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
 
         {/* Columna derecha */}
         <div className="md:col-span-2 space-y-6">
-          <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center gap-2">
-              <CreditCard className="w-4 h-4 text-zinc-400" />
-              <h3 className="font-medium text-zinc-900">Cuentas por Cobrar</h3>
+          <div className={cardContainer}>
+            <div className={cardHeader + " flex items-center"}>
+              <span className={headerAccent} aria-hidden />
+              <CreditCard className="w-4 h-4 text-[rgb(var(--text-muted))]" />
+              <h3 className={cardTitle}>Cuentas por Cobrar</h3>
             </div>
             <div className="p-5 space-y-4">
               {cuentasProcesadas.length ? (
@@ -371,10 +385,11 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
             </div>
           </div>
 
-          <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center gap-2">
-              <Clock className="w-4 h-4 text-zinc-400" />
-              <h3 className="font-medium text-zinc-900">Historial de Abonos</h3>
+          <div className={cardContainer}>
+            <div className={cardHeader + " flex items-center"}>
+              <span className={headerAccent} aria-hidden />
+              <Clock className="w-4 h-4 text-[rgb(var(--text-muted))]" />
+              <h3 className={cardTitle}>Historial de Abonos</h3>
             </div>
             <div className="p-5 space-y-3">
               {todosLosAbonos.length ? (
@@ -400,10 +415,11 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
             </div>
           </div>
 
-          <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center gap-2">
-              <Wallet className="w-4 h-4 text-zinc-400" />
-              <h3 className="font-medium text-zinc-900">Historial Saldo a Favor</h3>
+          <div className={cardContainer}>
+            <div className={cardHeader + " flex items-center"}>
+              <span className={headerAccent} aria-hidden />
+              <Wallet className="w-4 h-4 text-[rgb(var(--text-muted))]" />
+              <h3 className={cardTitle}>Historial Saldo a Favor</h3>
             </div>
             <div className="p-5 space-y-2">
               {movimientos.length ? (
@@ -428,10 +444,11 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
             </div>
           </div>
 
-          <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center gap-2">
-              <HeartHandshake className="w-4 h-4 text-zinc-400" />
-              <h3 className="font-medium text-zinc-900">Historial de Sesiones coach</h3>
+          <div className={cardContainer}>
+            <div className={cardHeader + " flex items-center"}>
+              <span className={headerAccent} aria-hidden />
+              <HeartHandshake className="w-4 h-4 text-[rgb(var(--text-muted))]" />
+              <h3 className={cardTitle}>Historial de Sesiones coach</h3>
             </div>
             <div className="p-5 space-y-2">
               {sesionesLista.length ? (
