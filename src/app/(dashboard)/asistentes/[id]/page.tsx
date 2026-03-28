@@ -299,9 +299,9 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
               <Clock className="w-4 h-4 text-zinc-400" />
               <h3 className="font-medium text-zinc-900">Historial de Abonos</h3>
             </div>
-            <div className="p-5 space-y-3">
+              <div className="p-5 space-y-3">
               {todosLosAbonos.length ? (
-                <div className="max-h-72 overflow-y-auto space-y-3 pr-1">
+                <div className="max-h-96 overflow-y-auto space-y-3 pr-1">
                   {todosLosAbonos.map((pago: any) => (
                     <div key={pago.id} className="flex items-center justify-between rounded-lg border border-zinc-200 p-3 bg-white">
                       <div>
@@ -328,21 +328,33 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
               <Wallet className="w-4 h-4 text-zinc-400" />
               <h3 className="font-medium text-zinc-900">Saldo a Favor</h3>
             </div>
-            <div className="p-5 space-y-3">
-              <p className="text-sm text-zinc-700">Saldo disponible: ${saldoAFavor.toLocaleString("es-CO")}</p>
-              {movimientos.map((mov) => (
-                <div key={mov.id} className="flex items-center justify-between border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white">
-                  <span>{new Date(mov.fecha).toLocaleDateString("es-CO")}</span>
-                  <span className={mov.tipo === "ingreso" ? "text-emerald-600" : "text-amber-600"}>
-                    {mov.tipo === "ingreso" ? "+" : "-"}${Number(mov.monto).toLocaleString("es-CO")}
-                  </span>
-                  <span>{mov.metodo_pago}</span>
-                  <span className="text-zinc-500 truncate max-w-[180px]">{mov.notas || "Sin notas"}</span>
+            <div className="p-5">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+                <div className="space-y-3">
+                  <p className="text-sm text-zinc-700">Saldo disponible: ${saldoAFavor.toLocaleString("es-CO")}</p>
+                  <AnticipoForm asistenteId={asistente.id} disabled={!isAdmin} />
+                  {saldoAFavor > 0 && <PagarConSaldoButton asistenteId={asistente.id} disabled={!isAdmin} />}
                 </div>
-              ))}
-              {!movimientos.length && <p className="text-sm text-zinc-500">Sin movimientos de saldo a favor.</p>}
-              <AnticipoForm asistenteId={asistente.id} disabled={!isAdmin} />
-              {saldoAFavor > 0 && <PagarConSaldoButton asistenteId={asistente.id} disabled={!isAdmin} />}
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Historial</p>
+                  {movimientos.length ? (
+                    <div className="max-h-96 overflow-y-auto space-y-2 pr-1">
+                      {movimientos.map((mov) => (
+                        <div key={mov.id} className="flex items-center justify-between border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white">
+                          <span>{new Date(mov.fecha).toLocaleDateString("es-CO")}</span>
+                          <span className={mov.tipo === "ingreso" ? "text-emerald-600" : "text-amber-600"}>
+                            {mov.tipo === "ingreso" ? "+" : "-"}${Number(mov.monto).toLocaleString("es-CO")}
+                          </span>
+                          <span>{mov.metodo_pago}</span>
+                          <span className="text-zinc-500 truncate max-w-[180px]">{mov.notas || "Sin notas"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-zinc-500">Sin movimientos de saldo a favor.</p>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -385,7 +397,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                 <div className="space-y-2 lg:col-span-7">
                   <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Historial de sesiones</p>
                   {sesionesLista.length ? (
-                    <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+                    <div className="max-h-96 overflow-y-auto space-y-2 pr-1">
                       {sesionesLista.map((s, idx) => (
                         <div key={`${s.paquete_id}-${s.fecha}-${idx}`} className="flex items-center justify-between border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white">
                           <span>{new Date(s.fecha).toLocaleDateString("es-CO")}</span>
