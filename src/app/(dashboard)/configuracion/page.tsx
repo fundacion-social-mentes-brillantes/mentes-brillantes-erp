@@ -84,7 +84,7 @@ export default async function ConfiguracionPage() {
                 <Link
                   key={table}
                   href={`/api/backup/${table}`}
-                  className="inline-flex items-center justify-center rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+                  className="inline-flex items-center justify-center rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] px-3 py-2 text-sm font-medium text-[rgb(var(--text-primary))] hover:bg-[rgb(var(--surface-3))] transition-colors"
                 >
                   {table}.csv
                 </Link>
@@ -95,7 +95,7 @@ export default async function ConfiguracionPage() {
             <h3 className="text-sm font-semibold text-zinc-800 mb-2">Respaldo completo (ZIP)</h3>
             <Link
               href="/api/backup/full"
-              className="inline-flex items-center justify-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100"
+              className="inline-flex items-center justify-center rounded-md border border-transparent bg-[rgb(var(--accent))] px-3 py-2 text-sm font-semibold text-[rgb(var(--accent-foreground))] hover:bg-[rgb(var(--accent-strong))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--accent))] focus-visible:ring-offset-2 focus-visible:ring-offset-[rgb(var(--surface-1))] transition-colors"
             >
               Descargar backup completo (.zip)
             </Link>
