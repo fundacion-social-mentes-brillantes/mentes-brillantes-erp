@@ -1,4 +1,5 @@
 import { LoginForm } from './LoginForm'
+import Link from 'next/link'
 
 export default function LoginPage() {
   return (
@@ -14,6 +15,12 @@ export default function LoginPage() {
         </div>
 
         <LoginForm />
+
+        <div className="text-center mt-6">
+          <Link href="/registro" className="text-sm font-medium text-emerald-700 hover:text-emerald-800">
+            Registrarse
+          </Link>
+        </div>
       </div>
     </div>
   )

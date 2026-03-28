@@ -31,6 +31,8 @@ CREATE TABLE asistentes (
   creado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS asistentes_codigo_unq ON asistentes (codigo) WHERE codigo IS NOT NULL;
+
 -- CUENTAS POR COBRAR (El "Valor Compra" del legacy)
 CREATE TABLE cuentas_por_cobrar (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
