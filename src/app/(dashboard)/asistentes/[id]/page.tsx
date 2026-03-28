@@ -38,8 +38,8 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
   let totalIngresosSaldo = 0
   let totalAplicadoSaldo = 0
   movimientos.forEach((m) => {
-    if (m.tipo === "ingreso") totalIngresosSaldo += Number(m.monto)
-    if (m.tipo === "aplicacion") totalAplicadoSaldo += Number(m.monto)
+    if (m.tipo === "ingreso") totalIngresosSaldo += toSafeNumber(m.monto)
+    if (m.tipo === "aplicacion") totalAplicadoSaldo += toSafeNumber(m.monto)
   })
   const saldoAFavor = Math.round(totalIngresosSaldo - totalAplicadoSaldo)
 
@@ -50,7 +50,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
     .order("fecha", { ascending: false })
   const donaciones = donacionesData || []
   const donacionesActivas = donaciones.filter((d) => d.estado !== "anulado")
-  const totalDonado = Math.round(donacionesActivas.reduce((acc, curr) => acc + Number(curr.monto), 0))
+  const totalDonado = Math.round(donacionesActivas.reduce((acc, curr) => acc + toSafeNumber(curr.monto), 0))
   const cantidadDonaciones = donaciones.length
 
   const { data: paquetesCoach } = await supabase
@@ -275,22 +275,27 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
               <h3 className="font-medium text-zinc-900">Cuentas por Cobrar</h3>
             </div>
             <div className="p-5 space-y-4">
-              {cuentasProcesadas.map((cuenta) => (
-                <div key={cuenta.id} className="rounded-lg border border-zinc-200 p-4 bg-zinc-50/60">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-zinc-900">{cuenta.concepto}</p>
-                      <p className="text-xs text-zinc-500">Emisión: {new Date(cuenta.fecha_emision).toLocaleDateString("es-CO")}</p>
+              {cuentasProcesadas.length ? (
+                <div className="h-[520px] overflow-y-auto space-y-4 pr-1">
+                  {cuentasProcesadas.map((cuenta) => (
+                    <div key={cuenta.id} className="rounded-lg border border-zinc-200 p-4 bg-zinc-50/60">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-zinc-900">{cuenta.concepto}</p>
+                          <p className="text-xs text-zinc-500">Emisión: {new Date(cuenta.fecha_emision).toLocaleDateString("es-CO")}</p>
+                        </div>
+                        <div className="text-right text-sm">
+                          <p className="text-zinc-600">Valor: ${toSafeNumber(cuenta.valorCuenta ?? cuenta.valor_total).toLocaleString("es-CO")}</p>
+                          <p className="text-emerald-600">Abonado: ${toSafeNumber(cuenta.abonado).toLocaleString("es-CO")}</p>
+                          <p className="text-amber-600">Pendiente: ${toSafeNumber(cuenta.pendiente).toLocaleString("es-CO")}</p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-right text-sm">
-                      <p className="text-zinc-600">Valor: ${toSafeNumber(cuenta.valorCuenta ?? cuenta.valor_total).toLocaleString("es-CO")}</p>
-                      <p className="text-emerald-600">Abonado: ${toSafeNumber(cuenta.abonado).toLocaleString("es-CO")}</p>
-                      <p className="text-amber-600">Pendiente: ${toSafeNumber(cuenta.pendiente).toLocaleString("es-CO")}</p>
-                    </div>
-                  </div>
+                  ))}
                 </div>
-              ))}
-              {!cuentasProcesadas.length && <p className="text-sm text-zinc-500">Sin cuentas registradas.</p>}
+              ) : (
+                <p className="text-sm text-zinc-500">Sin cuentas registradas.</p>
+              )}
             </div>
           </div>
 
@@ -299,9 +304,9 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
               <Clock className="w-4 h-4 text-zinc-400" />
               <h3 className="font-medium text-zinc-900">Historial de Abonos</h3>
             </div>
-              <div className="p-5 space-y-3">
+            <div className="p-5 space-y-3">
               {todosLosAbonos.length ? (
-                <div className="max-h-96 overflow-y-auto space-y-3 pr-1">
+                <div className="h-[420px] overflow-y-auto space-y-3 pr-1">
                   {todosLosAbonos.map((pago: any) => (
                     <div key={pago.id} className="flex items-center justify-between rounded-lg border border-zinc-200 p-3 bg-white">
                       <div>
@@ -338,12 +343,12 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Historial</p>
                   {movimientos.length ? (
-                    <div className="max-h-96 overflow-y-auto space-y-2 pr-1">
+                    <div className="h-[420px] overflow-y-auto space-y-2 pr-1">
                       {movimientos.map((mov) => (
                         <div key={mov.id} className="flex items-center justify-between border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white">
                           <span>{new Date(mov.fecha).toLocaleDateString("es-CO")}</span>
                           <span className={mov.tipo === "ingreso" ? "text-emerald-600" : "text-amber-600"}>
-                            {mov.tipo === "ingreso" ? "+" : "-"}${Number(mov.monto).toLocaleString("es-CO")}
+                            {mov.tipo === "ingreso" ? "+" : "-"}${toSafeNumber(mov.monto).toLocaleString("es-CO")}
                           </span>
                           <span>{mov.metodo_pago}</span>
                           <span className="text-zinc-500 truncate max-w-[180px]">{mov.notas || "Sin notas"}</span>
@@ -397,7 +402,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                 <div className="space-y-2 lg:col-span-7">
                   <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Historial de sesiones</p>
                   {sesionesLista.length ? (
-                    <div className="max-h-96 overflow-y-auto space-y-2 pr-1">
+                    <div className="h-[420px] overflow-y-auto space-y-2 pr-1">
                       {sesionesLista.map((s, idx) => (
                         <div key={`${s.paquete_id}-${s.fecha}-${idx}`} className="flex items-center justify-between border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white">
                           <span>{new Date(s.fecha).toLocaleDateString("es-CO")}</span>
