@@ -294,6 +294,9 @@ describe('cuentas/actions sobrepago (reglas nuevas)', () => {
   })
 
   it('editMontoAbono bloquea sobrepago', async () => {
+    const abonoUpdateEq = vi.fn().mockResolvedValue({ error: null })
+    const abonoUpdate = vi.fn(() => ({ eq: abonoUpdateEq }))
+
     const supabase = {
       from: vi.fn((table: string) => {
         if (table === 'pagos_abonos') {
@@ -303,7 +306,7 @@ describe('cuentas/actions sobrepago (reglas nuevas)', () => {
                 single: async () => ({ data: { origen_fondos: 'pago_directo' }, error: null }),
               }),
             }),
-            update: async () => ({ error: null }),
+            update: abonoUpdate,
           }
         }
         if (table === 'cuentas_por_cobrar') {

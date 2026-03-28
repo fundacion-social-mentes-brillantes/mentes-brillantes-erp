@@ -118,9 +118,6 @@ describe('editarMovimiento', () => {
   })
 
   it('actualiza abono y recalcula estado de cuenta', async () => {
-    const updatePago = vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) }))
-    const updateCuenta = vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) }))
-
     const updatePagoEq = vi.fn().mockResolvedValue({ error: null })
     const updatePago = vi.fn(() => ({ eq: updatePagoEq }))
     const updateCuentaEq = vi.fn().mockResolvedValue({ error: null })
