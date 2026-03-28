@@ -50,7 +50,8 @@ describe('anularMovimiento', () => {
   })
 
   it('anula abono y recalcula cuenta con pagos válidos', async () => {
-    const updateMock = vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) }))
+    const updatePagoEq = vi.fn().mockResolvedValue({ error: null })
+    const updatePago = vi.fn(() => ({ eq: updatePagoEq }))
     const auditInsert = vi.fn().mockResolvedValue({ error: null })
 
     const supabase = buildSupabase({
@@ -58,7 +59,7 @@ describe('anularMovimiento', () => {
         select: vi.fn(() => ({
           eq: vi.fn(() => singleWrapper({ notas: '', origen_fondos: 'pago_directo', metodo_pago: 'efectivo', cuenta_id: 'c1' })),
         })),
-        update: updateMock,
+        update: updatePago,
       },
       cuentas_por_cobrar: {
         select: vi.fn(() => ({
@@ -70,7 +71,7 @@ describe('anularMovimiento', () => {
             ],
           })),
         })),
-        update: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) })),
+        update: () => ({ eq: vi.fn().mockResolvedValue({ error: null }) }),
       },
       auditoria_financiera: { insert: auditInsert },
       movimientos_saldo_favor: { insert: vi.fn() },
@@ -79,7 +80,7 @@ describe('anularMovimiento', () => {
 
     const res = await anularMovimiento('m1', 'abono', 100, null)
     expect(res?.success).toBe(true)
-    expect(updateMock).toHaveBeenCalled()
+    expect(updatePago).toHaveBeenCalled()
     expect(auditInsert).toHaveBeenCalled()
     expect(revalidatePathMock).toHaveBeenCalledWith('/cuentas')
   })
