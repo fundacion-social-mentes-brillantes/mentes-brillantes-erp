@@ -1,5 +1,14 @@
 import Link from "next/link"
-import { ArrowLeft, Edit2, Calendar, FileText, CreditCard, CheckCircle2, Clock, AlertCircle, Plus, Wallet, HeartHandshake } from "lucide-react"
+import {
+  ArrowLeft,
+  Edit2,
+  Calendar,
+  FileText,
+  CreditCard,
+  Clock,
+  Wallet,
+  HeartHandshake,
+} from "lucide-react"
 import { notFound } from "next/navigation"
 import { AnticipoForm } from "./AnticipoForm"
 import { PagarConSaldoButton } from "./PagarConSaldoButton"
@@ -64,7 +73,8 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
     .eq("asistente_id", id)
     .order("fecha", { ascending: false })
 
-  const sesionesCompradas = paquetesCoach?.reduce((acc: number, p: any) => acc + (p.sesiones_compradas || 0), 0) || 0
+  const sesionesCompradas =
+    paquetesCoach?.reduce((acc: number, p: any) => acc + (toSafeNumber(p.sesiones_compradas) || 0), 0) || 0
   const sesionesRealizadas = (sesionesCoach || []).length
   const sesionesRestantes = Math.max(0, sesionesCompradas - sesionesRealizadas)
   const sesionesLista = (sesionesCoach || []).map((s: any) => ({
@@ -74,7 +84,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
     cuenta_id: s.coach_paquetes?.cuenta_id || null,
   }))
   const paqueteActivo = (paquetesCoach || []).find(
-    (p: any) => (sesionesCoach || []).filter((s) => s.paquete_id === p.id).length < (p.sesiones_compradas || 0)
+    (p: any) => (sesionesCoach || []).filter((s) => s.paquete_id === p.id).length < toSafeNumber(p.sesiones_compradas)
   )
 
   const actividad = estadoPorActividad({
@@ -123,7 +133,10 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
     <div className="space-y-6 max-w-5xl mx-auto pb-10">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link href="/asistentes" className="inline-flex p-2 text-zinc-400 hover:text-zinc-900 transition-colors rounded-md hover:bg-zinc-100">
+          <Link
+            href="/asistentes"
+            className="inline-flex p-2 text-zinc-400 hover:text-zinc-900 transition-colors rounded-md hover:bg-zinc-100"
+          >
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div>
@@ -158,6 +171,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Columna izquierda */}
         <div className="space-y-6 md:col-span-1">
           {saldoFavorError && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 text-amber-800 p-4 text-sm">{saldoFavorError}</div>
@@ -202,15 +216,21 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
             <div className="p-5 space-y-5">
               <div>
                 <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Total Facturado</p>
-                <p className="text-xl font-semibold text-zinc-900">${toSafeNumber(totalFacturado).toLocaleString("es-CO")}</p>
+                <p className="text-xl font-semibold text-zinc-900">
+                  ${toSafeNumber(totalFacturado).toLocaleString("es-CO")}
+                </p>
               </div>
               <div>
                 <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Total Abonado</p>
-                <p className="text-xl font-semibold text-emerald-600">${toSafeNumber(totalAbonado).toLocaleString("es-CO")}</p>
+                <p className="text-xl font-semibold text-emerald-600">
+                  ${toSafeNumber(totalAbonado).toLocaleString("es-CO")}
+                </p>
               </div>
               <div className="pt-4 border-t border-zinc-100">
                 <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Saldo Pendiente</p>
-                <p className="text-xl font-semibold text-amber-600">${toSafeNumber(saldoPendiente).toLocaleString("es-CO")}</p>
+                <p className="text-xl font-semibold text-amber-600">
+                  ${toSafeNumber(saldoPendiente).toLocaleString("es-CO")}
+                </p>
               </div>
             </div>
           </div>
@@ -223,7 +243,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
             <div className="p-5 space-y-3">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-zinc-600">Total donado</span>
-                <span className="font-semibold text-emerald-700">${totalDonado.toLocaleString("es-CO")}</span>
+                <span className="font-semibold text-emerald-700">${toSafeNumber(totalDonado).toLocaleString("es-CO")}</span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-zinc-600">Cantidad de donaciones</span>
@@ -241,7 +261,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                       >
                         <div>
                           <p className="text-sm font-medium text-[rgb(var(--text-primary))]">
-                            ${Number(donacion.monto).toLocaleString("es-CO")} · {donacion.metodo_pago}
+                            ${toSafeNumber(donacion.monto).toLocaleString("es-CO")} · {donacion.metodo_pago}
                           </p>
                           <p className="text-[11px] text-[rgb(var(--text-muted))]">
                             {new Date(donacion.fecha).toLocaleDateString("es-CO")}
@@ -266,8 +286,56 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
               <p>No hay documentos cargados.</p>
             </div>
           </div>
+
+          <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center gap-2">
+              <Wallet className="w-4 h-4 text-zinc-400" />
+              <h3 className="font-medium text-zinc-900">Saldo a Favor</h3>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-sm text-zinc-700">Saldo disponible: ${toSafeNumber(saldoAFavor).toLocaleString("es-CO")}</p>
+              <AnticipoForm asistenteId={asistente.id} disabled={!isAdmin} />
+              {saldoAFavor > 0 && <PagarConSaldoButton asistenteId={asistente.id} disabled={!isAdmin} />}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center gap-2">
+              <HeartHandshake className="w-4 h-4 text-zinc-400" />
+              <h3 className="font-medium text-zinc-900">Sesiones guía coach</h3>
+            </div>
+            <div className="p-5 space-y-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-zinc-600">Compradas</span>
+                <span className="font-medium text-zinc-900">{sesionesCompradas}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-zinc-600">Realizadas</span>
+                <span className="font-medium text-zinc-900">{sesionesRealizadas}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-zinc-600">Restantes</span>
+                <span className="font-medium text-zinc-900">{sesionesRestantes}</span>
+              </div>
+              {paqueteActivo && (
+                <div className="pt-2">
+                  <RegisterCoachSessionForm paqueteId={paqueteActivo.id} disabled={false} />
+                </div>
+              )}
+              <div className="pt-2">
+                <CoachSessionsPdf
+                  sesiones={sesionesLista.map((s) => ({ fecha: s.fecha, notas: s.notas }))}
+                  asistenteNombre={asistente.nombre}
+                  sesionesCompradas={sesionesCompradas}
+                  sesionesRealizadas={sesionesRealizadas}
+                  sesionesRestantes={sesionesRestantes}
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
+        {/* Columna derecha */}
         <div className="md:col-span-2 space-y-6">
           <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center gap-2">
@@ -285,9 +353,13 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                           <p className="text-xs text-zinc-500">Emisión: {new Date(cuenta.fecha_emision).toLocaleDateString("es-CO")}</p>
                         </div>
                         <div className="text-right text-sm">
-                          <p className="text-zinc-600">Valor: ${toSafeNumber(cuenta.valorCuenta ?? cuenta.valor_total).toLocaleString("es-CO")}</p>
+                          <p className="text-zinc-600">
+                            Valor: ${toSafeNumber(cuenta.valorCuenta ?? cuenta.valor_total).toLocaleString("es-CO")}
+                          </p>
                           <p className="text-emerald-600">Abonado: ${toSafeNumber(cuenta.abonado).toLocaleString("es-CO")}</p>
-                          <p className="text-amber-600">Pendiente: ${toSafeNumber(cuenta.pendiente).toLocaleString("es-CO")}</p>
+                          <p className="text-amber-600">
+                            Pendiente: ${toSafeNumber(cuenta.pendiente).toLocaleString("es-CO")}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -331,90 +403,52 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
           <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center gap-2">
               <Wallet className="w-4 h-4 text-zinc-400" />
-              <h3 className="font-medium text-zinc-900">Saldo a Favor</h3>
+              <h3 className="font-medium text-zinc-900">Historial Saldo a Favor</h3>
             </div>
-            <div className="p-5">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-                <div className="space-y-3">
-                  <p className="text-sm text-zinc-700">Saldo disponible: ${saldoAFavor.toLocaleString("es-CO")}</p>
-                  <AnticipoForm asistenteId={asistente.id} disabled={!isAdmin} />
-                  {saldoAFavor > 0 && <PagarConSaldoButton asistenteId={asistente.id} disabled={!isAdmin} />}
-                </div>
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Historial</p>
-                  {movimientos.length ? (
-                    <div className="h-[420px] overflow-y-auto space-y-2 pr-1">
-                      {movimientos.map((mov) => (
-                        <div key={mov.id} className="flex items-center justify-between border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white">
-                          <span>{new Date(mov.fecha).toLocaleDateString("es-CO")}</span>
-                          <span className={mov.tipo === "ingreso" ? "text-emerald-600" : "text-amber-600"}>
-                            {mov.tipo === "ingreso" ? "+" : "-"}${toSafeNumber(mov.monto).toLocaleString("es-CO")}
-                          </span>
-                          <span>{mov.metodo_pago}</span>
-                          <span className="text-zinc-500 truncate max-w-[180px]">{mov.notas || "Sin notas"}</span>
-                        </div>
-                      ))}
+            <div className="p-5 space-y-2">
+              {movimientos.length ? (
+                <div className="h-[420px] overflow-y-auto space-y-2 pr-1">
+                  {movimientos.map((mov) => (
+                    <div
+                      key={mov.id}
+                      className="flex items-center justify-between border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white"
+                    >
+                      <span>{new Date(mov.fecha).toLocaleDateString("es-CO")}</span>
+                      <span className={mov.tipo === "ingreso" ? "text-emerald-600" : "text-amber-600"}>
+                        {mov.tipo === "ingreso" ? "+" : "-"}${toSafeNumber(mov.monto).toLocaleString("es-CO")}
+                      </span>
+                      <span>{mov.metodo_pago}</span>
+                      <span className="text-zinc-500 truncate max-w-[180px]">{mov.notas || "Sin notas"}</span>
                     </div>
-                  ) : (
-                    <p className="text-sm text-zinc-500">Sin movimientos de saldo a favor.</p>
-                  )}
+                  ))}
                 </div>
-              </div>
+              ) : (
+                <p className="text-sm text-zinc-500">Sin movimientos de saldo a favor.</p>
+              )}
             </div>
           </div>
 
           <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center gap-2">
               <HeartHandshake className="w-4 h-4 text-zinc-400" />
-              <h3 className="font-medium text-zinc-900">Sesiones guía coach</h3>
+              <h3 className="font-medium text-zinc-900">Historial de Sesiones coach</h3>
             </div>
-            <div className="p-5">
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-                <div className="space-y-3 lg:col-span-5">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-zinc-600">Compradas</span>
-                    <span className="font-medium text-zinc-900">{sesionesCompradas}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-zinc-600">Realizadas</span>
-                    <span className="font-medium text-zinc-900">{sesionesRealizadas}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-zinc-600">Restantes</span>
-                    <span className="font-medium text-zinc-900">{sesionesRestantes}</span>
-                  </div>
-                  {paqueteActivo && (
-                    <div className="pt-2">
-                      <RegisterCoachSessionForm paqueteId={paqueteActivo.id} disabled={false} />
+            <div className="p-5 space-y-2">
+              {sesionesLista.length ? (
+                <div className="h-[420px] overflow-y-auto space-y-2 pr-1">
+                  {sesionesLista.map((s, idx) => (
+                    <div
+                      key={`${s.paquete_id}-${s.fecha}-${idx}`}
+                      className="flex items-center justify-between border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white"
+                    >
+                      <span>{new Date(s.fecha).toLocaleDateString("es-CO")}</span>
+                      <span className="text-zinc-600 truncate max-w-[200px]">{s.notas || "Sin notas"}</span>
                     </div>
-                  )}
-                  <div className="pt-2">
-                    <CoachSessionsPdf
-                      sesiones={sesionesLista.map((s) => ({ fecha: s.fecha, notas: s.notas }))}
-                      asistenteNombre={asistente.nombre}
-                      sesionesCompradas={sesionesCompradas}
-                      sesionesRealizadas={sesionesRealizadas}
-                      sesionesRestantes={sesionesRestantes}
-                    />
-                  </div>
+                  ))}
                 </div>
-
-                <div className="space-y-2 lg:col-span-7">
-                  <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Historial de sesiones</p>
-                  {sesionesLista.length ? (
-                    <div className="h-[420px] overflow-y-auto space-y-2 pr-1">
-                      {sesionesLista.map((s, idx) => (
-                        <div key={`${s.paquete_id}-${s.fecha}-${idx}`} className="flex items-center justify-between border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white">
-                          <span>{new Date(s.fecha).toLocaleDateString("es-CO")}</span>
-                          <span className="text-zinc-600 truncate max-w-[200px]">{s.notas || "Sin notas"}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-zinc-500">No hay sesiones registradas.</p>
-                  )}
-                </div>
-              </div>
+              ) : (
+                <p className="text-sm text-zinc-500">No hay sesiones registradas.</p>
+              )}
             </div>
           </div>
         </div>
