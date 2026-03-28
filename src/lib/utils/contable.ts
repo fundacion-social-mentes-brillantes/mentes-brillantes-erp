@@ -18,11 +18,12 @@ export const esSaldoAFavor = (p: { metodo_pago?: string | null; origen_fondos?: 
   toLower(p.metodo_pago) === 'saldo_a_favor' || toLower(p.origen_fondos) === 'saldo_a_favor'
 export const esAplicacionSaldo = (p: { tipo?: string | null }) => toLower(p.tipo) === 'aplicacion_saldo'
 export const esPagoValido = (p: { notas?: string | null; estado?: string | null }) => !esAnuladoCompleto(p)
+export const esPagoDeSaldoAFavor = (p: { metodo_pago?: string | null; origen_fondos?: string | null; tipo?: string | null }) =>
+  esSaldoAFavor(p) || esAplicacionSaldo(p)
 
 export const toSafeNumber = (value: unknown): number => {
   const num = Number(value ?? 0)
   if (!Number.isFinite(num)) {
-    // Solo para depurar datos defectuosos; no impacta al usuario final.
     console.warn('[contable] valor no numérico, usando 0', value)
     return 0
   }
@@ -58,10 +59,43 @@ export const sumarMontos = (pagos: PagoRecord[] = []) =>
     return sum + monto
   }, 0)
 
+export const totalPagosValidos = (
+  pagos: PagoRecord[] = [],
+  opts: { incluirSaldoAFavor?: boolean } = { incluirSaldoAFavor: true }
+) => {
+  const { incluirSaldoAFavor = true } = opts
+  const filtrados = filtrarPagosValidosCuentas(
+    pagos.filter((p) => {
+      if (!incluirSaldoAFavor && esPagoDeSaldoAFavor(p)) return false
+      return true
+    })
+  )
+  return sumarMontos(filtrados)
+}
+
 export const calcularEstadoCuenta = (valorTotal: number, totalAbonado: number): 'pendiente' | 'parcial' | 'pagado' => {
   if (totalAbonado >= valorTotal) return 'pagado'
   if (totalAbonado > 0) return 'parcial'
   return 'pendiente'
+}
+
+export const calcularEstadoCuentaDesdePagos = (
+  valorTotal: number,
+  pagos: PagoRecord[] = [],
+  opts: { incluirSaldoAFavor?: boolean } = { incluirSaldoAFavor: true }
+) => {
+  const totalValido = totalPagosValidos(pagos, opts)
+  return calcularEstadoCuenta(toSafeNumber(valorTotal), totalValido)
+}
+
+export const calcularPendienteCuenta = (
+  valorTotal: number,
+  pagos: PagoRecord[] = [],
+  opts: { incluirSaldoAFavor?: boolean } = { incluirSaldoAFavor: true }
+) => {
+  const totalValido = totalPagosValidos(pagos, opts)
+  const pendiente = toSafeNumber(valorTotal) - totalValido
+  return Math.max(0, pendiente)
 }
 
 export const calcularPendienteDespuesDeAbono = (
@@ -73,6 +107,6 @@ export const calcularPendienteDespuesDeAbono = (
   const validos = filtrarPagosValidosCuentas(pagos)
   const otros = validos.filter((p) => p.id !== abonoId)
   const totalOtros = sumarMontos(otros)
-  const pendiente = valorTotal - totalOtros
-  return { pendiente, excede: montoNuevo > pendiente }
+  const pendiente = toSafeNumber(valorTotal) - totalOtros
+  return { pendiente, excede: toSafeNumber(montoNuevo) > pendiente }
 }

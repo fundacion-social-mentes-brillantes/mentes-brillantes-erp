@@ -3,7 +3,13 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { calcularEstadoCuenta } from '../../../lib/utils/cuentas'
-import { filtrarPagosValidosCuentas, calcularPendienteDespuesDeAbono } from '@/lib/utils/contable'
+import {
+  filtrarPagosValidosCuentas,
+  calcularPendienteDespuesDeAbono,
+  totalPagosValidos,
+  calcularEstadoCuentaDesdePagos,
+  toSafeNumber,
+} from '@/lib/utils/contable'
 import { requireAdmin, requireRoles } from '../../../lib/utils/authz'
 
 export type ActionState = {
@@ -215,15 +221,15 @@ export async function saveAbono(cuenta_id: string, prevState: ActionState, formD
 
   const { data: cuentaData } = await supabase
     .from('cuentas_por_cobrar')
-    .select('valor_total, pagos_abonos(monto, notas)')
+    .select('valor_total, pagos_abonos(id, monto, notas, estado, metodo_pago, origen_fondos, tipo)')
     .eq('id', cuenta_id)
     .single()
 
   if (cuentaData) {
-    const valor_total = Number(cuentaData.valor_total)
-    const pagosValidos = cuentaData.pagos_abonos?.filter((p: any) => !p.notas?.includes('[ANULADO]')) || []
-    const total_abonado_previo = pagosValidos.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0)
-    const monto_pendiente = valor_total - total_abonado_previo
+    const valor_total = toSafeNumber(cuentaData.valor_total)
+    const pagos = cuentaData.pagos_abonos || []
+    const total_abonado_previo = totalPagosValidos(pagos)
+    const monto_pendiente = Math.max(0, valor_total - total_abonado_previo)
 
     if (monto > monto_pendiente) {
       return { error: `El abono no puede superar el saldo pendiente ($${monto_pendiente.toLocaleString()})` }
@@ -246,12 +252,10 @@ export async function saveAbono(cuenta_id: string, prevState: ActionState, formD
   }
 
   if (cuentaData) {
-    const valor_total = Number(cuentaData.valor_total)
-    const pagosValidos = cuentaData.pagos_abonos?.filter((p: any) => !p.notas?.includes('[ANULADO]')) || []
-    const total_abonado_previo = pagosValidos.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0)
-    const nuevo_total_abonado = total_abonado_previo + monto
+    const valor_total = toSafeNumber(cuentaData.valor_total)
+    const pagos = cuentaData.pagos_abonos || []
+    const nuevo_total_abonado = totalPagosValidos(pagos) + toSafeNumber(monto)
     const nuevo_estado = calcularEstadoCuenta(valor_total, nuevo_total_abonado)
-
     await supabase.from('cuentas_por_cobrar').update({ estado: nuevo_estado }).eq('id', cuenta_id)
   }
 
@@ -338,14 +342,12 @@ export async function editValorCuenta(
 
   const { data: cuentaData } = await supabase
     .from('cuentas_por_cobrar')
-    .select('valor_total, pagos_abonos(monto, notas)')
+    .select('valor_total, pagos_abonos(id, monto, notas, estado, metodo_pago, origen_fondos, tipo)')
     .eq('id', cuenta_id)
     .single()
 
   if (cuentaData) {
-    const pagosValidos = cuentaData.pagos_abonos?.filter((p: any) => !p.notas?.includes('[ANULADO]')) || []
-    const total_abonado = pagosValidos.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0)
-    const nuevo_estado = calcularEstadoCuenta(Number(cuentaData.valor_total), total_abonado)
+    const nuevo_estado = calcularEstadoCuentaDesdePagos(toSafeNumber(cuentaData.valor_total), cuentaData.pagos_abonos || [])
     await supabase.from('cuentas_por_cobrar').update({ estado: nuevo_estado }).eq('id', cuenta_id)
   }
 
@@ -381,7 +383,7 @@ export async function editMontoAbono(
   // Validar sobrepago antes de actualizar
   const { data: cuentaData } = await supabase
     .from('cuentas_por_cobrar')
-    .select('valor_total, pagos_abonos(id, monto, notas, estado)')
+    .select('valor_total, pagos_abonos(id, monto, notas, estado, metodo_pago, origen_fondos, tipo)')
     .eq('id', cuenta_id)
     .single()
 
@@ -418,9 +420,7 @@ export async function editMontoAbono(
   ])
 
   if (cuentaData) {
-    const pagosValidos = filtrarPagosValidosCuentas(cuentaData.pagos_abonos || [])
-    const total_abonado = pagosValidos.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0)
-    const nuevo_estado = calcularEstadoCuenta(Number(cuentaData.valor_total), total_abonado)
+    const nuevo_estado = calcularEstadoCuentaDesdePagos(toSafeNumber(cuentaData.valor_total), cuentaData.pagos_abonos || [])
     await supabase.from('cuentas_por_cobrar').update({ estado: nuevo_estado }).eq('id', cuenta_id)
   }
 
