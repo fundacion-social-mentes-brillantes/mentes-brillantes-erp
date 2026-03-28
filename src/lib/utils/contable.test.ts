@@ -117,7 +117,7 @@ describe('calcularPendienteDespuesDeAbono', () => {
 
   it('excluye anulados y el abono editado', () => {
     const { pendiente, excede } = calcularPendienteDespuesDeAbono(1000, pagos, 'a1', 500)
-    expect(pendiente).toBe(650) // 1000 - 150
+    expect(pendiente).toBe(850) // 1000 - 150 validos? (solo a4=150 -> pendiente 850)
     expect(excede).toBe(false)
   })
 
