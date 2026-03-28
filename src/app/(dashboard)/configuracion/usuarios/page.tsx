@@ -1,5 +1,6 @@
 import { requireRoles } from '@/lib/utils/authz'
 import UsuariosTable from './UsuariosTable'
+import { NewUsuarioForm } from './NewUsuarioForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,6 +32,8 @@ export default async function UsuariosConfigPage() {
           Administra roles y, para rol consulta, asigna el asistente vinculado.
         </p>
       </div>
+
+      <NewUsuarioForm asistentes={asistentes || []} />
 
       <UsuariosTable perfiles={perfilesNormalizados} asistentes={asistentes || []} />
     </div>
