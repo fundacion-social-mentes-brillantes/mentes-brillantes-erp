@@ -121,6 +121,11 @@ describe('editarMovimiento', () => {
     const updatePago = vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) }))
     const updateCuenta = vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) }))
 
+    const updatePagoEq = vi.fn().mockResolvedValue({ error: null })
+    const updatePago = vi.fn(() => ({ eq: updatePagoEq }))
+    const updateCuentaEq = vi.fn().mockResolvedValue({ error: null })
+    const updateCuenta = vi.fn(() => ({ eq: updateCuentaEq }))
+
     const supabase = buildSupabase({
       pagos_abonos: {
         update: updatePago,
@@ -143,7 +148,9 @@ describe('editarMovimiento', () => {
     const res = await editarMovimiento('m1', 'abono', { monto: 250, fecha: '2024-01-01' })
     expect(res?.success).toBe(true)
     expect(updatePago).toHaveBeenCalled()
+    expect(updatePagoEq).toHaveBeenCalled()
     expect(updateCuenta).toHaveBeenCalled()
+    expect(updateCuentaEq).toHaveBeenCalled()
     expect(revalidatePathMock).toHaveBeenCalledWith('/movimientos')
   })
 

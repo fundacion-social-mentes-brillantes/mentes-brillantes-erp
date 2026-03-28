@@ -201,13 +201,11 @@ describe('editMontoAbono', () => {
   it('actualiza abono, saldo a favor si aplica, auditoría y estado', async () => {
     const abonoSelectSingle = vi.fn().mockResolvedValue({ data: { origen_fondos: 'saldo_a_favor' } })
     const abonoSelect = vi.fn(() => ({ single: abonoSelectSingle, eq: vi.fn(() => ({ single: abonoSelectSingle })) }))
-    const abonoUpdate = vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) }))
+    const abonoUpdateEq = vi.fn().mockResolvedValue({ error: null })
+    const abonoUpdate = vi.fn(() => ({ eq: abonoUpdateEq }))
 
-    const movimientosBuilder: any = {
-      eq: vi.fn(() => movimientosBuilder),
-      then: (resolve: any) => resolve({ error: null }),
-    }
-    const movimientosUpdate = vi.fn(() => movimientosBuilder)
+    const movimientosUpdateEq = vi.fn().mockResolvedValue({ error: null })
+    const movimientosUpdate = vi.fn(() => ({ eq: movimientosUpdateEq }))
 
     const auditInsert = vi.fn().mockResolvedValue({ error: null })
 
@@ -215,7 +213,8 @@ describe('editMontoAbono', () => {
       data: { valor_total: 1000, pagos_abonos: [{ monto: 600 }] },
     })
     const cuentaSelect = vi.fn(() => ({ single: cuentaSelectSingle, eq: vi.fn(() => ({ single: cuentaSelectSingle })) }))
-    const cuentaUpdate = vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) }))
+    const cuentaUpdateEq = vi.fn().mockResolvedValue({ error: null })
+    const cuentaUpdate = vi.fn(() => ({ eq: cuentaUpdateEq }))
 
     const supabase = {
       from: vi.fn((table: string) => {
@@ -233,7 +232,9 @@ describe('editMontoAbono', () => {
 
     expect(result?.success).toBeTruthy()
     expect(abonoUpdate).toHaveBeenCalledWith({ monto: 600 })
+    expect(abonoUpdateEq).toHaveBeenCalled()
     expect(movimientosUpdate).toHaveBeenCalledWith({ monto: 600 })
+    expect(movimientosUpdateEq).toHaveBeenCalled()
     expect(auditInsert).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({
@@ -247,6 +248,7 @@ describe('editMontoAbono', () => {
     )
     const estadoPayload = cuentaUpdate.mock.calls.find(([payload]) => 'estado' in payload)
     expect(estadoPayload?.[0]).toEqual({ estado: 'parcial' })
+    expect(cuentaUpdateEq).toHaveBeenCalled()
     expect(revalidatePathMock).toHaveBeenCalledWith('/cuentas/cuenta-1')
     expect(revalidatePathMock).toHaveBeenCalledWith('/cuentas')
   })
