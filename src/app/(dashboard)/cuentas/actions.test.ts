@@ -205,7 +205,7 @@ describe('editMontoAbono', () => {
     const abonoUpdate = vi.fn(() => ({ eq: abonoUpdateEq }))
 
     const movimientosUpdateEq = vi.fn().mockResolvedValue({ error: null })
-    const movimientosUpdate = vi.fn(() => ({ eq: movimientosUpdateEq }))
+    const movimientosUpdate = vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn(() => ({ eq: movimientosUpdateEq })) })) }))
 
     const auditInsert = vi.fn().mockResolvedValue({ error: null })
 
@@ -319,8 +319,8 @@ describe('cuentas/actions sobrepago (reglas nuevas)', () => {
                   data: {
                     valor_total: 1000,
                     pagos_abonos: [
-                      { id: 'a1', monto: 950, estado: null, notas: null },
-                      { id: 'a2', monto: 0, estado: null, notas: null },
+                      { id: 'a1', monto: 100, estado: null, notas: null },
+                      { id: 'a2', monto: 900, estado: null, notas: null },
                     ],
                   },
                   error: null,
