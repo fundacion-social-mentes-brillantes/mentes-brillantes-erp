@@ -1,6 +1,0 @@
-1:"$Sreact.fragment"
-2:I[24524,["/_next/static/chunks/5ce09871c993e346.js","/_next/static/chunks/cde9d7665c675789.js","/_next/static/chunks/dfe56a12d810700e.js"],"LoginForm"]
-3:I[97367,["/_next/static/chunks/ff1a16fafef87110.js","/_next/static/chunks/61cc43b3d7ad2990.js"],"OutletBoundary"]
-4:"$Sreact.suspense"
-0:{"buildId":"71cW1dtsaiCwB41vnD-E7","rsc":["$","$1","c",{"children":[["$","div",null,{"className":"min-h-screen flex items-center justify-center bg-zinc-50 px-4","children":["$","div",null,{"className":"w-full max-w-md bg-white rounded-2xl shadow-sm border border-zinc-200 p-8","children":[["$","div",null,{"className":"text-center mb-8","children":[["$","h1",null,{"className":"text-2xl font-bold tracking-tight text-zinc-900","children":"Mentes Brillantes"}],["$","p",null,{"className":"text-sm text-zinc-500 mt-2","children":"Ingresa tus credenciales para acceder al sistema"}]]}],["$","$L2",null,{}]]}]}],[["$","script","script-0",{"src":"/_next/static/chunks/cde9d7665c675789.js","async":true}],["$","script","script-1",{"src":"/_next/static/chunks/dfe56a12d810700e.js","async":true}]],["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"loading":null,"isPartial":false}
-5:null

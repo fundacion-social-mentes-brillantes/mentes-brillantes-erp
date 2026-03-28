@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+﻿import { NextRequest, NextResponse } from "next/server"
 import Papa from "papaparse"
 import JSZip from "jszip"
 import { requireAdmin } from "@/lib/utils/authz"
@@ -6,6 +6,7 @@ import { readFile } from "fs/promises"
 import path from "path"
 
 const TABLES = [
+  "configuracion_empresa",
   "asistentes",
   "cuentas_por_cobrar",
   "pagos_abonos",
@@ -16,11 +17,10 @@ const TABLES = [
   "donaciones_asistentes",
   "coach_paquetes",
   "coach_sesiones",
+  "movimientos_saldo_favor",
   "perfiles",
   "liquidaciones_socios",
   "liquidaciones_resumen_cuentas",
-  "configuracion_empresa",
-  "movimientos_saldo_favor",
 ]
 
 const isTableAllowed = (table: string) => TABLES.includes(table)
@@ -32,11 +32,11 @@ async function fetchCsv(supabase: any, table: string) {
   return "\uFEFF" + csv
 }
 
-export async function GET(req: NextRequest, { params }: { params: { resource: string } }) {
+export async function GET(_req: NextRequest, context: { params: Promise<{ resource: string }> }) {
+  const { resource } = await context.params
   const { supabase } = await requireAdmin()
   if (!supabase) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
 
-  const resource = params.resource
   const today = new Date().toISOString().slice(0, 10)
 
   try {
@@ -48,12 +48,10 @@ export async function GET(req: NextRequest, { params }: { params: { resource: st
         zip.file(`${table}_${today}.csv`, csv)
       }
 
-      // Adjuntar schema.sql
       const schemaPath = path.join(process.cwd(), "supabase", "schema.sql")
       const schema = await readFile(schemaPath, "utf-8")
       zip.file(`schema_${today}.sql`, schema)
 
-      // README del backup
       const readme = [
         `Backup completo - ${today}`,
         "",
