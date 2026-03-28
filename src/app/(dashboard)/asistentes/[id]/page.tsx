@@ -3,7 +3,7 @@ import { ArrowLeft, Edit2, Calendar, FileText, CreditCard, CheckCircle2, Clock, 
 import { notFound } from "next/navigation"
 import { AnticipoForm } from "./AnticipoForm"
 import { PagarConSaldoButton } from "./PagarConSaldoButton"
-import { filtrarPagosValidos, sumarMontos } from "@/lib/utils/contable"
+import { filtrarPagosValidos, sumarMontos, toSafeNumber } from "@/lib/utils/contable"
 import { DonacionForm } from "./DonacionForm"
 import { DonacionActionsMenu } from "./DonacionActionsMenu"
 import { RegisterCoachSessionForm } from "@/components/coach/RegisterCoachSessionForm"
@@ -92,18 +92,19 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
 
   const cuentasProcesadas = (cuentas || []).map((cuenta) => {
     const pagosValidos = filtrarPagosValidos(cuenta.pagos_abonos || [])
-    const abonado = Math.round(sumarMontos(pagosValidos))
-    const pendiente = Math.round(Number(cuenta.valor_total) - abonado)
+    const abonado = Math.round(toSafeNumber(sumarMontos(pagosValidos)))
+    const valorCuenta = toSafeNumber(cuenta.valor_total)
+    const pendiente = Math.max(0, Math.round(valorCuenta - abonado))
 
-    totalFacturado += Number(cuenta.valor_total)
+    totalFacturado += valorCuenta
     totalAbonado += abonado
 
-    return { ...cuenta, abonado, pendiente }
+    return { ...cuenta, abonado, pendiente, valorCuenta }
   })
 
-  totalFacturado = Math.round(totalFacturado)
-  totalAbonado = Math.round(totalAbonado)
-  const saldoPendiente = Math.round(totalFacturado - totalAbonado)
+  totalFacturado = Math.round(toSafeNumber(totalFacturado))
+  totalAbonado = Math.round(toSafeNumber(totalAbonado))
+  const saldoPendiente = Math.max(0, Math.round(toSafeNumber(totalFacturado - totalAbonado)))
 
   const todosLosAbonos = (cuentas || [])
     .flatMap((cuenta) =>
@@ -201,15 +202,15 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
             <div className="p-5 space-y-5">
               <div>
                 <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Total Facturado</p>
-                <p className="text-xl font-semibold text-zinc-900">${totalFacturado.toLocaleString("es-CO")}</p>
+                <p className="text-xl font-semibold text-zinc-900">${toSafeNumber(totalFacturado).toLocaleString("es-CO")}</p>
               </div>
               <div>
                 <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Total Abonado</p>
-                <p className="text-xl font-semibold text-emerald-600">${totalAbonado.toLocaleString("es-CO")}</p>
+                <p className="text-xl font-semibold text-emerald-600">${toSafeNumber(totalAbonado).toLocaleString("es-CO")}</p>
               </div>
               <div className="pt-4 border-t border-zinc-100">
                 <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Saldo Pendiente</p>
-                <p className="text-xl font-semibold text-amber-600">${saldoPendiente.toLocaleString("es-CO")}</p>
+                <p className="text-xl font-semibold text-amber-600">${toSafeNumber(saldoPendiente).toLocaleString("es-CO")}</p>
               </div>
             </div>
           </div>
@@ -282,9 +283,9 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                       <p className="text-xs text-zinc-500">Emisión: {new Date(cuenta.fecha_emision).toLocaleDateString("es-CO")}</p>
                     </div>
                     <div className="text-right text-sm">
-                      <p className="text-zinc-600">Valor: ${Number(cuenta.valor_total).toLocaleString("es-CO")}</p>
-                      <p className="text-emerald-600">Abonado: ${cuenta.abonado.toLocaleString("es-CO")}</p>
-                      <p className="text-amber-600">Pendiente: ${cuenta.pendiente.toLocaleString("es-CO")}</p>
+                      <p className="text-zinc-600">Valor: ${toSafeNumber(cuenta.valorCuenta ?? cuenta.valor_total).toLocaleString("es-CO")}</p>
+                      <p className="text-emerald-600">Abonado: ${toSafeNumber(cuenta.abonado).toLocaleString("es-CO")}</p>
+                      <p className="text-amber-600">Pendiente: ${toSafeNumber(cuenta.pendiente).toLocaleString("es-CO")}</p>
                     </div>
                   </div>
                 </div>
@@ -300,20 +301,22 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
             </div>
             <div className="p-5 space-y-3">
               {todosLosAbonos.length ? (
-                todosLosAbonos.map((pago: any) => (
-                  <div key={pago.id} className="flex items-center justify-between rounded-lg border border-zinc-200 p-3 bg-white">
-                    <div>
-                      <p className="font-medium text-zinc-900 text-sm">${Number(pago.monto).toLocaleString("es-CO")}</p>
-                      <p className="text-xs text-zinc-500">
-                        {new Date(pago.fecha_pago).toLocaleDateString("es-CO")} · {pago.concepto_cuenta}
-                      </p>
+                <div className="max-h-72 overflow-y-auto space-y-3 pr-1">
+                  {todosLosAbonos.map((pago: any) => (
+                    <div key={pago.id} className="flex items-center justify-between rounded-lg border border-zinc-200 p-3 bg-white">
+                      <div>
+                        <p className="font-medium text-zinc-900 text-sm">${toSafeNumber(pago.monto).toLocaleString("es-CO")}</p>
+                        <p className="text-xs text-zinc-500">
+                          {new Date(pago.fecha_pago).toLocaleDateString("es-CO")} · {pago.concepto_cuenta}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-zinc-500">
+                        <span>{pago.metodo_pago || "—"}</span>
+                        <span>{pago.notas || "Sin notas"}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-zinc-500">
-                      <span>{pago.metodo_pago || "—"}</span>
-                      <span>{pago.notas || "Sin notas"}</span>
-                    </div>
-                  </div>
-                ))
+                  ))}
+                </div>
               ) : (
                 <p className="text-sm text-zinc-500">No hay abonos registrados.</p>
               )}
@@ -348,45 +351,52 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
               <HeartHandshake className="w-4 h-4 text-zinc-400" />
               <h3 className="font-medium text-zinc-900">Sesiones guía coach</h3>
             </div>
-            <div className="p-5 space-y-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-zinc-600">Compradas</span>
-                <span className="font-medium text-zinc-900">{sesionesCompradas}</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-zinc-600">Realizadas</span>
-                <span className="font-medium text-zinc-900">{sesionesRealizadas}</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-zinc-600">Restantes</span>
-                <span className="font-medium text-zinc-900">{sesionesRestantes}</span>
-              </div>
-              {paqueteActivo && (
-                <div className="pt-2">
-                  <RegisterCoachSessionForm paqueteId={paqueteActivo.id} disabled={false} />
-                </div>
-              )}
-              <div className="pt-2">
-                <CoachSessionsPdf
-                  sesiones={sesionesLista.map((s) => ({ fecha: s.fecha, notas: s.notas }))}
-                  asistenteNombre={asistente.nombre}
-                  sesionesCompradas={sesionesCompradas}
-                  sesionesRealizadas={sesionesRealizadas}
-                  sesionesRestantes={sesionesRestantes}
-                />
-              </div>
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Historial de sesiones</p>
-                {sesionesLista.length ? (
-                  sesionesLista.map((s, idx) => (
-                    <div key={`${s.paquete_id}-${s.fecha}-${idx}`} className="flex items-center justify-between border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white">
-                      <span>{new Date(s.fecha).toLocaleDateString("es-CO")}</span>
-                      <span className="text-zinc-600 truncate max-w-[200px]">{s.notas || "Sin notas"}</span>
+            <div className="p-5">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                <div className="space-y-3 lg:col-span-5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-zinc-600">Compradas</span>
+                    <span className="font-medium text-zinc-900">{sesionesCompradas}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-zinc-600">Realizadas</span>
+                    <span className="font-medium text-zinc-900">{sesionesRealizadas}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-zinc-600">Restantes</span>
+                    <span className="font-medium text-zinc-900">{sesionesRestantes}</span>
+                  </div>
+                  {paqueteActivo && (
+                    <div className="pt-2">
+                      <RegisterCoachSessionForm paqueteId={paqueteActivo.id} disabled={false} />
                     </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-zinc-500">No hay sesiones registradas.</p>
-                )}
+                  )}
+                  <div className="pt-2">
+                    <CoachSessionsPdf
+                      sesiones={sesionesLista.map((s) => ({ fecha: s.fecha, notas: s.notas }))}
+                      asistenteNombre={asistente.nombre}
+                      sesionesCompradas={sesionesCompradas}
+                      sesionesRealizadas={sesionesRealizadas}
+                      sesionesRestantes={sesionesRestantes}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2 lg:col-span-7">
+                  <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Historial de sesiones</p>
+                  {sesionesLista.length ? (
+                    <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+                      {sesionesLista.map((s, idx) => (
+                        <div key={`${s.paquete_id}-${s.fecha}-${idx}`} className="flex items-center justify-between border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white">
+                          <span>{new Date(s.fecha).toLocaleDateString("es-CO")}</span>
+                          <span className="text-zinc-600 truncate max-w-[200px]">{s.notas || "Sin notas"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-zinc-500">No hay sesiones registradas.</p>
+                  )}
+                </div>
               </div>
             </div>
           </div>

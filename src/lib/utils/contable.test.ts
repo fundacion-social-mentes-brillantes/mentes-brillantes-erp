@@ -5,6 +5,7 @@ import {
   esSaldoAFavor,
   esAplicacionSaldo,
   esPagoValido,
+  toSafeNumber,
   filtrarPagosValidosCuentas,
   filtrarIngresosOperativos,
   sumarMontos,
@@ -46,6 +47,18 @@ describe('esPagoValido', () => {
   })
   it('true si no está anulado', () => {
     expect(esPagoValido({ estado: 'aprobado', notas: 'ok' })).toBe(true)
+  })
+})
+
+describe('toSafeNumber', () => {
+  it('devuelve 0 para NaN e infinitos y deja advertencia', () => {
+    expect(toSafeNumber(NaN)).toBe(0)
+    expect(toSafeNumber(Infinity)).toBe(0)
+    expect(toSafeNumber(-Infinity)).toBe(0)
+  })
+
+  it('convierte strings numéricos', () => {
+    expect(toSafeNumber('123.5')).toBe(123.5)
   })
 })
 

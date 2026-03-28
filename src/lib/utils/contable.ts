@@ -19,6 +19,16 @@ export const esSaldoAFavor = (p: { metodo_pago?: string | null; origen_fondos?: 
 export const esAplicacionSaldo = (p: { tipo?: string | null }) => toLower(p.tipo) === 'aplicacion_saldo'
 export const esPagoValido = (p: { notas?: string | null; estado?: string | null }) => !esAnuladoCompleto(p)
 
+export const toSafeNumber = (value: unknown): number => {
+  const num = Number(value ?? 0)
+  if (!Number.isFinite(num)) {
+    // Solo para depurar datos defectuosos; no impacta al usuario final.
+    console.warn('[contable] valor no numérico, usando 0', value)
+    return 0
+  }
+  return num
+}
+
 // --- Filtros específicos ---
 // Uso actual en cuentas / asistente: excluye anulados (estado o nota)
 export function filtrarPagosValidosCuentas<T extends PagoRecord>(pagos: T[] = []): T[] {
@@ -43,7 +53,10 @@ export function filtrarIngresosOperativos<T extends PagoRecord>(
 export const filtrarPagosValidos = filtrarPagosValidosCuentas
 
 export const sumarMontos = (pagos: PagoRecord[] = []) =>
-  pagos.reduce((sum, p) => sum + Number(p.monto || 0), 0)
+  pagos.reduce((sum, p) => {
+    const monto = toSafeNumber(p.monto)
+    return sum + monto
+  }, 0)
 
 export const calcularEstadoCuenta = (valorTotal: number, totalAbonado: number): 'pendiente' | 'parcial' | 'pagado' => {
   if (totalAbonado >= valorTotal) return 'pagado'
