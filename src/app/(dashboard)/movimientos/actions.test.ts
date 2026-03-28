@@ -242,7 +242,7 @@ describe('recalculo con pagos válidos (nuevas reglas)', () => {
             },
           }),
         }),
-        update: async () => ({ error: null }),
+        update: () => ({ eq: vi.fn().mockResolvedValue({ error: null }) }),
       },
       cuentas_por_cobrar: {
         select: () => ({
@@ -261,7 +261,7 @@ describe('recalculo con pagos válidos (nuevas reglas)', () => {
         }),
         update: (payload: any) => {
           updates.push(payload)
-          return { eq: () => ({ eq: cuentasUpdateEq }) }
+          return { eq: cuentasUpdateEq }
         },
       },
       auditoria_financiera: { insert: async () => ({ error: null }) },
