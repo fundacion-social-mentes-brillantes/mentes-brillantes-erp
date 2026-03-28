@@ -85,9 +85,9 @@ export function Header({ userEmail, userRole = 'user' }: { userEmail?: string, u
   };
 
   return (
-    <header className="h-16 border-b border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] px-6 pl-16 md:pl-6 flex items-center justify-between sticky top-0 z-10 shadow-soft transition-colors">
-      <div className="flex items-center gap-4 flex-1">
-        <form onSubmit={onSearch} className="relative w-full max-w-md">
+    <header className="border-b border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] px-4 sm:px-6 py-3 sm:py-0 pl-14 sm:pl-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 sm:h-16 sticky top-0 z-10 shadow-soft transition-colors">
+      <div className="flex items-center gap-3 sm:gap-4 flex-1 w-full">
+        <form onSubmit={onSearch} className="relative w-full max-w-full sm:max-w-md">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-[rgb(var(--text-muted))]" />
           <Input
             type="search"
@@ -99,7 +99,7 @@ export function Header({ userEmail, userRole = 'user' }: { userEmail?: string, u
         </form>
       </div>
       
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end flex-wrap sm:flex-nowrap">
         <ThemeToggle />
         <div className="relative">
           <button
