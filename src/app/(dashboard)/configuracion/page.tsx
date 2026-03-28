@@ -1,4 +1,4 @@
-import Link from "next/link"
+ï»¿import Link from "next/link"
 import { MigracionForm } from "./MigracionForm"
 import { EmpresaForm } from "@/components/configuracion/EmpresaForm"
 import { requireRoles } from "@/lib/utils/authz"
@@ -41,14 +41,14 @@ export default async function ConfiguracionPage() {
   return (
     <div className="space-y-6 max-w-4xl">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Configuración</h1>
-        <p className="text-zinc-500 text-sm">Ajustes del sistema y migración de datos.</p>
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Configuracion</h1>
+        <p className="text-zinc-500 text-sm">Ajustes del sistema y migracion de datos.</p>
       </div>
 
       <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-zinc-200">
-          <h2 className="text-lg font-semibold text-zinc-900">Datos de la Fundación</h2>
-          <p className="text-sm text-zinc-500 mt-1">Información que aparecerá en los documentos exportados (PDF, PNG).</p>
+          <h2 className="text-lg font-semibold text-zinc-900">Datos de la Fundacion</h2>
+          <p className="text-sm text-zinc-500 mt-1">Informacion que aparecera en los documentos exportados (PDF, PNG).</p>
         </div>
         <div className="p-6">
           <EmpresaForm initialData={empresa} isAdmin={isAdmin} />
@@ -57,10 +57,10 @@ export default async function ConfiguracionPage() {
 
       <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-zinc-200">
-          <h2 className="text-lg font-semibold text-zinc-900">Migración de Datos (AppSheet / CSV)</h2>
+          <h2 className="text-lg font-semibold text-zinc-900">Migracion de Datos (AppSheet / CSV)</h2>
           <p className="text-sm text-zinc-500 mt-1">
-            Sube archivos CSV exportados desde AppSheet para importar los datos al nuevo sistema. El sistema evitará
-            duplicados basándose en el "Row ID" original.
+            Sube archivos CSV exportados desde AppSheet para importar los datos al nuevo sistema. El sistema evitara
+            duplicados basandose en el "Row ID" original.
           </p>
         </div>
         <div className="p-6">
@@ -100,8 +100,8 @@ export default async function ConfiguracionPage() {
               Descargar backup completo (.zip)
             </Link>
             <p className="text-xs text-zinc-500 mt-2">
-              Incluye todos los CSV, schema.sql y README con fecha/hora y orden sugerido de restauración. La tabla
-              perfiles NO reemplaza auth.users; este backup no restaura usuarios ni contraseñas de Supabase Auth.
+              Incluye todos los CSV, schema.sql y README con fecha/hora y orden sugerido de restauracion. La tabla
+              perfiles NO reemplaza auth.users; este backup no restaura usuarios ni contrasenas de Supabase Auth.
             </p>
           </div>
         </div>

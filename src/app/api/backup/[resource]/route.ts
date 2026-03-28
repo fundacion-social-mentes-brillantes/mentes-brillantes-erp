@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import Papa from "papaparse"
 import JSZip from "jszip"
 import { requireAdmin } from "@/lib/utils/authz"
@@ -32,7 +32,7 @@ async function fetchCsv(supabase: any, table: string) {
   return "\uFEFF" + csv
 }
 
-export async function GET(req: Request, { params }: { params: { resource: string } }) {
+export async function GET(req: NextRequest, { params }: { params: { resource: string } }) {
   const { supabase } = await requireAdmin()
   if (!supabase) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
 
