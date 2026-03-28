@@ -61,9 +61,16 @@ Configurar `.env.local` con:
 7) Borrado: en producción el admin puede borrar movimientos; es decisión operativa vigente (aunque menos conservadora contablemente).  
 8) Anulados: pagos/abonos con `estado='anulado'` o notas con `[ANULADO]` no cuentan para estados ni ingresos.
 
+## Estado confirmado actual de base de datos
+- `vista_cuentas_saldos` filtra pagos anulados (estado = 'anulado' o notas con “[ANULADO]” no suman).
+- `adelantos_socios` maneja `metodo_pago` (enum `metodo_pago`).
+- `fn_cerrar_liquidacion` preagrega por `metodo_pago` antes de combinar, evitando duplicados.
+- Lógica aprobada vigente: donaciones sí cuentan y se reparten; saldo a favor aplicado no es ingreso nuevo; egresos restan; adelantos restan; períodos cerrados no se editan.
+
 ## Estado actual
-- Pruebas: suite Vitest pasó localmente en Windows en la última ejecución conocida.
-- Build: en Windows puede fallar por `spawn EPERM` al escribir en `.next` (revisar antivirus/permisos).
+- CI: GitHub Actions (“CI Tests”) en verde.  
+- Pruebas locales Windows: pueden seguir fallando por `spawn EPERM / esbuild` (antivirus/permisos sobre `.next`).  
+- Build: `npm run build`.
 - Tema claro/oscuro operativo con tokens en `globals.css`.
 
 ## Pendientes técnicos / diferencias entre documentación y base de datos
@@ -71,6 +78,21 @@ Configurar `.env.local` con:
 - Alinear despliegues antiguos donde `pagos_abonos` no tenga columna `estado` o triggers que aún no excluyan `[ANULADO]`.
 - Confirmar que `fn_cerrar_liquidacion` en la BD sea la versión con agregados por método (sin duplicar montos).
 - Mitigar definitivamente `spawn EPERM` en Windows (permisos o antivirus sobre `.next`).
+
+## Checklist de validación contable
+- `vista_cuentas_saldos` = abonos válidos (excluye anulados).
+- `total_ingresos` = abonos + donaciones.
+- `total_salidas` = egresos + adelantos.
+- `saldo_neto_periodo` = ingresos − salidas.
+- Liquidación por método sin duplicados (preagregado por `metodo_pago`).
+
+## Cambios aplicados el 2026-03-28
+- Blindaje de reglas contables (anulados filtrados; saldo a favor no como ingreso; egresos/adelantos restan).
+- Documentación oficial consolidada (README + reglas de negocio).
+- CI verde en GitHub Actions (Vitest).
+- Ajuste SQL: `vista_cuentas_saldos` filtra anulados.
+- Ajuste SQL: `adelantos_socios.metodo_pago`.
+- Ajuste SQL: `fn_cerrar_liquidacion` con preagregación por método.
 
 ## Documentación ampliada
 Consultar `docs/reglas-negocio-contables.md` para el detalle completo de reglas financieras, exclusiones y flujo de liquidación.

@@ -102,6 +102,10 @@ CREATE TABLE adelantos_socios (
   creado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Alinear adelantos con resumen por método de pago
+ALTER TABLE adelantos_socios
+  ADD COLUMN IF NOT EXISTS metodo_pago metodo_pago NOT NULL DEFAULT 'otro';
+
 -- LIQUIDACIONES
 CREATE TABLE liquidaciones_socios (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -130,7 +134,10 @@ SELECT
   (c.valor_total - COALESCE(SUM(p.monto), 0)) as monto_pendiente, -- 168000
   c.estado
 FROM cuentas_por_cobrar c
-LEFT JOIN pagos_abonos p ON c.id = p.cuenta_id
+LEFT JOIN pagos_abonos p
+  ON c.id = p.cuenta_id
+ AND p.estado <> 'anulado'
+ AND (p.notas IS NULL OR p.notas NOT ILIKE '%[ANULADO]%')
 GROUP BY c.id;
 
 -- TRIGGER PARA ACTUALIZAR ESTADO AUTOMÁTICAMENTE
@@ -329,46 +336,53 @@ BEGIN
     RETURN;
   END IF;
 
-  WITH abonos_vista AS (
-    SELECT LOWER(COALESCE(metodo_pago::text, 'otro')) AS metodo_pago, valor_ingreso AS monto
+  WITH metodos AS (
+    SELECT unnest(ARRAY['efectivo','nequi','daviplata','otro']::text[]) AS metodo_pago
+  ),
+  abonos_agg AS (
+    SELECT LOWER(COALESCE(metodo_pago::text,'otro')) AS metodo_pago,
+           SUM(valor_ingreso) AS monto
     FROM vw_movimientos_generales
     WHERE tipo_movimiento = 'abono'
       AND fecha BETWEEN v_inicio AND v_fin
+    GROUP BY 1
   ),
-  donaciones_vista AS (
-    SELECT LOWER(COALESCE(metodo_pago::text, 'otro')) AS metodo_pago, valor_ingreso AS monto
+  donaciones_agg AS (
+    SELECT LOWER(COALESCE(metodo_pago::text,'otro')) AS metodo_pago,
+           SUM(valor_ingreso) AS monto
     FROM vw_movimientos_generales
     WHERE tipo_movimiento = 'donacion'
       AND fecha BETWEEN v_inicio AND v_fin
+    GROUP BY 1
   ),
-  egresos_validos AS (
-    SELECT LOWER(COALESCE(metodo_pago::text, 'otro')) AS metodo_pago, monto
+  egresos_agg AS (
+    SELECT LOWER(COALESCE(metodo_pago::text,'otro')) AS metodo_pago,
+           SUM(monto) AS monto
     FROM egresos
     WHERE fecha BETWEEN v_inicio AND v_fin
       AND estado <> 'anulado'
-      AND notas NOT ILIKE '%[ANULADO]%'
+      AND (notas IS NULL OR notas NOT ILIKE '%[ANULADO]%')
+    GROUP BY 1
   ),
-  adelantos_validos AS (
-    SELECT LOWER(COALESCE(metodo_pago::text, 'otro')) AS metodo_pago, monto
+  adelantos_agg AS (
+    SELECT LOWER(COALESCE(metodo_pago::text,'otro')) AS metodo_pago,
+           SUM(monto) AS monto
     FROM adelantos_socios
     WHERE fecha BETWEEN v_inicio AND v_fin
-  ),
-  metodos AS (
-    SELECT unnest(ARRAY['efectivo','nequi','daviplata','otro']) AS metodo_pago
+    GROUP BY 1
   ),
   resumen AS (
     SELECT
       m.metodo_pago::metodo_pago AS metodo_pago,
-      COALESCE(SUM(ab.monto),0) AS ingresos_abonos,
-      COALESCE(SUM(d.monto),0) AS ingresos_donaciones,
-      COALESCE(SUM(e.monto),0) AS salidas_egresos,
-      COALESCE(SUM(ad.monto),0) AS salidas_adelantos
+      COALESCE(a.monto,0) AS ingresos_abonos,
+      COALESCE(d.monto,0) AS ingresos_donaciones,
+      COALESCE(e.monto,0) AS salidas_egresos,
+      COALESCE(ad.monto,0) AS salidas_adelantos
     FROM metodos m
-    LEFT JOIN abonos_vista ab ON ab.metodo_pago = m.metodo_pago
-    LEFT JOIN donaciones_vista d ON d.metodo_pago = m.metodo_pago
-    LEFT JOIN egresos_validos e ON e.metodo_pago = m.metodo_pago
-    LEFT JOIN adelantos_validos ad ON ad.metodo_pago = m.metodo_pago
-    GROUP BY m.metodo_pago
+    LEFT JOIN abonos_agg a ON a.metodo_pago = m.metodo_pago
+    LEFT JOIN donaciones_agg d ON d.metodo_pago = m.metodo_pago
+    LEFT JOIN egresos_agg e ON e.metodo_pago = m.metodo_pago
+    LEFT JOIN adelantos_agg ad ON ad.metodo_pago = m.metodo_pago
   )
   INSERT INTO liquidaciones_resumen_cuentas (
     periodo_id, metodo_pago, total_ingresos, total_salidas, saldo_neto_periodo,
@@ -389,14 +403,14 @@ BEGIN
     NOW()
   FROM resumen r
   ON CONFLICT (periodo_id, metodo_pago) DO UPDATE SET
-    total_ingresos = EXCLUDED.total_ingresos,
-    total_salidas = EXCLUDED.total_salidas,
-    saldo_neto_periodo = EXCLUDED.saldo_neto_periodo,
-    ingresos_abonos = EXCLUDED.ingresos_abonos,
+    total_ingresos      = EXCLUDED.total_ingresos,
+    total_salidas       = EXCLUDED.total_salidas,
+    saldo_neto_periodo  = EXCLUDED.saldo_neto_periodo,
+    ingresos_abonos     = EXCLUDED.ingresos_abonos,
     ingresos_donaciones = EXCLUDED.ingresos_donaciones,
-    salidas_egresos = EXCLUDED.salidas_egresos,
-    salidas_adelantos = EXCLUDED.salidas_adelantos,
-    updated_at = NOW();
+    salidas_egresos     = EXCLUDED.salidas_egresos,
+    salidas_adelantos   = EXCLUDED.salidas_adelantos,
+    updated_at          = NOW();
 
   SELECT
     SUM(r.ingresos_abonos + r.ingresos_donaciones),
@@ -435,15 +449,15 @@ BEGIN
   FROM socios s
   WHERE s.activo = true
   ON CONFLICT (periodo_id, socio_id) DO UPDATE SET
-    ingresos_cobrados = EXCLUDED.ingresos_cobrados,
-    donaciones_periodo = EXCLUDED.donaciones_periodo,
-    ingresos_operativos = EXCLUDED.ingresos_operativos,
-    egresos_periodo = EXCLUDED.egresos_periodo,
-    utilidad_neta = EXCLUDED.utilidad_neta,
-    porcentaje_aplicado = EXCLUDED.porcentaje_aplicado,
-    valor_correspondiente = EXCLUDED.valor_correspondiente,
-    adelantos_descontados = EXCLUDED.adelantos_descontados,
-    valor_neto_pagar = EXCLUDED.valor_neto_pagar;
+    ingresos_cobrados      = EXCLUDED.ingresos_cobrados,
+    donaciones_periodo     = EXCLUDED.donaciones_periodo,
+    ingresos_operativos    = EXCLUDED.ingresos_operativos,
+    egresos_periodo        = EXCLUDED.egresos_periodo,
+    utilidad_neta          = EXCLUDED.utilidad_neta,
+    porcentaje_aplicado    = EXCLUDED.porcentaje_aplicado,
+    valor_correspondiente  = EXCLUDED.valor_correspondiente,
+    adelantos_descontados  = EXCLUDED.adelantos_descontados,
+    valor_neto_pagar       = EXCLUDED.valor_neto_pagar;
 
   UPDATE periodos SET estado = 'cerrado' WHERE id = p_periodo_id;
 END;
