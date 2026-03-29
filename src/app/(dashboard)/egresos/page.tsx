@@ -23,7 +23,7 @@ export default async function EgresosPage() {
         </Link>
       </div>
 
-      <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
+      <div className="hidden md:block rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left whitespace-nowrap">
             <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 font-medium">
@@ -68,6 +68,44 @@ export default async function EgresosPage() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Mobile cards */}
+      <div className="md:hidden space-y-3">
+        {!egresos?.length ? (
+          <div className="bg-white p-6 rounded-xl border border-zinc-200 text-center text-zinc-500">
+            No hay egresos registrados.
+          </div>
+        ) : (
+          egresos.map((egreso) => (
+            <div key={egreso.id} className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm space-y-3">
+              <div className="flex justify-between items-start">
+                <div className="space-y-0.5">
+                  <p className="text-sm text-zinc-500">{new Date(egreso.fecha).toLocaleDateString()}</p>
+                  <p className="font-semibold text-zinc-900 leading-snug">{egreso.concepto}</p>
+                  <span className="inline-flex items-center px-2 py-1 rounded-md text-[11px] font-medium bg-zinc-100 text-zinc-700">
+                    {egreso.categoria}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-zinc-500 capitalize">{egreso.metodo_pago}</p>
+                  <p className="font-bold text-red-600 text-lg">${Number(egreso.monto).toLocaleString()}</p>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                <Link
+                  href={`/egresos/${egreso.id}/editar`}
+                  className="inline-flex items-center justify-center gap-2 rounded-md border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+                >
+                  <Edit2 className="w-4 h-4" />
+                  Editar
+                </Link>
+                <DeleteEgresoButton id={egreso.id} />
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
   )

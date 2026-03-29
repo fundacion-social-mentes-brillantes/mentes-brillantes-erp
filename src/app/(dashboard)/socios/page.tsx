@@ -9,7 +9,7 @@ export default async function SociosPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Socios</h1>
           <p className="text-zinc-500">Gestiona los socios y sus porcentajes de participación.</p>
@@ -23,7 +23,7 @@ export default async function SociosPage() {
         </Link>
       </div>
 
-      <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
+      <div className="hidden md:block rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 font-medium">
@@ -66,6 +66,46 @@ export default async function SociosPage() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Mobile cards */}
+      <div className="md:hidden space-y-3">
+        {!socios?.length ? (
+          <div className="bg-white p-6 rounded-xl border border-zinc-200 text-center text-zinc-500">
+            No hay socios registrados.
+          </div>
+        ) : (
+          socios.map((socio) => (
+            <div key={socio.id} className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <p className="font-semibold text-zinc-900 leading-snug">{socio.nombre}</p>
+                  <p className="text-sm text-zinc-500">ParticipaciÃ³n: {socio.porcentaje_participacion}%</p>
+                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${socio.activo ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-600'}`}>
+                    {socio.activo ? 'Activo' : 'Inactivo'}
+                  </span>
+                </div>
+                <Link
+                  href={`/socios/${socio.id}/editar`}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-md border border-zinc-200 px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+                >
+                  <Edit2 className="w-4 h-4" />
+                  Editar
+                </Link>
+              </div>
+
+              <form action={toggleSocioEstado.bind(null, socio.id, !socio.activo)} className="w-full">
+                <button
+                  type="submit"
+                  className={`w-full inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${socio.activo ? 'text-red-600 bg-red-50 border border-red-200 hover:bg-red-100' : 'text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100'}`}
+                >
+                  {socio.activo ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                  {socio.activo ? 'Desactivar' : 'Activar'}
+                </button>
+              </form>
+            </div>
+          ))
+        )}
       </div>
     </div>
   )
