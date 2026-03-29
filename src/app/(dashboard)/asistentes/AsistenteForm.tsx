@@ -20,7 +20,7 @@ export function AsistenteForm({ asistente, codigoSugerido, readOnlyDates = false
   )
 
   return (
-    <form action={formAction} className="space-y-6 max-w-2xl bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
+    <form action={formAction} className="space-y-6 w-full max-w-2xl bg-white p-4 md:p-6 rounded-xl border border-zinc-200 shadow-sm">
       {state?.error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-red-600">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
@@ -28,7 +28,7 @@ export function AsistenteForm({ asistente, codigoSugerido, readOnlyDates = false
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
         <div className="space-y-2">
           <label className="text-sm font-medium text-zinc-900">Nombre Completo *</label>
           <Input name="nombre" defaultValue={asistente?.nombre} required disabled={isPending} />
@@ -74,11 +74,11 @@ export function AsistenteForm({ asistente, codigoSugerido, readOnlyDates = false
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-4 pt-4 border-t border-zinc-100">
-        <Link href="/asistentes" className="text-sm font-medium text-zinc-500 hover:text-zinc-900">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 sm:gap-4 pt-4 border-t border-zinc-100">
+        <Link href="/asistentes" className="text-sm font-medium text-center text-zinc-500 hover:text-zinc-900">
           Cancelar
         </Link>
-        <Button type="submit" disabled={isPending}>
+        <Button type="submit" disabled={isPending} className="w-full sm:w-auto justify-center">
           {isPending ? 'Guardando...' : 'Guardar Asistente'}
         </Button>
       </div>

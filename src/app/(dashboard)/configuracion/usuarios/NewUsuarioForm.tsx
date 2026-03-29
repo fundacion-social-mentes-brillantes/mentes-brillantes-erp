@@ -99,11 +99,11 @@ export function NewUsuarioForm({ asistentes }: { asistentes: Asistente[] }) {
         )}
       </div>
 
-      <div className="flex items-center justify-between gap-2 flex-wrap">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
         <button
           type="submit"
           disabled={pending}
-          className="inline-flex items-center justify-center rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] px-3 py-2 text-sm font-semibold text-[rgb(var(--text-primary))] hover:bg-[rgb(var(--surface-3))] transition-colors"
+          className="inline-flex items-center justify-center rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] px-3 py-2 text-sm font-semibold text-[rgb(var(--text-primary))] hover:bg-[rgb(var(--surface-3))] transition-colors w-full sm:w-auto"
         >
           {pending ? 'Creando...' : 'Crear usuario'}
         </button>
