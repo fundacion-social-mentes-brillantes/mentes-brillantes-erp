@@ -360,11 +360,17 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
               {cuentasProcesadas.length ? (
                 <div className="h-[520px] overflow-y-auto space-y-4 pr-1">
                   {cuentasProcesadas.map((cuenta) => (
-                    <div key={cuenta.id} className="rounded-lg border border-zinc-200 p-4 bg-zinc-50/60">
+                    <Link
+                      key={cuenta.id}
+                      href={`/cuentas/${cuenta.id}`}
+                      className="block rounded-lg border border-zinc-200 p-4 bg-zinc-50/60 hover:bg-zinc-100/70 hover:border-zinc-300 transition-colors cursor-pointer"
+                    >
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="font-medium text-zinc-900">{cuenta.concepto}</p>
-                          <p className="text-xs text-zinc-500">Emisión: {new Date(cuenta.fecha_emision).toLocaleDateString("es-CO")}</p>
+                          <p className="text-xs text-zinc-500">
+                            Emisión: {new Date(cuenta.fecha_emision).toLocaleDateString("es-CO")}
+                          </p>
                         </div>
                         <div className="text-right text-sm">
                           <p className="text-zinc-600">
@@ -376,7 +382,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                           </p>
                         </div>
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               ) : (
