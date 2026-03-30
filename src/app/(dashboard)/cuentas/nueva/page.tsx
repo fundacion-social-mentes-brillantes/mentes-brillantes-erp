@@ -1,7 +1,7 @@
 import { CuentaForm } from './CuentaForm'
 import { requireRoles } from '@/lib/utils/authz'
 
-type SearchParams = { asistente?: string | string[] }
+type SearchParams = { asistente?: string | string[]; returnTo?: string | string[] }
 
 export default async function NuevaCuentaPage({ searchParams }: { searchParams?: SearchParams | Promise<SearchParams> }) {
   const resolvedParams = typeof (searchParams as any)?.then === 'function'
@@ -11,6 +11,10 @@ export default async function NuevaCuentaPage({ searchParams }: { searchParams?:
   const asistenteInicial = Array.isArray(resolvedParams.asistente)
     ? resolvedParams.asistente[0]
     : resolvedParams.asistente || undefined
+
+  const returnTo = Array.isArray(resolvedParams.returnTo)
+    ? resolvedParams.returnTo[0]
+    : resolvedParams.returnTo || undefined
 
   const { supabase } = await requireRoles(['admin', 'caja'])
   const { data: asistentes } = await supabase
@@ -25,7 +29,7 @@ export default async function NuevaCuentaPage({ searchParams }: { searchParams?:
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Nueva Cuenta por Cobrar</h1>
         <p className="text-zinc-500 text-sm">Registra una nueva deuda para un asistente.</p>
       </div>
-      <CuentaForm asistentes={asistentes || []} asistenteInicial={asistenteInicial} />
+      <CuentaForm asistentes={asistentes || []} asistenteInicial={asistenteInicial} returnTo={returnTo} />
     </div>
   )
 }

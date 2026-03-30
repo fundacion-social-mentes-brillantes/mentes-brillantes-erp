@@ -34,6 +34,7 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
   const tipo_cuenta = ((formData.get('tipo_cuenta') as string) || 'general').toLowerCase()
   const sesiones_coach_str = formData.get('sesiones_coach') as string | null
   const fecha_sesion_coach_raw = formData.get('fecha_sesion_coach') as string | null
+  const return_to_raw = formData.get('return_to') as string | null
 
   const valor_total = Math.round(parseFloat(valor_total_str))
   const abono_inicial = abono_inicial_str ? Math.round(parseFloat(abono_inicial_str)) : 0
@@ -155,7 +156,9 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
   if (asistente_id) {
     revalidatePath(`/asistentes/${asistente_id}`)
   }
-  redirect('/cuentas')
+  const return_to =
+    return_to_raw && return_to_raw.startsWith('/') ? return_to_raw : null
+  redirect(return_to || '/cuentas')
 }
 
 export async function deleteCuenta(cuenta_id: string): Promise<ActionState> {

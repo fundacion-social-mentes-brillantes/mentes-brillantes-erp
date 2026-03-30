@@ -351,10 +351,16 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
         {/* Columna derecha */}
         <div className="md:col-span-2 space-y-6">
           <div className={cardContainer}>
-            <div className={cardHeader + " flex items-center"}>
+            <div className={cardHeader + " flex items-center justify-between"}>
               <span className={headerAccent} aria-hidden />
               <CreditCard className="w-4 h-4 text-[rgb(var(--text-muted))]" />
               <h3 className={cardTitle}>Cuentas por Cobrar</h3>
+              <Link
+                href={`/cuentas/nueva?asistente=${asistente.id}&returnTo=/asistentes/${asistente.id}`}
+                className="text-xs font-semibold text-[rgb(var(--accent-strong))] bg-[rgba(var(--accent),0.12)] border border-[rgba(var(--accent),0.35)] px-3 py-1.5 rounded-md hover:bg-[rgba(var(--accent),0.2)] transition-colors"
+              >
+                Crear cuenta de cobro
+              </Link>
             </div>
             <div className="p-5 space-y-4">
               {cuentasProcesadas.length ? (
@@ -362,7 +368,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                   {cuentasProcesadas.map((cuenta) => (
                     <Link
                       key={cuenta.id}
-                      href={`/cuentas/${cuenta.id}`}
+                      href={`/cuentas/${cuenta.id}?backTo=/asistentes/${asistente.id}`}
                       className="block rounded-lg border border-zinc-200 p-4 bg-zinc-50/60 hover:bg-zinc-100/70 hover:border-zinc-300 transition-colors cursor-pointer"
                     >
                       <div className="flex items-center justify-between">

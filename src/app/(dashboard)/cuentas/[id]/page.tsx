@@ -11,8 +11,16 @@ import { RegisterCoachSessionForm } from '@/components/coach/RegisterCoachSessio
 import { CoachSessionsPdf } from '@/components/coach/CoachSessionsPdf'
 import { CoachSessionActions } from '@/components/coach/CoachSessionActions'
 
-export default async function DetalleCuentaPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function DetalleCuentaPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ backTo?: string }>
+}) {
   const { id } = await params
+  const resolvedSearch = await searchParams
+  const backTo = resolvedSearch?.backTo && resolvedSearch.backTo.startsWith('/') ? resolvedSearch.backTo : '/cuentas'
   const { supabase } = await requireRoles(['admin', 'caja'])
 
   const { data: cuenta, error } = await supabase
@@ -86,7 +94,7 @@ export default async function DetalleCuentaPage({ params }: { params: Promise<{ 
   return (
     <div className="space-y-6 max-w-5xl">
       <div className="flex items-center gap-4">
-        <Link href="/cuentas" className="p-2 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors">
+        <Link href={backTo} className="p-2 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors">
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div>
