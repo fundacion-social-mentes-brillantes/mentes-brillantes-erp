@@ -25,6 +25,22 @@ const TABLES = [
 
 const isTableAllowed = (table: string) => TABLES.includes(table)
 
+async function tableExists(supabase: any, table: string) {
+  const { data, error } = await supabase
+    .from("information_schema.tables")
+    .select("table_name")
+    .eq("table_schema", "public")
+    .eq("table_name", table)
+    .maybeSingle()
+
+  if (error) {
+    console.warn(`No se pudo verificar la tabla ${table}: ${error.message}`)
+    return false
+  }
+
+  return Boolean(data?.table_name)
+}
+
 async function fetchCsv(supabase: any, table: string) {
   const { data, error } = await supabase.from(table).select("*")
   if (error) throw new Error(`Error al consultar ${table}: ${error.message}`)
@@ -43,9 +59,21 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ resour
     if (resource === "full") {
       const zip = new JSZip()
 
+      const warnings: string[] = []
+
       for (const table of TABLES) {
-        const csv = await fetchCsv(supabase, table)
-        zip.file(`${table}_${today}.csv`, csv)
+        const exists = await tableExists(supabase, table)
+        if (!exists) {
+          warnings.push(`- Tabla omitida: ${table} (no existe en este entorno)`)
+          continue
+        }
+
+        try {
+          const csv = await fetchCsv(supabase, table)
+          zip.file(`${table}_${today}.csv`, csv)
+        } catch (err: any) {
+          warnings.push(`- Tabla omitida: ${table} (error al consultar: ${err?.message || "desconocido"})`)
+        }
       }
 
       const schemaPath = path.join(process.cwd(), "supabase", "schema.sql")
@@ -75,6 +103,9 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ resour
         "Notas:",
         "- La tabla perfiles NO reemplaza auth.users; este backup no restaura usuarios/contraseñas de Supabase Auth.",
         "- Este respaldo cubre datos del sistema y schema.sql, no credenciales de Auth.",
+        ...(warnings.length
+          ? ["", "Advertencias:", ...warnings]
+          : ["", "Advertencias:", "- Ninguna (todas las tablas configuradas existen en este entorno)"]),
         "",
         "Codificación: UTF-8 con BOM para CSV.",
       ].join("\n")
@@ -92,6 +123,11 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ resour
 
     if (!isTableAllowed(resource)) {
       return NextResponse.json({ error: "Tabla no permitida" }, { status: 400 })
+    }
+
+    const exists = await tableExists(supabase, resource)
+    if (!exists) {
+      return NextResponse.json({ error: "Tabla no existe en este entorno" }, { status: 404 })
     }
 
     const csv = await fetchCsv(supabase, resource)

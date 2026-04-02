@@ -10,6 +10,31 @@ export default async function ConfiguracionPage() {
   const { data: empresaData } =
     (await supabase?.from("configuracion_empresa").select("*").eq("id", 1).single()) || { data: null }
 
+  const { data: existingTablesData } =
+    (await supabase
+      ?.from("information_schema.tables")
+      .select("table_name")
+      .eq("table_schema", "public")
+      .in("table_name", [
+        "configuracion_empresa",
+        "asistentes",
+        "cuentas_por_cobrar",
+        "pagos_abonos",
+        "egresos",
+        "socios",
+        "periodos",
+        "adelantos_socios",
+        "donaciones_asistentes",
+        "coach_paquetes",
+        "coach_sesiones",
+        "movimientos_saldo_favor",
+        "perfiles",
+        "liquidaciones_socios",
+        "liquidaciones_resumen_cuentas",
+      ])) || { data: [] }
+
+  const existingTables = new Set((existingTablesData || []).map((t: any) => t.table_name))
+
   const defaultEmpresa = {
     nombre: "FUNDACION SOCIAL MENTES BRILLANTES",
     nit: "901002849-3",
@@ -36,7 +61,7 @@ export default async function ConfiguracionPage() {
     "perfiles",
     "liquidaciones_socios",
     "liquidaciones_resumen_cuentas",
-  ]
+  ].filter((t) => existingTables.has(t))
 
   return (
     <div className="space-y-6 max-w-4xl">
