@@ -103,7 +103,7 @@ describe('deleteCuenta', () => {
 
     const result = await deleteCuenta('cuenta-1')
 
-    expect(result).toBeUndefined()
+    expect(result?.success).toBe(true)
     expect(deleteEq).toHaveBeenCalledWith('id', 'cuenta-1')
     expect(revalidatePathMock).toHaveBeenCalledWith('/cuentas')
     expect(redirectMock).toHaveBeenCalledWith('/cuentas')

@@ -1,0 +1,35 @@
+{
+  "node": {
+    "600b00d166e69f0aceb57ce1abe00346d353f5200a": {
+      "workers": {
+        "app/(dashboard)/configuracion/usuarios/page": {
+          "moduleId": 58084,
+          "async": false,
+          "exportedName": "actualizarUsuario",
+          "filename": "src/app/(dashboard)/configuracion/usuarios/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/configuracion/usuarios/page": "action-browser"
+      },
+      "exportedName": "actualizarUsuario",
+      "filename": "src/app/(dashboard)/configuracion/usuarios/actions.ts"
+    },
+    "6034a9de68cd79a8bd526fbf71b02c73576837c790": {
+      "workers": {
+        "app/(dashboard)/configuracion/usuarios/page": {
+          "moduleId": 58084,
+          "async": false,
+          "exportedName": "crearUsuario",
+          "filename": "src/app/(dashboard)/configuracion/usuarios/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/configuracion/usuarios/page": "action-browser"
+      },
+      "exportedName": "crearUsuario",
+      "filename": "src/app/(dashboard)/configuracion/usuarios/actions.ts"
+    }
+  },
+  "edge": {}
+}

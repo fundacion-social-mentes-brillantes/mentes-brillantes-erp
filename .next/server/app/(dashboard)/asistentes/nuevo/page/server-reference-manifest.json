@@ -1,0 +1,95 @@
+{
+  "node": {
+    "704b4bbf6b4505735c5b7b9e0d7c5630a203a2a0fd": {
+      "workers": {
+        "app/(dashboard)/asistentes/nuevo/page": {
+          "moduleId": 52174,
+          "async": false,
+          "exportedName": "saveAsistente",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/asistentes/nuevo/page": "rsc"
+      },
+      "exportedName": "saveAsistente",
+      "filename": "src/app/(dashboard)/asistentes/actions.ts"
+    },
+    "001acdabd1ba3e013f1c86a59e8ba861193afae23e": {
+      "workers": {
+        "app/(dashboard)/asistentes/nuevo/page": {
+          "moduleId": 52174,
+          "async": false,
+          "exportedName": "obtenerSiguienteCodigoAsistente",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/asistentes/nuevo/page": "rsc"
+      },
+      "exportedName": "obtenerSiguienteCodigoAsistente",
+      "filename": "src/app/(dashboard)/asistentes/actions.ts"
+    },
+    "405c2b15ea7adf96401437b7418f39f543987d93dc": {
+      "workers": {
+        "app/(dashboard)/asistentes/nuevo/page": {
+          "moduleId": 52174,
+          "async": false,
+          "exportedName": "pagarDeudasConSaldo",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/asistentes/nuevo/page": "rsc"
+      },
+      "exportedName": "pagarDeudasConSaldo",
+      "filename": "src/app/(dashboard)/asistentes/actions.ts"
+    },
+    "40828c33aa9e246a9dda1ace9ceae33c486526ee5e": {
+      "workers": {
+        "app/(dashboard)/asistentes/nuevo/page": {
+          "moduleId": 52174,
+          "async": false,
+          "exportedName": "deleteAsistente",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/asistentes/nuevo/page": "rsc"
+      },
+      "exportedName": "deleteAsistente",
+      "filename": "src/app/(dashboard)/asistentes/actions.ts"
+    },
+    "60534b88d59bec6ba50675c2f32966299eadbd092f": {
+      "workers": {
+        "app/(dashboard)/asistentes/nuevo/page": {
+          "moduleId": 52174,
+          "async": false,
+          "exportedName": "toggleAsistenteEstado",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/asistentes/nuevo/page": "rsc"
+      },
+      "exportedName": "toggleAsistenteEstado",
+      "filename": "src/app/(dashboard)/asistentes/actions.ts"
+    },
+    "702721c167d8bf1b4a739194312152470e814ff4e7": {
+      "workers": {
+        "app/(dashboard)/asistentes/nuevo/page": {
+          "moduleId": 52174,
+          "async": false,
+          "exportedName": "saveAnticipo",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/asistentes/nuevo/page": "rsc"
+      },
+      "exportedName": "saveAnticipo",
+      "filename": "src/app/(dashboard)/asistentes/actions.ts"
+    }
+  },
+  "edge": {}
+}

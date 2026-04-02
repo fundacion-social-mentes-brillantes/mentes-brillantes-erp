@@ -1,0 +1,20 @@
+{
+  "node": {
+    "40e10b46c78c382c25f312b94e4422cbece45c60d9": {
+      "workers": {
+        "app/(dashboard)/cuentas/page": {
+          "moduleId": 99536,
+          "async": false,
+          "exportedName": "deleteCuenta",
+          "filename": "src/app/(dashboard)/cuentas/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/cuentas/page": "action-browser"
+      },
+      "exportedName": "deleteCuenta",
+      "filename": "src/app/(dashboard)/cuentas/actions.ts"
+    }
+  },
+  "edge": {}
+}

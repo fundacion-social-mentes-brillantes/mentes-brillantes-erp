@@ -1,0 +1,35 @@
+{
+  "node": {
+    "70c5c65add8f188c41c29fe7ab463c0a58cb234ca7": {
+      "workers": {
+        "app/(dashboard)/liquidaciones/[id]/page": {
+          "moduleId": 50687,
+          "async": false,
+          "exportedName": "saveAdelanto",
+          "filename": "src/app/(dashboard)/liquidaciones/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/liquidaciones/[id]/page": "action-browser"
+      },
+      "exportedName": "saveAdelanto",
+      "filename": "src/app/(dashboard)/liquidaciones/actions.ts"
+    },
+    "40c52b70c2362611f7bc8bd00f625f1615036c46fe": {
+      "workers": {
+        "app/(dashboard)/liquidaciones/[id]/page": {
+          "moduleId": 50687,
+          "async": false,
+          "exportedName": "generarLiquidacion",
+          "filename": "src/app/(dashboard)/liquidaciones/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/liquidaciones/[id]/page": "action-browser"
+      },
+      "exportedName": "generarLiquidacion",
+      "filename": "src/app/(dashboard)/liquidaciones/actions.ts"
+    }
+  },
+  "edge": {}
+}

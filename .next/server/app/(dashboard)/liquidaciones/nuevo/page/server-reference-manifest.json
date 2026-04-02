@@ -1,0 +1,20 @@
+{
+  "node": {
+    "60ea32531942099a13c60725324fc4cc7977918d28": {
+      "workers": {
+        "app/(dashboard)/liquidaciones/nuevo/page": {
+          "moduleId": 68465,
+          "async": false,
+          "exportedName": "savePeriodo",
+          "filename": "src/app/(dashboard)/liquidaciones/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/liquidaciones/nuevo/page": "action-browser"
+      },
+      "exportedName": "savePeriodo",
+      "filename": "src/app/(dashboard)/liquidaciones/actions.ts"
+    }
+  },
+  "edge": {}
+}

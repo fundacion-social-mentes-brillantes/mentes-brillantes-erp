@@ -1,0 +1,20 @@
+{
+  "node": {
+    "70573645f197400eed3763b58608ea160081befa08": {
+      "workers": {
+        "app/(dashboard)/egresos/nuevo/page": {
+          "moduleId": 75181,
+          "async": false,
+          "exportedName": "saveEgreso",
+          "filename": "src/app/(dashboard)/egresos/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/egresos/nuevo/page": "action-browser"
+      },
+      "exportedName": "saveEgreso",
+      "filename": "src/app/(dashboard)/egresos/actions.ts"
+    }
+  },
+  "edge": {}
+}

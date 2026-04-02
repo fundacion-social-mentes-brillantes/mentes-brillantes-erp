@@ -6,9 +6,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { AlertCircle, CheckCircle2 } from 'lucide-react'
 
+export type AbonoActionState = Awaited<ReturnType<typeof saveAbono>>
+
 export function AbonoForm({ cuentaId, maxMonto }: { cuentaId: string, maxMonto: number }) {
-  const actionWithId = saveAbono.bind(null, cuentaId)
-  const [state, formAction, isPending] = useActionState(actionWithId, null)
+  const actionWithId = (state: AbonoActionState, formData: FormData) => saveAbono(cuentaId, state, formData)
+  const [state, formAction, isPending] = useActionState<AbonoActionState, FormData>(actionWithId, null)
   const formRef = useRef<HTMLFormElement>(null)
 
   // Si fue exitoso, limpiamos el formulario visualmente

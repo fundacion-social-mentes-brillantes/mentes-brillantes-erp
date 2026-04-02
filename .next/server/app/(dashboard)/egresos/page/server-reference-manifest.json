@@ -1,0 +1,20 @@
+{
+  "node": {
+    "407740fb768543e18d3c3bc9be3686072cab599bcc": {
+      "workers": {
+        "app/(dashboard)/egresos/page": {
+          "moduleId": 37412,
+          "async": false,
+          "exportedName": "deleteEgreso",
+          "filename": "src/app/(dashboard)/egresos/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/egresos/page": "action-browser"
+      },
+      "exportedName": "deleteEgreso",
+      "filename": "src/app/(dashboard)/egresos/actions.ts"
+    }
+  },
+  "edge": {}
+}

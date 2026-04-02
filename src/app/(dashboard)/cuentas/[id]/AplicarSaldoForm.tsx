@@ -1,14 +1,15 @@
 'use client'
 
 import { useActionState, useRef } from 'react'
-import { aplicarSaldoFavor } from '../actions'
+import { aplicarSaldoFavor, ActionState } from '../actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { AlertCircle, CheckCircle2, Wallet } from 'lucide-react'
 
 export function AplicarSaldoForm({ cuentaId, asistenteId, maxMonto }: { cuentaId: string, asistenteId: string, maxMonto: number }) {
-  const actionWithArgs = aplicarSaldoFavor.bind(null, cuentaId, asistenteId, maxMonto.toString())
-  const [state, formAction, isPending] = useActionState(actionWithArgs, null)
+  const actionWithArgs = (state: ActionState, formData: FormData) =>
+    aplicarSaldoFavor(cuentaId, asistenteId, maxMonto.toString(), state, formData)
+  const [state, formAction, isPending] = useActionState<ActionState, FormData>(actionWithArgs, null)
   const formRef = useRef<HTMLFormElement>(null)
 
   if (state?.success && formRef.current) {

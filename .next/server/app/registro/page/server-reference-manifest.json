@@ -1,0 +1,20 @@
+{
+  "node": {
+    "607317c9f2f63baf4a1279b4ca65d30bc10852bd4a": {
+      "workers": {
+        "app/registro/page": {
+          "moduleId": 51113,
+          "async": false,
+          "exportedName": "registroAction",
+          "filename": "src/app/registro/actions.ts"
+        }
+      },
+      "layer": {
+        "app/registro/page": "action-browser"
+      },
+      "exportedName": "registroAction",
+      "filename": "src/app/registro/actions.ts"
+    }
+  },
+  "edge": {}
+}

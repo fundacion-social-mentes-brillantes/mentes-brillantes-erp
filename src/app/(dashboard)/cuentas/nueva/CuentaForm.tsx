@@ -1,7 +1,7 @@
 'use client'
 
 import { useActionState, useEffect, useMemo, useState } from 'react'
-import { saveCuenta } from '../actions'
+import { saveCuenta, ActionState } from '../actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { AlertCircle } from 'lucide-react'
@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { SearchableAsistenteSelect } from '@/components/SearchableAsistenteSelect'
 
 export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asistentes: any[], asistenteInicial?: string, returnTo?: string }) {
-  const [state, formAction, isPending] = useActionState(saveCuenta, null)
+  const [state, formAction, isPending] = useActionState<ActionState, FormData>(saveCuenta, null)
   const [tipo, setTipo] = useState<'general' | 'coach'>('general')
   const [sesiones, setSesiones] = useState<number>(1)
   const [concepto, setConcepto] = useState('')
