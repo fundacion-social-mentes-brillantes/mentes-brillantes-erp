@@ -169,13 +169,39 @@ export async function deleteCuenta(cuenta_id: string): Promise<ActionState> {
     return { error: e?.message || 'Acceso denegado' }
   }
 
-  const { count: pagosCount, error: pagosError } = await supabase
+  const { data: pagosData, count: pagosCount, error: pagosError } = await supabase
     .from('pagos_abonos')
-    .select('*', { count: 'exact', head: true })
+    .select('origen_fondos, metodo_pago, tipo', { count: 'exact', head: false })
     .eq('cuenta_id', cuenta_id)
+  const { data: msfAplicaciones, error: msfError } = await supabase
+    .from('movimientos_saldo_favor')
+    .select('id')
+    .eq('cuenta_id', cuenta_id)
+    .eq('tipo', 'aplicacion')
 
   if (pagosError) return { error: pagosError.message }
+  if (msfError) return { error: msfError.message }
+
+  if ((msfAplicaciones?.length ?? 0) > 0) {
+    return {
+      error:
+        'No se puede eliminar la cuenta porque tiene aplicaciones de saldo a favor no revertidas. Reviértalas/anúlelas antes de borrar.',
+    }
+  }
   if ((pagosCount ?? 0) > 0) {
+    const pagos = pagosData || []
+    const tieneAplicacionesSaldo = pagos.some(
+      (p) =>
+        (p.origen_fondos || '').toLowerCase() === 'saldo_a_favor' ||
+        (p.metodo_pago || '').toLowerCase() === 'saldo_a_favor' ||
+        (p.tipo || '').toLowerCase() === 'aplicacion_saldo'
+    )
+    if (tieneAplicacionesSaldo) {
+      return {
+        error:
+          'No se puede eliminar la cuenta porque tiene aplicaciones de saldo a favor. Reviértalas/anúlelas antes de borrar.',
+      }
+    }
     return { error: 'No se puede eliminar la cuenta porque tiene pagos registrados. Anula o elimina los pagos primero.' }
   }
 
@@ -224,7 +250,7 @@ export async function saveAbono(cuenta_id: string, prevState: ActionState, formD
 
   const { data: cuentaData } = await supabase
     .from('cuentas_por_cobrar')
-    .select('valor_total, pagos_abonos(id, monto, notas, estado, metodo_pago, origen_fondos, tipo)')
+    .select('valor_total, asistente_id, pagos_abonos(id, monto, notas, estado, metodo_pago, origen_fondos, tipo)')
     .eq('id', cuenta_id)
     .single()
 
@@ -345,7 +371,7 @@ export async function editValorCuenta(
 
   const { data: cuentaData } = await supabase
     .from('cuentas_por_cobrar')
-    .select('valor_total, pagos_abonos(id, monto, notas, estado, metodo_pago, origen_fondos, tipo)')
+    .select('asistente_id, valor_total, pagos_abonos(id, monto, notas, estado, metodo_pago, origen_fondos, tipo)')
     .eq('id', cuenta_id)
     .single()
 
@@ -381,12 +407,16 @@ export async function editMontoAbono(
   const valor_nuevo = Math.round(parseFloat(valor_nuevo_str))
   if (isNaN(valor_nuevo) || valor_nuevo <= 0) return { error: 'El valor debe ser mayor a 0' }
 
-  const { data: abono } = await supabase.from('pagos_abonos').select('origen_fondos').eq('id', abono_id).single()
+  const { data: abono } = await supabase
+    .from('pagos_abonos')
+    .select('origen_fondos, metodo_pago, tipo')
+    .eq('id', abono_id)
+    .single()
 
   // Validar sobrepago antes de actualizar
   const { data: cuentaData } = await supabase
     .from('cuentas_por_cobrar')
-    .select('valor_total, pagos_abonos(id, monto, notas, estado, metodo_pago, origen_fondos, tipo)')
+    .select('valor_total, asistente_id, pagos_abonos(id, monto, notas, estado, metodo_pago, origen_fondos, tipo)')
     .eq('id', cuenta_id)
     .single()
 
@@ -401,13 +431,28 @@ export async function editMontoAbono(
   const { error: updateError } = await supabase.from('pagos_abonos').update({ monto: valor_nuevo }).eq('id', abono_id)
   if (updateError) return { error: updateError.message }
 
-  if (abono?.origen_fondos === 'saldo_a_favor') {
-    await supabase
-      .from('movimientos_saldo_favor')
-      .update({ monto: valor_nuevo })
-      .eq('cuenta_id', cuenta_id)
-      .eq('tipo', 'aplicacion')
-      .eq('monto', valor_anterior)
+  const asistenteIdCuenta = (cuentaData as any)?.asistente_id ?? null
+
+  const esSaldoFavor =
+    (abono?.origen_fondos || '').toLowerCase() === 'saldo_a_favor' ||
+    (abono?.metodo_pago || '').toLowerCase() === 'saldo_a_favor' ||
+    (abono?.tipo || '').toLowerCase() === 'aplicacion_saldo'
+
+  if (esSaldoFavor && asistenteIdCuenta) {
+    const delta = valor_nuevo - valor_anterior
+    if (delta !== 0) {
+      const esIncremento = delta > 0
+      await supabase.from('movimientos_saldo_favor').insert([
+        {
+          asistente_id: asistenteIdCuenta,
+          tipo: esIncremento ? 'aplicacion' : 'ingreso',
+          monto: Math.abs(delta),
+          fecha: new Date().toISOString().slice(0, 10),
+          metodo_pago: 'saldo_a_favor',
+          notas: `Ajuste de aplicación de saldo (abono ${abono_id})`,
+        },
+      ])
+    }
   }
 
   await supabase.from('auditoria_financiera').insert([
@@ -423,7 +468,10 @@ export async function editMontoAbono(
   ])
 
   if (cuentaData) {
-    const nuevo_estado = calcularEstadoCuentaDesdePagos(toSafeNumber(cuentaData.valor_total), cuentaData.pagos_abonos || [])
+    const pagosAjustados = (cuentaData.pagos_abonos || []).map((p: any) =>
+      p.id === abono_id ? { ...p, monto: valor_nuevo } : p
+    )
+    const nuevo_estado = calcularEstadoCuentaDesdePagos(toSafeNumber(cuentaData.valor_total), pagosAjustados)
     await supabase.from('cuentas_por_cobrar').update({ estado: nuevo_estado }).eq('id', cuenta_id)
   }
 

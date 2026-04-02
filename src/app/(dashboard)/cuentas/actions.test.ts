@@ -54,7 +54,16 @@ describe('deleteCuenta', () => {
         if (table === 'pagos_abonos') {
           return {
             select: vi.fn(() => ({
-              eq: vi.fn().mockResolvedValue({ count: 2, error: null }),
+              eq: vi.fn().mockResolvedValue({ count: 2, error: null, data: [{ origen_fondos: 'pago_directo' }] }),
+            })),
+          }
+        }
+        if (table === 'movimientos_saldo_favor') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+              })),
             })),
           }
         }
@@ -74,30 +83,19 @@ describe('deleteCuenta', () => {
     const deleteEq = vi.fn().mockResolvedValue({ error: null })
     const supabase = {
       from: vi.fn((table: string) => {
-        if (table === 'pagos_abonos') {
-          return {
-            select: vi.fn(() => ({
-              eq: vi.fn().mockResolvedValue({ count: 0, error: null }),
-            })),
-          }
-        }
-        if (table === 'coach_paquetes') {
-          const single = vi.fn().mockResolvedValue({ data: null })
+        if (table === 'pagos_abonos')
+          return { select: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ count: 0, error: null, data: [] }) })) }
+        if (table === 'movimientos_saldo_favor')
           return {
             select: vi.fn(() => ({
               eq: vi.fn(() => ({
-                single,
+                eq: vi.fn().mockResolvedValue({ data: [], error: null }),
               })),
             })),
           }
-        }
-        if (table === 'cuentas_por_cobrar') {
-          return {
-            delete: vi.fn(() => ({
-              eq: deleteEq,
-            })),
-          }
-        }
+        if (table === 'coach_paquetes')
+          return { select: vi.fn(() => ({ eq: vi.fn(() => ({ single: vi.fn().mockResolvedValue({ data: null }) })) })) }
+        if (table === 'cuentas_por_cobrar') return { delete: vi.fn(() => ({ eq: deleteEq })) }
         return {}
       }),
     }
@@ -109,6 +107,32 @@ describe('deleteCuenta', () => {
     expect(deleteEq).toHaveBeenCalledWith('id', 'cuenta-1')
     expect(revalidatePathMock).toHaveBeenCalledWith('/cuentas')
     expect(redirectMock).toHaveBeenCalledWith('/cuentas')
+  })
+
+  it('bloquea si hay aplicaciones de saldo a favor', async () => {
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'pagos_abonos')
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn().mockResolvedValue({ count: 0, error: null, data: [] }),
+            })),
+          }
+        if (table === 'movimientos_saldo_favor')
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                eq: vi.fn().mockResolvedValue({ data: [{ id: 'msf-1' }], error: null }),
+              })),
+            })),
+          }
+        return {}
+      }),
+    }
+    mockRequireAdminReturn(supabase)
+
+    const result = await deleteCuenta('cuenta-1')
+    expect(result?.error).toMatch(/saldo a favor/i)
   })
 })
 
@@ -204,13 +228,12 @@ describe('editMontoAbono', () => {
     const abonoUpdateEq = vi.fn().mockResolvedValue({ error: null })
     const abonoUpdate = vi.fn(() => ({ eq: abonoUpdateEq }))
 
-    const movimientosUpdateEq = vi.fn().mockResolvedValue({ error: null })
-    const movimientosUpdate = vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn(() => ({ eq: movimientosUpdateEq })) })) }))
+    const movimientosInsert = vi.fn().mockResolvedValue({ error: null })
 
     const auditInsert = vi.fn().mockResolvedValue({ error: null })
 
     const cuentaSelectSingle = vi.fn().mockResolvedValue({
-      data: { valor_total: 1000, pagos_abonos: [{ id: 'abono-1', monto: 300 }] },
+      data: { valor_total: 1000, asistente_id: 'asis-1', pagos_abonos: [{ id: 'abono-1', monto: 300 }] },
     })
     const cuentaSelect = vi.fn(() => ({ single: cuentaSelectSingle, eq: vi.fn(() => ({ single: cuentaSelectSingle })) }))
     const cuentaUpdateEq = vi.fn().mockResolvedValue({ error: null })
@@ -219,7 +242,7 @@ describe('editMontoAbono', () => {
     const supabase = {
       from: vi.fn((table: string) => {
         if (table === 'pagos_abonos') return { select: abonoSelect, update: abonoUpdate }
-        if (table === 'movimientos_saldo_favor') return { update: movimientosUpdate }
+        if (table === 'movimientos_saldo_favor') return { insert: movimientosInsert }
         if (table === 'auditoria_financiera') return { insert: auditInsert }
         if (table === 'cuentas_por_cobrar') return { select: cuentaSelect, update: cuentaUpdate }
         return {}
@@ -233,8 +256,15 @@ describe('editMontoAbono', () => {
     expect(result?.success).toBeTruthy()
     expect(abonoUpdate).toHaveBeenCalledWith({ monto: 600 })
     expect(abonoUpdateEq).toHaveBeenCalled()
-    expect(movimientosUpdate).toHaveBeenCalledWith({ monto: 600 })
-    expect(movimientosUpdateEq).toHaveBeenCalled()
+    expect(movimientosInsert).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          asistente_id: 'asis-1',
+          tipo: 'aplicacion',
+          monto: 300,
+        }),
+      ])
+    )
     expect(auditInsert).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({
@@ -345,5 +375,46 @@ describe('cuentas/actions sobrepago (reglas nuevas)', () => {
     const result = await editMontoAbono('a1', 'cuenta1', 950, null, form)
     expect(result?.error).toMatch(/no puede superar el saldo pendiente/i)
     expect(cuentaUpdateEq).not.toHaveBeenCalled() // no debe intentar update estado cuando sobrepago bloquea
+  })
+
+  it('ajusta saldo a favor devolviendo diferencia cuando el abono baja', async () => {
+    const abonoSelectSingle = vi.fn().mockResolvedValue({ data: { origen_fondos: 'saldo_a_favor' } })
+    const abonoSelect = vi.fn(() => ({ single: abonoSelectSingle, eq: vi.fn(() => ({ single: abonoSelectSingle })) }))
+    const abonoUpdateEq = vi.fn().mockResolvedValue({ error: null })
+    const abonoUpdate = vi.fn(() => ({ eq: abonoUpdateEq }))
+
+    const movimientosInsert = vi.fn().mockResolvedValue({ error: null })
+
+    const cuentaSelectSingle = vi.fn().mockResolvedValue({
+      data: { valor_total: 1000, asistente_id: 'asis-1', pagos_abonos: [{ id: 'abono-1', monto: 500 }] },
+    })
+    const cuentaSelect = vi.fn(() => ({ single: cuentaSelectSingle, eq: vi.fn(() => ({ single: cuentaSelectSingle })) }))
+    const cuentaUpdateEq = vi.fn().mockResolvedValue({ error: null })
+    const cuentaUpdate = vi.fn(() => ({ eq: cuentaUpdateEq }))
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'pagos_abonos') return { select: abonoSelect, update: abonoUpdate }
+        if (table === 'movimientos_saldo_favor') return { insert: movimientosInsert }
+        if (table === 'auditoria_financiera') return { insert: async () => ({ error: null }) }
+        if (table === 'cuentas_por_cobrar') return { select: cuentaSelect, update: cuentaUpdate }
+        return {}
+      }),
+    }
+    mockRequireAdminReturn(supabase, { id: 'admin-1' })
+
+    const formData = buildFormData({ valor_nuevo: '200', motivo: 'ajuste' })
+    const result = await editMontoAbono('abono-1', 'cuenta-1', 500, null, formData)
+
+    expect(result?.success).toBeTruthy()
+    expect(movimientosInsert).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          asistente_id: 'asis-1',
+          tipo: 'ingreso',
+          monto: 300,
+        }),
+      ])
+    )
   })
 })

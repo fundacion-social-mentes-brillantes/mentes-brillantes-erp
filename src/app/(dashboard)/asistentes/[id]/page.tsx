@@ -17,6 +17,7 @@ import { DonacionForm } from "./DonacionForm"
 import { DonacionActionsMenu } from "./DonacionActionsMenu"
 import { RegisterCoachSessionForm } from "@/components/coach/RegisterCoachSessionForm"
 import { CoachSessionsPdf } from "@/components/coach/CoachSessionsPdf"
+import { CoachSessionActions } from "@/components/coach/CoachSessionActions"
 import { requireRoles } from "@/lib/utils/authz"
 import { estadoPorActividad } from "@/lib/utils/asistentes"
 
@@ -85,6 +86,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
   const sesionesRealizadas = (sesionesCoach || []).length
   const sesionesRestantes = Math.max(0, sesionesCompradas - sesionesRealizadas)
   const sesionesLista = (sesionesCoach || []).map((s: any) => ({
+    id: s.id,
     fecha: s.fecha,
     notas: s.notas,
     paquete_id: s.paquete_id,
@@ -470,8 +472,13 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                       key={`${s.paquete_id}-${s.fecha}-${idx}`}
                       className="flex items-center justify-between border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white"
                     >
-                      <span>{new Date(s.fecha).toLocaleDateString("es-CO")}</span>
-                      <span className="text-zinc-600 truncate max-w-[200px]">{s.notas || "Sin notas"}</span>
+                      <div className="flex flex-col gap-1">
+                        <span>{new Date(s.fecha).toLocaleDateString("es-CO")}</span>
+                        <span className="text-zinc-600 truncate max-w-[200px]">{s.notas || "Sin notas"}</span>
+                      </div>
+                      {isAdmin && s.id && (
+                        <CoachSessionActions sesionId={s.id} fecha={s.fecha} notas={s.notas} />
+                      )}
                     </div>
                   ))}
                 </div>
