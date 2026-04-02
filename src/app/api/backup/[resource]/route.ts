@@ -25,22 +25,6 @@ const TABLES = [
 
 const isTableAllowed = (table: string) => TABLES.includes(table)
 
-async function tableExists(supabase: any, table: string) {
-  const { data, error } = await supabase
-    .from("information_schema.tables")
-    .select("table_name")
-    .eq("table_schema", "public")
-    .eq("table_name", table)
-    .maybeSingle()
-
-  if (error) {
-    console.warn(`No se pudo verificar la tabla ${table}: ${error.message}`)
-    return false
-  }
-
-  return Boolean(data?.table_name)
-}
-
 async function fetchCsv(supabase: any, table: string) {
   const { data, error } = await supabase.from(table).select("*")
   if (error) throw new Error(`Error al consultar ${table}: ${error.message}`)
@@ -62,17 +46,12 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ resour
       const warnings: string[] = []
 
       for (const table of TABLES) {
-        const exists = await tableExists(supabase, table)
-        if (!exists) {
-          warnings.push(`- Tabla omitida: ${table} (no existe en este entorno)`)
-          continue
-        }
-
         try {
           const csv = await fetchCsv(supabase, table)
           zip.file(`${table}_${today}.csv`, csv)
         } catch (err: any) {
-          warnings.push(`- Tabla omitida: ${table} (error al consultar: ${err?.message || "desconocido"})`)
+          const msg = err?.message?.toString() || "desconocido"
+          warnings.push(`- Tabla omitida: ${table} (error al consultar: ${msg})`)
         }
       }
 
@@ -125,19 +104,22 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ resour
       return NextResponse.json({ error: "Tabla no permitida" }, { status: 400 })
     }
 
-    const exists = await tableExists(supabase, resource)
-    if (!exists) {
-      return NextResponse.json({ error: "Tabla no existe en este entorno" }, { status: 404 })
+    try {
+      const csv = await fetchCsv(supabase, resource)
+      return new NextResponse(csv, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename="${resource}_${today}.csv"`,
+        },
+      })
+    } catch (error: any) {
+      const message = error?.message || "Error al consultar tabla"
+      if (message.includes("does not exist") || (message.includes("relation") && message.includes("does not exist"))) {
+        return NextResponse.json({ error: "Tabla no existe en este entorno" }, { status: 404 })
+      }
+      return NextResponse.json({ error: message }, { status: 500 })
     }
-
-    const csv = await fetchCsv(supabase, resource)
-    return new NextResponse(csv, {
-      status: 200,
-      headers: {
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${resource}_${today}.csv"`,
-      },
-    })
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "Error al generar respaldo" }, { status: 500 })
   }
