@@ -68,14 +68,29 @@ export async function deleteCuenta(cuentaId: string): Promise<ActionState> {
       return { error: "No se puede eliminar la cuenta porque tiene pagos registrados. Anula o elimina los pagos primero." }
     }
 
-    const { data: paqueteCoach } = await supabase
+    const { data: paqueteCoach, error: paqueteError } = await supabase
       .from("coach_paquetes")
       .select("id")
       .eq("cuenta_id", cuentaId)
       .single()
 
-    if (paqueteCoach) {
-      return { error: "No se puede eliminar porque está asociada a un paquete/agenda de coach." }
+    if (paqueteError && paqueteError.code !== "PGRST116") {
+      return { error: "No se pudo validar la relacion coach de la cuenta." }
+    }
+
+    if (paqueteCoach?.id) {
+      const { count: sesionesCount, error: sesionesError } = await supabase
+        .from("coach_sesiones")
+        .select("id", { count: "exact", head: true })
+        .eq("paquete_id", paqueteCoach.id)
+
+      if (sesionesError) {
+        return { error: "No se pudieron validar las sesiones coach asociadas." }
+      }
+
+      if ((sesionesCount || 0) > 0) {
+        return { error: "No se puede eliminar porque el paquete coach ya tiene sesiones registradas." }
+      }
     }
 
     const { error: deleteError } = await supabase.from("cuentas_por_cobrar").delete().eq("id", cuentaId)

@@ -231,7 +231,9 @@ export function CuentasClient({ cuentas, isAdmin = false }: { cuentas: Cuenta[];
                   </Link>
                   <div className="pt-1">
                     <DeleteCuentaButton cuentaId={selectedCuenta.id} />
-                    <p className="text-xs text-[rgb(var(--text-muted))] mt-1">No se puede eliminar si tiene pagos registrados.</p>
+                    <p className="text-xs text-[rgb(var(--text-muted))] mt-1">
+                      Solo se puede eliminar si no tiene pagos, aplicaciones de saldo a favor ni sesiones coach registradas.
+                    </p>
                   </div>
                 </div>
               )}

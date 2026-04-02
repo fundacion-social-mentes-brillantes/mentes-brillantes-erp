@@ -94,7 +94,13 @@ describe('deleteCuenta', () => {
             })),
           }
         if (table === 'coach_paquetes')
-          return { select: vi.fn(() => ({ eq: vi.fn(() => ({ single: vi.fn().mockResolvedValue({ data: null }) })) })) }
+          return { select: vi.fn(() => ({ eq: vi.fn(() => ({ single: vi.fn().mockResolvedValue({ data: { id: 'pkg-1' }, error: null }) })) })) }
+        if (table === 'coach_sesiones')
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn().mockResolvedValue({ count: 0, error: null }),
+            })),
+          }
         if (table === 'cuentas_por_cobrar') return { delete: vi.fn(() => ({ eq: deleteEq })) }
         return {}
       }),
@@ -107,6 +113,39 @@ describe('deleteCuenta', () => {
     expect(deleteEq).toHaveBeenCalledWith('id', 'cuenta-1')
     expect(revalidatePathMock).toHaveBeenCalledWith('/cuentas')
     expect(redirectMock).toHaveBeenCalledWith('/cuentas')
+  })
+
+  it('bloquea si el paquete coach ya tiene sesiones registradas', async () => {
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'pagos_abonos')
+          return { select: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ count: 0, error: null, data: [] }) })) }
+        if (table === 'movimientos_saldo_favor')
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+              })),
+            })),
+          }
+        if (table === 'coach_paquetes')
+          return { select: vi.fn(() => ({ eq: vi.fn(() => ({ single: vi.fn().mockResolvedValue({ data: { id: 'pkg-1' }, error: null }) })) })) }
+        if (table === 'coach_sesiones')
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn().mockResolvedValue({ count: 2, error: null }),
+            })),
+          }
+        return {}
+      }),
+    }
+    mockRequireAdminReturn(supabase)
+
+    const result = await deleteCuenta('cuenta-1')
+
+    expect(result?.error).toMatch(/sesiones registradas/i)
+    expect(revalidatePathMock).not.toHaveBeenCalled()
+    expect(redirectMock).not.toHaveBeenCalled()
   })
 
   it('bloquea si hay aplicaciones de saldo a favor', async () => {

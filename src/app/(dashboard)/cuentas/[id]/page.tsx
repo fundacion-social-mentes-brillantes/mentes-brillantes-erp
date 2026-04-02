@@ -260,7 +260,9 @@ export default async function DetalleCuentaPage({
                 <div className="pt-2 border-t border-zinc-100">
                   <p className="text-sm text-[rgb(var(--text-muted))] mb-2">Eliminar cuenta</p>
                   <DeleteCuentaButton cuentaId={cuenta.id} />
-                  <p className="text-xs text-[rgb(var(--text-muted))] mt-2">Solo se puede eliminar si no tiene pagos registrados.</p>
+                  <p className="text-xs text-[rgb(var(--text-muted))] mt-2">
+                    Solo se puede eliminar si no tiene pagos, aplicaciones de saldo a favor ni sesiones coach registradas.
+                  </p>
                 </div>
               </div>
             </div>
