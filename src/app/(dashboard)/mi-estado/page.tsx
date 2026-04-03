@@ -21,7 +21,7 @@ export default async function MiEstadoPage() {
       concepto,
       valor_total,
       estado,
-      pagos_abonos ( monto, notas )
+      pagos_abonos ( monto, estado, notas )
     `)
     .eq('asistente_id', asistenteId)
     .order('fecha_emision', { ascending: false });

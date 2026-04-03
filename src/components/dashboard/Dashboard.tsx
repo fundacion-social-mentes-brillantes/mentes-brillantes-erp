@@ -55,7 +55,7 @@ export async function Dashboard({ month }: { month?: string }) {
     .select('monto, estado, notas')
     .gte('fecha', firstDayOfMonth)
     .lte('fecha', lastDayOfMonth);
-  const donacionesMes = Math.round((rawDonaciones ?? []).filter(d => d.estado !== 'anulado' && !d.notas?.includes('[ANULADO]')).reduce((acc, d) => acc + Number(d.monto), 0));
+  const donacionesMes = Math.round((rawDonaciones ?? []).filter((item) => !esAnuladoCompleto(item)).reduce((acc, d) => acc + Number(d.monto), 0));
 
   // Egresos del Mes
   const { data: rawEgresosData } = await supabase
@@ -130,7 +130,7 @@ export async function Dashboard({ month }: { month?: string }) {
   });
   const ingresosPrev = Math.round(sumarMontos(ingresosPrevData));
   const { data: rawDonacionesPrev } = await supabase.from('donaciones_asistentes').select('monto, estado, notas').gte('fecha', firstDayOfPrevMonth).lte('fecha', lastDayOfPrevMonth);
-  const donacionesPrev = Math.round((rawDonacionesPrev ?? []).filter(d => d.estado !== 'anulado' && !d.notas?.includes('[ANULADO]')).reduce((acc, d) => acc + Number(d.monto), 0));
+  const donacionesPrev = Math.round((rawDonacionesPrev ?? []).filter((item) => !esAnuladoCompleto(item)).reduce((acc, d) => acc + Number(d.monto), 0));
   const ingresosTotalesPrev = ingresosPrev + donacionesPrev;
 
   const { data: rawEgresosPrevData } = await supabase.from('egresos').select('monto, estado, notas').gte('fecha', firstDayOfPrevMonth).lte('fecha', lastDayOfPrevMonth);

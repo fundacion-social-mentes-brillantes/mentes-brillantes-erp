@@ -13,7 +13,7 @@ SELECT
 FROM cuentas_por_cobrar c
 LEFT JOIN pagos_abonos p
   ON c.id = p.cuenta_id
- AND p.estado <> 'anulado'
+ AND COALESCE(p.estado, 'activo') <> 'anulado'
  AND (p.notas IS NULL OR p.notas NOT ILIKE '%[ANULADO]%')
 GROUP BY c.id;
 

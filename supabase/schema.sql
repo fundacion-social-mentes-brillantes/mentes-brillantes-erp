@@ -1,25 +1,19 @@
 -- supabase/schema.sql
+-- Esquema base alineado con las reglas contables vigentes del ERP.
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- ENUMS
 CREATE TYPE estado_cuenta AS ENUM ('pendiente', 'parcial', 'pagado');
-CREATE TYPE metodo_pago AS ENUM ('efectivo', 'nequi', 'daviplata', 'otro');
+CREATE TYPE metodo_pago AS ENUM ('efectivo', 'nequi', 'daviplata', 'otro', 'saldo_a_favor');
 CREATE TYPE estado_periodo AS ENUM ('abierto', 'cerrado');
 CREATE TYPE rol_usuario AS ENUM ('admin', 'caja', 'consulta');
 
--- PERFILES (Auth)
-CREATE TABLE perfiles (
-  id UUID REFERENCES auth.users(id) PRIMARY KEY,
-  nombre TEXT NOT NULL,
-  rol rol_usuario DEFAULT 'consulta' NOT NULL,
-  asistente_id UUID UNIQUE REFERENCES asistentes(id),
-  creado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- ASISTENTES (Mapeo exacto del legacy)
+-- ASISTENTES
 CREATE TABLE asistentes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  legacy_row_id TEXT UNIQUE, -- Row ID de AppSheet
-  legacy_asistente_id TEXT,  -- Asistente Id de AppSheet
+  legacy_row_id TEXT UNIQUE,
+  legacy_asistente_id TEXT,
   codigo TEXT,
   nombre TEXT NOT NULL,
   cedula TEXT UNIQUE,
@@ -27,163 +21,120 @@ CREATE TABLE asistentes (
   telefono TEXT,
   fecha_registro DATE,
   fecha_inicio_proceso DATE,
-  activo BOOLEAN DEFAULT true,
-  creado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  activo BOOLEAN NOT NULL DEFAULT true,
+  creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS asistentes_codigo_unq ON asistentes (codigo) WHERE codigo IS NOT NULL;
+CREATE UNIQUE INDEX asistentes_codigo_unq ON asistentes (codigo) WHERE codigo IS NOT NULL;
 
--- CUENTAS POR COBRAR (El "Valor Compra" del legacy)
+-- PERFILES
+CREATE TABLE perfiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id),
+  nombre TEXT NOT NULL,
+  rol rol_usuario NOT NULL DEFAULT 'consulta',
+  asistente_id UUID UNIQUE REFERENCES asistentes(id),
+  creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- CUENTAS POR COBRAR
 CREATE TABLE cuentas_por_cobrar (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  asistente_id UUID REFERENCES asistentes(id) ON DELETE RESTRICT,
-  legacy_row_id TEXT UNIQUE, -- Row ID del movimiento original
+  asistente_id UUID NOT NULL REFERENCES asistentes(id) ON DELETE RESTRICT,
+  legacy_row_id TEXT UNIQUE,
   concepto TEXT NOT NULL,
-  valor_total DECIMAL(12,2) NOT NULL CHECK (valor_total > 0), -- Ej: 768000
+  valor_total NUMERIC(12,2) NOT NULL CHECK (valor_total > 0),
   fecha_emision DATE NOT NULL,
-  estado estado_cuenta DEFAULT 'pendiente' NOT NULL,
-  creado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  estado estado_cuenta NOT NULL DEFAULT 'pendiente',
+  creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- PAGOS / ABONOS (El "Valor Abonado" del legacy)
+CREATE INDEX idx_cuentas_asistente_fecha ON cuentas_por_cobrar (asistente_id, fecha_emision DESC);
+CREATE INDEX idx_cuentas_estado ON cuentas_por_cobrar (estado);
+
+-- PAGOS / ABONOS
 CREATE TABLE pagos_abonos (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  cuenta_id UUID REFERENCES cuentas_por_cobrar(id) ON DELETE CASCADE,
-  legacy_row_id TEXT UNIQUE, -- Si el abono vino de un registro legacy
-  monto DECIMAL(12,2) NOT NULL CHECK (monto > 0), -- Ej: 600000
+  cuenta_id UUID NOT NULL REFERENCES cuentas_por_cobrar(id) ON DELETE CASCADE,
+  legacy_row_id TEXT UNIQUE,
+  monto NUMERIC(12,2) NOT NULL CHECK (monto > 0),
   metodo_pago metodo_pago NOT NULL,
+  origen_fondos TEXT NOT NULL DEFAULT 'pago_directo' CHECK (origen_fondos IN ('pago_directo', 'saldo_a_favor')),
   fecha_pago DATE NOT NULL,
+  estado TEXT NOT NULL DEFAULT 'activo' CHECK (estado IN ('activo', 'anulado')),
   notas TEXT,
-  creado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  usuario_id UUID REFERENCES auth.users(id),
+  creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX idx_pagos_cuenta_fecha ON pagos_abonos (cuenta_id, fecha_pago DESC);
+CREATE INDEX idx_pagos_estado ON pagos_abonos (estado);
+CREATE INDEX idx_pagos_fecha ON pagos_abonos (fecha_pago);
+
+-- MOVIMIENTOS DE SALDO A FAVOR
+CREATE TABLE movimientos_saldo_favor (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  asistente_id UUID NOT NULL REFERENCES asistentes(id) ON DELETE RESTRICT,
+  cuenta_id UUID REFERENCES cuentas_por_cobrar(id) ON DELETE SET NULL,
+  tipo TEXT NOT NULL CHECK (tipo IN ('ingreso', 'aplicacion')),
+  monto NUMERIC(12,2) NOT NULL CHECK (monto > 0),
+  metodo_pago metodo_pago NOT NULL DEFAULT 'otro',
+  fecha DATE NOT NULL DEFAULT CURRENT_DATE,
+  notas TEXT,
+  usuario_id UUID REFERENCES auth.users(id),
+  creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_msf_asistente_fecha ON movimientos_saldo_favor (asistente_id, fecha DESC);
+CREATE INDEX idx_msf_cuenta ON movimientos_saldo_favor (cuenta_id);
 
 -- EGRESOS
 CREATE TABLE egresos (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   legacy_row_id TEXT UNIQUE,
   concepto TEXT NOT NULL,
-  monto DECIMAL(12,2) NOT NULL CHECK (monto > 0),
+  monto NUMERIC(12,2) NOT NULL CHECK (monto > 0),
   categoria TEXT NOT NULL,
   metodo_pago metodo_pago NOT NULL,
   fecha DATE NOT NULL DEFAULT CURRENT_DATE,
+  estado TEXT NOT NULL DEFAULT 'activo' CHECK (estado IN ('activo', 'anulado')),
   notas TEXT,
-  creado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  usuario_id UUID REFERENCES auth.users(id),
+  creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- SOCIOS
-CREATE TABLE socios (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  usuario_id UUID REFERENCES perfiles(id),
-  legacy_row_id TEXT UNIQUE,
-  nombre TEXT NOT NULL,
-  porcentaje_participacion DECIMAL(5,2) NOT NULL CHECK (porcentaje_participacion >= 0 AND porcentaje_participacion <= 100),
-  activo BOOLEAN DEFAULT true,
-  creado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+CREATE INDEX idx_egresos_fecha ON egresos (fecha DESC);
+CREATE INDEX idx_egresos_estado ON egresos (estado);
 
--- PERIODOS (Reemplaza USERSETTINGS)
-CREATE TABLE periodos (
+-- DONACIONES
+CREATE TABLE donaciones_asistentes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  asistente_id UUID NOT NULL REFERENCES asistentes(id) ON DELETE RESTRICT,
   legacy_row_id TEXT UNIQUE,
-  nombre TEXT NOT NULL,
-  fecha_inicio DATE NOT NULL,
-  fecha_fin DATE NOT NULL,
-  estado estado_periodo DEFAULT 'abierto' NOT NULL,
-  creado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- ADELANTOS SOCIOS
-CREATE TABLE adelantos_socios (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  socio_id UUID REFERENCES socios(id) ON DELETE RESTRICT,
-  periodo_id UUID REFERENCES periodos(id) ON DELETE RESTRICT,
-  legacy_row_id TEXT UNIQUE,
-  monto DECIMAL(12,2) NOT NULL CHECK (monto > 0),
+  monto NUMERIC(12,2) NOT NULL CHECK (monto > 0),
+  metodo_pago metodo_pago NOT NULL,
   fecha DATE NOT NULL DEFAULT CURRENT_DATE,
+  estado TEXT NOT NULL DEFAULT 'activo' CHECK (estado IN ('activo', 'anulado')),
   notas TEXT,
-  creado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  usuario_id UUID REFERENCES auth.users(id),
+  creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Alinear adelantos con resumen por método de pago
-ALTER TABLE adelantos_socios
-  ADD COLUMN IF NOT EXISTS metodo_pago metodo_pago NOT NULL DEFAULT 'otro';
+CREATE INDEX idx_donaciones_asistente_fecha ON donaciones_asistentes (asistente_id, fecha DESC);
+CREATE INDEX idx_donaciones_estado ON donaciones_asistentes (estado);
 
--- LIQUIDACIONES
-CREATE TABLE liquidaciones_socios (
+-- COACH
+CREATE TABLE coach_paquetes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  periodo_id UUID REFERENCES periodos(id) ON DELETE RESTRICT,
-  socio_id UUID REFERENCES socios(id) ON DELETE RESTRICT,
-  ingresos_cobrados DECIMAL(12,2) NOT NULL,
-  donaciones_periodo DECIMAL(12,2) NOT NULL DEFAULT 0,
-  ingresos_operativos DECIMAL(12,2) NOT NULL DEFAULT 0,
-  egresos_periodo DECIMAL(12,2) NOT NULL,
-  utilidad_neta DECIMAL(12,2) NOT NULL,
-  porcentaje_aplicado DECIMAL(5,2) NOT NULL,
-  valor_correspondiente DECIMAL(12,2) NOT NULL,
-  adelantos_descontados DECIMAL(12,2) NOT NULL,
-  valor_neto_pagar DECIMAL(12,2) NOT NULL,
-  generado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  UNIQUE(periodo_id, socio_id)
-);
-
--- VISTA PARA RESOLVER EL "MONTO PENDIENTE" (Ej: 168000)
-CREATE OR REPLACE VIEW vista_cuentas_saldos AS
-SELECT 
-  c.id,
-  c.asistente_id,
-  c.valor_total, -- 768000
-  COALESCE(SUM(p.monto), 0) as total_abonado, -- 600000
-  (c.valor_total - COALESCE(SUM(p.monto), 0)) as monto_pendiente, -- 168000
-  c.estado
-FROM cuentas_por_cobrar c
-LEFT JOIN pagos_abonos p
-  ON c.id = p.cuenta_id
- AND p.estado <> 'anulado'
- AND (p.notas IS NULL OR p.notas NOT ILIKE '%[ANULADO]%')
-GROUP BY c.id;
-
--- TRIGGER PARA ACTUALIZAR ESTADO AUTOMÁTICAMENTE
-CREATE OR REPLACE FUNCTION actualizar_estado_cuenta() RETURNS TRIGGER AS $$
-DECLARE
-  v_total DECIMAL;
-  v_abonado DECIMAL;
-BEGIN
-  SELECT valor_total INTO v_total FROM cuentas_por_cobrar WHERE id = COALESCE(NEW.cuenta_id, OLD.cuenta_id);
-  SELECT COALESCE(SUM(monto), 0) INTO v_abonado
-  FROM pagos_abonos
-  WHERE cuenta_id = COALESCE(NEW.cuenta_id, OLD.cuenta_id)
-    AND estado <> 'anulado'
-    AND (notas IS NULL OR notas NOT ILIKE '%[ANULADO]%');
-  
-  IF v_abonado >= v_total THEN
-    UPDATE cuentas_por_cobrar SET estado = 'pagado' WHERE id = COALESCE(NEW.cuenta_id, OLD.cuenta_id);
-  ELSIF v_abonado > 0 THEN
-    UPDATE cuentas_por_cobrar SET estado = 'parcial' WHERE id = COALESCE(NEW.cuenta_id, OLD.cuenta_id);
-  ELSE
-    UPDATE cuentas_por_cobrar SET estado = 'pendiente' WHERE id = COALESCE(NEW.cuenta_id, OLD.cuenta_id);
-  END IF;
-  RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trg_estado_cuenta AFTER INSERT OR UPDATE OR DELETE ON pagos_abonos
-FOR EACH ROW EXECUTE FUNCTION actualizar_estado_cuenta();
-
--- PAQUETES COACH (una cuenta -> un paquete)
-CREATE TABLE IF NOT EXISTS coach_paquetes (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  cuenta_id UUID NOT NULL REFERENCES cuentas_por_cobrar(id) ON DELETE CASCADE,
+  cuenta_id UUID NOT NULL UNIQUE REFERENCES cuentas_por_cobrar(id) ON DELETE CASCADE,
   asistente_id UUID NOT NULL REFERENCES asistentes(id) ON DELETE RESTRICT,
   sesiones_compradas INTEGER NOT NULL CHECK (sesiones_compradas > 0),
   notas TEXT,
-  creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (cuenta_id)
+  creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS coach_paquetes_asistente_idx ON coach_paquetes (asistente_id);
+CREATE INDEX idx_coach_paquetes_asistente ON coach_paquetes (asistente_id);
 
--- Sesiones registradas de paquetes coach
-CREATE TABLE IF NOT EXISTS coach_sesiones (
+CREATE TABLE coach_sesiones (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   paquete_id UUID NOT NULL REFERENCES coach_paquetes(id) ON DELETE CASCADE,
   asistente_id UUID NOT NULL REFERENCES asistentes(id) ON DELETE RESTRICT,
@@ -192,26 +143,172 @@ CREATE TABLE IF NOT EXISTS coach_sesiones (
   creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS coach_sesiones_paquete_idx ON coach_sesiones (paquete_id);
-CREATE INDEX IF NOT EXISTS coach_sesiones_asistente_idx ON coach_sesiones (asistente_id);
+CREATE INDEX idx_coach_sesiones_paquete ON coach_sesiones (paquete_id);
+CREATE INDEX idx_coach_sesiones_asistente ON coach_sesiones (asistente_id);
 
--- DONACIONES DE ASISTENTES (flujo independiente a cuentas/abonos)
-CREATE TABLE IF NOT EXISTS donaciones_asistentes (
+-- SOCIOS Y PERIODOS
+CREATE TABLE socios (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  asistente_id UUID NOT NULL REFERENCES asistentes(id) ON DELETE RESTRICT,
+  usuario_id UUID REFERENCES perfiles(id),
   legacy_row_id TEXT UNIQUE,
-  monto DECIMAL(12,2) NOT NULL CHECK (monto > 0),
-  metodo_pago metodo_pago NOT NULL,
-  fecha DATE NOT NULL DEFAULT CURRENT_DATE,
-  notas TEXT,
-  estado TEXT NOT NULL DEFAULT 'activo' CHECK (estado IN ('activo','anulado')),
+  nombre TEXT NOT NULL,
+  porcentaje_participacion NUMERIC(5,2) NOT NULL CHECK (porcentaje_participacion >= 0 AND porcentaje_participacion <= 100),
+  activo BOOLEAN NOT NULL DEFAULT true,
   creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_donaciones_asistente_fecha ON donaciones_asistentes (asistente_id, fecha DESC);
-CREATE INDEX IF NOT EXISTS idx_donaciones_estado ON donaciones_asistentes (estado);
+CREATE TABLE periodos (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  legacy_row_id TEXT UNIQUE,
+  nombre TEXT NOT NULL,
+  fecha_inicio DATE NOT NULL,
+  fecha_fin DATE NOT NULL,
+  estado estado_periodo NOT NULL DEFAULT 'abierto',
+  creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (fecha_inicio <= fecha_fin)
+);
 
--- Vista de movimientos generales (incluye donaciones)
+CREATE INDEX idx_periodos_rango ON periodos (fecha_inicio, fecha_fin);
+CREATE INDEX idx_periodos_estado ON periodos (estado);
+
+CREATE TABLE adelantos_socios (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  socio_id UUID NOT NULL REFERENCES socios(id) ON DELETE RESTRICT,
+  periodo_id UUID NOT NULL REFERENCES periodos(id) ON DELETE RESTRICT,
+  legacy_row_id TEXT UNIQUE,
+  monto NUMERIC(12,2) NOT NULL CHECK (monto > 0),
+  fecha DATE NOT NULL DEFAULT CURRENT_DATE,
+  metodo_pago metodo_pago NOT NULL DEFAULT 'otro',
+  notas TEXT,
+  usuario_id UUID REFERENCES auth.users(id),
+  creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_adelantos_periodo_socio ON adelantos_socios (periodo_id, socio_id);
+
+CREATE TABLE liquidaciones_socios (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  periodo_id UUID NOT NULL REFERENCES periodos(id) ON DELETE RESTRICT,
+  socio_id UUID NOT NULL REFERENCES socios(id) ON DELETE RESTRICT,
+  ingresos_cobrados NUMERIC(12,2) NOT NULL,
+  donaciones_periodo NUMERIC(12,2) NOT NULL DEFAULT 0,
+  ingresos_operativos NUMERIC(12,2) NOT NULL DEFAULT 0,
+  egresos_periodo NUMERIC(12,2) NOT NULL,
+  utilidad_neta NUMERIC(12,2) NOT NULL,
+  porcentaje_aplicado NUMERIC(5,2) NOT NULL,
+  valor_correspondiente NUMERIC(12,2) NOT NULL,
+  adelantos_descontados NUMERIC(12,2) NOT NULL DEFAULT 0,
+  valor_neto_pagar NUMERIC(12,2) NOT NULL,
+  generado_en TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (periodo_id, socio_id)
+);
+
+CREATE TABLE liquidaciones_resumen_cuentas (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  periodo_id UUID NOT NULL REFERENCES periodos(id) ON DELETE CASCADE,
+  metodo_pago metodo_pago NOT NULL,
+  total_ingresos NUMERIC(12,2) NOT NULL DEFAULT 0,
+  total_salidas NUMERIC(12,2) NOT NULL DEFAULT 0,
+  saldo_neto_periodo NUMERIC(12,2) NOT NULL DEFAULT 0,
+  ingresos_abonos NUMERIC(12,2) NOT NULL DEFAULT 0,
+  ingresos_donaciones NUMERIC(12,2) NOT NULL DEFAULT 0,
+  salidas_egresos NUMERIC(12,2) NOT NULL DEFAULT 0,
+  salidas_adelantos NUMERIC(12,2) NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (periodo_id, metodo_pago)
+);
+
+-- AUDITORIA
+CREATE TABLE auditoria_financiera (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tabla_afectada TEXT NOT NULL,
+  registro_id UUID NOT NULL,
+  usuario_id UUID REFERENCES auth.users(id),
+  accion TEXT NOT NULL,
+  valor_anterior NUMERIC(12,2),
+  valor_nuevo NUMERIC(12,2),
+  motivo TEXT,
+  creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_auditoria_tabla_registro ON auditoria_financiera (tabla_afectada, registro_id, creado_en DESC);
+
+-- CONFIGURACION DE EMPRESA
+CREATE TABLE configuracion_empresa (
+  id INTEGER PRIMARY KEY,
+  nombre TEXT NOT NULL,
+  nit TEXT,
+  correo TEXT,
+  telefono TEXT,
+  ciudad TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO configuracion_empresa (id, nombre)
+VALUES (1, 'Fundacion Social Gimnasio Emocional Mentes Brillantes')
+ON CONFLICT (id) DO NOTHING;
+
+-- VISTA DE SALDOS POR CUENTA
+CREATE OR REPLACE VIEW vista_cuentas_saldos AS
+SELECT
+  c.id,
+  c.asistente_id,
+  c.valor_total,
+  COALESCE(SUM(p.monto), 0) AS total_abonado,
+  GREATEST(c.valor_total - COALESCE(SUM(p.monto), 0), 0) AS monto_pendiente,
+  c.estado
+FROM cuentas_por_cobrar c
+LEFT JOIN pagos_abonos p
+  ON c.id = p.cuenta_id
+ AND COALESCE(p.estado, 'activo') <> 'anulado'
+ AND (p.notas IS NULL OR p.notas NOT ILIKE '%[ANULADO]%')
+GROUP BY c.id;
+
+-- TRIGGER DE ESTADO DE CUENTA
+CREATE OR REPLACE FUNCTION actualizar_estado_cuenta()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_cuenta_id UUID;
+  v_total NUMERIC;
+  v_abonado NUMERIC;
+BEGIN
+  v_cuenta_id := COALESCE(NEW.cuenta_id, OLD.cuenta_id);
+  IF v_cuenta_id IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  SELECT valor_total INTO v_total
+  FROM cuentas_por_cobrar
+  WHERE id = v_cuenta_id;
+
+  SELECT COALESCE(SUM(monto), 0) INTO v_abonado
+  FROM pagos_abonos
+  WHERE cuenta_id = v_cuenta_id
+    AND COALESCE(estado, 'activo') <> 'anulado'
+    AND (notas IS NULL OR notas NOT ILIKE '%[ANULADO]%');
+
+  UPDATE cuentas_por_cobrar
+  SET estado = CASE
+    WHEN v_abonado >= v_total THEN 'pagado'::estado_cuenta
+    WHEN v_abonado > 0 THEN 'parcial'::estado_cuenta
+    ELSE 'pendiente'::estado_cuenta
+  END
+  WHERE id = v_cuenta_id;
+
+  RETURN NULL;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_estado_cuenta ON pagos_abonos;
+CREATE TRIGGER trg_estado_cuenta
+AFTER INSERT OR UPDATE OR DELETE ON pagos_abonos
+FOR EACH ROW EXECUTE FUNCTION actualizar_estado_cuenta();
+
+-- HISTORIAL GENERAL
 CREATE OR REPLACE VIEW vw_movimientos_generales AS
 SELECT
   c.id AS movimiento_id,
@@ -219,17 +316,24 @@ SELECT
   'cuenta_cobrar' AS tipo_movimiento,
   c.asistente_id,
   a.nombre AS asistente_nombre,
-  c.concepto AS concepto,
+  c.concepto,
   NULL::metodo_pago AS metodo_pago,
-  GREATEST(c.valor_total - COALESCE((
-    SELECT SUM(pa.monto) FROM pagos_abonos pa WHERE pa.cuenta_id = c.id AND pa.estado <> 'anulado' AND pa.notas NOT ILIKE '%[ANULADO]%'
-  ), 0),0) AS valor_deuda,
-  0::DECIMAL(12,2) AS valor_ingreso,
-  0::DECIMAL(12,2) AS valor_egreso,
-  c.estado AS estado_o_saldo,
-  NULL::text AS notas,
-  c.creado_en AS creado_en,
-  NULL::text AS categoria
+  GREATEST(
+    c.valor_total - COALESCE((
+      SELECT SUM(pa.monto)
+      FROM pagos_abonos pa
+      WHERE pa.cuenta_id = c.id
+        AND COALESCE(pa.estado, 'activo') <> 'anulado'
+        AND (pa.notas IS NULL OR pa.notas NOT ILIKE '%[ANULADO]%')
+    ), 0),
+    0
+  ) AS valor_deuda,
+  0::NUMERIC(12,2) AS valor_ingreso,
+  0::NUMERIC(12,2) AS valor_egreso,
+  c.estado::TEXT AS estado_o_saldo,
+  NULL::TEXT AS notas,
+  c.creado_en,
+  NULL::TEXT AS categoria
 FROM cuentas_por_cobrar c
 LEFT JOIN asistentes a ON a.id = c.asistente_id
 
@@ -241,15 +345,22 @@ SELECT
   'abono' AS tipo_movimiento,
   c.asistente_id,
   a.nombre AS asistente_nombre,
-  c.concepto AS concepto,
-  p.metodo_pago AS metodo_pago,
-  0::DECIMAL(12,2) AS valor_deuda,
-  CASE WHEN p.estado <> 'anulado' AND p.notas NOT ILIKE '%[ANULADO]%' THEN p.monto ELSE 0 END AS valor_ingreso,
-  0::DECIMAL(12,2) AS valor_egreso,
+  c.concepto,
+  p.metodo_pago,
+  0::NUMERIC(12,2) AS valor_deuda,
+  CASE
+    WHEN COALESCE(p.estado, 'activo') <> 'anulado'
+      AND (p.notas IS NULL OR p.notas NOT ILIKE '%[ANULADO]%')
+      AND COALESCE(LOWER(p.origen_fondos), '') <> 'saldo_a_favor'
+      AND COALESCE(LOWER(p.metodo_pago::TEXT), '') <> 'saldo_a_favor'
+    THEN p.monto
+    ELSE 0
+  END AS valor_ingreso,
+  0::NUMERIC(12,2) AS valor_egreso,
   p.estado AS estado_o_saldo,
-  p.notas AS notas,
-  p.creado_en AS creado_en,
-  NULL::text AS categoria
+  p.notas,
+  p.creado_en,
+  NULL::TEXT AS categoria
 FROM pagos_abonos p
 LEFT JOIN cuentas_por_cobrar c ON c.id = p.cuenta_id
 LEFT JOIN asistentes a ON a.id = c.asistente_id
@@ -263,14 +374,14 @@ SELECT
   msf.asistente_id,
   a.nombre AS asistente_nombre,
   COALESCE(msf.notas, 'Saldo a favor') AS concepto,
-  msf.metodo_pago AS metodo_pago,
-  0::DECIMAL(12,2) AS valor_deuda,
+  msf.metodo_pago,
+  0::NUMERIC(12,2) AS valor_deuda,
   CASE WHEN msf.tipo = 'ingreso' THEN msf.monto ELSE 0 END AS valor_ingreso,
   CASE WHEN msf.tipo = 'aplicacion' THEN msf.monto ELSE 0 END AS valor_egreso,
   msf.tipo AS estado_o_saldo,
-  msf.notas AS notas,
-  msf.creado_en AS creado_en,
-  NULL::text AS categoria
+  msf.notas,
+  msf.creado_en,
+  NULL::TEXT AS categoria
 FROM movimientos_saldo_favor msf
 LEFT JOIN asistentes a ON a.id = msf.asistente_id
 
@@ -278,42 +389,167 @@ UNION ALL
 
 SELECT
   e.id AS movimiento_id,
-  e.fecha AS fecha,
+  e.fecha,
   'egreso' AS tipo_movimiento,
-  NULL::uuid AS asistente_id,
-  NULL::text AS asistente_nombre,
-  e.concepto AS concepto,
-  e.metodo_pago AS metodo_pago,
-  0::DECIMAL(12,2) AS valor_deuda,
-  0::DECIMAL(12,2) AS valor_ingreso,
-  CASE WHEN e.estado <> 'anulado' AND e.notas NOT ILIKE '%[ANULADO]%' THEN e.monto ELSE 0 END AS valor_egreso,
+  NULL::UUID AS asistente_id,
+  NULL::TEXT AS asistente_nombre,
+  e.concepto,
+  e.metodo_pago,
+  0::NUMERIC(12,2) AS valor_deuda,
+  0::NUMERIC(12,2) AS valor_ingreso,
+  CASE
+    WHEN COALESCE(e.estado, 'activo') <> 'anulado'
+      AND (e.notas IS NULL OR e.notas NOT ILIKE '%[ANULADO]%')
+    THEN e.monto
+    ELSE 0
+  END AS valor_egreso,
   e.estado AS estado_o_saldo,
-  e.notas AS notas,
-  e.creado_en AS creado_en,
-  e.categoria AS categoria
+  e.notas,
+  e.creado_en,
+  e.categoria
 FROM egresos e
 
 UNION ALL
 
 SELECT
   d.id AS movimiento_id,
-  d.fecha AS fecha,
+  d.fecha,
   'donacion' AS tipo_movimiento,
-  d.asistente_id AS asistente_id,
+  d.asistente_id,
   a.nombre AS asistente_nombre,
-  'Donación' AS concepto,
-  d.metodo_pago AS metodo_pago,
-  0::DECIMAL(12,2) AS valor_deuda,
-  CASE WHEN d.estado <> 'anulado' THEN d.monto ELSE 0 END AS valor_ingreso,
-  0::DECIMAL(12,2) AS valor_egreso,
+  'Donacion' AS concepto,
+  d.metodo_pago,
+  0::NUMERIC(12,2) AS valor_deuda,
+  CASE
+    WHEN COALESCE(d.estado, 'activo') <> 'anulado'
+      AND (d.notas IS NULL OR d.notas NOT ILIKE '%[ANULADO]%')
+    THEN d.monto
+    ELSE 0
+  END AS valor_ingreso,
+  0::NUMERIC(12,2) AS valor_egreso,
   d.estado AS estado_o_saldo,
-  d.notas AS notas,
-  d.creado_en AS creado_en,
-  NULL::text AS categoria
+  d.notas,
+  d.creado_en,
+  NULL::TEXT AS categoria
 FROM donaciones_asistentes d
 LEFT JOIN asistentes a ON a.id = d.asistente_id;
 
--- FUNCIÓN TRANSACCIONAL PARA CERRAR LIQUIDACIÓN CON SNAPSHOT POR CUENTA
+-- RPC PARA APLICAR SALDO A FAVOR SIN DESCUADRES
+CREATE OR REPLACE FUNCTION aplicar_saldo_favor_trx(
+  p_cuenta_id UUID,
+  p_asistente_id UUID,
+  p_monto NUMERIC
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_fecha DATE := CURRENT_DATE;
+  v_periodo_nombre TEXT;
+  v_periodo_estado TEXT;
+  v_valor_total NUMERIC;
+  v_total_abonado NUMERIC;
+  v_pendiente NUMERIC;
+  v_pago_id UUID;
+  v_movimiento_id UUID;
+  v_usuario_id UUID := auth.uid();
+BEGIN
+  IF p_monto IS NULL OR p_monto <= 0 THEN
+    RAISE EXCEPTION 'El monto debe ser mayor a 0.';
+  END IF;
+
+  SELECT nombre, estado::TEXT
+  INTO v_periodo_nombre, v_periodo_estado
+  FROM periodos
+  WHERE v_fecha BETWEEN fecha_inicio AND fecha_fin
+  ORDER BY fecha_inicio DESC
+  LIMIT 1;
+
+  IF v_periodo_estado = 'cerrado' THEN
+    RAISE EXCEPTION 'Aplicar saldo a favor no se puede realizar porque la fecha % pertenece al periodo cerrado %.', v_fecha, v_periodo_nombre;
+  END IF;
+
+  SELECT valor_total
+  INTO v_valor_total
+  FROM cuentas_por_cobrar
+  WHERE id = p_cuenta_id
+  FOR UPDATE;
+
+  IF v_valor_total IS NULL THEN
+    RAISE EXCEPTION 'Cuenta no encontrada.';
+  END IF;
+
+  SELECT COALESCE(SUM(monto), 0)
+  INTO v_total_abonado
+  FROM pagos_abonos
+  WHERE cuenta_id = p_cuenta_id
+    AND COALESCE(estado, 'activo') <> 'anulado'
+    AND (notas IS NULL OR notas NOT ILIKE '%[ANULADO]%');
+
+  v_pendiente := GREATEST(v_valor_total - v_total_abonado, 0);
+
+  IF p_monto > v_pendiente THEN
+    RAISE EXCEPTION 'El monto excede el saldo pendiente de la cuenta.';
+  END IF;
+
+  INSERT INTO pagos_abonos (
+    cuenta_id,
+    monto,
+    metodo_pago,
+    origen_fondos,
+    fecha_pago,
+    notas,
+    usuario_id
+  )
+  VALUES (
+    p_cuenta_id,
+    p_monto,
+    'saldo_a_favor',
+    'saldo_a_favor',
+    v_fecha,
+    'Aplicacion de saldo a favor',
+    v_usuario_id
+  )
+  RETURNING id INTO v_pago_id;
+
+  INSERT INTO movimientos_saldo_favor (
+    asistente_id,
+    cuenta_id,
+    tipo,
+    monto,
+    metodo_pago,
+    fecha,
+    notas,
+    usuario_id
+  )
+  VALUES (
+    p_asistente_id,
+    p_cuenta_id,
+    'aplicacion',
+    p_monto,
+    'saldo_a_favor',
+    v_fecha,
+    format('Aplicacion de saldo a favor a la cuenta %s', p_cuenta_id),
+    v_usuario_id
+  )
+  RETURNING id INTO v_movimiento_id;
+
+  INSERT INTO auditoria_financiera (
+    tabla_afectada,
+    registro_id,
+    usuario_id,
+    accion,
+    valor_anterior,
+    valor_nuevo,
+    motivo
+  )
+  VALUES
+    ('pagos_abonos', v_pago_id, v_usuario_id, 'aplicar_saldo_a_favor', NULL, p_monto, 'Pago aplicado desde saldo a favor'),
+    ('movimientos_saldo_favor', v_movimiento_id, v_usuario_id, 'consumir_saldo_a_favor', NULL, p_monto, 'Aplicacion de saldo a favor a una cuenta');
+END;
+$$;
+
+-- RPC DE CIERRE DE LIQUIDACION
 CREATE OR REPLACE FUNCTION fn_cerrar_liquidacion(p_periodo_id UUID)
 RETURNS void
 LANGUAGE plpgsql
@@ -327,8 +563,11 @@ DECLARE
   v_utilidad_neta NUMERIC;
   v_donaciones_total NUMERIC;
 BEGIN
-  SELECT fecha_inicio, fecha_fin, estado INTO v_inicio, v_fin, v_estado
-  FROM periodos WHERE id = p_periodo_id FOR UPDATE;
+  SELECT fecha_inicio, fecha_fin, estado::TEXT
+  INTO v_inicio, v_fin, v_estado
+  FROM periodos
+  WHERE id = p_periodo_id
+  FOR UPDATE;
 
   IF v_estado IS NULL THEN
     RAISE EXCEPTION 'Periodo no encontrado';
@@ -339,67 +578,76 @@ BEGIN
   END IF;
 
   WITH metodos AS (
-    SELECT unnest(ARRAY['efectivo','nequi','daviplata','otro']::text[]) AS metodo_pago
+    SELECT unnest(ARRAY['efectivo','nequi','daviplata','otro','saldo_a_favor']::TEXT[]) AS metodo_pago
   ),
   abonos_agg AS (
-    SELECT LOWER(COALESCE(pa.metodo_pago::text,'otro')) AS metodo_pago,
+    SELECT LOWER(COALESCE(pa.metodo_pago::TEXT, 'otro')) AS metodo_pago,
            SUM(pa.monto) AS monto
     FROM pagos_abonos pa
     WHERE pa.fecha_pago BETWEEN v_inicio AND v_fin
       AND COALESCE(pa.estado, 'activo') <> 'anulado'
       AND (pa.notas IS NULL OR pa.notas NOT ILIKE '%[ANULADO]%')
-      AND COALESCE(LOWER(pa.origen_fondos::text), '') <> 'saldo_a_favor'
-      AND COALESCE(LOWER(pa.metodo_pago::text), '') <> 'saldo_a_favor'
+      AND COALESCE(LOWER(pa.origen_fondos), '') <> 'saldo_a_favor'
+      AND COALESCE(LOWER(pa.metodo_pago::TEXT), '') <> 'saldo_a_favor'
     GROUP BY 1
   ),
   donaciones_agg AS (
-    SELECT LOWER(COALESCE(metodo_pago::text,'otro')) AS metodo_pago,
-           SUM(valor_ingreso) AS monto
-    FROM vw_movimientos_generales
-    WHERE tipo_movimiento = 'donacion'
-      AND fecha BETWEEN v_inicio AND v_fin
+    SELECT LOWER(COALESCE(d.metodo_pago::TEXT, 'otro')) AS metodo_pago,
+           SUM(d.monto) AS monto
+    FROM donaciones_asistentes d
+    WHERE d.fecha BETWEEN v_inicio AND v_fin
+      AND COALESCE(d.estado, 'activo') <> 'anulado'
+      AND (d.notas IS NULL OR d.notas NOT ILIKE '%[ANULADO]%')
     GROUP BY 1
   ),
   egresos_agg AS (
-    SELECT LOWER(COALESCE(metodo_pago::text,'otro')) AS metodo_pago,
-           SUM(monto) AS monto
-    FROM egresos
-    WHERE fecha BETWEEN v_inicio AND v_fin
-      AND estado <> 'anulado'
-      AND (notas IS NULL OR notas NOT ILIKE '%[ANULADO]%')
+    SELECT LOWER(COALESCE(e.metodo_pago::TEXT, 'otro')) AS metodo_pago,
+           SUM(e.monto) AS monto
+    FROM egresos e
+    WHERE e.fecha BETWEEN v_inicio AND v_fin
+      AND COALESCE(e.estado, 'activo') <> 'anulado'
+      AND (e.notas IS NULL OR e.notas NOT ILIKE '%[ANULADO]%')
     GROUP BY 1
   ),
   adelantos_agg AS (
-    SELECT LOWER(COALESCE(metodo_pago::text,'otro')) AS metodo_pago,
-           SUM(monto) AS monto
-    FROM adelantos_socios
-    WHERE fecha BETWEEN v_inicio AND v_fin
+    SELECT LOWER(COALESCE(a.metodo_pago::TEXT, 'otro')) AS metodo_pago,
+           SUM(a.monto) AS monto
+    FROM adelantos_socios a
+    WHERE a.fecha BETWEEN v_inicio AND v_fin
     GROUP BY 1
   ),
   resumen AS (
     SELECT
       m.metodo_pago::metodo_pago AS metodo_pago,
-      COALESCE(a.monto,0) AS ingresos_abonos,
-      COALESCE(d.monto,0) AS ingresos_donaciones,
-      COALESCE(e.monto,0) AS salidas_egresos,
-      COALESCE(ad.monto,0) AS salidas_adelantos
+      COALESCE(ab.monto, 0) AS ingresos_abonos,
+      COALESCE(dn.monto, 0) AS ingresos_donaciones,
+      COALESCE(eg.monto, 0) AS salidas_egresos,
+      COALESCE(ad.monto, 0) AS salidas_adelantos
     FROM metodos m
-    LEFT JOIN abonos_agg a ON a.metodo_pago = m.metodo_pago
-    LEFT JOIN donaciones_agg d ON d.metodo_pago = m.metodo_pago
-    LEFT JOIN egresos_agg e ON e.metodo_pago = m.metodo_pago
+    LEFT JOIN abonos_agg ab ON ab.metodo_pago = m.metodo_pago
+    LEFT JOIN donaciones_agg dn ON dn.metodo_pago = m.metodo_pago
+    LEFT JOIN egresos_agg eg ON eg.metodo_pago = m.metodo_pago
     LEFT JOIN adelantos_agg ad ON ad.metodo_pago = m.metodo_pago
   )
   INSERT INTO liquidaciones_resumen_cuentas (
-    periodo_id, metodo_pago, total_ingresos, total_salidas, saldo_neto_periodo,
-    ingresos_abonos, ingresos_donaciones, salidas_egresos, salidas_adelantos,
-    created_at, updated_at
+    periodo_id,
+    metodo_pago,
+    total_ingresos,
+    total_salidas,
+    saldo_neto_periodo,
+    ingresos_abonos,
+    ingresos_donaciones,
+    salidas_egresos,
+    salidas_adelantos,
+    created_at,
+    updated_at
   )
   SELECT
     p_periodo_id,
     r.metodo_pago,
-    (r.ingresos_abonos + r.ingresos_donaciones) AS total_ingresos,
-    r.salidas_egresos AS total_salidas,
-    (r.ingresos_abonos + r.ingresos_donaciones - r.salidas_egresos) AS saldo_neto_periodo,
+    r.ingresos_abonos + r.ingresos_donaciones,
+    r.salidas_egresos,
+    r.ingresos_abonos + r.ingresos_donaciones - r.salidas_egresos,
     r.ingresos_abonos,
     r.ingresos_donaciones,
     r.salidas_egresos,
@@ -408,14 +656,14 @@ BEGIN
     NOW()
   FROM resumen r
   ON CONFLICT (periodo_id, metodo_pago) DO UPDATE SET
-    total_ingresos      = EXCLUDED.total_ingresos,
-    total_salidas       = EXCLUDED.total_salidas,
-    saldo_neto_periodo  = EXCLUDED.saldo_neto_periodo,
-    ingresos_abonos     = EXCLUDED.ingresos_abonos,
+    total_ingresos = EXCLUDED.total_ingresos,
+    total_salidas = EXCLUDED.total_salidas,
+    saldo_neto_periodo = EXCLUDED.saldo_neto_periodo,
+    ingresos_abonos = EXCLUDED.ingresos_abonos,
     ingresos_donaciones = EXCLUDED.ingresos_donaciones,
-    salidas_egresos     = EXCLUDED.salidas_egresos,
-    salidas_adelantos   = EXCLUDED.salidas_adelantos,
-    updated_at          = NOW();
+    salidas_egresos = EXCLUDED.salidas_egresos,
+    salidas_adelantos = EXCLUDED.salidas_adelantos,
+    updated_at = NOW();
 
   SELECT
     SUM(r.ingresos_abonos + r.ingresos_donaciones),
@@ -423,47 +671,64 @@ BEGIN
     SUM(r.ingresos_donaciones)
   INTO v_ingresos_operativos, v_egresos_periodo, v_donaciones_total
   FROM liquidaciones_resumen_cuentas r
-  WHERE periodo_id = p_periodo_id;
+  WHERE r.periodo_id = p_periodo_id;
 
-  v_utilidad_neta := COALESCE(v_ingresos_operativos,0) - COALESCE(v_egresos_periodo,0);
+  v_utilidad_neta := COALESCE(v_ingresos_operativos, 0) - COALESCE(v_egresos_periodo, 0);
 
   INSERT INTO liquidaciones_socios (
-    periodo_id, socio_id, ingresos_cobrados, donaciones_periodo, ingresos_operativos,
-    egresos_periodo, utilidad_neta, porcentaje_aplicado, valor_correspondiente,
-    adelantos_descontados, valor_neto_pagar
+    periodo_id,
+    socio_id,
+    ingresos_cobrados,
+    donaciones_periodo,
+    ingresos_operativos,
+    egresos_periodo,
+    utilidad_neta,
+    porcentaje_aplicado,
+    valor_correspondiente,
+    adelantos_descontados,
+    valor_neto_pagar
   )
   SELECT
     p_periodo_id,
     s.id,
-    COALESCE(v_ingresos_operativos,0) - COALESCE(v_donaciones_total,0) AS ingresos_cobrados,
-    COALESCE(v_donaciones_total,0) AS donaciones_periodo,
-    COALESCE(v_ingresos_operativos,0) AS ingresos_operativos,
-    COALESCE(v_egresos_periodo,0) AS egresos_periodo,
-    v_utilidad_neta AS utilidad_neta,
-    porcentaje_participacion AS porcentaje_aplicado,
-    ROUND((v_utilidad_neta * porcentaje_participacion) / 100)::DECIMAL(12,2) AS valor_correspondiente,
+    COALESCE(v_ingresos_operativos, 0) - COALESCE(v_donaciones_total, 0) AS ingresos_cobrados,
+    COALESCE(v_donaciones_total, 0) AS donaciones_periodo,
+    COALESCE(v_ingresos_operativos, 0) AS ingresos_operativos,
+    COALESCE(v_egresos_periodo, 0) AS egresos_periodo,
+    v_utilidad_neta,
+    s.porcentaje_participacion,
+    ROUND((v_utilidad_neta * s.porcentaje_participacion) / 100, 2),
     (
-      SELECT COALESCE(SUM(monto),0) FROM adelantos_socios
-      WHERE periodo_id = p_periodo_id AND socio_id = s.id
-    ) AS adelantos_descontados,
-    ROUND(((v_utilidad_neta * porcentaje_participacion) / 100) -
+      SELECT COALESCE(SUM(ad.monto), 0)
+      FROM adelantos_socios ad
+      WHERE ad.periodo_id = p_periodo_id
+        AND ad.socio_id = s.id
+    ),
+    ROUND(
+      ((v_utilidad_neta * s.porcentaje_participacion) / 100) -
       (
-        SELECT COALESCE(SUM(monto),0) FROM adelantos_socios
-        WHERE periodo_id = p_periodo_id AND socio_id = s.id
-      ), 2) AS valor_neto_pagar
+        SELECT COALESCE(SUM(ad.monto), 0)
+        FROM adelantos_socios ad
+        WHERE ad.periodo_id = p_periodo_id
+          AND ad.socio_id = s.id
+      ),
+      2
+    )
   FROM socios s
   WHERE s.activo = true
   ON CONFLICT (periodo_id, socio_id) DO UPDATE SET
-    ingresos_cobrados      = EXCLUDED.ingresos_cobrados,
-    donaciones_periodo     = EXCLUDED.donaciones_periodo,
-    ingresos_operativos    = EXCLUDED.ingresos_operativos,
-    egresos_periodo        = EXCLUDED.egresos_periodo,
-    utilidad_neta          = EXCLUDED.utilidad_neta,
-    porcentaje_aplicado    = EXCLUDED.porcentaje_aplicado,
-    valor_correspondiente  = EXCLUDED.valor_correspondiente,
-    adelantos_descontados  = EXCLUDED.adelantos_descontados,
-    valor_neto_pagar       = EXCLUDED.valor_neto_pagar;
+    ingresos_cobrados = EXCLUDED.ingresos_cobrados,
+    donaciones_periodo = EXCLUDED.donaciones_periodo,
+    ingresos_operativos = EXCLUDED.ingresos_operativos,
+    egresos_periodo = EXCLUDED.egresos_periodo,
+    utilidad_neta = EXCLUDED.utilidad_neta,
+    porcentaje_aplicado = EXCLUDED.porcentaje_aplicado,
+    valor_correspondiente = EXCLUDED.valor_correspondiente,
+    adelantos_descontados = EXCLUDED.adelantos_descontados,
+    valor_neto_pagar = EXCLUDED.valor_neto_pagar;
 
-  UPDATE periodos SET estado = 'cerrado' WHERE id = p_periodo_id;
+  UPDATE periodos
+  SET estado = 'cerrado'
+  WHERE id = p_periodo_id;
 END;
 $$;

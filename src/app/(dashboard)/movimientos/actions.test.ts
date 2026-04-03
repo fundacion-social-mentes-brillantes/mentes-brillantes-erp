@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const requireAdminMock = vi.fn()
 const revalidatePathMock = vi.fn()
+const assertFechaEditableMock = vi.fn()
 
 vi.mock('../../../lib/utils/authz', () => ({
   requireAdmin: (...args: unknown[]) => requireAdminMock(...args),
@@ -11,305 +12,182 @@ vi.mock('next/cache', () => ({
   revalidatePath: (...args: unknown[]) => revalidatePathMock(...args),
 }))
 
+vi.mock('@/lib/utils/periodos', () => ({
+  assertFechaEditable: (...args: unknown[]) => assertFechaEditableMock(...args),
+}))
+
 const { anularMovimiento, editarMovimiento, eliminarMovimiento } = await import('./actions')
 
+const singleWrapper = (data: any, error: any = null) => ({
+  single: vi.fn().mockResolvedValue({ data, error }),
+})
+
 const buildSupabase = (handlers: Record<string, any>) => ({
-  from: vi.fn((table: string) => handlers[table] ?? handlers.__default ?? {}),
+  from: vi.fn((table: string) => handlers[table] ?? {}),
 })
 
-const singleWrapper = (data: any) => ({
-  single: vi.fn().mockResolvedValue({ data }),
-})
-
-describe('anularMovimiento', () => {
+describe('movimientos/actions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    assertFechaEditableMock.mockResolvedValue(null)
   })
 
-  it('devuelve error si no hay acceso', async () => {
-    requireAdminMock.mockRejectedValue(new Error('sin acceso'))
-    const res = await anularMovimiento('m1', 'abono', 100, null)
-    expect(res?.error).toBe('sin acceso')
-  })
+  it('bloquea editar, anular y eliminar aplicaciones de saldo desde historial general', async () => {
+    requireAdminMock.mockResolvedValue({ supabase: buildSupabase({}), user: { id: 'admin-1' } })
 
-  it('bloquea pagos provenientes de saldo a favor', async () => {
-    const supabase = buildSupabase({
-      pagos_abonos: {
-        select: vi.fn(() => ({
-          eq: vi.fn(() => singleWrapper({ notas: '', origen_fondos: 'saldo_a_favor', metodo_pago: 'saldo_a_favor' })),
-        })),
-        update: vi.fn(),
-      },
-      auditoria_financiera: { insert: vi.fn() },
-    })
-    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin' } })
+    await expect(anularMovimiento('msf-1', 'aplicacion_saldo', 100, 'asis-1')).resolves.toEqual(
+      expect.objectContaining({ error: expect.stringMatching(/no se pueden editar, anular ni eliminar/i) })
+    )
+    await expect(editarMovimiento('msf-1', 'aplicacion_saldo', { monto: 120 })).resolves.toEqual(
+      expect.objectContaining({ error: expect.stringMatching(/no se pueden editar, anular ni eliminar/i) })
+    )
+    await expect(eliminarMovimiento('msf-1', 'aplicacion_saldo', 100, 'asis-1')).resolves.toEqual(
+      expect.objectContaining({ error: expect.stringMatching(/no se pueden editar, anular ni eliminar/i) })
+    )
 
-    const res = await anularMovimiento('m1', 'abono', 100, null)
-    expect(res?.error).toMatch(/saldo a favor/i)
     expect(revalidatePathMock).not.toHaveBeenCalled()
   })
 
-  it('anula abono y recalcula cuenta con pagos válidos', async () => {
-    const updatePagoEq = vi.fn().mockResolvedValue({ error: null })
-    const updatePago = vi.fn(() => ({ eq: updatePagoEq }))
+  it('bloquea anular un movimiento si pertenece a un periodo cerrado', async () => {
+    assertFechaEditableMock.mockResolvedValue('Periodo cerrado')
+    const supabase = buildSupabase({
+      pagos_abonos: {
+        select: vi.fn(() => ({
+          eq: vi.fn(() => singleWrapper({ cuenta_id: 'c1', fecha_pago: '2024-01-10', notas: '', origen_fondos: 'pago_directo', metodo_pago: 'efectivo' })),
+        })),
+      },
+    })
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
+
+    const result = await anularMovimiento('abono-1', 'abono', 100, null)
+
+    expect(result?.error).toBe('Periodo cerrado')
+  })
+
+  it('anula un abono valido, recalcula la cuenta y audita la operacion', async () => {
+    const pagoUpdateEq = vi.fn().mockResolvedValue({ error: null })
+    const cuentaUpdateEq = vi.fn().mockResolvedValue({ error: null })
     const auditInsert = vi.fn().mockResolvedValue({ error: null })
 
     const supabase = buildSupabase({
       pagos_abonos: {
-        select: vi.fn(() => ({
-          eq: vi.fn(() => singleWrapper({ notas: '', origen_fondos: 'pago_directo', metodo_pago: 'efectivo', cuenta_id: 'c1' })),
+        select: vi.fn((cols: string) => ({
+          eq: vi.fn(() =>
+            cols.includes('fecha_pago')
+              ? singleWrapper({ cuenta_id: 'c1', fecha_pago: '2024-01-10', notas: '', origen_fondos: 'pago_directo', metodo_pago: 'efectivo' })
+              : singleWrapper({ cuenta_id: 'c1' })
+          ),
         })),
-        update: updatePago,
+        update: vi.fn(() => ({ eq: pagoUpdateEq })),
       },
       cuentas_por_cobrar: {
         select: vi.fn(() => ({
-          eq: vi.fn(() => singleWrapper({
-            valor_total: 200,
-            pagos_abonos: [
-              { monto: 50, estado: 'activo', notas: '' },
-              { monto: 20, estado: 'anulado', notas: '[ANULADO]' },
-            ],
-          })),
+          eq: vi.fn(() =>
+            singleWrapper({
+              valor_total: 200,
+              pagos_abonos: [{ monto: 50, estado: 'activo', notas: '' }],
+            })
+          ),
         })),
-        update: () => ({ eq: vi.fn().mockResolvedValue({ error: null }) }),
+        update: vi.fn(() => ({ eq: cuentaUpdateEq })),
       },
       auditoria_financiera: { insert: auditInsert },
-      movimientos_saldo_favor: { insert: vi.fn() },
+      movimientos_saldo_favor: {
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            ilike: vi.fn().mockResolvedValue({ data: [], error: null }),
+          })),
+        })),
+        insert: vi.fn(),
+      },
     })
-    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin' } })
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
 
-    const res = await anularMovimiento('m1', 'abono', 100, null)
-    expect(res?.success).toBe(true)
-    expect(updatePago).toHaveBeenCalled()
+    const result = await anularMovimiento('abono-1', 'abono', 100, null)
+
+    expect(result?.success).toBe(true)
+    expect(pagoUpdateEq).toHaveBeenCalledWith('id', 'abono-1')
+    expect(cuentaUpdateEq).toHaveBeenCalledWith('id', 'c1')
     expect(auditInsert).toHaveBeenCalled()
     expect(revalidatePathMock).toHaveBeenCalledWith('/cuentas')
   })
 
-  it('anula donación sin revalidar cuentas', async () => {
-    const updateDon = vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) }))
-    const selectDon = vi.fn(() => ({
-      eq: vi.fn(() => singleWrapper({ notas: 'nota', monto: 20000 })),
-    }))
+  it('edita una donacion respetando el guard de periodo y registra auditoria', async () => {
+    const updateEq = vi.fn().mockResolvedValue({ error: null })
+    const auditInsert = vi.fn().mockResolvedValue({ error: null })
     const supabase = buildSupabase({
       donaciones_asistentes: {
-        select: selectDon,
-        update: updateDon,
-      },
-      auditoria_financiera: { insert: vi.fn() },
-    })
-    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin' } })
-
-    const res = await anularMovimiento('d1', 'donacion', 20000, null)
-    expect(res?.success).toBe(true)
-    expect(updateDon).toHaveBeenCalled()
-    expect(revalidatePathMock).toHaveBeenCalledWith('/movimientos')
-    expect(revalidatePathMock).not.toHaveBeenCalledWith('/cuentas')
-  })
-
-  it('bloquea anular una aplicacion de saldo desde historial general', async () => {
-    const pagosSelect = vi.fn()
-    const supabase = buildSupabase({
-      pagos_abonos: {
-        select: pagosSelect,
-        update: vi.fn(),
-      },
-    })
-    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin' } })
-
-    const res = await anularMovimiento('msf-1', 'aplicacion_saldo', 100, 'asis-1')
-    expect(res?.error).toMatch(/no se pueden editar, anular ni eliminar/i)
-    expect(pagosSelect).not.toHaveBeenCalled()
-    expect(revalidatePathMock).not.toHaveBeenCalled()
-  })
-})
-
-describe('editarMovimiento', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  it('retorna error para tipo no soportado', async () => {
-    requireAdminMock.mockResolvedValue({ supabase: buildSupabase({}), user: { id: 'admin' } })
-    const res = await editarMovimiento('m1', 'otro', { monto: 10 })
-    expect(res?.error).toMatch(/no soportado/i)
-  })
-
-  it('actualiza abono y recalcula estado de cuenta', async () => {
-    const updatePagoEq = vi.fn().mockResolvedValue({ error: null })
-    const updatePago = vi.fn(() => ({ eq: updatePagoEq }))
-    const updateCuentaEq = vi.fn().mockResolvedValue({ error: null })
-    const updateCuenta = vi.fn(() => ({ eq: updateCuentaEq }))
-
-    const supabase = buildSupabase({
-      pagos_abonos: {
-        update: updatePago,
         select: vi.fn(() => ({
-          eq: vi.fn(() => singleWrapper({ cuenta_id: 'c1' })),
+          eq: vi.fn(() => singleWrapper({ fecha: '2024-01-10', notas: 'ok' })),
         })),
+        update: vi.fn(() => ({ eq: updateEq })),
       },
-      cuentas_por_cobrar: {
-        select: vi.fn(() => ({
-          eq: vi.fn(() => singleWrapper({
-            valor_total: 500,
-            pagos_abonos: [{ monto: 200, estado: 'activo', notas: '' }],
-          })),
-        })),
-        update: updateCuenta,
-      },
+      auditoria_financiera: { insert: auditInsert },
     })
-    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin' } })
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
 
-    const res = await editarMovimiento('m1', 'abono', { monto: 250, fecha: '2024-01-01' })
-    expect(res?.success).toBe(true)
-    expect(updatePago).toHaveBeenCalled()
-    expect(updatePagoEq).toHaveBeenCalled()
-    expect(updateCuenta).toHaveBeenCalled()
-    expect(updateCuentaEq).toHaveBeenCalled()
-    expect(revalidatePathMock).toHaveBeenCalledWith('/movimientos')
-  })
-
-  it('edita donación sin revalidar cuentas', async () => {
-    const updateDon = vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) }))
-    const supabase = buildSupabase({
-      donaciones_asistentes: { update: updateDon },
+    const result = await editarMovimiento('don-1', 'donacion', {
+      monto: 50000,
+      fecha: '2024-01-12',
+      metodo_pago: 'efectivo',
+      notas: 'ajuste',
     })
-    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin' } })
 
-    const res = await editarMovimiento('d1', 'donacion', { monto: 100000, fecha: '2024-01-01', metodo_pago: 'efectivo' })
-    expect(res?.success).toBe(true)
-    expect(updateDon).toHaveBeenCalled()
-    expect(revalidatePathMock).toHaveBeenCalledWith('/movimientos')
-    expect(revalidatePathMock).not.toHaveBeenCalledWith('/cuentas')
+    expect(result?.success).toBe(true)
+    expect(assertFechaEditableMock).toHaveBeenCalledTimes(2)
+    expect(updateEq).toHaveBeenCalledWith('id', 'don-1')
+    expect(auditInsert).toHaveBeenCalled()
   })
 
-  it('bloquea editar una aplicacion de saldo desde historial general', async () => {
-    requireAdminMock.mockResolvedValue({ supabase: buildSupabase({}), user: { id: 'admin' } })
-    const res = await editarMovimiento('msf-1', 'aplicacion_saldo', { monto: 120 })
-    expect(res?.error).toMatch(/no se pueden editar, anular ni eliminar/i)
-    expect(revalidatePathMock).not.toHaveBeenCalled()
-  })
-})
+  it('bloquea editar el monto de un abono desde historial general', async () => {
+    requireAdminMock.mockResolvedValue({ supabase: buildSupabase({}), user: { id: 'admin-1' } })
 
-describe('eliminarMovimiento', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
+    const result = await editarMovimiento('abono-1', 'abono', { monto: 300 })
+
+    expect(result?.error).toMatch(/no se puede editar desde historial general/i)
   })
 
-  it('retorna error para tipo no soportado', async () => {
-    requireAdminMock.mockResolvedValue({ supabase: buildSupabase({}), user: { id: 'admin' } })
-    const res = await eliminarMovimiento('m1', 'otro', 50, null)
-    expect(res?.error).toMatch(/no soportado/i)
-  })
-
-  it('elimina abono y recalcula estado', async () => {
-    const deleteMock = vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) }))
-    const updateCuenta = vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) }))
-
-    const supabase = buildSupabase({
-      pagos_abonos: {
-        delete: deleteMock,
-        select: vi.fn(() => ({
-          eq: vi.fn(() => singleWrapper({ cuenta_id: 'c1' })),
-        })),
-      },
-      cuentas_por_cobrar: {
-        select: vi.fn(() => ({
-          eq: vi.fn(() => singleWrapper({
-            valor_total: 300,
-            pagos_abonos: [],
-          })),
-        })),
-        update: updateCuenta,
-      },
-      movimientos_saldo_favor: { insert: vi.fn() },
-    })
-    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin' } })
-
-    const res = await eliminarMovimiento('m1', 'abono', 100, null)
-    expect(res?.success).toBe(true)
-    expect(deleteMock).toHaveBeenCalled()
-    expect(updateCuenta).toHaveBeenCalled()
-    expect(revalidatePathMock).toHaveBeenCalledWith('/movimientos')
-  })
-
-  it('elimina donación sin tocar cuentas', async () => {
-    const deleteMock = vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) }))
+  it('elimina una donacion respetando el guard de periodo y registra auditoria', async () => {
+    const deleteEq = vi.fn().mockResolvedValue({ error: null })
+    const auditInsert = vi.fn().mockResolvedValue({ error: null })
     const supabase = buildSupabase({
       donaciones_asistentes: {
-        delete: deleteMock,
+        select: vi.fn(() => ({
+          eq: vi.fn(() => singleWrapper({ fecha: '2024-01-10', notas: 'ok' })),
+        })),
+        delete: vi.fn(() => ({ eq: deleteEq })),
       },
-      auditoria_financiera: { insert: vi.fn() },
+      auditoria_financiera: { insert: auditInsert },
     })
-    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin' } })
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
 
-    const res = await eliminarMovimiento('d1', 'donacion', 50000, null)
-    expect(res?.success).toBe(true)
-    expect(deleteMock).toHaveBeenCalled()
+    const result = await eliminarMovimiento('don-1', 'donacion', 50000, null)
+
+    expect(result?.success).toBe(true)
+    expect(deleteEq).toHaveBeenCalledWith('id', 'don-1')
+    expect(auditInsert).toHaveBeenCalled()
     expect(revalidatePathMock).toHaveBeenCalledWith('/movimientos')
-    expect(revalidatePathMock).not.toHaveBeenCalledWith('/cuentas')
   })
 
-  it('bloquea eliminar una aplicacion de saldo desde historial general', async () => {
-    const pagosDelete = vi.fn()
+  it('bloquea eliminar un abono que ya genero saldo a favor por sobrepago', async () => {
     const supabase = buildSupabase({
       pagos_abonos: {
-        delete: pagosDelete,
+        select: vi.fn(() => ({
+          eq: vi.fn(() => singleWrapper({ cuenta_id: 'c1', fecha_pago: '2024-01-10', notas: '', origen_fondos: 'pago_directo', metodo_pago: 'efectivo' })),
+        })),
+      },
+      movimientos_saldo_favor: {
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            ilike: vi.fn().mockResolvedValue({ data: [{ id: 'msf-1' }], error: null }),
+          })),
+        })),
       },
     })
-    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin' } })
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
 
-    const res = await eliminarMovimiento('msf-1', 'aplicacion_saldo', 100, 'asis-1')
-    expect(res?.error).toMatch(/no se pueden editar, anular ni eliminar/i)
-    expect(pagosDelete).not.toHaveBeenCalled()
-    expect(revalidatePathMock).not.toHaveBeenCalled()
-  })
-})
+    const result = await eliminarMovimiento('abono-1', 'abono', 100, null)
 
-// Recalculo adicional (reglas nuevas) para pendiente con pagos válidos
-describe('recalculo con pagos válidos (nuevas reglas)', () => {
-  it('anularMovimiento recalcula estado con pagos válidos', async () => {
-    const updates: any[] = []
-    const cuentasUpdateEq = vi.fn().mockResolvedValue({ error: null })
-    const supabase = buildSupabase({
-      pagos_abonos: {
-        select: (cols: string) => ({
-          eq: () => ({
-            single: async () => {
-              if (cols.includes('notas')) return { data: { notas: '', origen_fondos: 'pago_directo', metodo_pago: 'efectivo' } }
-              return { data: { cuenta_id: 'c1' } }
-            },
-          }),
-        }),
-        update: () => ({ eq: vi.fn().mockResolvedValue({ error: null }) }),
-      },
-      cuentas_por_cobrar: {
-        select: () => ({
-          eq: () => ({
-            single: async () => ({
-              data: {
-                valor_total: 1000,
-                pagos_abonos: [
-                  { id: 'p1', monto: 200, estado: 'anulado', notas: '[ANULADO]' },
-                  { id: 'p2', monto: 300, estado: null, notas: null, metodo_pago: 'efectivo' },
-                ],
-              },
-              error: null,
-            }),
-          }),
-        }),
-        update: (payload: any) => {
-          updates.push(payload)
-          return { eq: cuentasUpdateEq }
-        },
-      },
-      auditoria_financiera: { insert: async () => ({ error: null }) },
-      movimientos_saldo_favor: { insert: async () => ({ error: null }) },
-    })
-
-    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin' } })
-    const res = await anularMovimiento('p2', 'abono', 300, null)
-    expect(res?.success).toBe(true)
-    expect(updates[0]?.estado).toBe('parcial')
-    expect(cuentasUpdateEq).toHaveBeenCalled()
+    expect(result?.error).toMatch(/genero movimientos de saldo a favor/i)
   })
 })

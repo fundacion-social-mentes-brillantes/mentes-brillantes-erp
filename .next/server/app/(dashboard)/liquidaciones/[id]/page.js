@@ -1,5 +1,5 @@
 var R=require("../../../../chunks/ssr/[turbopack]_runtime.js")("server/app/(dashboard)/liquidaciones/[id]/page.js")
-R.c("server/chunks/ssr/[root-of-the-server]__a0622b7f._.js")
+R.c("server/chunks/ssr/[root-of-the-server]__1c57b44b._.js")
 R.c("server/chunks/ssr/src_b03726a3._.js")
 R.c("server/chunks/ssr/node_modules_next_dist_4b63a0e1._.js")
 R.c("server/chunks/ssr/_897f20f9._.js")
@@ -14,7 +14,7 @@ R.c("server/chunks/ssr/node_modules_next_dist_client_components_builtin_forbidde
 R.c("server/chunks/ssr/node_modules_next_dist_client_components_builtin_unauthorized_15817684.js")
 R.c("server/chunks/ssr/_dd383f48._.js")
 R.c("server/chunks/ssr/_12167b23._.js")
-R.c("server/chunks/ssr/_d4b41231._.js")
+R.c("server/chunks/ssr/_d15c9565._.js")
 R.c("server/chunks/ssr/node_modules_next_fd00b625._.js")
 R.m(24176)
 module.exports=R.m(24176).exports

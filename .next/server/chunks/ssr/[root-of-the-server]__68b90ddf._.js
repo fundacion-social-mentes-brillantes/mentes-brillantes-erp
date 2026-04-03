@@ -6,7 +6,7 @@ module.exports=[93695,(a,b,c)=>{b.exports=a.x("next/dist/shared/lib/no-fallback-
       valor_total,
       asistente_id,
       asistentes ( nombre ),
-      pagos_abonos ( monto, fecha_pago, metodo_pago, notas )
+      pagos_abonos ( monto, fecha_pago, metodo_pago, estado, notas )
     `).order("fecha_emision",{ascending:!1}),k=(j??[]).map(a=>{let b=Number(a.valor_total),c=(0,g.filtrarPagosValidos)(a.pagos_abonos??[]),d=(0,g.sumarMontos)(c);return{id:a.id,concepto:a.concepto,fecha_emision:a.fecha_emision,estado:a.estado,valor_total:b,asistente_id:a.asistente_id,asistente_nombre:a.asistentes?.nombre??null,abonos:a.pagos_abonos??[],saldos:{valor_total:b,total_abonado:d,monto_pendiente:b-d}}});return(0,b.jsxs)("div",{className:"space-y-6",children:[(0,b.jsxs)("div",{className:"flex flex-col sm:flex-row sm:items-center justify-between gap-4",children:[(0,b.jsxs)("div",{children:[(0,b.jsx)("h1",{className:"text-2xl font-bold tracking-tight text-[rgb(var(--text-primary))]",children:"Cuentas por Cobrar"}),(0,b.jsx)("p",{className:"text-[rgb(var(--text-muted))] text-sm",children:"Gestiona las deudas de los asistentes y sus pagos."})]}),(0,b.jsxs)(d.default,{href:"/cuentas/nueva",className:"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors bg-[rgb(var(--surface-3))] text-[rgb(var(--text-primary))] border border-[rgb(var(--border))] hover:bg-[rgb(var(--surface-2))] h-10 px-4 py-2 w-full sm:w-auto",children:[(0,b.jsx)(e.Plus,{className:"w-4 h-4"}),"Nueva Cuenta"]})]}),(0,b.jsx)(f.CuentasClient,{cuentas:k,isAdmin:i})]})}a.s(["default",()=>h])}];
 
 //# sourceMappingURL=%5Broot-of-the-server%5D__68b90ddf._.js.map

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { requireAdmin, requireRoles } from '@/lib/utils/authz'
+import { assertFechaEditable } from '@/lib/utils/periodos'
 
 export type DonacionState = { error?: string; success?: boolean } | null
 
@@ -50,6 +51,9 @@ export async function crearDonacion(asistente_id: string, formData: FormData): P
     return { error: 'Monto y método de pago son obligatorios y el monto debe ser mayor a 0.' }
   }
 
+  const periodoError = await assertFechaEditable(supabase, fecha, 'Crear la donación')
+  if (periodoError) return { error: periodoError }
+
   const { data, error } = await supabase
     .from(TABLE)
     .insert([
@@ -87,6 +91,12 @@ export async function editarDonacion(
   }
 
   const updatePayload: any = {}
+  const { data: registroActual, error: registroActualError } = await supabase.from(TABLE).select('fecha').eq('id', id).single()
+  if (registroActualError || !registroActual) return { error: 'No se encontró la donación.' }
+
+  const periodoActualError = await assertFechaEditable(supabase, registroActual.fecha, 'Editar la donación')
+  if (periodoActualError) return { error: periodoActualError }
+
   if (payload.monto !== undefined) {
     if (isNaN(payload.monto) || payload.monto <= 0) return { error: 'El monto debe ser mayor a 0.' }
     updatePayload.monto = payload.monto
@@ -94,6 +104,11 @@ export async function editarDonacion(
   if (payload.metodo_pago) updatePayload.metodo_pago = payload.metodo_pago
   if (payload.fecha) updatePayload.fecha = payload.fecha
   if (payload.notas !== undefined) updatePayload.notas = payload.notas
+
+  if (payload.fecha) {
+    const periodoNuevoError = await assertFechaEditable(supabase, payload.fecha, 'Editar la donación')
+    if (periodoNuevoError) return { error: periodoNuevoError }
+  }
 
   const { error } = await supabase.from(TABLE).update(updatePayload).eq('id', id)
   if (error) return { error: error.message }
@@ -114,7 +129,9 @@ export async function anularDonacion(id: string, asistente_id: string, motivo?: 
     return { error: e?.message || 'Acceso denegado' }
   }
 
-  const { data: registro } = await supabase.from(TABLE).select('monto, notas').eq('id', id).single()
+  const { data: registro } = await supabase.from(TABLE).select('monto, notas, fecha').eq('id', id).single()
+  const periodoError = await assertFechaEditable(supabase, registro?.fecha, 'Anular la donación')
+  if (periodoError) return { error: periodoError }
 
   const { error } = await supabase
     .from(TABLE)
@@ -142,7 +159,9 @@ export async function eliminarDonacion(id: string, asistente_id: string, motivo?
     return { error: e?.message || 'Acceso denegado' }
   }
 
-  const { data: registro } = await supabase.from(TABLE).select('monto').eq('id', id).single()
+  const { data: registro } = await supabase.from(TABLE).select('monto, fecha').eq('id', id).single()
+  const periodoError = await assertFechaEditable(supabase, registro?.fecha, 'Eliminar la donación')
+  if (periodoError) return { error: periodoError }
   const { error } = await supabase.from(TABLE).delete().eq('id', id)
   if (error) return { error: error.message }
 

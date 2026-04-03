@@ -18,7 +18,7 @@ export default async function CuentasPage() {
       valor_total,
       asistente_id,
       asistentes ( nombre ),
-      pagos_abonos ( monto, fecha_pago, metodo_pago, notas )
+      pagos_abonos ( monto, fecha_pago, metodo_pago, estado, notas )
     `)
     .order('fecha_emision', { ascending: false })
 

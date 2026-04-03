@@ -4,6 +4,8 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { requireAdmin, requireRoles } from '@/lib/utils/authz'
+import { calcularPendienteCuenta } from '@/lib/utils/contable'
+import { assertFechaEditable } from '@/lib/utils/periodos'
 
 export type ActionState = {
   error?: string
@@ -165,6 +167,12 @@ export async function pagarDeudasConSaldo(asistente_id: string): Promise<ActionS
     return { error: 'No hay saldo a favor disponible para aplicar' }
   }
 
+  const fechaHoy = new Date().toISOString().split('T')[0]
+  const periodoError = await assertFechaEditable(supabase, fechaHoy, 'Aplicar saldo a favor')
+  if (periodoError) {
+    return { error: periodoError }
+  }
+
   const { data: cuentas } = await supabase
     .from('cuentas_por_cobrar')
     .select(
@@ -172,7 +180,7 @@ export async function pagarDeudasConSaldo(asistente_id: string): Promise<ActionS
       id,
       valor_total,
       fecha_emision,
-      pagos_abonos (monto, notas)
+      pagos_abonos (monto, estado, notas, metodo_pago, origen_fondos)
     `
     )
     .eq('asistente_id', asistente_id)
@@ -188,10 +196,7 @@ export async function pagarDeudasConSaldo(asistente_id: string): Promise<ActionS
   for (const cuenta of cuentas) {
     if (saldoDisponible <= 0) break
 
-    const abonado = Math.round(
-      cuenta.pagos_abonos?.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0) || 0
-    )
-    const pendiente = Math.round(Number(cuenta.valor_total) - abonado)
+    const pendiente = Math.round(calcularPendienteCuenta(Number(cuenta.valor_total), cuenta.pagos_abonos || []))
 
     if (pendiente <= 0) continue
 

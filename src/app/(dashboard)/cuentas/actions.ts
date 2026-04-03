@@ -1,4 +1,4 @@
-"use server"
+﻿"use server"
 
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
@@ -6,11 +6,12 @@ import {
   calcularEstadoCuenta,
   calcularEstadoCuentaDesdePagos,
   calcularPendienteCuenta,
-  calcularPendienteDespuesDeAbono,
   esSaldoAFavor,
+  filtrarPagosValidosCuentas,
   toSafeNumber,
 } from "@/lib/utils/contable"
 import { requireAdmin, requireRoles } from "@/lib/utils/authz"
+import { assertFechaEditable } from "@/lib/utils/periodos"
 
 export type ActionState = { error?: string; success?: boolean } | null
 
@@ -23,9 +24,9 @@ const buildAudit = (
   registroId: string,
   usuarioId: string,
   accion: string,
-  valorAnterior?: number,
-  valorNuevo?: number,
-  notas?: string
+  valorAnterior?: number | null,
+  valorNuevo?: number | null,
+  motivo?: string
 ) => ({
   tabla_afectada: tabla,
   registro_id: registroId,
@@ -33,8 +34,57 @@ const buildAudit = (
   accion,
   valor_anterior: valorAnterior,
   valor_nuevo: valorNuevo,
-  notas,
+  motivo,
 })
+
+const overflowMarker = (abonoId: string) => `[ABONO:${abonoId}]`
+
+const overflowNote = (abonoId: string, motivo: string) => `${overflowMarker(abonoId)} ${motivo}`
+
+async function getOverflowAsociadoAbono(supabase: any, cuentaId: string, abonoId: string) {
+  const { data, error } = await supabase
+    .from("movimientos_saldo_favor")
+    .select("tipo, monto")
+    .eq("cuenta_id", cuentaId)
+    .ilike("notas", `%${overflowMarker(abonoId)}%`)
+
+  if (error) {
+    throw new Error("No se pudo validar el saldo a favor asociado al abono.")
+  }
+
+  return (data || []).reduce((acc: number, mov: any) => {
+    const monto = toSafeNumber(mov.monto)
+    if (mov.tipo === "ingreso") return acc + monto
+    if (mov.tipo === "aplicacion") return acc - monto
+    return acc
+  }, 0)
+}
+
+async function registrarMovimientoSaldoFavor(
+  supabase: any,
+  payload: {
+    asistente_id: string
+    cuenta_id: string
+    tipo: "ingreso" | "aplicacion"
+    monto: number
+    metodo_pago: string | null
+    fecha: string
+    notas: string
+  }
+) {
+  const { data, error } = await supabase
+    .from("movimientos_saldo_favor")
+    .insert([
+      {
+        ...payload,
+        metodo_pago: payload.metodo_pago || "otro",
+      },
+    ])
+    .select("id")
+    .single()
+
+  return { data, error }
+}
 
 async function rollbackCuentaCreada(
   supabase: any,
@@ -67,7 +117,18 @@ async function rollbackCuentaCreada(
 // --------------------------------------------
 export async function deleteCuenta(cuentaId: string): Promise<ActionState> {
   try {
-    const { supabase } = await requireAdmin()
+    const { supabase, user } = await requireAdmin()
+
+    const { data: cuentaBase, error: cuentaBaseError } = await supabase
+      .from("cuentas_por_cobrar")
+      .select("fecha_emision, valor_total")
+      .eq("id", cuentaId)
+      .single()
+
+    if (cuentaBaseError || !cuentaBase) return { error: "No se encontrÃ³ la cuenta." }
+
+    const periodoError = await assertFechaEditable(supabase, cuentaBase.fecha_emision, "Eliminar la cuenta")
+    if (periodoError) return { error: periodoError }
 
     const { data: pagosData, error: pagosError } = await supabase
       .from("pagos_abonos")
@@ -92,7 +153,7 @@ export async function deleteCuenta(cuentaId: string): Promise<ActionState> {
       const tieneSaldoFavor = (pagosData || []).some((p) => esSaldoAFavor(p))
       if (tieneSaldoFavor) {
         return {
-          error: "No se puede eliminar la cuenta porque tiene pagos provenientes de saldo a favor. Reviértalos antes de borrar.",
+          error: "No se puede eliminar la cuenta porque tiene pagos provenientes de saldo a favor. ReviÃ©rtalos antes de borrar.",
         }
       }
       return { error: "No se puede eliminar la cuenta porque tiene pagos registrados. Anula o elimina los pagos primero." }
@@ -126,10 +187,15 @@ export async function deleteCuenta(cuentaId: string): Promise<ActionState> {
     const { error: deleteError } = await supabase.from("cuentas_por_cobrar").delete().eq("id", cuentaId)
     if (deleteError) return { error: deleteError.message }
 
+    await supabase
+      .from("auditoria_financiera")
+      .insert([buildAudit("cuentas_por_cobrar", cuentaId, user?.id || "", "eliminar_cuenta", cuentaBase.valor_total, null, "EliminaciÃ³n definitiva de cuenta")])
+
     revalidatePath("/cuentas")
     redirect("/cuentas")
     return { success: true }
   } catch (e: any) {
+    if (isNextRedirectError(e)) throw e
     return { error: e.message || "Error eliminando la cuenta." }
   }
 }
@@ -152,36 +218,91 @@ export async function saveAbono(
 
     if (monto <= 0) return { error: "El monto debe ser mayor a 0." }
 
+    const periodoError = await assertFechaEditable(supabase, fecha_pago, "Registrar el abono")
+    if (periodoError) return { error: periodoError }
+
     const { data: cuenta, error: cuentaError } = await supabase
       .from("cuentas_por_cobrar")
       .select("valor_total, estado, asistente_id, pagos_abonos(id, monto, notas, estado, metodo_pago, origen_fondos)")
       .eq("id", cuentaId)
       .single()
 
-    if (cuentaError || !cuenta) return { error: "No se encontró la cuenta." }
+    if (cuentaError || !cuenta) return { error: "No se encontrÃ³ la cuenta." }
 
     const pendiente = calcularPendienteCuenta(toSafeNumber(cuenta.valor_total), cuenta.pagos_abonos)
-    if (monto > pendiente) return { error: "El abono no puede superar el saldo pendiente." }
+    const montoAplicado = Math.min(monto, pendiente)
+    const excedente = Math.max(0, monto - montoAplicado)
 
-    const { error: insertError } = await supabase.from("pagos_abonos").insert([
-      {
+    let pagoId: string | null = null
+    let saldoFavorId: string | null = null
+
+    if (montoAplicado > 0) {
+      const { data: pagoInsertado, error: insertError } = await supabase
+        .from("pagos_abonos")
+        .insert([
+          {
+            cuenta_id: cuentaId,
+            monto: montoAplicado,
+            metodo_pago,
+            fecha_pago,
+            notas,
+            origen_fondos: "pago_directo",
+            usuario_id: user?.id || null,
+          },
+        ])
+        .select("id")
+        .single()
+
+      if (insertError || !pagoInsertado) return { error: insertError?.message || "No se pudo registrar el abono." }
+      pagoId = pagoInsertado.id
+    }
+
+    if (excedente > 0) {
+      const notaSaldo = pagoId
+        ? overflowNote(pagoId, "Saldo a favor generado por sobrepago del abono")
+        : `Saldo a favor generado por pago adicional sobre la cuenta ${cuentaId}`
+      const { data: saldoFavorInsertado, error: saldoFavorError } = await registrarMovimientoSaldoFavor(supabase, {
+        asistente_id: cuenta.asistente_id,
         cuenta_id: cuentaId,
-        monto,
+        tipo: "ingreso",
+        monto: excedente,
         metodo_pago,
-        fecha_pago,
-        notas,
-        origen_fondos: "pago_directo",
-        usuario_id: user?.id || null,
-      },
-    ])
+        fecha: fecha_pago,
+        notas: notaSaldo,
+      })
 
-    if (insertError) return { error: insertError.message }
+      if (saldoFavorError || !saldoFavorInsertado) {
+        if (pagoId) {
+          await supabase.from("pagos_abonos").delete().eq("id", pagoId)
+        }
+        return { error: saldoFavorError?.message || "No se pudo registrar el saldo a favor del sobrepago." }
+      }
+      saldoFavorId = saldoFavorInsertado.id
+    }
 
-    const totalPendiente = calcularPendienteCuenta(toSafeNumber(cuenta.valor_total), [...cuenta.pagos_abonos, { monto }])
-    const totalPagado = toSafeNumber(cuenta.valor_total) - totalPendiente
-    const nuevoEstado = calcularEstadoCuenta(toSafeNumber(cuenta.valor_total), totalPagado)
+    const pagosActualizados =
+      montoAplicado > 0
+        ? [...(cuenta.pagos_abonos || []), { monto: montoAplicado, metodo_pago, origen_fondos: "pago_directo" }]
+        : cuenta.pagos_abonos || []
+    const nuevoEstado = calcularEstadoCuentaDesdePagos(toSafeNumber(cuenta.valor_total), pagosActualizados)
 
-    await supabase.from("cuentas_por_cobrar").update({ estado: nuevoEstado }).eq("id", cuentaId)
+    const { error: updateCuentaError } = await supabase.from("cuentas_por_cobrar").update({ estado: nuevoEstado }).eq("id", cuentaId)
+    if (updateCuentaError) {
+      if (saldoFavorId) await supabase.from("movimientos_saldo_favor").delete().eq("id", saldoFavorId)
+      if (pagoId) await supabase.from("pagos_abonos").delete().eq("id", pagoId)
+      return { error: "No se pudo consolidar el abono. Se revirtiÃ³ la operaciÃ³n para evitar inconsistencias." }
+    }
+
+    if (pagoId) {
+      await supabase
+        .from("auditoria_financiera")
+        .insert([buildAudit("pagos_abonos", pagoId, user?.id || "", "crear_abono", null, montoAplicado, notas || "Registro manual de abono")])
+    }
+    if (saldoFavorId) {
+      await supabase
+        .from("auditoria_financiera")
+        .insert([buildAudit("movimientos_saldo_favor", saldoFavorId, user?.id || "", "crear_saldo_favor_sobrepago", null, excedente, "Excedente de abono enviado a saldo a favor")])
+    }
 
     revalidatePath("/cuentas")
     revalidatePath(`/cuentas/${cuentaId}`)
@@ -207,7 +328,7 @@ export async function aplicarSaldoFavor(
     const max = toSafeNumber(maxMonto)
 
     if (monto <= 0) return { error: "El monto debe ser mayor a 0." }
-    if (monto > max) return { error: "No puedes aplicar más del saldo disponible." }
+    if (monto > max) return { error: "No puedes aplicar mÃ¡s del saldo disponible." }
 
     const { data: cuenta, error: cuentaError } = await supabase
       .from("cuentas_por_cobrar")
@@ -215,21 +336,24 @@ export async function aplicarSaldoFavor(
       .eq("id", cuentaId)
       .single()
 
-    if (cuentaError || !cuenta) return { error: "No se encontró la cuenta." }
+    if (cuentaError || !cuenta) return { error: "No se encontrÃ³ la cuenta." }
 
     const pendiente = calcularPendienteCuenta(toSafeNumber(cuenta.valor_total), cuenta.pagos_abonos)
-    if (monto > pendiente) return { error: "El abono no puede superar el saldo pendiente." }
+    const montoAplicado = Math.min(monto, pendiente)
+    if (montoAplicado <= 0) return { error: "La cuenta no tiene saldo pendiente para aplicar." }
 
     const fechaHoy = new Date().toISOString().slice(0, 10)
+    const periodoError = await assertFechaEditable(supabase, fechaHoy, "Aplicar saldo a favor")
+    if (periodoError) return { error: periodoError }
 
     const { data: pagoInsertado, error: pagoError } = await supabase.from("pagos_abonos").insert([
       {
         cuenta_id: cuentaId,
-        monto,
+        monto: montoAplicado,
         metodo_pago: "saldo_a_favor",
         origen_fondos: "saldo_a_favor",
         fecha_pago: fechaHoy,
-        notas: "Aplicación de saldo a favor",
+        notas: "AplicaciÃ³n de saldo a favor",
         usuario_id: user?.id || null,
       },
     ])
@@ -237,30 +361,52 @@ export async function aplicarSaldoFavor(
       .single()
     if (pagoError || !pagoInsertado) return { error: pagoError?.message || "No se pudo registrar el pago con saldo a favor." }
 
-    const { error: msfError } = await supabase.from("movimientos_saldo_favor").insert([
+    const { data: msfInsertado, error: msfError } = await supabase.from("movimientos_saldo_favor").insert([
       {
         asistente_id: asistenteId,
         cuenta_id: cuentaId,
         tipo: "aplicacion",
-        monto,
+        monto: montoAplicado,
         metodo_pago: "saldo_a_favor",
         fecha: fechaHoy,
-        notas: `Aplicación de saldo a favor a la cuenta ${cuentaId}`,
+        notas: `AplicaciÃ³n de saldo a favor a la cuenta ${cuentaId}`,
       },
     ])
+      .select("id")
+      .single()
     if (msfError) {
       const { error: rollbackPagoError } = await supabase.from("pagos_abonos").delete().eq("id", pagoInsertado.id)
       if (rollbackPagoError) {
         return {
-          error: "Se registró el pago desde saldo a favor, pero falló su movimiento espejo y no se pudo revertir automáticamente. Requiere revisión manual.",
+          error: "Se registrÃ³ el pago desde saldo a favor, pero fallÃ³ su movimiento espejo y no se pudo revertir automÃ¡ticamente. Requiere revisiÃ³n manual.",
         }
       }
       return { error: "No se pudo aplicar el saldo a favor. El pago fue revertido para evitar descuadres." }
     }
 
-    const pagosActualizados = [...cuenta.pagos_abonos, { monto, origen_fondos: "saldo_a_favor", metodo_pago: "saldo_a_favor" }]
+    const pagosActualizados = [...cuenta.pagos_abonos, { monto: montoAplicado, origen_fondos: "saldo_a_favor", metodo_pago: "saldo_a_favor" }]
     const estado = calcularEstadoCuentaDesdePagos(toSafeNumber(cuenta.valor_total), pagosActualizados)
-    await supabase.from("cuentas_por_cobrar").update({ estado }).eq("id", cuentaId)
+    const { error: updateCuentaError } = await supabase.from("cuentas_por_cobrar").update({ estado }).eq("id", cuentaId)
+    if (updateCuentaError) {
+      if (msfInsertado?.id) {
+        await supabase.from("movimientos_saldo_favor").delete().eq("id", msfInsertado.id)
+      }
+      await supabase.from("pagos_abonos").delete().eq("id", pagoInsertado.id)
+      return { error: "No se pudo consolidar la aplicaciÃ³n del saldo a favor. Se revirtiÃ³ para evitar inconsistencias." }
+    }
+
+    await supabase
+      .from("auditoria_financiera")
+      .insert([
+        buildAudit("pagos_abonos", pagoInsertado.id, user?.id || "", "aplicar_saldo_a_favor", null, montoAplicado, "Pago aplicado desde saldo a favor"),
+      ])
+    if (msfInsertado?.id) {
+      await supabase
+        .from("auditoria_financiera")
+        .insert([
+          buildAudit("movimientos_saldo_favor", msfInsertado.id, user?.id || "", "consumir_saldo_a_favor", null, montoAplicado, "AplicaciÃ³n de saldo a favor a una cuenta"),
+        ])
+    }
 
     revalidatePath(`/cuentas/${cuentaId}`)
     revalidatePath("/cuentas")
@@ -286,6 +432,16 @@ export async function editValorCuenta(
     const motivo = ((formData.get("motivo") as string) || "").trim()
 
     if (valorNuevo <= 0) return { error: "El nuevo valor debe ser mayor a 0." }
+
+    const { data: cuentaBase, error: cuentaBaseError } = await supabase
+      .from("cuentas_por_cobrar")
+      .select("fecha_emision")
+      .eq("id", cuentaId)
+      .single()
+    if (cuentaBaseError || !cuentaBase) return { error: "No se encontrÃ³ la cuenta." }
+
+    const periodoError = await assertFechaEditable(supabase, cuentaBase.fecha_emision, "Editar el valor de la cuenta")
+    if (periodoError) return { error: periodoError }
 
     const { error: updateValorError } = await supabase.from("cuentas_por_cobrar").update({ valor_total: valorNuevo }).eq("id", cuentaId)
     if (updateValorError) return { error: "No se pudo actualizar el valor de la cuenta." }
@@ -333,10 +489,13 @@ export async function editMontoAbono(
 
     const { data: abono, error: abonoError } = await supabase
       .from("pagos_abonos")
-      .select("monto, origen_fondos, metodo_pago")
+      .select("monto, origen_fondos, metodo_pago, fecha_pago")
       .eq("id", abonoId)
       .single()
-    if (abonoError || !abono) return { error: "No se encontró el abono." }
+    if (abonoError || !abono) return { error: "No se encontrÃ³ el abono." }
+
+    const periodoError = await assertFechaEditable(supabase, abono.fecha_pago, "Editar el abono")
+    if (periodoError) return { error: periodoError }
 
     const { data: cuenta, error: cuentaError } = await supabase
       .from("cuentas_por_cobrar")
@@ -344,54 +503,117 @@ export async function editMontoAbono(
       .eq("id", cuentaId)
       .single()
 
-    if (cuentaError || !cuenta) return { error: "No se encontró la cuenta asociada." }
+    if (cuentaError || !cuenta) return { error: "No se encontrÃ³ la cuenta asociada." }
 
-    const validacion = calcularPendienteDespuesDeAbono(toSafeNumber(cuenta.valor_total), cuenta.pagos_abonos, abonoId, valorNuevo)
-    if (validacion.excede) return { error: "El abono no puede superar el saldo pendiente." }
+    const pagosOtros = filtrarPagosValidosCuentas(cuenta.pagos_abonos || []).filter((p) => p.id !== abonoId)
+    const totalOtros = pagosOtros.reduce((acc, pago) => acc + toSafeNumber(pago.monto), 0)
+    const maxAplicableCuenta = Math.max(0, toSafeNumber(cuenta.valor_total) - totalOtros)
+    const montoAplicadoNuevo = Math.min(valorNuevo, maxAplicableCuenta)
+    const excedenteNuevo = Math.max(0, valorNuevo - montoAplicadoNuevo)
+    const montoActual = toSafeNumber(abono.monto)
 
-    const { error: updateAbonoError } = await supabase.from("pagos_abonos").update({ monto: valorNuevo }).eq("id", abonoId)
+    if (excedenteNuevo > 0 && !cuenta.asistente_id) {
+      return { error: "No se puede generar saldo a favor porque la cuenta no tiene asistente asociado." }
+    }
+
+    const esSaldo = esSaldoAFavor(abono)
+    const excedenteActual = !esSaldo ? await getOverflowAsociadoAbono(supabase, cuentaId, abonoId) : 0
+
+    const { error: updateAbonoError } = await supabase.from("pagos_abonos").update({ monto: montoAplicadoNuevo }).eq("id", abonoId)
     if (updateAbonoError) return { error: "No se pudo actualizar el abono." }
 
-    const delta = valorNuevo - toSafeNumber(valorAnterior)
-    const esSaldo = esSaldoAFavor(abono)
-    const fechaHoy = new Date().toISOString().slice(0, 10)
+    let movimientoAjusteId: string | null = null
+    let movimientoAjusteTipo: "ingreso" | "aplicacion" | null = null
+    let movimientoAjusteMonto = 0
+    const fechaMovimiento = abono.fecha_pago || new Date().toISOString().slice(0, 10)
 
-    if (esSaldo && cuenta.asistente_id && delta !== 0) {
-      const tipoMovimiento = delta > 0 ? "aplicacion" : "ingreso"
-      const montoMovimiento = Math.abs(delta)
-      const notasMovimiento = "Ajuste de aplicación de saldo (abono " + abonoId + ")"
-      const { error: movError } = await supabase.from("movimientos_saldo_favor").insert([
-        {
-          asistente_id: cuenta.asistente_id,
-          cuenta_id: cuentaId,
-          tipo: tipoMovimiento,
-          monto: montoMovimiento,
-          metodo_pago: "saldo_a_favor",
-          fecha: fechaHoy,
-          notas: notasMovimiento,
-        },
-      ])
-      if (movError) {
-        const { error: rollbackAbonoError } = await supabase
-          .from("pagos_abonos")
-          .update({ monto: valorAnterior })
-          .eq("id", abonoId)
-        if (rollbackAbonoError) {
-          return {
-            error: "Se modificó el abono, pero falló el ajuste de saldo a favor y no se pudo revertir automáticamente. Requiere revisión manual.",
+    if (cuenta.asistente_id) {
+      if (esSaldo) {
+        const deltaAplicado = montoAplicadoNuevo - montoActual
+        if (deltaAplicado !== 0) {
+          movimientoAjusteTipo = deltaAplicado > 0 ? "aplicacion" : "ingreso"
+          movimientoAjusteMonto = Math.abs(deltaAplicado)
+          const { data: movimientoAjuste, error: movError } = await registrarMovimientoSaldoFavor(supabase, {
+            asistente_id: cuenta.asistente_id,
+            cuenta_id: cuentaId,
+            tipo: movimientoAjusteTipo,
+            monto: movimientoAjusteMonto,
+            metodo_pago: "saldo_a_favor",
+            fecha: fechaMovimiento,
+            notas: overflowNote(abonoId, "Ajuste de aplicaciÃ³n de saldo a favor del abono"),
+          })
+
+          if (movError || !movimientoAjuste) {
+            const { error: rollbackAbonoError } = await supabase.from("pagos_abonos").update({ monto: montoActual }).eq("id", abonoId)
+            if (rollbackAbonoError) {
+              return {
+                error: "Se modificÃ³ el abono, pero fallÃ³ el ajuste de saldo a favor y no se pudo revertir automÃ¡ticamente. Requiere revisiÃ³n manual.",
+              }
+            }
+            return { error: "No se pudo registrar el ajuste de saldo a favor. El abono fue restaurado para evitar inconsistencias." }
           }
+
+          movimientoAjusteId = movimientoAjuste.id
         }
-        return { error: "No se pudo registrar el ajuste de saldo a favor. El abono fue restaurado para evitar inconsistencias." }
+      } else {
+        const deltaExcedente = excedenteNuevo - excedenteActual
+        if (deltaExcedente !== 0) {
+          movimientoAjusteTipo = deltaExcedente > 0 ? "ingreso" : "aplicacion"
+          movimientoAjusteMonto = Math.abs(deltaExcedente)
+          const { data: movimientoAjuste, error: movError } = await registrarMovimientoSaldoFavor(supabase, {
+            asistente_id: cuenta.asistente_id,
+            cuenta_id: cuentaId,
+            tipo: movimientoAjusteTipo,
+            monto: movimientoAjusteMonto,
+            metodo_pago: deltaExcedente > 0 ? abono.metodo_pago : "saldo_a_favor",
+            fecha: fechaMovimiento,
+            notas: overflowNote(abonoId, "Ajuste de saldo a favor por ediciÃ³n del abono"),
+          })
+
+          if (movError || !movimientoAjuste) {
+            const { error: rollbackAbonoError } = await supabase.from("pagos_abonos").update({ monto: montoActual }).eq("id", abonoId)
+            if (rollbackAbonoError) {
+              return {
+                error: "Se modificÃ³ el abono, pero fallÃ³ el ajuste del saldo a favor y no se pudo revertir automÃ¡ticamente. Requiere revisiÃ³n manual.",
+              }
+            }
+            return { error: "No se pudo ajustar el saldo a favor del abono. El pago fue restaurado para evitar inconsistencias." }
+          }
+
+          movimientoAjusteId = movimientoAjuste.id
+        }
       }
     }
 
     await supabase
       .from("auditoria_financiera")
       .insert([buildAudit("pagos_abonos", abonoId, user?.id || "", "edicion_abono", valorAnterior, valorNuevo, motivo || "Ajuste de abono")])
+    if (movimientoAjusteId && movimientoAjusteTipo) {
+      await supabase
+        .from("auditoria_financiera")
+        .insert([
+          buildAudit(
+            "movimientos_saldo_favor",
+            movimientoAjusteId,
+            user?.id || "",
+            movimientoAjusteTipo === "ingreso" ? "ajuste_saldo_a_favor_ingreso" : "ajuste_saldo_a_favor_aplicacion",
+            null,
+            movimientoAjusteMonto,
+            "Ajuste automÃ¡tico del saldo a favor por ediciÃ³n de abono"
+          ),
+        ])
+    }
 
-    const pagosAjustados = cuenta.pagos_abonos.map((p) => (p.id === abonoId ? { ...p, monto: valorNuevo } : p))
+    const pagosAjustados = cuenta.pagos_abonos.map((p) => (p.id === abonoId ? { ...p, monto: montoAplicadoNuevo } : p))
     const nuevoEstado = calcularEstadoCuentaDesdePagos(toSafeNumber(cuenta.valor_total), pagosAjustados)
-    await supabase.from("cuentas_por_cobrar").update({ estado: nuevoEstado }).eq("id", cuentaId)
+    const { error: updateCuentaError } = await supabase.from("cuentas_por_cobrar").update({ estado: nuevoEstado }).eq("id", cuentaId)
+    if (updateCuentaError) {
+      if (movimientoAjusteId) {
+        await supabase.from("movimientos_saldo_favor").delete().eq("id", movimientoAjusteId)
+      }
+      await supabase.from("pagos_abonos").update({ monto: montoActual }).eq("id", abonoId)
+      return { error: "No se pudo consolidar la ediciÃ³n del abono. Se restaurÃ³ la operaciÃ³n para evitar inconsistencias." }
+    }
 
     revalidatePath(`/cuentas/${cuentaId}`)
     revalidatePath("/cuentas")
@@ -424,7 +646,10 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
     if (!concepto) return { error: "El concepto es obligatorio." }
     if (valor_total <= 0) return { error: "El valor debe ser mayor a 0." }
     if (abonoInicial < 0) return { error: "El abono inicial no puede ser negativo." }
-    if (abonoInicial > 0 && !metodoPago) return { error: "Debes indicar el método de pago del abono inicial." }
+    if (abonoInicial > 0 && !metodoPago) return { error: "Debes indicar el mÃ©todo de pago del abono inicial." }
+
+    const periodoError = await assertFechaEditable(supabase, fecha_emision, "Crear la cuenta")
+    if (periodoError) return { error: periodoError }
 
     let paqueteCoachId: string | null = null
     let pagoInicialId: string | null = null
@@ -453,7 +678,6 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
           asistente_id,
           cuenta_id: cuentaIdCreada,
           sesiones_compradas: sesionesCoach,
-          valor_total,
         },
       ])
         .select("id")
@@ -505,7 +729,7 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
               monto: excedente,
               metodo_pago: metodoPago,
               fecha: fecha_emision,
-              notas: `Saldo a favor generado por abono inicial excedente de la cuenta ${cuentaIdCreada}`,
+              notas: overflowNote(pagoInicialId || cuentaIdCreada, "Saldo a favor generado por excedente del abono inicial"),
             },
           ])
           .select("id")
@@ -531,8 +755,24 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
           pagoId: pagoInicialId,
           saldoFavorId,
         })
-        return { error: "La cuenta se creó, pero no se pudo consolidar el abono inicial. Se revirtió la operación para evitar inconsistencias." }
+        return { error: "La cuenta se creÃ³, pero no se pudo consolidar el abono inicial. Se revirtiÃ³ la operaciÃ³n para evitar inconsistencias." }
       }
+    }
+
+    await supabase
+      .from("auditoria_financiera")
+      .insert([buildAudit("cuentas_por_cobrar", cuentaIdCreada, user?.id || "", "crear_cuenta", null, valor_total, "CreaciÃ³n de cuenta por cobrar")])
+    if (pagoInicialId) {
+      const montoAplicado = Math.min(abonoInicial, valor_total)
+      await supabase
+        .from("auditoria_financiera")
+        .insert([buildAudit("pagos_abonos", pagoInicialId, user?.id || "", "crear_abono_inicial", null, montoAplicado, "Abono inicial registrado al crear la cuenta")])
+    }
+    if (saldoFavorId) {
+      const excedente = Math.max(0, abonoInicial - valor_total)
+      await supabase
+        .from("auditoria_financiera")
+        .insert([buildAudit("movimientos_saldo_favor", saldoFavorId, user?.id || "", "crear_saldo_favor_sobrepago", null, excedente, "Saldo a favor generado por excedente del abono inicial")])
     }
 
     revalidatePath("/cuentas")
@@ -547,3 +787,4 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
     return { error: e.message || "Error al crear la cuenta." }
   }
 }
+
