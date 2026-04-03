@@ -8,6 +8,7 @@ import {
   calcularPendienteCuenta,
   esSaldoAFavor,
   filtrarPagosValidosCuentas,
+  parseMoneyInput,
   toSafeNumber,
 } from "@/lib/utils/contable"
 import { requireAdmin, requireRoles } from "@/lib/utils/authz"
@@ -633,20 +634,27 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
 
     const asistente_id = (formData.get("asistente_id") as string) || ""
     const concepto = ((formData.get("concepto") as string) || "").trim()
-    const valor_total = toSafeNumber(formData.get("valor_total"))
+    const valorTotalInput = formData.get("valor_total")
+    const valor_total = parseMoneyInput(valorTotalInput)
     const fecha_emision = (formData.get("fecha_emision") as string) || new Date().toISOString().slice(0, 10)
     const returnTo = (formData.get("return_to") as string) || null
     const tipoCuenta = (formData.get("tipo_cuenta") as string) || "general"
     const sesionesCoach = Math.max(1, toSafeNumber(formData.get("sesiones_coach")) || 1)
-    const abonoInicial = toSafeNumber(formData.get("abono_inicial"))
+    const abonoInicialRaw = ((formData.get("abono_inicial") as string) || "").trim()
+    const abonoInicial = abonoInicialRaw === "" ? 0 : parseMoneyInput(abonoInicialRaw)
     const metodoPago = ((formData.get("metodo_pago") as string) || "").trim() || null
     const paqueteCoach = tipoCuenta === "coach"
 
     if (!asistente_id) return { error: "Debes seleccionar un asistente." }
     if (!concepto) return { error: "El concepto es obligatorio." }
+    if (valor_total === null) return { error: "El valor total no tiene un formato valido." }
+    if (abonoInicialRaw !== "" && abonoInicial === null) {
+      return { error: "El abono inicial no tiene un formato valido." }
+    }
+    const abonoInicialValue = abonoInicial ?? 0
     if (valor_total <= 0) return { error: "El valor debe ser mayor a 0." }
-    if (abonoInicial < 0) return { error: "El abono inicial no puede ser negativo." }
-    if (abonoInicial > 0 && !metodoPago) return { error: "Debes indicar el mÃ©todo de pago del abono inicial." }
+    if (abonoInicialValue < 0) return { error: "El abono inicial no puede ser negativo." }
+    if (abonoInicialValue > 0 && !metodoPago) return { error: "Debes indicar el mÃ©todo de pago del abono inicial." }
 
     const periodoError = await assertFechaEditable(supabase, fecha_emision, "Crear la cuenta")
     if (periodoError) return { error: periodoError }
@@ -690,9 +698,9 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
       paqueteCoachId = coachInsert.id
     }
 
-    if (abonoInicial > 0) {
-      const montoAplicado = Math.min(abonoInicial, valor_total)
-      const excedente = Math.max(0, abonoInicial - montoAplicado)
+    if (abonoInicialValue > 0) {
+      const montoAplicado = Math.min(abonoInicialValue, valor_total)
+      const excedente = Math.max(0, abonoInicialValue - montoAplicado)
 
       if (montoAplicado > 0) {
         const { data: pagoInsertado, error: pagoError } = await supabase
@@ -763,13 +771,13 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
       .from("auditoria_financiera")
       .insert([buildAudit("cuentas_por_cobrar", cuentaIdCreada, user?.id || "", "crear_cuenta", null, valor_total, "CreaciÃ³n de cuenta por cobrar")])
     if (pagoInicialId) {
-      const montoAplicado = Math.min(abonoInicial, valor_total)
+      const montoAplicado = Math.min(abonoInicialValue, valor_total)
       await supabase
         .from("auditoria_financiera")
         .insert([buildAudit("pagos_abonos", pagoInicialId, user?.id || "", "crear_abono_inicial", null, montoAplicado, "Abono inicial registrado al crear la cuenta")])
     }
     if (saldoFavorId) {
-      const excedente = Math.max(0, abonoInicial - valor_total)
+      const excedente = Math.max(0, abonoInicialValue - valor_total)
       await supabase
         .from("auditoria_financiera")
         .insert([buildAudit("movimientos_saldo_favor", saldoFavorId, user?.id || "", "crear_saldo_favor_sobrepago", null, excedente, "Saldo a favor generado por excedente del abono inicial")])

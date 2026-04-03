@@ -175,6 +175,60 @@ describe('cuentas/actions', () => {
     expect(cuentaUpdateEq).toHaveBeenCalledWith('id', 'cuenta-1')
   })
 
+  it('saveCuenta parsea correctamente montos con separador local al crear cuenta coach', async () => {
+    const cuentaInsert = insertSingle({ id: 'cuenta-1' })
+    const coachInsert = insertSingle({ id: 'pkg-1' })
+    const pagoInsert = insertSingle({ id: 'pago-1' })
+    const saldoInsert = vi.fn()
+    const cuentaUpdateEq = vi.fn().mockResolvedValue({ error: null })
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'cuentas_por_cobrar') {
+          return {
+            insert: cuentaInsert,
+            update: vi.fn(() => ({ eq: cuentaUpdateEq })),
+          }
+        }
+        if (table === 'coach_paquetes') return { insert: coachInsert }
+        if (table === 'pagos_abonos') return { insert: pagoInsert }
+        if (table === 'movimientos_saldo_favor') return { insert: saldoInsert }
+        if (table === 'auditoria_financiera') return { insert: vi.fn().mockResolvedValue({ error: null }) }
+        return {}
+      }),
+    }
+
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+
+    const result = await saveCuenta(
+      null,
+      buildFormData({
+        asistente_id: 'asis-1',
+        concepto: 'Paquete coach',
+        valor_total: '90.000',
+        fecha_emision: '2026-04-03',
+        tipo_cuenta: 'coach',
+        sesiones_coach: '4',
+        abono_inicial: '60.000',
+        metodo_pago: 'nequi',
+      })
+    )
+
+    expect(result?.success).toBe(true)
+    expect(cuentaInsert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        valor_total: 90000,
+      }),
+    ])
+    expect(pagoInsert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        monto: 60000,
+        metodo_pago: 'nequi',
+      }),
+    ])
+    expect(saldoInsert).not.toHaveBeenCalled()
+  })
+
   it('saveCuenta aplica el sobrepago a saldo a favor y deja la cuenta pagada', async () => {
     const cuentaInsert = insertSingle({ id: 'cuenta-1' })
     const pagoInsert = insertSingle({ id: 'pago-1' })
