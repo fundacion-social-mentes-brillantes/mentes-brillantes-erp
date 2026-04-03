@@ -5,7 +5,7 @@ import { ArrowLeft, Wallet, Lock, Calculator } from 'lucide-react'
 import { AdelantoForm } from './AdelantoForm'
 import { GenerarLiquidacionBtn } from './GenerarLiquidacionBtn'
 import { ExportarLiquidacion } from '@/components/liquidaciones/ExportarLiquidacion'
-import { agruparPorMetodo, MetodoPago } from '@/lib/utils/liquidaciones'
+import { agruparPorMetodo, MetodoPago, METODOS_PAGO_RESUMEN } from '@/lib/utils/liquidaciones'
 import { esAnuladoCompleto, filtrarIngresosOperativos, sumarMontos } from '@/lib/utils/contable'
 
 export const dynamic = 'force-dynamic'
@@ -123,8 +123,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
       .order('metodo_pago')
     if (resumenError) console.error('Error al consultar resumen congelado:', resumenError)
 
-    const metodos: MetodoPago[] = ['efectivo', 'nequi', 'daviplata', 'otro']
-    const base = metodos.map((m) => ({
+    const base = METODOS_PAGO_RESUMEN.map((m) => ({
       metodo_pago: m,
       total_ingresos: 0,
       total_salidas: 0,
@@ -285,14 +284,18 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
             {periodo.estado === 'abierto' ? 'Proyección en vivo' : 'Datos congelados'}
           </span>
         </div>
+        <div className="px-5 py-3 border-b border-zinc-100 bg-zinc-50/60 text-xs text-zinc-500">
+          Total salidas y saldo neto del período usan solo egresos operativos. Los adelantos se muestran aparte y no reducen la utilidad.
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="text-zinc-500 font-medium border-b border-zinc-200 bg-zinc-50">
               <tr>
                 <th className="px-4 py-3">Método</th>
                 <th className="px-4 py-3 text-right">Ingresos</th>
-                <th className="px-4 py-3 text-right">Salidas</th>
-                <th className="px-4 py-3 text-right">Saldo neto del período</th>
+                <th className="px-4 py-3 text-right">Egresos operativos</th>
+                <th className="px-4 py-3 text-right">Adelantos no operativos</th>
+                <th className="px-4 py-3 text-right">Saldo neto operativo</th>
                 <th className="px-4 py-3 text-right">Valor esperado en cuenta</th>
               </tr>
             </thead>
@@ -302,6 +305,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                   <td className="px-4 py-3 font-medium text-zinc-900 capitalize">{row.metodo_pago}</td>
                   <td className="px-4 py-3 text-right text-emerald-700">${row.total_ingresos.toLocaleString()}</td>
                   <td className="px-4 py-3 text-right text-red-600">-${row.total_salidas.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-right text-amber-600">-${Number(row.salidas_adelantos ?? 0).toLocaleString()}</td>
                   <td className={`px-4 py-3 text-right font-semibold ${row.saldo_neto_periodo >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
                     ${row.saldo_neto_periodo.toLocaleString()}
                   </td>
@@ -312,6 +316,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                 <td className="px-4 py-3">Total</td>
                 <td className="px-4 py-3 text-right text-emerald-700">${resumenTotales.total_ingresos.toLocaleString()}</td>
                 <td className="px-4 py-3 text-right text-red-600">-${resumenTotales.total_salidas.toLocaleString()}</td>
+                <td className="px-4 py-3 text-right text-amber-600">-${adelantos_periodo.toLocaleString()}</td>
                 <td className="px-4 py-3 text-right">${resumenTotales.saldo_neto_periodo.toLocaleString()}</td>
                 <td className="px-4 py-3 text-right">${resumenTotales.saldo_neto_periodo.toLocaleString()}</td>
               </tr>

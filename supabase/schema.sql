@@ -578,7 +578,7 @@ BEGIN
   END IF;
 
   WITH metodos AS (
-    SELECT unnest(ARRAY['efectivo','nequi','daviplata','otro','saldo_a_favor']::TEXT[]) AS metodo_pago
+    SELECT unnest(ARRAY['efectivo','nequi','daviplata','otro']::TEXT[]) AS metodo_pago
   ),
   abonos_agg AS (
     SELECT LOWER(COALESCE(pa.metodo_pago::TEXT, 'otro')) AS metodo_pago,

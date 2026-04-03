@@ -22,11 +22,11 @@ type ResumenMetodo = {
   salidas_adelantos?: number
 }
 
-const metodosBase: MetodoPago[] = ["efectivo", "nequi", "daviplata", "otro"]
+export const METODOS_PAGO_RESUMEN: MetodoPago[] = ["efectivo", "nequi", "daviplata", "otro"]
 
 const normalizarMetodo = (m?: string | null): MetodoPago => {
   const v = (m || "").toLowerCase().trim() as MetodoPago
-  return metodosBase.includes(v) ? v : "otro"
+  return METODOS_PAGO_RESUMEN.includes(v) ? v : "otro"
 }
 
 export function agruparPorMetodo({
@@ -40,7 +40,7 @@ export function agruparPorMetodo({
   egresos?: Movimiento[]
   adelantos?: Movimiento[]
 }): { resumen: ResumenMetodo[]; totales: ResumenMetodo } {
-  const base = metodosBase.reduce<Record<MetodoPago, ResumenMetodo>>(
+  const base = METODOS_PAGO_RESUMEN.reduce<Record<MetodoPago, ResumenMetodo>>(
     (acc, m) => ({
       ...acc,
       [m]: {
@@ -81,7 +81,7 @@ export function agruparPorMetodo({
     base[key].salidas_adelantos = (base[key].salidas_adelantos || 0) + Number(a.monto || 0)
   })
 
-  const resumen = metodosBase.map((m) => {
+  const resumen = METODOS_PAGO_RESUMEN.map((m) => {
     const item = base[m]
     item.total_ingresos = (item.ingresos_abonos || 0) + (item.ingresos_donaciones || 0)
     item.total_salidas = item.salidas_egresos || 0
