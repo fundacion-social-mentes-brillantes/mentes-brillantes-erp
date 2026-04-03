@@ -88,7 +88,7 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
 
         <div className="space-y-2">
           <label className="text-sm font-medium text-zinc-900">Valor Total ($) *</label>
-          <Input name="valor_total" type="number" step="0.01" min="0.01" required disabled={isPending} />
+          <Input name="valor_total" type="text" inputMode="decimal" placeholder="Ej: 90.000" required disabled={isPending} />
         </div>
 
         <div className="space-y-2">
@@ -136,7 +136,7 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
 
         <div className="space-y-2">
           <label className="text-sm font-medium text-zinc-900">Abono Inicial ($)</label>
-          <Input name="abono_inicial" type="number" step="0.01" min="0" placeholder="0.00" disabled={isPending} />
+          <Input name="abono_inicial" type="text" inputMode="decimal" placeholder="Ej: 60.000" disabled={isPending} />
         </div>
 
         <div className="space-y-2">
