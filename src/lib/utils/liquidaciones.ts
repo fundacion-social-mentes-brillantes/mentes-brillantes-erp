@@ -84,7 +84,7 @@ export function agruparPorMetodo({
   const resumen = metodosBase.map((m) => {
     const item = base[m]
     item.total_ingresos = (item.ingresos_abonos || 0) + (item.ingresos_donaciones || 0)
-    item.total_salidas = (item.salidas_egresos || 0) + (item.salidas_adelantos || 0)
+    item.total_salidas = item.salidas_egresos || 0
     item.saldo_neto_periodo = item.total_ingresos - item.total_salidas
     return item
   })

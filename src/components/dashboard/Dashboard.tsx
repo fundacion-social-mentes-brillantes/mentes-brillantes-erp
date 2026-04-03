@@ -136,12 +136,12 @@ export async function Dashboard({ month }: { month?: string }) {
   const { data: rawEgresosPrevData } = await supabase.from('egresos').select('monto, estado, notas').gte('fecha', firstDayOfPrevMonth).lte('fecha', lastDayOfPrevMonth);
   const egresosPrevData = (rawEgresosPrevData ?? []).filter((item) => !esAnuladoCompleto(item));
   const egresosPrev = Math.round(sumarMontos(egresosPrevData));
-  const utilidadPrev = ingresosPrev - egresosPrev;
+  const utilidadPrev = ingresosTotalesPrev - egresosPrev;
 
-  const { data: cuentasPrevData } = await supabase.from('cuentas_por_cobrar').select('valor_total, pagos_abonos(monto)').gte('fecha_emision', firstDayOfPrevMonth).lte('fecha_emision', lastDayOfPrevMonth);
+  const { data: cuentasPrevData } = await supabase.from('cuentas_por_cobrar').select('valor_total, pagos_abonos(monto, estado, notas)').gte('fecha_emision', firstDayOfPrevMonth).lte('fecha_emision', lastDayOfPrevMonth);
   const facturadoPrev = Math.round(cuentasPrevData?.reduce((acc, curr) => acc + Number(curr.valor_total), 0) || 0);
   const pendientePrev = Math.round(cuentasPrevData?.reduce((acc, curr) => {
-    const abonado = curr.pagos_abonos?.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0) || 0;
+    const abonado = filtrarPagosValidosCuentas(curr.pagos_abonos || []).reduce((sum: number, pago: any) => sum + Number(pago.monto), 0);
     return acc + (Number(curr.valor_total) - abonado);
   }, 0) || 0);
 

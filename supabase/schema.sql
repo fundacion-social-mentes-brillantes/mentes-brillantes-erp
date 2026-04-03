@@ -342,11 +342,14 @@ BEGIN
     SELECT unnest(ARRAY['efectivo','nequi','daviplata','otro']::text[]) AS metodo_pago
   ),
   abonos_agg AS (
-    SELECT LOWER(COALESCE(metodo_pago::text,'otro')) AS metodo_pago,
-           SUM(valor_ingreso) AS monto
-    FROM vw_movimientos_generales
-    WHERE tipo_movimiento = 'abono'
-      AND fecha BETWEEN v_inicio AND v_fin
+    SELECT LOWER(COALESCE(pa.metodo_pago::text,'otro')) AS metodo_pago,
+           SUM(pa.monto) AS monto
+    FROM pagos_abonos pa
+    WHERE pa.fecha_pago BETWEEN v_inicio AND v_fin
+      AND COALESCE(pa.estado, 'activo') <> 'anulado'
+      AND (pa.notas IS NULL OR pa.notas NOT ILIKE '%[ANULADO]%')
+      AND COALESCE(LOWER(pa.origen_fondos::text), '') <> 'saldo_a_favor'
+      AND COALESCE(LOWER(pa.metodo_pago::text), '') <> 'saldo_a_favor'
     GROUP BY 1
   ),
   donaciones_agg AS (
@@ -395,8 +398,8 @@ BEGIN
     p_periodo_id,
     r.metodo_pago,
     (r.ingresos_abonos + r.ingresos_donaciones) AS total_ingresos,
-    (r.salidas_egresos + r.salidas_adelantos) AS total_salidas,
-    (r.ingresos_abonos + r.ingresos_donaciones - r.salidas_egresos - r.salidas_adelantos) AS saldo_neto_periodo,
+    r.salidas_egresos AS total_salidas,
+    (r.ingresos_abonos + r.ingresos_donaciones - r.salidas_egresos) AS saldo_neto_periodo,
     r.ingresos_abonos,
     r.ingresos_donaciones,
     r.salidas_egresos,
@@ -416,7 +419,7 @@ BEGIN
 
   SELECT
     SUM(r.ingresos_abonos + r.ingresos_donaciones),
-    SUM(r.salidas_egresos + r.salidas_adelantos),
+    SUM(r.salidas_egresos),
     SUM(r.ingresos_donaciones)
   INTO v_ingresos_operativos, v_egresos_periodo, v_donaciones_total
   FROM liquidaciones_resumen_cuentas r

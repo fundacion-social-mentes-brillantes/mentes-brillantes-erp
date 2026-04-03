@@ -6,7 +6,7 @@ import { AdelantoForm } from './AdelantoForm'
 import { GenerarLiquidacionBtn } from './GenerarLiquidacionBtn'
 import { ExportarLiquidacion } from '@/components/liquidaciones/ExportarLiquidacion'
 import { agruparPorMetodo, MetodoPago } from '@/lib/utils/liquidaciones'
-import { sumarMontos } from '@/lib/utils/contable'
+import { esAnuladoCompleto, filtrarIngresosOperativos, sumarMontos } from '@/lib/utils/contable'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -41,6 +41,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
   let donaciones_periodo = 0
   let ingresos_operativos = 0
   let egresos_periodo = 0
+  let adelantos_periodo = 0
   let ingresosData: any[] = []
   let donacionesValidas: any[] = []
   let egresosData: any[] = []
@@ -57,17 +58,20 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
   let resumenTotales = { total_ingresos: 0, total_salidas: 0, saldo_neto_periodo: 0 }
 
   if (periodo.estado === 'abierto') {
-    const { data: abonosVista, error: abonosError } = await supabase
-      .from('vw_movimientos_generales')
-      .select('metodo_pago, valor_ingreso, fecha, tipo_movimiento')
-      .eq('tipo_movimiento', 'abono')
-      .gte('fecha', periodo.fecha_inicio)
-      .lte('fecha', periodo.fecha_fin)
-    if (abonosError) console.error('Error al consultar abonos en vista:', abonosError)
+    const { data: rawAbonos, error: abonosError } = await supabase
+      .from('pagos_abonos')
+      .select('monto, metodo_pago, origen_fondos, estado, notas, fecha_pago')
+      .gte('fecha_pago', periodo.fecha_inicio)
+      .lte('fecha_pago', periodo.fecha_fin)
+    if (abonosError) console.error('Error al consultar abonos:', abonosError)
+
     ingresosData =
-      (abonosVista || []).map((a: any) => ({
-        monto: a.valor_ingreso,
+      filtrarIngresosOperativos(rawAbonos || []).map((a: any) => ({
+        monto: a.monto,
         metodo_pago: a.metodo_pago,
+        origen_fondos: a.origen_fondos,
+        estado: a.estado,
+        notas: a.notas,
       })) || []
     ingresos_cobrados = Math.round(sumarMontos(ingresosData))
 
@@ -78,7 +82,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
       .lte('fecha', periodo.fecha_fin)
     if (donacionesError) console.error('Error al consultar donaciones:', donacionesError)
 
-    donacionesValidas = (rawDonaciones || []).filter((d) => d.estado !== 'anulado' && !d.notas?.includes('[ANULADO]'))
+    donacionesValidas = (rawDonaciones || []).filter((d) => !esAnuladoCompleto(d))
     donaciones_periodo = Math.round(donacionesValidas.reduce((acc: number, curr: any) => acc + Number(curr.monto), 0))
 
     const { data: rawEgresosData, error: egresosError } = await supabase
@@ -88,9 +92,10 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
       .lte('fecha', periodo.fecha_fin)
     if (egresosError) console.error('Error al consultar egresos:', egresosError)
 
-    egresosData =
-      rawEgresosData?.filter((item) => !item.notas?.includes('[ANULADO]') && item.estado !== 'anulado') || []
-    egresos_periodo = Math.round(egresosData.reduce((acc, curr) => acc + Number(curr.monto), 0))
+    egresosData = rawEgresosData?.filter((item) => !esAnuladoCompleto(item)) || []
+    const egresosValidos = Math.round(egresosData.reduce((acc, curr) => acc + Number(curr.monto), 0))
+    adelantos_periodo = Math.round(adelantos.reduce((acc: number, curr: any) => acc + Number(curr.monto), 0))
+    egresos_periodo = egresosValidos
 
     ingresos_operativos = ingresos_cobrados + donaciones_periodo
 
@@ -110,7 +115,6 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
     ingresos_cobrados = Math.round(Number(liquidaciones[0].ingresos_cobrados))
     donaciones_periodo = Math.round(Number(liquidaciones[0].donaciones_periodo ?? 0))
     ingresos_operativos = Math.round(Number(liquidaciones[0].ingresos_operativos ?? ingresos_cobrados + donaciones_periodo))
-    egresos_periodo = Math.round(Number(liquidaciones[0].egresos_periodo))
 
     const { data: resumenDb, error: resumenError } = await supabase
       .from('liquidaciones_resumen_cuentas')
@@ -134,9 +138,19 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
             total_ingresos: Number(row.total_ingresos),
             total_salidas: Number(row.total_salidas),
             saldo_neto_periodo: Number(row.saldo_neto_periodo),
+            ingresos_abonos: Number(row.ingresos_abonos ?? 0),
+            ingresos_donaciones: Number(row.ingresos_donaciones ?? 0),
+            salidas_egresos: Number(row.salidas_egresos ?? 0),
+            salidas_adelantos: Number(row.salidas_adelantos ?? 0),
           }
         : item
     })
+    adelantos_periodo = Math.round(
+      resumenPorCuenta.reduce((acc: number, row: any) => acc + Number(row.salidas_adelantos ?? 0), 0)
+    )
+    egresos_periodo = Math.round(
+      resumenPorCuenta.reduce((acc: number, row: any) => acc + Number(row.salidas_egresos ?? 0), 0)
+    )
     resumenTotales = resumenPorCuenta.reduce(
       (acc, r) => ({
         total_ingresos: acc.total_ingresos + r.total_ingresos,

@@ -18,7 +18,7 @@ vi.mock('next/navigation', () => ({
   redirect: (...args: unknown[]) => redirectMock(...args),
 }))
 
-const { deleteCuenta, editValorCuenta, editMontoAbono, saveAbono } = await import('./actions')
+const { aplicarSaldoFavor, deleteCuenta, editValorCuenta, editMontoAbono, saveAbono, saveCuenta } = await import('./actions')
 
 const buildFormData = (values: Record<string, string>) => {
   const formData = new FormData()
@@ -243,6 +243,45 @@ describe('editValorCuenta', () => {
     expect(revalidatePathMock).toHaveBeenCalledWith('/cuentas/cuenta-1')
     expect(revalidatePathMock).toHaveBeenCalledWith('/cuentas')
   })
+
+  it('restaura el abono si falla el ajuste espejo de saldo a favor', async () => {
+    const abonoSelectSingle = vi.fn().mockResolvedValue({ data: { origen_fondos: 'saldo_a_favor' } })
+    const abonoSelect = vi.fn(() => ({ single: abonoSelectSingle, eq: vi.fn(() => ({ single: abonoSelectSingle })) }))
+    const abonoUpdateEq = vi.fn()
+      .mockResolvedValueOnce({ error: null })
+      .mockResolvedValueOnce({ error: null })
+    const abonoUpdate = vi.fn(() => ({ eq: abonoUpdateEq }))
+
+    const cuentaSelectSingle = vi.fn().mockResolvedValue({
+      data: { valor_total: 1000, asistente_id: 'asis-1', pagos_abonos: [{ id: 'abono-1', monto: 300 }] },
+    })
+    const cuentaSelect = vi.fn(() => ({ single: cuentaSelectSingle, eq: vi.fn(() => ({ single: cuentaSelectSingle })) }))
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'pagos_abonos') return { select: abonoSelect, update: abonoUpdate }
+        if (table === 'movimientos_saldo_favor') return { insert: vi.fn().mockResolvedValue({ error: { message: 'fallo msf' } }) }
+        if (table === 'cuentas_por_cobrar') {
+          return {
+            select: cuentaSelect,
+            update: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) })),
+          }
+        }
+        if (table === 'auditoria_financiera') return { insert: vi.fn().mockResolvedValue({ error: null }) }
+        return {}
+      }),
+    }
+    mockRequireAdminReturn(supabase, { id: 'admin-1' })
+
+    const formData = buildFormData({ valor_nuevo: '600', motivo: 'ajuste' })
+    const result = await editMontoAbono('abono-1', 'cuenta-1', 300, null, formData)
+
+    expect(result?.error).toMatch(/abono fue restaurado para evitar inconsistencias/i)
+    expect(abonoUpdate).toHaveBeenCalledTimes(2)
+    expect(abonoUpdateEq).toHaveBeenNthCalledWith(1, 'id', 'abono-1')
+    expect(abonoUpdateEq).toHaveBeenNthCalledWith(2, 'id', 'abono-1')
+    expect(revalidatePathMock).not.toHaveBeenCalled()
+  })
 })
 
 describe('editMontoAbono', () => {
@@ -455,5 +494,120 @@ describe('cuentas/actions sobrepago (reglas nuevas)', () => {
         }),
       ])
     )
+  })
+})
+
+describe('aplicarSaldoFavor', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('revierte el pago si falla el movimiento espejo de saldo a favor', async () => {
+    const pagoDeleteEq = vi.fn().mockResolvedValue({ error: null })
+    const pagoDelete = vi.fn(() => ({ eq: pagoDeleteEq }))
+    const pagoInsertSingle = vi.fn().mockResolvedValue({ data: { id: 'pago-1' }, error: null })
+    const pagoInsertSelect = vi.fn(() => ({ single: pagoInsertSingle }))
+    const pagoInsert = vi.fn(() => ({ select: pagoInsertSelect }))
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'cuentas_por_cobrar') {
+          return {
+            select: () => ({
+              eq: () => ({
+                single: async () => ({
+                  data: {
+                    valor_total: 500,
+                    pagos_abonos: [],
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+            update: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) })),
+          }
+        }
+        if (table === 'pagos_abonos') {
+          return { insert: pagoInsert, delete: pagoDelete }
+        }
+        if (table === 'movimientos_saldo_favor') {
+          return { insert: vi.fn().mockResolvedValue({ error: { message: 'fallo msf' } }) }
+        }
+        return {}
+      }),
+    }
+
+    mockRequireRolesReturn(supabase, { id: 'user-1' })
+    const form = buildFormData({ monto: '200' })
+
+    const result = await aplicarSaldoFavor('cuenta-1', 'asis-1', '300', null, form)
+
+    expect(result?.error).toMatch(/fue revertido para evitar descuadres/i)
+    expect(pagoDelete).toHaveBeenCalled()
+    expect(pagoDeleteEq).toHaveBeenCalledWith('id', 'pago-1')
+    expect(revalidatePathMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('saveCuenta', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('crea cuenta coach sin usuario_id en cuentas_por_cobrar y usa sesiones_coach', async () => {
+    const cuentaInsertSingle = vi.fn().mockResolvedValue({
+      data: { id: 'cuenta-1' },
+      error: null,
+    })
+    const cuentaInsertSelect = vi.fn(() => ({
+      single: cuentaInsertSingle,
+    }))
+    const cuentaInsert = vi.fn(() => ({
+      select: cuentaInsertSelect,
+    }))
+    const coachInsert = vi.fn().mockResolvedValue({ error: null })
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'cuentas_por_cobrar') return { insert: cuentaInsert }
+        if (table === 'coach_paquetes') return { insert: coachInsert }
+        return {}
+      }),
+    }
+
+    mockRequireRolesReturn(supabase, { id: 'user-1' })
+
+    const formData = buildFormData({
+      asistente_id: 'asis-1',
+      concepto: 'Sesion guia coach - 4 sesiones',
+      valor_total: '400000',
+      fecha_emision: '2026-04-02',
+      tipo_cuenta: 'coach',
+      sesiones_coach: '4',
+    })
+
+    const result = await saveCuenta(null, formData)
+
+    expect(result?.success).toBe(true)
+    expect(cuentaInsert).toHaveBeenCalledWith([
+      {
+        asistente_id: 'asis-1',
+        concepto: 'Sesion guia coach - 4 sesiones',
+        valor_total: 400000,
+        fecha_emision: '2026-04-02',
+        estado: 'pendiente',
+      },
+    ])
+    expect(cuentaInsert.mock.calls[0][0][0]).not.toHaveProperty('usuario_id')
+    expect(coachInsert).toHaveBeenCalledWith([
+      {
+        asistente_id: 'asis-1',
+        cuenta_id: 'cuenta-1',
+        sesiones_compradas: 4,
+        valor_total: 400000,
+      },
+    ])
+    expect(revalidatePathMock).toHaveBeenCalledWith('/cuentas')
+    expect(redirectMock).toHaveBeenCalledWith('/cuentas')
   })
 })

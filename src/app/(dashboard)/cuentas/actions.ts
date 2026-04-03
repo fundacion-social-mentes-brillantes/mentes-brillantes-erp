@@ -192,7 +192,7 @@ export async function aplicarSaldoFavor(
 
     const fechaHoy = new Date().toISOString().slice(0, 10)
 
-    const { error: pagoError } = await supabase.from("pagos_abonos").insert([
+    const { data: pagoInsertado, error: pagoError } = await supabase.from("pagos_abonos").insert([
       {
         cuenta_id: cuentaId,
         monto,
@@ -203,7 +203,9 @@ export async function aplicarSaldoFavor(
         usuario_id: user?.id || null,
       },
     ])
-    if (pagoError) return { error: pagoError.message }
+      .select("id")
+      .single()
+    if (pagoError || !pagoInsertado) return { error: pagoError?.message || "No se pudo registrar el pago con saldo a favor." }
 
     const { error: msfError } = await supabase.from("movimientos_saldo_favor").insert([
       {
@@ -216,7 +218,15 @@ export async function aplicarSaldoFavor(
         notas: `Aplicación de saldo a favor a la cuenta ${cuentaId}`,
       },
     ])
-    if (msfError) return { error: msfError.message }
+    if (msfError) {
+      const { error: rollbackPagoError } = await supabase.from("pagos_abonos").delete().eq("id", pagoInsertado.id)
+      if (rollbackPagoError) {
+        return {
+          error: "Se registró el pago desde saldo a favor, pero falló su movimiento espejo y no se pudo revertir automáticamente. Requiere revisión manual.",
+        }
+      }
+      return { error: "No se pudo aplicar el saldo a favor. El pago fue revertido para evitar descuadres." }
+    }
 
     const pagosActualizados = [...cuenta.pagos_abonos, { monto, origen_fondos: "saldo_a_favor", metodo_pago: "saldo_a_favor" }]
     const estado = calcularEstadoCuentaDesdePagos(toSafeNumber(cuenta.valor_total), pagosActualizados)
@@ -331,7 +341,18 @@ export async function editMontoAbono(
           notas: notasMovimiento,
         },
       ])
-      if (movError) return { error: "No se pudo registrar el ajuste de saldo a favor." }
+      if (movError) {
+        const { error: rollbackAbonoError } = await supabase
+          .from("pagos_abonos")
+          .update({ monto: valorAnterior })
+          .eq("id", abonoId)
+        if (rollbackAbonoError) {
+          return {
+            error: "Se modificó el abono, pero falló el ajuste de saldo a favor y no se pudo revertir automáticamente. Requiere revisión manual.",
+          }
+        }
+        return { error: "No se pudo registrar el ajuste de saldo a favor. El abono fue restaurado para evitar inconsistencias." }
+      }
     }
 
     await supabase
@@ -356,7 +377,7 @@ export async function editMontoAbono(
 // --------------------------------------------
 export async function saveCuenta(prevState: ActionState, formData: FormData): Promise<ActionState> {
   try {
-    const { supabase, user } = await requireRoles(["admin", "caja"])
+    const { supabase } = await requireRoles(["admin", "caja"])
 
     const asistente_id = (formData.get("asistente_id") as string) || ""
     const concepto = ((formData.get("concepto") as string) || "").trim()
@@ -364,7 +385,7 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
     const fecha_emision = (formData.get("fecha_emision") as string) || new Date().toISOString().slice(0, 10)
     const returnTo = (formData.get("return_to") as string) || null
     const tipoCuenta = (formData.get("tipo_cuenta") as string) || "general"
-    const sesiones = toSafeNumber(formData.get("sesiones")) || 0
+    const sesiones = toSafeNumber(formData.get("sesiones_coach")) || 0
     const valorSesion = toSafeNumber(formData.get("valor_sesion")) || 0
     const paqueteCoach = tipoCuenta === "coach"
 
@@ -381,7 +402,6 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
           valor_total,
           fecha_emision,
           estado: "pendiente",
-          usuario_id: user?.id || null,
         },
       ])
       .select("id")

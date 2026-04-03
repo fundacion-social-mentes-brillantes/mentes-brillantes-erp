@@ -105,6 +105,22 @@ describe('anularMovimiento', () => {
     expect(revalidatePathMock).toHaveBeenCalledWith('/movimientos')
     expect(revalidatePathMock).not.toHaveBeenCalledWith('/cuentas')
   })
+
+  it('bloquea anular una aplicacion de saldo desde historial general', async () => {
+    const pagosSelect = vi.fn()
+    const supabase = buildSupabase({
+      pagos_abonos: {
+        select: pagosSelect,
+        update: vi.fn(),
+      },
+    })
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin' } })
+
+    const res = await anularMovimiento('msf-1', 'aplicacion_saldo', 100, 'asis-1')
+    expect(res?.error).toMatch(/no se pueden editar, anular ni eliminar/i)
+    expect(pagosSelect).not.toHaveBeenCalled()
+    expect(revalidatePathMock).not.toHaveBeenCalled()
+  })
 })
 
 describe('editarMovimiento', () => {
@@ -165,6 +181,13 @@ describe('editarMovimiento', () => {
     expect(revalidatePathMock).toHaveBeenCalledWith('/movimientos')
     expect(revalidatePathMock).not.toHaveBeenCalledWith('/cuentas')
   })
+
+  it('bloquea editar una aplicacion de saldo desde historial general', async () => {
+    requireAdminMock.mockResolvedValue({ supabase: buildSupabase({}), user: { id: 'admin' } })
+    const res = await editarMovimiento('msf-1', 'aplicacion_saldo', { monto: 120 })
+    expect(res?.error).toMatch(/no se pueden editar, anular ni eliminar/i)
+    expect(revalidatePathMock).not.toHaveBeenCalled()
+  })
 })
 
 describe('eliminarMovimiento', () => {
@@ -224,6 +247,21 @@ describe('eliminarMovimiento', () => {
     expect(deleteMock).toHaveBeenCalled()
     expect(revalidatePathMock).toHaveBeenCalledWith('/movimientos')
     expect(revalidatePathMock).not.toHaveBeenCalledWith('/cuentas')
+  })
+
+  it('bloquea eliminar una aplicacion de saldo desde historial general', async () => {
+    const pagosDelete = vi.fn()
+    const supabase = buildSupabase({
+      pagos_abonos: {
+        delete: pagosDelete,
+      },
+    })
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin' } })
+
+    const res = await eliminarMovimiento('msf-1', 'aplicacion_saldo', 100, 'asis-1')
+    expect(res?.error).toMatch(/no se pueden editar, anular ni eliminar/i)
+    expect(pagosDelete).not.toHaveBeenCalled()
+    expect(revalidatePathMock).not.toHaveBeenCalled()
   })
 })
 
