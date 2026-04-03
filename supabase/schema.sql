@@ -447,9 +447,11 @@ DECLARE
   v_fecha DATE := CURRENT_DATE;
   v_periodo_nombre TEXT;
   v_periodo_estado TEXT;
+  v_cuenta_asistente_id UUID;
   v_valor_total NUMERIC;
   v_total_abonado NUMERIC;
   v_pendiente NUMERIC;
+  v_saldo_disponible NUMERIC;
   v_pago_id UUID;
   v_movimiento_id UUID;
   v_usuario_id UUID := auth.uid();
@@ -469,14 +471,18 @@ BEGIN
     RAISE EXCEPTION 'Aplicar saldo a favor no se puede realizar porque la fecha % pertenece al periodo cerrado %.', v_fecha, v_periodo_nombre;
   END IF;
 
-  SELECT valor_total
-  INTO v_valor_total
+  SELECT asistente_id, valor_total
+  INTO v_cuenta_asistente_id, v_valor_total
   FROM cuentas_por_cobrar
   WHERE id = p_cuenta_id
   FOR UPDATE;
 
   IF v_valor_total IS NULL THEN
     RAISE EXCEPTION 'Cuenta no encontrada.';
+  END IF;
+
+  IF v_cuenta_asistente_id IS DISTINCT FROM p_asistente_id THEN
+    RAISE EXCEPTION 'La cuenta no pertenece al asistente indicado.';
   END IF;
 
   SELECT COALESCE(SUM(monto), 0)
@@ -490,6 +496,21 @@ BEGIN
 
   IF p_monto > v_pendiente THEN
     RAISE EXCEPTION 'El monto excede el saldo pendiente de la cuenta.';
+  END IF;
+
+  SELECT COALESCE(SUM(
+    CASE
+      WHEN tipo = 'ingreso' THEN monto
+      WHEN tipo = 'aplicacion' THEN -monto
+      ELSE 0
+    END
+  ), 0)
+  INTO v_saldo_disponible
+  FROM movimientos_saldo_favor
+  WHERE asistente_id = p_asistente_id;
+
+  IF p_monto > v_saldo_disponible THEN
+    RAISE EXCEPTION 'El monto excede el saldo a favor disponible del asistente.';
   END IF;
 
   INSERT INTO pagos_abonos (

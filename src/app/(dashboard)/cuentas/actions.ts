@@ -87,6 +87,24 @@ async function registrarMovimientoSaldoFavor(
   return { data, error }
 }
 
+async function getSaldoFavorDisponible(supabase: any, asistenteId: string) {
+  const { data, error } = await supabase
+    .from("movimientos_saldo_favor")
+    .select("tipo, monto")
+    .eq("asistente_id", asistenteId)
+
+  if (error) {
+    throw new Error("No se pudo validar el saldo a favor disponible.")
+  }
+
+  return (data || []).reduce((acc: number, mov: any) => {
+    const monto = toSafeNumber(mov.monto)
+    if (mov.tipo === "ingreso") return acc + monto
+    if (mov.tipo === "aplicacion") return acc - monto
+    return acc
+  }, 0)
+}
+
 async function rollbackCuentaCreada(
   supabase: any,
   {
@@ -319,25 +337,31 @@ export async function saveAbono(
 export async function aplicarSaldoFavor(
   cuentaId: string,
   asistenteId: string,
-  maxMonto: string,
+  _maxMonto: string,
   _state: ActionState,
   formData: FormData
 ): Promise<ActionState> {
   try {
     const { supabase, user } = await requireRoles(["admin", "caja"])
     const monto = toSafeNumber(formData.get("monto"))
-    const max = toSafeNumber(maxMonto)
 
     if (monto <= 0) return { error: "El monto debe ser mayor a 0." }
-    if (monto > max) return { error: "No puedes aplicar mÃ¡s del saldo disponible." }
 
     const { data: cuenta, error: cuentaError } = await supabase
       .from("cuentas_por_cobrar")
-      .select("valor_total, pagos_abonos(id, monto, notas, estado, metodo_pago, origen_fondos)")
+      .select("asistente_id, valor_total, pagos_abonos(id, monto, notas, estado, metodo_pago, origen_fondos)")
       .eq("id", cuentaId)
       .single()
 
     if (cuentaError || !cuenta) return { error: "No se encontrÃ³ la cuenta." }
+    if (!cuenta.asistente_id) return { error: "La cuenta no tiene un asistente asociado." }
+    if (cuenta.asistente_id !== asistenteId) {
+      return { error: "No puedes aplicar saldo a favor de un asistente a la cuenta de otro." }
+    }
+
+    const saldoDisponible = await getSaldoFavorDisponible(supabase, asistenteId)
+    if (saldoDisponible <= 0) return { error: "No hay saldo a favor disponible para aplicar." }
+    if (monto > saldoDisponible) return { error: "No puedes aplicar mÃ¡s saldo del realmente disponible." }
 
     const pendiente = calcularPendienteCuenta(toSafeNumber(cuenta.valor_total), cuenta.pagos_abonos)
     const montoAplicado = Math.min(monto, pendiente)

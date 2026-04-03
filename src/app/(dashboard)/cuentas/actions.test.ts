@@ -573,6 +573,7 @@ describe('cuentas/actions', () => {
             select: vi.fn(() => ({
               eq: vi.fn(() =>
                 selectSingle({
+                  asistente_id: 'asis-1',
                   valor_total: 500,
                   pagos_abonos: [],
                 })
@@ -589,6 +590,12 @@ describe('cuentas/actions', () => {
         }
         if (table === 'movimientos_saldo_favor') {
           return {
+            select: vi.fn(() => ({
+              eq: vi.fn().mockResolvedValue({
+                data: [{ tipo: 'ingreso', monto: 300 }],
+                error: null,
+              }),
+            })),
             insert: vi.fn(() => ({
               select: vi.fn(() => ({
                 single: vi.fn().mockResolvedValue({ data: null, error: { message: 'fallo msf' } }),
@@ -612,5 +619,94 @@ describe('cuentas/actions', () => {
 
     expect(result?.error).toMatch(/fue revertido para evitar descuadres/i)
     expect(pagoDeleteEq).toHaveBeenCalledWith('id', 'pago-1')
+  })
+
+  it('aplicarSaldoFavor no permite aplicar mas saldo del disponible real', async () => {
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'cuentas_por_cobrar') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() =>
+                selectSingle({
+                  asistente_id: 'asis-1',
+                  valor_total: 500,
+                  pagos_abonos: [],
+                })
+              ),
+            })),
+          }
+        }
+        if (table === 'movimientos_saldo_favor') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn().mockResolvedValue({
+                data: [
+                  { tipo: 'ingreso', monto: 100 },
+                  { tipo: 'aplicacion', monto: 40 },
+                ],
+                error: null,
+              }),
+            })),
+          }
+        }
+        return {}
+      }),
+    }
+
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+
+    const result = await aplicarSaldoFavor(
+      'cuenta-1',
+      'asis-1',
+      '999999',
+      null,
+      buildFormData({ monto: '80' })
+    )
+
+    expect(result?.error).toMatch(/realmente disponible/i)
+  })
+
+  it('aplicarSaldoFavor no permite usar saldo de un asistente en cuenta de otro', async () => {
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'cuentas_por_cobrar') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() =>
+                selectSingle({
+                  asistente_id: 'asis-cuenta',
+                  valor_total: 500,
+                  pagos_abonos: [],
+                })
+              ),
+            })),
+          }
+        }
+        if (table === 'movimientos_saldo_favor') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn().mockResolvedValue({
+                data: [{ tipo: 'ingreso', monto: 100 }],
+                error: null,
+              }),
+            })),
+          }
+        }
+        return {}
+      }),
+    }
+
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+
+    const result = await aplicarSaldoFavor(
+      'cuenta-1',
+      'asis-saldo',
+      '999999',
+      null,
+      buildFormData({ monto: '50' })
+    )
+
+    expect(result?.error).toMatch(/cuenta de otro/i)
   })
 })
