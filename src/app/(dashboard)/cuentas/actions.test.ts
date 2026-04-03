@@ -554,7 +554,7 @@ describe('saveCuenta', () => {
     vi.clearAllMocks()
   })
 
-  it('crea cuenta coach sin usuario_id en cuentas_por_cobrar y usa sesiones_coach', async () => {
+  it('crea cuenta sin abono inicial y no inserta usuario_id en cuentas_por_cobrar', async () => {
     const cuentaInsertSingle = vi.fn().mockResolvedValue({
       data: { id: 'cuenta-1' },
       error: null,
@@ -565,7 +565,68 @@ describe('saveCuenta', () => {
     const cuentaInsert = vi.fn(() => ({
       select: cuentaInsertSelect,
     }))
-    const coachInsert = vi.fn().mockResolvedValue({ error: null })
+
+    const pagosInsert = vi.fn()
+    const saldoInsert = vi.fn()
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'cuentas_por_cobrar') {
+          return {
+            insert: cuentaInsert,
+            update: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) })),
+          }
+        }
+        if (table === 'pagos_abonos') return { insert: pagosInsert }
+        if (table === 'movimientos_saldo_favor') return { insert: saldoInsert }
+        return {}
+      }),
+    }
+
+    mockRequireRolesReturn(supabase, { id: 'user-1' })
+
+    const formData = buildFormData({
+      asistente_id: 'asis-1',
+      concepto: 'Tratamiento mensual',
+      valor_total: '400000',
+      fecha_emision: '2026-04-02',
+      tipo_cuenta: 'general',
+      abono_inicial: '0',
+      metodo_pago: 'nequi',
+    })
+
+    const result = await saveCuenta(null, formData)
+
+    expect(result?.success).toBe(true)
+    expect(cuentaInsert).toHaveBeenCalledWith([
+      {
+        asistente_id: 'asis-1',
+        concepto: 'Tratamiento mensual',
+        valor_total: 400000,
+        fecha_emision: '2026-04-02',
+        estado: 'pendiente',
+      },
+    ])
+    expect(cuentaInsert.mock.calls[0][0][0]).not.toHaveProperty('usuario_id')
+    expect(pagosInsert).not.toHaveBeenCalled()
+    expect(saldoInsert).not.toHaveBeenCalled()
+    expect(redirectMock).toHaveBeenCalledWith('/cuentas')
+  })
+
+  it('crea cuenta coach usando sesiones_coach y valor_total del formulario', async () => {
+    const cuentaInsertSingle = vi.fn().mockResolvedValue({
+      data: { id: 'cuenta-1' },
+      error: null,
+    })
+    const cuentaInsertSelect = vi.fn(() => ({
+      single: cuentaInsertSingle,
+    }))
+    const cuentaInsert = vi.fn(() => ({
+      select: cuentaInsertSelect,
+    }))
+    const coachInsertSingle = vi.fn().mockResolvedValue({ data: { id: 'pkg-1' }, error: null })
+    const coachInsertSelect = vi.fn(() => ({ single: coachInsertSingle }))
+    const coachInsert = vi.fn(() => ({ select: coachInsertSelect }))
 
     const supabase = {
       from: vi.fn((table: string) => {
@@ -609,5 +670,190 @@ describe('saveCuenta', () => {
     ])
     expect(revalidatePathMock).toHaveBeenCalledWith('/cuentas')
     expect(redirectMock).toHaveBeenCalledWith('/cuentas')
+  })
+
+  it('crea cuenta con abono inicial parcial y la deja en parcial', async () => {
+    const cuentaInsertSingle = vi.fn().mockResolvedValue({ data: { id: 'cuenta-1' }, error: null })
+    const cuentaInsertSelect = vi.fn(() => ({ single: cuentaInsertSingle }))
+    const cuentaInsert = vi.fn(() => ({ select: cuentaInsertSelect }))
+    const cuentaUpdateEq = vi.fn().mockResolvedValue({ error: null })
+    const cuentaUpdate = vi.fn(() => ({ eq: cuentaUpdateEq }))
+
+    const pagoInsertSingle = vi.fn().mockResolvedValue({ data: { id: 'pago-1' }, error: null })
+    const pagoInsertSelect = vi.fn(() => ({ single: pagoInsertSingle }))
+    const pagoInsert = vi.fn(() => ({ select: pagoInsertSelect }))
+
+    const saldoInsert = vi.fn()
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'cuentas_por_cobrar') return { insert: cuentaInsert, update: cuentaUpdate }
+        if (table === 'pagos_abonos') return { insert: pagoInsert }
+        if (table === 'movimientos_saldo_favor') return { insert: saldoInsert }
+        return {}
+      }),
+    }
+
+    mockRequireRolesReturn(supabase, { id: 'user-9' })
+
+    const formData = buildFormData({
+      asistente_id: 'asis-1',
+      concepto: 'Tratamiento mensual',
+      valor_total: '400000',
+      fecha_emision: '2026-04-02',
+      tipo_cuenta: 'general',
+      abono_inicial: '150000',
+      metodo_pago: 'daviplata',
+    })
+
+    const result = await saveCuenta(null, formData)
+
+    expect(result?.success).toBe(true)
+    expect(pagoInsert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        cuenta_id: 'cuenta-1',
+        monto: 150000,
+        metodo_pago: 'daviplata',
+        fecha_pago: '2026-04-02',
+        origen_fondos: 'pago_directo',
+      }),
+    ])
+    expect(cuentaUpdate).toHaveBeenCalledWith({ estado: 'parcial' })
+    expect(saldoInsert).not.toHaveBeenCalled()
+  })
+
+  it('crea cuenta con abono inicial que paga toda la cuenta y la deja pagada', async () => {
+    const cuentaInsertSingle = vi.fn().mockResolvedValue({ data: { id: 'cuenta-1' }, error: null })
+    const cuentaInsertSelect = vi.fn(() => ({ single: cuentaInsertSingle }))
+    const cuentaInsert = vi.fn(() => ({ select: cuentaInsertSelect }))
+    const cuentaUpdateEq = vi.fn().mockResolvedValue({ error: null })
+    const cuentaUpdate = vi.fn(() => ({ eq: cuentaUpdateEq }))
+
+    const pagoInsertSingle = vi.fn().mockResolvedValue({ data: { id: 'pago-1' }, error: null })
+    const pagoInsertSelect = vi.fn(() => ({ single: pagoInsertSingle }))
+    const pagoInsert = vi.fn(() => ({ select: pagoInsertSelect }))
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'cuentas_por_cobrar') return { insert: cuentaInsert, update: cuentaUpdate }
+        if (table === 'pagos_abonos') return { insert: pagoInsert }
+        if (table === 'movimientos_saldo_favor') return { insert: vi.fn() }
+        return {}
+      }),
+    }
+
+    mockRequireRolesReturn(supabase, { id: 'user-9' })
+
+    const formData = buildFormData({
+      asistente_id: 'asis-1',
+      concepto: 'Tratamiento mensual',
+      valor_total: '400000',
+      fecha_emision: '2026-04-02',
+      tipo_cuenta: 'general',
+      abono_inicial: '400000',
+      metodo_pago: 'efectivo',
+    })
+
+    const result = await saveCuenta(null, formData)
+
+    expect(result?.success).toBe(true)
+    expect(pagoInsert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        cuenta_id: 'cuenta-1',
+        monto: 400000,
+        metodo_pago: 'efectivo',
+      }),
+    ])
+    expect(cuentaUpdate).toHaveBeenCalledWith({ estado: 'pagado' })
+  })
+
+  it('crea cuenta con sobrepago y manda el excedente a saldo a favor', async () => {
+    const cuentaInsertSingle = vi.fn().mockResolvedValue({ data: { id: 'cuenta-1' }, error: null })
+    const cuentaInsertSelect = vi.fn(() => ({ single: cuentaInsertSingle }))
+    const cuentaInsert = vi.fn(() => ({ select: cuentaInsertSelect }))
+    const cuentaUpdateEq = vi.fn().mockResolvedValue({ error: null })
+    const cuentaUpdate = vi.fn(() => ({ eq: cuentaUpdateEq }))
+
+    const pagoInsertSingle = vi.fn().mockResolvedValue({ data: { id: 'pago-1' }, error: null })
+    const pagoInsertSelect = vi.fn(() => ({ single: pagoInsertSingle }))
+    const pagoInsert = vi.fn(() => ({ select: pagoInsertSelect }))
+
+    const saldoInsertSingle = vi.fn().mockResolvedValue({ data: { id: 'msf-1' }, error: null })
+    const saldoInsertSelect = vi.fn(() => ({ single: saldoInsertSingle }))
+    const saldoInsert = vi.fn(() => ({ select: saldoInsertSelect }))
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'cuentas_por_cobrar') return { insert: cuentaInsert, update: cuentaUpdate }
+        if (table === 'pagos_abonos') return { insert: pagoInsert }
+        if (table === 'movimientos_saldo_favor') return { insert: saldoInsert }
+        return {}
+      }),
+    }
+
+    mockRequireRolesReturn(supabase, { id: 'user-9' })
+
+    const formData = buildFormData({
+      asistente_id: 'asis-1',
+      concepto: 'Tratamiento mensual',
+      valor_total: '400000',
+      fecha_emision: '2026-04-02',
+      tipo_cuenta: 'general',
+      abono_inicial: '450000',
+      metodo_pago: 'nequi',
+    })
+
+    const result = await saveCuenta(null, formData)
+
+    expect(result?.success).toBe(true)
+    expect(pagoInsert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        cuenta_id: 'cuenta-1',
+        monto: 400000,
+        metodo_pago: 'nequi',
+      }),
+    ])
+    expect(saldoInsert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        asistente_id: 'asis-1',
+        cuenta_id: 'cuenta-1',
+        tipo: 'ingreso',
+        monto: 50000,
+        metodo_pago: 'nequi',
+      }),
+    ])
+    expect(cuentaUpdate).toHaveBeenCalledWith({ estado: 'pagado' })
+  })
+
+  it('repropaga NEXT_REDIRECT y no lo devuelve como error funcional', async () => {
+    const cuentaInsertSingle = vi.fn().mockResolvedValue({ data: { id: 'cuenta-1' }, error: null })
+    const cuentaInsertSelect = vi.fn(() => ({ single: cuentaInsertSingle }))
+    const cuentaInsert = vi.fn(() => ({ select: cuentaInsertSelect }))
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'cuentas_por_cobrar') return { insert: cuentaInsert }
+        return {}
+      }),
+    }
+
+    mockRequireRolesReturn(supabase, { id: 'user-1' })
+    redirectMock.mockImplementation(() => {
+      const error: any = new Error('NEXT_REDIRECT')
+      error.digest = 'NEXT_REDIRECT;replace;/cuentas;303;'
+      throw error
+    })
+
+    const formData = buildFormData({
+      asistente_id: 'asis-1',
+      concepto: 'Tratamiento mensual',
+      valor_total: '400000',
+      fecha_emision: '2026-04-02',
+      tipo_cuenta: 'general',
+    })
+
+    await expect(saveCuenta(null, formData)).rejects.toMatchObject({
+      digest: expect.stringContaining('NEXT_REDIRECT'),
+    })
   })
 })

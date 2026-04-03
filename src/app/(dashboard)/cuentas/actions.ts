@@ -14,6 +14,10 @@ import { requireAdmin, requireRoles } from "@/lib/utils/authz"
 
 export type ActionState = { error?: string; success?: boolean } | null
 
+const isNextRedirectError = (error: unknown) =>
+  typeof (error as { digest?: unknown })?.digest === "string" &&
+  (error as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+
 const buildAudit = (
   tabla: string,
   registroId: string,
@@ -31,6 +35,32 @@ const buildAudit = (
   valor_nuevo: valorNuevo,
   notas,
 })
+
+async function rollbackCuentaCreada(
+  supabase: any,
+  {
+    cuentaId,
+    paqueteCoachId,
+    pagoId,
+    saldoFavorId,
+  }: {
+    cuentaId: string
+    paqueteCoachId?: string | null
+    pagoId?: string | null
+    saldoFavorId?: string | null
+  }
+) {
+  if (saldoFavorId) {
+    await supabase.from("movimientos_saldo_favor").delete().eq("id", saldoFavorId)
+  }
+  if (pagoId) {
+    await supabase.from("pagos_abonos").delete().eq("id", pagoId)
+  }
+  if (paqueteCoachId) {
+    await supabase.from("coach_paquetes").delete().eq("id", paqueteCoachId)
+  }
+  await supabase.from("cuentas_por_cobrar").delete().eq("id", cuentaId)
+}
 
 // --------------------------------------------
 // Elimina cuenta: bloquea si tiene pagos o aplicaciones de saldo a favor
@@ -377,7 +407,7 @@ export async function editMontoAbono(
 // --------------------------------------------
 export async function saveCuenta(prevState: ActionState, formData: FormData): Promise<ActionState> {
   try {
-    const { supabase } = await requireRoles(["admin", "caja"])
+    const { supabase, user } = await requireRoles(["admin", "caja"])
 
     const asistente_id = (formData.get("asistente_id") as string) || ""
     const concepto = ((formData.get("concepto") as string) || "").trim()
@@ -385,13 +415,20 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
     const fecha_emision = (formData.get("fecha_emision") as string) || new Date().toISOString().slice(0, 10)
     const returnTo = (formData.get("return_to") as string) || null
     const tipoCuenta = (formData.get("tipo_cuenta") as string) || "general"
-    const sesiones = toSafeNumber(formData.get("sesiones_coach")) || 0
-    const valorSesion = toSafeNumber(formData.get("valor_sesion")) || 0
+    const sesionesCoach = Math.max(1, toSafeNumber(formData.get("sesiones_coach")) || 1)
+    const abonoInicial = toSafeNumber(formData.get("abono_inicial"))
+    const metodoPago = ((formData.get("metodo_pago") as string) || "").trim() || null
     const paqueteCoach = tipoCuenta === "coach"
 
     if (!asistente_id) return { error: "Debes seleccionar un asistente." }
     if (!concepto) return { error: "El concepto es obligatorio." }
     if (valor_total <= 0) return { error: "El valor debe ser mayor a 0." }
+    if (abonoInicial < 0) return { error: "El abono inicial no puede ser negativo." }
+    if (abonoInicial > 0 && !metodoPago) return { error: "Debes indicar el método de pago del abono inicial." }
+
+    let paqueteCoachId: string | null = null
+    let pagoInicialId: string | null = null
+    let saldoFavorId: string | null = null
 
     const { error: insertCuentaError, data: cuentaInsert } = await supabase
       .from("cuentas_por_cobrar")
@@ -408,25 +445,105 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
       .single()
 
     if (insertCuentaError || !cuentaInsert) return { error: insertCuentaError?.message || "No se pudo crear la cuenta." }
+    const cuentaIdCreada = cuentaInsert.id
 
     if (paqueteCoach) {
-      const sesionesNum = sesiones || 1
-      const valorCoach = valorSesion || valor_total
-      await supabase.from("coach_paquetes").insert([
+      const { data: coachInsert, error: coachError } = await supabase.from("coach_paquetes").insert([
         {
           asistente_id,
-          cuenta_id: cuentaInsert.id,
-          sesiones_compradas: sesionesNum,
-          valor_total: valorCoach,
+          cuenta_id: cuentaIdCreada,
+          sesiones_compradas: sesionesCoach,
+          valor_total,
         },
       ])
+        .select("id")
+        .single()
+
+      if (coachError || !coachInsert) {
+        await rollbackCuentaCreada(supabase, { cuentaId: cuentaIdCreada })
+        return { error: coachError?.message || "No se pudo crear el paquete coach asociado." }
+      }
+      paqueteCoachId = coachInsert.id
+    }
+
+    if (abonoInicial > 0) {
+      const montoAplicado = Math.min(abonoInicial, valor_total)
+      const excedente = Math.max(0, abonoInicial - montoAplicado)
+
+      if (montoAplicado > 0) {
+        const { data: pagoInsertado, error: pagoError } = await supabase
+          .from("pagos_abonos")
+          .insert([
+            {
+              cuenta_id: cuentaIdCreada,
+              monto: montoAplicado,
+              metodo_pago: metodoPago,
+              fecha_pago: fecha_emision,
+              notas: "Abono inicial al crear la cuenta",
+              origen_fondos: "pago_directo",
+              usuario_id: user?.id || null,
+            },
+          ])
+          .select("id")
+          .single()
+
+        if (pagoError || !pagoInsertado) {
+          await rollbackCuentaCreada(supabase, { cuentaId: cuentaIdCreada, paqueteCoachId })
+          return { error: pagoError?.message || "No se pudo registrar el abono inicial." }
+        }
+        pagoInicialId = pagoInsertado.id
+      }
+
+      if (excedente > 0) {
+        const { data: saldoFavorInsertado, error: saldoFavorError } = await supabase
+          .from("movimientos_saldo_favor")
+          .insert([
+            {
+              asistente_id,
+              cuenta_id: cuentaIdCreada,
+              tipo: "ingreso",
+              monto: excedente,
+              metodo_pago: metodoPago,
+              fecha: fecha_emision,
+              notas: `Saldo a favor generado por abono inicial excedente de la cuenta ${cuentaIdCreada}`,
+            },
+          ])
+          .select("id")
+          .single()
+
+        if (saldoFavorError || !saldoFavorInsertado) {
+          await rollbackCuentaCreada(supabase, { cuentaId: cuentaIdCreada, paqueteCoachId, pagoId: pagoInicialId })
+          return { error: saldoFavorError?.message || "No se pudo registrar el saldo a favor generado por el abono inicial." }
+        }
+        saldoFavorId = saldoFavorInsertado.id
+      }
+
+      const estado = calcularEstadoCuenta(valor_total, montoAplicado)
+      const { error: updateEstadoError } = await supabase
+        .from("cuentas_por_cobrar")
+        .update({ estado })
+        .eq("id", cuentaIdCreada)
+
+      if (updateEstadoError) {
+        await rollbackCuentaCreada(supabase, {
+          cuentaId: cuentaIdCreada,
+          paqueteCoachId,
+          pagoId: pagoInicialId,
+          saldoFavorId,
+        })
+        return { error: "La cuenta se creó, pero no se pudo consolidar el abono inicial. Se revirtió la operación para evitar inconsistencias." }
+      }
     }
 
     revalidatePath("/cuentas")
-    if (returnTo && returnTo.startsWith("/")) redirect(returnTo)
+    revalidatePath(`/cuentas/${cuentaIdCreada}`)
+    if (returnTo && returnTo.startsWith("/")) {
+      redirect(returnTo)
+    }
     redirect("/cuentas")
     return { success: true }
   } catch (e: any) {
+    if (isNextRedirectError(e)) throw e
     return { error: e.message || "Error al crear la cuenta." }
   }
 }
