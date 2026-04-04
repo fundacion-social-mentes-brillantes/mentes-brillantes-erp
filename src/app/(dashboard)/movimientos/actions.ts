@@ -13,7 +13,7 @@ export type ActionState = {
 const APLICACION_SALDO_BLOQUEADA =
   'Las aplicaciones de saldo a favor no se pueden editar, anular ni eliminar desde Historial General. Deben gestionarse desde un flujo transaccional dedicado para no desbalancear la cuenta ni el saldo.'
 const ANTICIPO_BLOQUEADO =
-  'Los anticipos/saldo a favor no se pueden anular ni eliminar desde Historial General. Deben gestionarse desde un flujo contable dedicado para no desbalancear períodos ni saldo a favor.'
+  'Los anticipos/saldo a favor no se pueden editar, anular ni eliminar desde Historial General. Deben gestionarse desde un flujo contable dedicado para no desbalancear períodos ni saldo a favor.'
 const EDICION_ABONO_BLOQUEADA =
   'El monto de un abono no se puede editar desde Historial General. Usa el detalle de la cuenta para preservar correctamente sobrepagos y saldo a favor.'
 const ABONO_CON_SALDO_BLOQUEADO =
@@ -193,6 +193,10 @@ export async function editarMovimiento(
 
   if (tipo_movimiento === 'aplicacion_saldo') {
     return { error: APLICACION_SALDO_BLOQUEADA }
+  }
+
+  if (tipo_movimiento === 'anticipo') {
+    return { error: ANTICIPO_BLOQUEADO }
   }
 
   if (tipo_movimiento === 'abono' && newData.monto !== undefined) {

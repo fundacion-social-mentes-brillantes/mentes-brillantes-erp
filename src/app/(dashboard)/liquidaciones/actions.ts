@@ -70,7 +70,7 @@ export async function saveAdelanto(periodo_id: string, prevState: ActionState, f
   const monto_str = formData.get('monto') as string
   const fecha = formData.get('fecha') as string
   const notas = formData.get('notas') as string
-   const metodo_pago = (formData.get('metodo_pago') as string) || 'otro'
+  const metodo_pago = (formData.get('metodo_pago') as string) || 'otro'
 
   const monto = parseMoneyInput(monto_str)
 
@@ -92,17 +92,21 @@ export async function saveAdelanto(periodo_id: string, prevState: ActionState, f
     return { error: `La fecha del adelanto debe estar dentro del período ${periodo.nombre}.` }
   }
 
-  const { data: adelantoInsertado, error } = await supabase.from('adelantos_socios').insert([
-    {
-      socio_id,
-      periodo_id,
-      monto,
-      fecha,
-      metodo_pago,
-      notas: notas || null,
-      usuario_id: user?.id || null,
-    },
-  ]).select('id').single()
+  const { data: adelantoInsertado, error } = await supabase
+    .from('adelantos_socios')
+    .insert([
+      {
+        socio_id,
+        periodo_id,
+        monto,
+        fecha,
+        metodo_pago,
+        notas: notas || null,
+        usuario_id: user?.id || null,
+      },
+    ])
+    .select('id')
+    .single()
 
   if (error) {
     return { error: error.message }
@@ -124,24 +128,27 @@ export async function saveAdelanto(periodo_id: string, prevState: ActionState, f
   return { success: true }
 }
 
-export async function generarLiquidacion(periodo_id: string) {
+export async function generarLiquidacion(periodo_id: string): Promise<ActionState> {
   let supabase, user
   try {
     ;({ supabase, user } = await requireAdmin())
-  } catch {
-    return
+  } catch (e: any) {
+    return { error: e?.message || 'Acceso denegado' }
   }
 
-  const { data: periodo } = await supabase.from('periodos').select('estado').eq('id', periodo_id).single()
-  if (!periodo || periodo.estado !== 'abierto') return
+  const { data: periodo, error: periodoError } = await supabase.from('periodos').select('estado').eq('id', periodo_id).single()
+  if (periodoError) {
+    return { error: periodoError.message || 'No se pudo consultar el período.' }
+  }
+  if (!periodo) return { error: 'No se encontró el período.' }
+  if (periodo.estado !== 'abierto') return { error: 'El período ya no está abierto para cerrar y liquidar.' }
 
   const { error } = await supabase.rpc('fn_cerrar_liquidacion', { p_periodo_id: periodo_id })
   if (error) {
-    console.error('Error RPC fn_cerrar_liquidacion:', error)
-    return
+    return { error: error.message || 'No se pudo cerrar el período y generar la liquidación.' }
   }
 
-  await supabase.from('auditoria_financiera').insert([
+  const { error: auditError } = await supabase.from('auditoria_financiera').insert([
     {
       tabla_afectada: 'periodos',
       registro_id: periodo_id,
@@ -153,6 +160,11 @@ export async function generarLiquidacion(periodo_id: string) {
     },
   ])
 
+  if (auditError) {
+    return { error: auditError.message || 'La liquidación se cerró, pero no se pudo registrar la auditoría.' }
+  }
+
   revalidatePath('/liquidaciones')
   revalidatePath(`/liquidaciones/${periodo_id}`)
+  return { success: true }
 }

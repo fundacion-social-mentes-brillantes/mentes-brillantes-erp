@@ -48,14 +48,17 @@ describe('movimientos/actions', () => {
     expect(revalidatePathMock).not.toHaveBeenCalled()
   })
 
-  it('bloquea anular y eliminar anticipos desde historial general', async () => {
+  it('bloquea editar, anular y eliminar anticipos desde historial general', async () => {
     requireAdminMock.mockResolvedValue({ supabase: buildSupabase({}), user: { id: 'admin-1' } })
 
+    await expect(editarMovimiento('msf-anticipo-1', 'anticipo', { monto: 120 })).resolves.toEqual(
+      expect.objectContaining({ error: expect.stringMatching(/anticipos\/saldo a favor no se pueden editar, anular ni eliminar/i) })
+    )
     await expect(anularMovimiento('msf-anticipo-1', 'anticipo', 100, 'asis-1')).resolves.toEqual(
-      expect.objectContaining({ error: expect.stringMatching(/anticipos\/saldo a favor no se pueden anular ni eliminar/i) })
+      expect.objectContaining({ error: expect.stringMatching(/anticipos\/saldo a favor no se pueden editar, anular ni eliminar/i) })
     )
     await expect(eliminarMovimiento('msf-anticipo-1', 'anticipo', 100, 'asis-1')).resolves.toEqual(
-      expect.objectContaining({ error: expect.stringMatching(/anticipos\/saldo a favor no se pueden anular ni eliminar/i) })
+      expect.objectContaining({ error: expect.stringMatching(/anticipos\/saldo a favor no se pueden editar, anular ni eliminar/i) })
     )
 
     expect(revalidatePathMock).not.toHaveBeenCalled()

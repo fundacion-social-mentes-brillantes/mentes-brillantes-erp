@@ -23,7 +23,7 @@ vi.mock('@/lib/utils/periodos', () => ({
   assertPeriodoAbierto: (...args: unknown[]) => assertPeriodoAbiertoMock(...args),
 }))
 
-const { saveAdelanto } = await import('./actions')
+const { generarLiquidacion, saveAdelanto } = await import('./actions')
 
 const buildFormData = (values: Record<string, string>) => {
   const form = new FormData()
@@ -88,5 +88,60 @@ describe('liquidaciones/actions', () => {
         usuario_id: 'user-1',
       },
     ])
+  })
+
+  it('generarLiquidacion devuelve success cuando la RPC responde bien', async () => {
+    const auditInsert = vi.fn().mockResolvedValue({ error: null })
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'periodos') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                single: vi.fn().mockResolvedValue({ data: { estado: 'abierto' }, error: null }),
+              })),
+            })),
+          }
+        }
+        if (table === 'auditoria_financiera') return { insert: auditInsert }
+        return {}
+      }),
+      rpc: vi.fn().mockResolvedValue({ error: null }),
+    }
+
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+
+    const result = await generarLiquidacion('periodo-1')
+
+    expect(result).toEqual({ success: true })
+    expect(supabase.rpc).toHaveBeenCalledWith('fn_cerrar_liquidacion', { p_periodo_id: 'periodo-1' })
+    expect(revalidatePathMock).toHaveBeenCalledWith('/liquidaciones')
+    expect(revalidatePathMock).toHaveBeenCalledWith('/liquidaciones/periodo-1')
+    expect(auditInsert).toHaveBeenCalled()
+  })
+
+  it('generarLiquidacion devuelve error cuando la RPC falla', async () => {
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'periodos') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                single: vi.fn().mockResolvedValue({ data: { estado: 'abierto' }, error: null }),
+              })),
+            })),
+          }
+        }
+        if (table === 'auditoria_financiera') return { insert: vi.fn() }
+        return {}
+      }),
+      rpc: vi.fn().mockResolvedValue({ error: { message: 'rpc fallo' } }),
+    }
+
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+
+    const result = await generarLiquidacion('periodo-1')
+
+    expect(result).toEqual({ error: 'rpc fallo' })
   })
 })
