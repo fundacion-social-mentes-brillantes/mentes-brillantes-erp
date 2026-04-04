@@ -296,7 +296,6 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                 <th className="px-4 py-3 text-right">Egresos operativos</th>
                 <th className="px-4 py-3 text-right">Adelantos no operativos</th>
                 <th className="px-4 py-3 text-right">Saldo neto operativo</th>
-                <th className="px-4 py-3 text-right">Valor esperado en cuenta</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">
@@ -309,7 +308,6 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                   <td className={`px-4 py-3 text-right font-semibold ${row.saldo_neto_periodo >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
                     ${row.saldo_neto_periodo.toLocaleString()}
                   </td>
-                  <td className="px-4 py-3 text-right font-semibold">${row.saldo_neto_periodo.toLocaleString()}</td>
                 </tr>
               ))}
               <tr className="bg-zinc-50 font-semibold">
@@ -317,7 +315,6 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                 <td className="px-4 py-3 text-right text-emerald-700">${resumenTotales.total_ingresos.toLocaleString()}</td>
                 <td className="px-4 py-3 text-right text-red-600">-${resumenTotales.total_salidas.toLocaleString()}</td>
                 <td className="px-4 py-3 text-right text-amber-600">-${adelantos_periodo.toLocaleString()}</td>
-                <td className="px-4 py-3 text-right">${resumenTotales.saldo_neto_periodo.toLocaleString()}</td>
                 <td className="px-4 py-3 text-right">${resumenTotales.saldo_neto_periodo.toLocaleString()}</td>
               </tr>
             </tbody>
