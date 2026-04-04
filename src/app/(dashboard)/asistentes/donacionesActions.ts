@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { requireAdmin, requireRoles } from '@/lib/utils/authz'
+import { parseMoneyInput } from '@/lib/utils/contable'
 import { assertFechaEditable } from '@/lib/utils/periodos'
 
 export type DonacionState = { error?: string; success?: boolean } | null
@@ -37,17 +38,17 @@ async function audit(
 export async function crearDonacion(asistente_id: string, formData: FormData): Promise<DonacionState> {
   let supabase, user
   try {
-    ({ supabase, user } = await requireRoles(['admin', 'caja']))
+    ;({ supabase, user } = await requireRoles(['admin', 'caja']))
   } catch (e: any) {
     return { error: e?.message || 'Acceso denegado' }
   }
 
-  const monto = parseFloat(formData.get('monto') as string)
+  const monto = parseMoneyInput(formData.get('monto'))
   const metodo_pago = (formData.get('metodo_pago') as string) || ''
   const fecha = (formData.get('fecha') as string) || new Date().toISOString().split('T')[0]
   const notas = (formData.get('notas') as string) || null
 
-  if (!asistente_id || !monto || isNaN(monto) || monto <= 0 || !metodo_pago) {
+  if (!asistente_id || monto === null || monto <= 0 || !metodo_pago) {
     return { error: 'Monto y método de pago son obligatorios y el monto debe ser mayor a 0.' }
   }
 
@@ -63,6 +64,7 @@ export async function crearDonacion(asistente_id: string, formData: FormData): P
         metodo_pago,
         fecha,
         notas,
+        usuario_id: user?.id || null,
       },
     ])
     .select('id')
@@ -85,7 +87,7 @@ export async function editarDonacion(
 ): Promise<DonacionState> {
   let supabase, user
   try {
-    ({ supabase, user } = await requireAdmin())
+    ;({ supabase, user } = await requireAdmin())
   } catch (e: any) {
     return { error: e?.message || 'Acceso denegado' }
   }
@@ -104,6 +106,7 @@ export async function editarDonacion(
   if (payload.metodo_pago) updatePayload.metodo_pago = payload.metodo_pago
   if (payload.fecha) updatePayload.fecha = payload.fecha
   if (payload.notas !== undefined) updatePayload.notas = payload.notas
+  updatePayload.usuario_id = user?.id || null
 
   if (payload.fecha) {
     const periodoNuevoError = await assertFechaEditable(supabase, payload.fecha, 'Editar la donación')
@@ -124,7 +127,7 @@ export async function editarDonacion(
 export async function anularDonacion(id: string, asistente_id: string, motivo?: string): Promise<DonacionState> {
   let supabase, user
   try {
-    ({ supabase, user } = await requireAdmin())
+    ;({ supabase, user } = await requireAdmin())
   } catch (e: any) {
     return { error: e?.message || 'Acceso denegado' }
   }
@@ -154,7 +157,7 @@ export async function anularDonacion(id: string, asistente_id: string, motivo?: 
 export async function eliminarDonacion(id: string, asistente_id: string, motivo?: string): Promise<DonacionState> {
   let supabase, user
   try {
-    ({ supabase, user } = await requireAdmin())
+    ;({ supabase, user } = await requireAdmin())
   } catch (e: any) {
     return { error: e?.message || 'Acceso denegado' }
   }
@@ -181,9 +184,14 @@ export async function editarDonacionForm(prev: DonacionState, formData: FormData
   const metodo_pago = formData.get('metodo_pago') as string | null
   const fecha = formData.get('fecha') as string | null
   const notas = formData.get('notas') as string | null
+  const montoValue = monto ? parseMoneyInput(monto as string) : undefined
+
+  if (monto && montoValue === null) {
+    return { error: 'El monto debe ser mayor a 0.' }
+  }
 
   return editarDonacion(id, asistente_id, {
-    monto: monto ? parseFloat(monto as string) : undefined,
+    monto: montoValue ?? undefined,
     metodo_pago: metodo_pago || undefined,
     fecha: fecha || undefined,
     notas: notas ?? undefined,

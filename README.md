@@ -24,7 +24,7 @@ Sistema interno en Next.js + Supabase para la gestion administrativa y financier
 - `npm run test`
 
 ## Base de datos
-El contrato de referencia esta en [supabase/schema.sql](/C:/mentes-brillantes-erp/supabase/schema.sql).
+El contrato de referencia esta en [supabase/schema.sql](./supabase/schema.sql).
 
 Objetos clave que deben existir en la BD:
 - `vista_cuentas_saldos`
@@ -39,6 +39,8 @@ Objetos clave que deben existir en la BD:
 - `fn_cerrar_liquidacion`
 
 ## Reglas oficiales del negocio
+Este README es un resumen operativo del sistema. La fuente oficial de reglas contables es [docs/reglas-negocio-contables.md](./docs/reglas-negocio-contables.md); si existe alguna diferencia, prevalece esa documentacion.
+
 1. Ingresos validos del periodo = abonos validos + donaciones validas.
 2. Aplicar saldo a favor a una cuenta no crea ingreso nuevo.
 3. Utilidad del periodo = ingresos validos - egresos validos.
@@ -61,11 +63,11 @@ Objetos clave que deben existir en la BD:
 - La aplicacion de saldo a favor no debe contarse como ingreso operativo.
 
 ## Estado actual
-- Liquidaciones abiertas y cerradas usan la misma base contable.
-- Dashboard y cuentas filtran anulados con la misma regla.
+- Liquidaciones abiertas y cerradas comparten la misma base contable operativa.
+- Dashboard y cuentas ya filtran anulados con la misma regla principal.
 - `saveCuenta` registra abono inicial real y sobrepago a saldo a favor.
 - `saveAbono` y `editMontoAbono` respetan la regla oficial de sobrepago.
-- Historial general bloquea la edicion/anulacion/eliminacion de `aplicacion_saldo`.
+- Historial general ya bloquea flujos contables sensibles como `aplicacion_saldo` y `anticipo`.
 
 ## Documentacion ampliada
-Ver [docs/reglas-negocio-contables.md](/C:/mentes-brillantes-erp/docs/reglas-negocio-contables.md).
+Ver [docs/reglas-negocio-contables.md](./docs/reglas-negocio-contables.md).

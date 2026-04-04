@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { requireAdmin, requireRoles } from '@/lib/utils/authz'
-import { calcularPendienteCuenta } from '@/lib/utils/contable'
+import { calcularPendienteCuenta, parseMoneyInput } from '@/lib/utils/contable'
 import { assertFechaEditable } from '@/lib/utils/periodos'
 
 export type ActionState = {
@@ -72,33 +72,53 @@ export async function toggleAsistenteEstado(id: string, activo: boolean) {
 }
 
 export async function saveAnticipo(asistente_id: string, prevState: ActionState, formData: FormData): Promise<ActionState> {
-  let supabase
+  let supabase, user
   try {
-    ;({ supabase } = await requireRoles(['admin', 'caja']))
+    ;({ supabase, user } = await requireRoles(['admin', 'caja']))
   } catch (e: any) {
     return { error: e?.message || 'Acceso denegado' }
   }
 
-  const monto = parseFloat(formData.get('monto') as string)
+  const monto = parseMoneyInput(formData.get('monto'))
   const metodo_pago = formData.get('metodo_pago') as string
   const fecha = formData.get('fecha') as string
   const notas = formData.get('notas') as string
 
-  if (isNaN(monto) || monto <= 0) return { error: 'El monto debe ser mayor a 0' }
+  if (monto === null || monto <= 0) return { error: 'El monto debe ser mayor a 0' }
   if (!metodo_pago || !fecha) return { error: 'Método y fecha son obligatorios' }
 
-  const { error } = await supabase.from('movimientos_saldo_favor').insert([
-    {
-      asistente_id,
-      tipo: 'ingreso',
-      monto,
-      fecha,
-      metodo_pago,
-      notas: notas || null,
-    },
-  ])
+  const periodoError = await assertFechaEditable(supabase, fecha, 'Registrar el anticipo')
+  if (periodoError) return { error: periodoError }
+
+  const { data: anticipoInsertado, error } = await supabase
+    .from('movimientos_saldo_favor')
+    .insert([
+      {
+        asistente_id,
+        tipo: 'ingreso',
+        monto,
+        fecha,
+        metodo_pago,
+        notas: notas || null,
+        usuario_id: user?.id || null,
+      },
+    ])
+    .select('id')
+    .single()
 
   if (error) return { error: error.message }
+
+  await supabase.from('auditoria_financiera').insert([
+    {
+      tabla_afectada: 'movimientos_saldo_favor',
+      registro_id: anticipoInsertado.id,
+      usuario_id: user?.id || '',
+      accion: 'crear_anticipo',
+      valor_anterior: null,
+      valor_nuevo: monto,
+      motivo: notas || 'Registro de anticipo',
+    },
+  ])
 
   revalidatePath(`/asistentes/${asistente_id}`)
   return { success: true }

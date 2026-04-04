@@ -3,17 +3,18 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { requireAdmin } from '@/lib/utils/authz'
+import { parseMoneyInput } from '@/lib/utils/contable'
 import { assertFechaEditable } from '@/lib/utils/periodos'
 
 export type ActionState = {
-  error?: string;
-  success?: boolean;
-} | null;
+  error?: string
+  success?: boolean
+} | null
 
 export async function saveEgreso(id: string | null, prevState: ActionState, formData: FormData): Promise<ActionState> {
   let supabase, user
   try {
-    ({ supabase, user } = await requireAdmin())
+    ;({ supabase, user } = await requireAdmin())
   } catch (e: any) {
     return { error: e?.message || 'Acceso denegado' }
   }
@@ -25,13 +26,13 @@ export async function saveEgreso(id: string | null, prevState: ActionState, form
   const fecha = formData.get('fecha') as string
   const notas = formData.get('notas') as string
 
-  const monto = parseFloat(monto_str)
+  const monto = parseMoneyInput(monto_str)
 
   if (!concepto || !monto_str || !categoria || !metodo_pago || !fecha) {
     return { error: 'Todos los campos marcados con * son obligatorios' }
   }
 
-  if (isNaN(monto) || monto <= 0) {
+  if (monto === null || monto <= 0) {
     return { error: 'El monto debe ser mayor a 0' }
   }
 
@@ -57,7 +58,8 @@ export async function saveEgreso(id: string | null, prevState: ActionState, form
     categoria,
     metodo_pago,
     fecha,
-    notas: notas || null
+    notas: notas || null,
+    usuario_id: user?.id || null,
   }
 
   if (id) {
@@ -97,7 +99,7 @@ export async function saveEgreso(id: string | null, prevState: ActionState, form
 export async function deleteEgreso(id: string) {
   let supabase, user
   try {
-    ({ supabase, user } = await requireAdmin())
+    ;({ supabase, user } = await requireAdmin())
   } catch (e: any) {
     return { error: e?.message || 'Acceso denegado' }
   }
