@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { requireAdmin } from '@/lib/utils/authz'
+import { parseMoneyInput } from '@/lib/utils/contable'
 import { assertNoPeriodOverlap, assertPeriodoAbierto } from '@/lib/utils/periodos'
 
 export type ActionState = {
@@ -71,13 +72,17 @@ export async function saveAdelanto(periodo_id: string, prevState: ActionState, f
   const notas = formData.get('notas') as string
    const metodo_pago = (formData.get('metodo_pago') as string) || 'otro'
 
-  const monto = parseFloat(monto_str)
+  const monto = parseMoneyInput(monto_str)
 
   if (!socio_id || !monto_str || !fecha || !metodo_pago) {
     return { error: 'Socio, monto, fecha y método de pago son obligatorios' }
   }
 
-  if (isNaN(monto) || monto <= 0) {
+  if (monto === null) {
+    return { error: 'El monto tiene un formato invalido' }
+  }
+
+  if (monto <= 0) {
     return { error: 'El monto debe ser mayor a 0' }
   }
 
@@ -95,6 +100,7 @@ export async function saveAdelanto(periodo_id: string, prevState: ActionState, f
       fecha,
       metodo_pago,
       notas: notas || null,
+      usuario_id: user?.id || null,
     },
   ]).select('id').single()
 

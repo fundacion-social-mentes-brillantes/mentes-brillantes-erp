@@ -71,6 +71,7 @@ async function registrarMovimientoSaldoFavor(
     metodo_pago: string | null
     fecha: string
     notas: string
+    usuario_id: string | null
   }
 ) {
   const { data, error } = await supabase
@@ -288,6 +289,7 @@ export async function saveAbono(
         metodo_pago,
         fecha: fecha_pago,
         notas: notaSaldo,
+        usuario_id: user?.id || null,
       })
 
       if (saldoFavorError || !saldoFavorInsertado) {
@@ -395,6 +397,7 @@ export async function aplicarSaldoFavor(
         metodo_pago: "saldo_a_favor",
         fecha: fechaHoy,
         notas: `AplicaciÃ³n de saldo a favor a la cuenta ${cuentaId}`,
+        usuario_id: user?.id || null,
       },
     ])
       .select("id")
@@ -566,6 +569,7 @@ export async function editMontoAbono(
             metodo_pago: "saldo_a_favor",
             fecha: fechaMovimiento,
             notas: overflowNote(abonoId, "Ajuste de aplicaciÃ³n de saldo a favor del abono"),
+            usuario_id: user?.id || null,
           })
 
           if (movError || !movimientoAjuste) {
@@ -593,6 +597,7 @@ export async function editMontoAbono(
             metodo_pago: deltaExcedente > 0 ? abono.metodo_pago : "saldo_a_favor",
             fecha: fechaMovimiento,
             notas: overflowNote(abonoId, "Ajuste de saldo a favor por ediciÃ³n del abono"),
+            usuario_id: user?.id || null,
           })
 
           if (movError || !movimientoAjuste) {
@@ -751,21 +756,16 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
       }
 
       if (excedente > 0) {
-        const { data: saldoFavorInsertado, error: saldoFavorError } = await supabase
-          .from("movimientos_saldo_favor")
-          .insert([
-            {
-              asistente_id,
-              cuenta_id: cuentaIdCreada,
-              tipo: "ingreso",
-              monto: excedente,
-              metodo_pago: metodoPago,
-              fecha: fecha_emision,
-              notas: overflowNote(pagoInicialId || cuentaIdCreada, "Saldo a favor generado por excedente del abono inicial"),
-            },
-          ])
-          .select("id")
-          .single()
+        const { data: saldoFavorInsertado, error: saldoFavorError } = await registrarMovimientoSaldoFavor(supabase, {
+          asistente_id,
+          cuenta_id: cuentaIdCreada,
+          tipo: "ingreso",
+          monto: excedente,
+          metodo_pago: metodoPago,
+          fecha: fecha_emision,
+          notas: overflowNote(pagoInicialId || cuentaIdCreada, "Saldo a favor generado por excedente del abono inicial"),
+          usuario_id: user?.id || null,
+        })
 
         if (saldoFavorError || !saldoFavorInsertado) {
           await rollbackCuentaCreada(supabase, { cuentaId: cuentaIdCreada, paqueteCoachId, pagoId: pagoInicialId })
