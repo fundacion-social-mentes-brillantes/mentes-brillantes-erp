@@ -15,6 +15,7 @@ import { PagarConSaldoButton } from "./PagarConSaldoButton"
 import { filtrarPagosValidos, sumarMontos, toSafeNumber } from "@/lib/utils/contable"
 import { DonacionForm } from "./DonacionForm"
 import { DonacionActionsMenu } from "./DonacionActionsMenu"
+import { RevertAnticipoButton } from "./RevertAnticipoButton"
 import { RegisterCoachSessionForm } from "@/components/coach/RegisterCoachSessionForm"
 import { CoachSessionsPdf } from "@/components/coach/CoachSessionsPdf"
 import { CoachSessionActions } from "@/components/coach/CoachSessionActions"
@@ -310,6 +311,9 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
               <p className="text-sm text-zinc-700">Saldo disponible: ${toSafeNumber(saldoAFavor).toLocaleString("es-CO")}</p>
               <AnticipoForm asistenteId={asistente.id} disabled={!isAdmin} />
               {saldoAFavor > 0 && <PagarConSaldoButton asistenteId={asistente.id} disabled={!isAdmin} />}
+              <p className="text-[11px] text-zinc-500">
+                Los anticipos se revierten desde este perfil, no desde Historial General.
+              </p>
             </div>
           </div>
 
@@ -441,7 +445,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                   {movimientos.map((mov) => (
                     <div
                       key={mov.id}
-                      className="flex items-center justify-between border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white"
+                      className="flex items-center justify-between gap-3 border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white"
                     >
                       <span>{new Date(mov.fecha).toLocaleDateString("es-CO")}</span>
                       <span className={mov.tipo === "ingreso" ? "text-emerald-600" : "text-amber-600"}>
@@ -449,6 +453,9 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                       </span>
                       <span>{mov.metodo_pago}</span>
                       <span className="text-zinc-500 truncate max-w-[180px]">{mov.notas || "Sin notas"}</span>
+                      {isAdmin && mov.tipo === "ingreso" && !(mov.notas || "").includes("[ANULADO]") && (
+                        <RevertAnticipoButton asistenteId={asistente.id} anticipoId={mov.id} />
+                      )}
                     </div>
                   ))}
                 </div>

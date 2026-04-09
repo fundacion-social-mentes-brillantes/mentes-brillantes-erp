@@ -51,6 +51,9 @@ type Movimiento = {
   categoria?: string
 }
 
+export const isMovimientoBloqueadoEnHistorial = (tipo: Movimiento['tipo_movimiento'] | string | null | undefined) =>
+  tipo === 'aplicacion_saldo' || tipo === 'anticipo'
+
 export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes: Asistente[], isAdmin?: boolean }) {
   const [movimientos, setMovimientos] = useState<Movimiento[]>([])
   const [loading, setLoading] = useState(true)
@@ -77,7 +80,11 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
   const [isDeleting, setIsDeleting] = useState(false)
 
   const supabase = createClient()
-  const movimientoBloqueado = selectedMov?.tipo_movimiento === 'aplicacion_saldo'
+  const movimientoBloqueado = isMovimientoBloqueadoEnHistorial(selectedMov?.tipo_movimiento)
+  const mensajeBloqueoMovimiento =
+    selectedMov?.tipo_movimiento === 'anticipo'
+      ? 'Los anticipos/saldo a favor no se gestionan desde Historial General. Usa el perfil del asistente para revertirlos de forma segura.'
+      : 'Las aplicaciones de saldo a favor no se editan, anulan ni eliminan desde Historial General para evitar descuadres contables.'
 
   useEffect(() => {
     if (rangoFecha === 'este_mes') {
@@ -582,7 +589,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                     <div className="bg-amber-50 p-4 rounded-xl border border-amber-200">
                       <p className="text-xs text-amber-800 font-bold mb-1 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Edición bloqueada</p>
                       <p className="text-sm text-amber-900">
-                        Las aplicaciones de saldo a favor no se editan, anulan ni eliminan desde Historial General para evitar descuadres contables.
+                        {mensajeBloqueoMovimiento}
                       </p>
                     </div>
                   )}
@@ -593,7 +600,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                       <button
                         onClick={() => setIsEditing(true)}
                         disabled={movimientoBloqueado}
-                        className="w-full flex justify-center items-center gap-2 bg-zinc-900 text-white py-2 rounded-lg font-medium hover:bg-zinc-800 transition-colors"
+                        className="w-full flex justify-center items-center gap-2 bg-zinc-900 text-white py-2 rounded-lg font-medium hover:bg-zinc-800 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <Pencil className="w-4 h-4" /> Activar Edición Libre
                       </button>
@@ -611,7 +618,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                       <button
                         onClick={handleEliminar}
                         disabled={isDeleting || movimientoBloqueado}
-                        className="w-full flex justify-center items-center gap-2 text-red-500 text-sm font-medium hover:underline mt-4"
+                        className="w-full flex justify-center items-center gap-2 text-red-500 text-sm font-medium hover:underline mt-4 disabled:cursor-not-allowed disabled:no-underline disabled:opacity-60"
                       >
                         {isDeleting ? 'Borrando duro...' : <><Trash2 className="w-4 h-4" /> Eliminar Permanentemente (Hard Delete)</>}
                       </button>

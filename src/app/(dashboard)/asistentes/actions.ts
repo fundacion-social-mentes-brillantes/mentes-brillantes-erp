@@ -12,6 +12,23 @@ export type ActionState = {
   success?: boolean
 } | null
 
+const notaReversionAnticipo = (anticipoId: string) =>
+  `[REVERSO_ANTICIPO:${anticipoId}] Reversion contable de anticipo gestionada desde el perfil del asistente.`
+
+const calcularSaldoDisponible = (movimientos: Array<{ tipo?: string | null; monto?: number | string | null }> = []) => {
+  let totalIngresos = 0
+  let totalAplicado = 0
+
+  movimientos.forEach((mov) => {
+    const monto = Number(mov.monto || 0)
+    if (!Number.isFinite(monto)) return
+    if (mov.tipo === 'ingreso') totalIngresos += monto
+    if (mov.tipo === 'aplicacion') totalAplicado += monto
+  })
+
+  return Math.round(totalIngresos - totalAplicado)
+}
+
 export async function saveAsistente(id: string | null, prevState: ActionState, formData: FormData): Promise<ActionState> {
   let supabase
   try {
@@ -124,6 +141,131 @@ export async function saveAnticipo(asistente_id: string, prevState: ActionState,
   return { success: true }
 }
 
+export async function revertirAnticipo(asistente_id: string, anticipo_id: string): Promise<ActionState> {
+  let supabase, user
+  try {
+    ;({ supabase, user } = await requireAdmin())
+  } catch (e: any) {
+    return { error: e?.message || 'Acceso denegado' }
+  }
+
+  const { data: anticipo, error: anticipoError } = await supabase
+    .from('movimientos_saldo_favor')
+    .select('id, asistente_id, tipo, monto, fecha, metodo_pago, notas')
+    .eq('id', anticipo_id)
+    .single()
+
+  if (anticipoError || !anticipo) {
+    return { error: 'No se pudo encontrar el anticipo a revertir.' }
+  }
+
+  if (anticipo.asistente_id !== asistente_id) {
+    return { error: 'El anticipo no pertenece a este asistente.' }
+  }
+
+  if (anticipo.tipo !== 'ingreso') {
+    return { error: 'Solo se pueden revertir anticipos que representen ingreso real a saldo a favor.' }
+  }
+
+  if ((anticipo.notas || '').includes('[ANULADO]')) {
+    return { error: 'Este anticipo ya fue revertido anteriormente.' }
+  }
+
+  const periodoError = await assertFechaEditable(supabase, anticipo.fecha, 'Revertir el anticipo')
+  if (periodoError) return { error: periodoError }
+
+  const { data: movimientosSaldo, error: saldoError } = await supabase
+    .from('movimientos_saldo_favor')
+    .select('tipo, monto')
+    .eq('asistente_id', asistente_id)
+
+  if (saldoError) {
+    return { error: 'No se pudo verificar el saldo disponible del asistente.' }
+  }
+
+  const saldoDisponible = calcularSaldoDisponible(movimientosSaldo || [])
+  const montoAnticipo = Number(anticipo.monto || 0)
+
+  if (saldoDisponible < montoAnticipo) {
+    return {
+      error:
+        'No se puede revertir este anticipo porque el saldo a favor disponible ya no alcanza. Parte o todo del anticipo ya fue consumido.',
+    }
+  }
+
+  const notasOriginales = anticipo.notas?.trim() || ''
+  const notasAnuladas = `[ANULADO] ${notasOriginales}`.trim()
+
+  const { error: updateError } = await supabase
+    .from('movimientos_saldo_favor')
+    .update({
+      notas: notasAnuladas,
+      usuario_id: user?.id || null,
+    })
+    .eq('id', anticipo_id)
+
+  if (updateError) {
+    return { error: updateError.message }
+  }
+
+  const { data: reverso, error: reversoError } = await supabase
+    .from('movimientos_saldo_favor')
+    .insert([
+      {
+        asistente_id,
+        tipo: 'aplicacion',
+        monto: montoAnticipo,
+        fecha: anticipo.fecha,
+        metodo_pago: anticipo.metodo_pago || 'saldo_a_favor',
+        notas: notaReversionAnticipo(anticipo_id),
+        usuario_id: user?.id || null,
+      },
+    ])
+    .select('id')
+    .single()
+
+  if (reversoError || !reverso) {
+    await supabase
+      .from('movimientos_saldo_favor')
+      .update({ notas: anticipo.notas || null })
+      .eq('id', anticipo_id)
+    return { error: reversoError?.message || 'No se pudo registrar la reversión del anticipo.' }
+  }
+
+  const { error: auditError } = await supabase.from('auditoria_financiera').insert([
+    {
+      tabla_afectada: 'movimientos_saldo_favor',
+      registro_id: anticipo_id,
+      usuario_id: user?.id || '',
+      accion: 'revertir_anticipo',
+      valor_anterior: montoAnticipo,
+      valor_nuevo: 0,
+      motivo: 'Anticipo anulado contablemente desde el perfil del asistente.',
+    },
+    {
+      tabla_afectada: 'movimientos_saldo_favor',
+      registro_id: reverso.id,
+      usuario_id: user?.id || '',
+      accion: 'reversion_anticipo_compensatoria',
+      valor_anterior: null,
+      valor_nuevo: montoAnticipo,
+      motivo: notaReversionAnticipo(anticipo_id),
+    },
+  ])
+
+  if (auditError) {
+    await supabase.from('movimientos_saldo_favor').delete().eq('id', reverso.id)
+    await supabase.from('movimientos_saldo_favor').update({ notas: anticipo.notas || null }).eq('id', anticipo_id)
+    return { error: auditError.message }
+  }
+
+  revalidatePath(`/asistentes/${asistente_id}`)
+  revalidatePath('/movimientos')
+  revalidatePath('/dashboard')
+  revalidatePath('/liquidaciones')
+  return { success: true }
+}
+
 export async function deleteAsistente(id: string) {
   let supabase
   try {
@@ -172,16 +314,7 @@ export async function pagarDeudasConSaldo(asistente_id: string): Promise<ActionS
     .from('movimientos_saldo_favor')
     .select('tipo, monto')
     .eq('asistente_id', asistente_id)
-
-  let totalIngresos = 0
-  let totalAplicado = 0
-
-  ;(movimientosSaldo || []).forEach((m) => {
-    if (m.tipo === 'ingreso') totalIngresos += Number(m.monto)
-    if (m.tipo === 'aplicacion') totalAplicado += Number(m.monto)
-  })
-
-  let saldoDisponible = Math.round(totalIngresos - totalAplicado)
+  let saldoDisponible = calcularSaldoDisponible(movimientosSaldo || [])
 
   if (saldoDisponible <= 0) {
     return { error: 'No hay saldo a favor disponible para aplicar' }
