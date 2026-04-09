@@ -6,9 +6,12 @@ import {
   esAplicacionSaldo,
   esPagoValido,
   esPagoDeSaldoAFavor,
+  esIngresoRealSaldoAFavor,
+  PATRONES_NOTAS_AJUSTE_NO_INGRESO_SALDO_A_FAVOR,
   toSafeNumber,
   filtrarPagosValidosCuentas,
   filtrarIngresosOperativos,
+  filtrarIngresosRealesSaldoAFavor,
   sumarMontos,
   totalPagosValidos,
   calcularEstadoCuenta,
@@ -24,6 +27,12 @@ describe('anulados', () => {
   })
   it('detecta estado anulado', () => {
     expect(esAnuladoCompleto({ estado: 'anulado' })).toBe(true)
+  })
+
+  it('excluye explicitamente cada patron temporal controlado por el sistema', () => {
+    PATRONES_NOTAS_AJUSTE_NO_INGRESO_SALDO_A_FAVOR.forEach((pattern) => {
+      expect(esIngresoRealSaldoAFavor({ tipo: 'ingreso', notas: pattern })).toBe(false)
+    })
   })
 })
 
@@ -66,6 +75,22 @@ describe('saldo a favor y aplicaciones', () => {
     const ingresos = filtrarIngresosOperativos(pagos, { excluirSaldoAFavor: true, excluirAplicacionSaldo: true })
     expect(ingresos).toHaveLength(1)
     expect(ingresos[0]?.monto).toBe(300)
+  })
+
+  it('detecta ingreso real a saldo a favor una sola vez', () => {
+    const movimientos: PagoRecord[] = [
+      { monto: 90000, tipo: 'ingreso', metodo_pago: 'efectivo', notas: 'Anticipo real' },
+      { monto: 90000, tipo: 'aplicacion', metodo_pago: 'saldo_a_favor', notas: 'Aplicación a cuenta' },
+    ]
+
+    const ingresosReales = filtrarIngresosRealesSaldoAFavor(movimientos)
+    expect(ingresosReales).toHaveLength(1)
+    expect(sumarMontos(ingresosReales)).toBe(90000)
+  })
+
+  it('excluye restauraciones y ajustes internos de saldo a favor', () => {
+    expect(esIngresoRealSaldoAFavor({ tipo: 'ingreso', notas: 'Ajuste de aplicación de saldo a favor del abono' })).toBe(false)
+    expect(esIngresoRealSaldoAFavor({ tipo: 'ingreso', notas: 'Ajuste de saldo a favor por edición del abono' })).toBe(false)
   })
 })
 

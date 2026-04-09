@@ -4,7 +4,7 @@ import Link from "next/link";
 import { MonthSelector } from "./MonthSelector";
 import { BalanceChart } from "./BalanceChart";
 import { PdfReportButton } from "./PdfReportButton";
-import { filtrarIngresosOperativos, esAnuladoCompleto, filtrarPagosValidosCuentas, sumarMontos } from "@/lib/utils/contable";
+import { filtrarIngresosOperativos, filtrarIngresosRealesSaldoAFavor, esAnuladoCompleto, filtrarPagosValidosCuentas, sumarMontos } from "@/lib/utils/contable";
 
 export async function Dashboard({ month }: { month?: string }) {
   const supabase = await createClient();
@@ -47,7 +47,13 @@ export async function Dashboard({ month }: { month?: string }) {
     excluirSaldoAFavor: true,
     excluirAplicacionSaldo: true
   });
-  const ingresosMes = Math.round(sumarMontos(ingresosData));
+  const { data: rawSaldoFavorMes } = await supabase
+    .from('movimientos_saldo_favor')
+    .select('monto, fecha, metodo_pago, tipo, notas')
+    .gte('fecha', firstDayOfMonth)
+    .lte('fecha', lastDayOfMonth);
+  const saldoFavorIngresosMes = filtrarIngresosRealesSaldoAFavor(rawSaldoFavorMes ?? []);
+  const ingresosMes = Math.round(sumarMontos([...ingresosData, ...saldoFavorIngresosMes]));
 
   // Donaciones del Mes
   const { data: rawDonaciones } = await supabase
@@ -84,6 +90,13 @@ export async function Dashboard({ month }: { month?: string }) {
 
   ingresosData?.forEach(item => {
     const date = item.fecha_pago;
+    if (dailyData[date]) {
+      dailyData[date].ingresos += Number(item.monto);
+    }
+  });
+
+  saldoFavorIngresosMes?.forEach((item: any) => {
+    const date = item.fecha;
     if (dailyData[date]) {
       dailyData[date].ingresos += Number(item.monto);
     }
@@ -128,7 +141,13 @@ export async function Dashboard({ month }: { month?: string }) {
     excluirSaldoAFavor: true,
     excluirAplicacionSaldo: true
   });
-  const ingresosPrev = Math.round(sumarMontos(ingresosPrevData));
+  const { data: rawSaldoFavorPrev } = await supabase
+    .from('movimientos_saldo_favor')
+    .select('monto, fecha, metodo_pago, tipo, notas')
+    .gte('fecha', firstDayOfPrevMonth)
+    .lte('fecha', lastDayOfPrevMonth);
+  const saldoFavorIngresosPrev = filtrarIngresosRealesSaldoAFavor(rawSaldoFavorPrev ?? []);
+  const ingresosPrev = Math.round(sumarMontos([...ingresosPrevData, ...saldoFavorIngresosPrev]));
   const { data: rawDonacionesPrev } = await supabase.from('donaciones_asistentes').select('monto, estado, notas').gte('fecha', firstDayOfPrevMonth).lte('fecha', lastDayOfPrevMonth);
   const donacionesPrev = Math.round((rawDonacionesPrev ?? []).filter((item) => !esAnuladoCompleto(item)).reduce((acc, d) => acc + Number(d.monto), 0));
   const ingresosTotalesPrev = ingresosPrev + donacionesPrev;

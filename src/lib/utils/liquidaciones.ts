@@ -1,4 +1,4 @@
-import { filtrarIngresosOperativos, esAnuladoCompleto } from "./contable"
+import { filtrarIngresosOperativos, filtrarIngresosRealesSaldoAFavor, esAnuladoCompleto } from "./contable"
 
 export type MetodoPago = "efectivo" | "nequi" | "daviplata" | "otro"
 
@@ -34,11 +34,13 @@ export function agruparPorMetodo({
   donaciones = [],
   egresos = [],
   adelantos = [],
+  ingresosSaldoFavor = [],
 }: {
   abonos?: Movimiento[]
   donaciones?: Movimiento[]
   egresos?: Movimiento[]
   adelantos?: Movimiento[]
+  ingresosSaldoFavor?: Movimiento[]
 }): { resumen: ResumenMetodo[]; totales: ResumenMetodo } {
   const base = METODOS_PAGO_RESUMEN.reduce<Record<MetodoPago, ResumenMetodo>>(
     (acc, m) => ({
@@ -58,6 +60,11 @@ export function agruparPorMetodo({
   )
 
   filtrarIngresosOperativos(abonos).forEach((p) => {
+    const key = normalizarMetodo(p.metodo_pago)
+    base[key].ingresos_abonos = (base[key].ingresos_abonos || 0) + Number(p.monto || 0)
+  })
+
+  filtrarIngresosRealesSaldoAFavor(ingresosSaldoFavor).forEach((p) => {
     const key = normalizarMetodo(p.metodo_pago)
     base[key].ingresos_abonos = (base[key].ingresos_abonos || 0) + Number(p.monto || 0)
   })

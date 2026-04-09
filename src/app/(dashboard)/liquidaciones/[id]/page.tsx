@@ -6,7 +6,7 @@ import { AdelantoForm } from './AdelantoForm'
 import { GenerarLiquidacionBtn } from './GenerarLiquidacionBtn'
 import { ExportarLiquidacion } from '@/components/liquidaciones/ExportarLiquidacion'
 import { agruparPorMetodo, MetodoPago, METODOS_PAGO_RESUMEN } from '@/lib/utils/liquidaciones'
-import { esAnuladoCompleto, filtrarIngresosOperativos, sumarMontos } from '@/lib/utils/contable'
+import { esAnuladoCompleto, filtrarIngresosOperativos, filtrarIngresosRealesSaldoAFavor, sumarMontos } from '@/lib/utils/contable'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -43,6 +43,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
   let egresos_periodo = 0
   let adelantos_periodo = 0
   let ingresosData: any[] = []
+  let ingresosSaldoFavorData: any[] = []
   let donacionesValidas: any[] = []
   let egresosData: any[] = []
   let resumenPorCuenta: {
@@ -73,7 +74,23 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
         estado: a.estado,
         notas: a.notas,
       })) || []
-    ingresos_cobrados = Math.round(sumarMontos(ingresosData))
+
+    const { data: rawSaldoFavor, error: saldoFavorError } = await supabase
+      .from('movimientos_saldo_favor')
+      .select('monto, metodo_pago, tipo, notas, fecha')
+      .gte('fecha', periodo.fecha_inicio)
+      .lte('fecha', periodo.fecha_fin)
+    if (saldoFavorError) console.error('Error al consultar ingresos reales de saldo a favor:', saldoFavorError)
+
+    ingresosSaldoFavorData =
+      filtrarIngresosRealesSaldoAFavor(rawSaldoFavor || []).map((m: any) => ({
+        monto: m.monto,
+        metodo_pago: m.metodo_pago,
+        tipo: m.tipo,
+        notas: m.notas,
+      })) || []
+
+    ingresos_cobrados = Math.round(sumarMontos([...ingresosData, ...ingresosSaldoFavorData]))
 
     const { data: rawDonaciones, error: donacionesError } = await supabase
       .from('donaciones_asistentes')
@@ -101,6 +118,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
 
     const { resumen, totales } = agruparPorMetodo({
       abonos: ingresosData,
+      ingresosSaldoFavor: ingresosSaldoFavorData,
       donaciones: donacionesValidas,
       egresos: egresosData,
       adelantos,

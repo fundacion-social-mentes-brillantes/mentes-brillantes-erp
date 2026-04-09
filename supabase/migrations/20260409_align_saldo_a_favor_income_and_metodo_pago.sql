@@ -1,6 +1,15 @@
--- Reemplazo de fn_cerrar_liquidacion alineado con la regla oficial:
--- utilidad = ingresos validos - egresos validos
--- adelantos solo descuentan el neto por socio
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_type t
+    JOIN pg_enum e ON e.enumtypid = t.oid
+    WHERE t.typname = 'metodo_pago'
+      AND e.enumlabel = 'saldo_a_favor'
+  ) THEN
+    ALTER TYPE public.metodo_pago ADD VALUE 'saldo_a_favor';
+  END IF;
+END $$;
 
 CREATE OR REPLACE FUNCTION fn_cerrar_liquidacion(p_periodo_id UUID)
 RETURNS void
@@ -30,7 +39,7 @@ BEGIN
   END IF;
 
   WITH metodos AS (
-    SELECT unnest(ARRAY['efectivo','nequi','daviplata','otro','saldo_a_favor']::TEXT[]) AS metodo_pago
+    SELECT unnest(ARRAY['efectivo','nequi','daviplata','otro']::TEXT[]) AS metodo_pago
   ),
   abonos_agg AS (
     SELECT LOWER(COALESCE(pa.metodo_pago::TEXT, 'otro')) AS metodo_pago,

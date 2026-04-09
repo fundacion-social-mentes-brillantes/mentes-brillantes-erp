@@ -23,7 +23,7 @@ vi.mock('@/lib/utils/periodos', () => ({
   assertFechaEditable: (...args: unknown[]) => assertFechaEditableMock(...args),
 }))
 
-const { saveAnticipo } = await import('./actions')
+const { pagarDeudasConSaldo, saveAnticipo } = await import('./actions')
 
 const buildFormData = (values: Record<string, string>) => {
   const form = new FormData()
@@ -99,5 +99,53 @@ describe('asistentes/actions', () => {
         valor_nuevo: 90000,
       }),
     ])
+  })
+
+  it('pagarDeudasConSaldo usa la RPC y funciona cuando el contrato acepta saldo_a_favor', async () => {
+    assertFechaEditableMock.mockResolvedValue(null)
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'movimientos_saldo_favor') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn().mockResolvedValue({ data: [{ tipo: 'ingreso', monto: 50000 }], error: null }),
+            })),
+          }
+        }
+        if (table === 'cuentas_por_cobrar') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                neq: vi.fn(() => ({
+                  order: vi.fn().mockResolvedValue({
+                    data: [
+                      {
+                        id: 'cuenta-1',
+                        valor_total: 50000,
+                        fecha_emision: '2026-04-04',
+                        pagos_abonos: [],
+                      },
+                    ],
+                    error: null,
+                  }),
+                })),
+              })),
+            })),
+          }
+        }
+        return {}
+      }),
+      rpc: vi.fn().mockResolvedValue({ error: null }),
+    }
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+
+    const result = await pagarDeudasConSaldo('asis-1')
+
+    expect(result).toEqual({ success: true })
+    expect(supabase.rpc).toHaveBeenCalledWith('aplicar_saldo_favor_trx', {
+      p_cuenta_id: 'cuenta-1',
+      p_asistente_id: 'asis-1',
+      p_monto: 50000,
+    })
   })
 })

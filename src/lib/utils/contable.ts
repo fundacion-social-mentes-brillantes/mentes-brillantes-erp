@@ -9,6 +9,17 @@ export type PagoRecord = {
 }
 
 const toLower = (v: string | null | undefined) => v?.toLowerCase().trim()
+// Criterio temporal: mientras no exista una marca estructurada del origen del
+// movimiento, estos patrones exactos emitidos por el sistema se excluyen del
+// reconocimiento de "ingreso real" a saldo a favor.
+export const PATRONES_NOTAS_AJUSTE_NO_INGRESO_SALDO_A_FAVOR = [
+  "ajuste de aplicacion de saldo a favor",
+  "ajuste de aplicación de saldo a favor",
+  "ajuste de saldo a favor por edicion del abono",
+  "ajuste de saldo a favor por edición del abono",
+  "reversion automatica por anulacion del anticipo",
+  "reversion automatica por eliminacion del anticipo",
+]
 
 export const esAnuladoPorNota = (p: { notas?: string | null }) => !!p.notas?.includes('[ANULADO]')
 export const esAnuladoCompleto = (p: { notas?: string | null; estado?: string | null }) =>
@@ -22,6 +33,18 @@ export const esPagoDeSaldoAFavor = (p: {
   origen_fondos?: string | null
   tipo?: string | null
 }) => esSaldoAFavor(p) || esAplicacionSaldo(p)
+
+export const esIngresoRealSaldoAFavor = (p: {
+  tipo?: string | null
+  notas?: string | null
+  estado?: string | null
+}) => {
+  if (!esPagoValido(p)) return false
+  if (toLower(p.tipo) !== "ingreso") return false
+
+  const nota = toLower(p.notas) || ""
+  return !PATRONES_NOTAS_AJUSTE_NO_INGRESO_SALDO_A_FAVOR.some((pattern) => nota.includes(pattern))
+}
 
 export const toSafeNumber = (value: unknown): number => {
   const num = Number(value ?? 0)
@@ -117,6 +140,10 @@ export const parseMoneyInput = (value: unknown): number | null => {
 
 export function filtrarPagosValidosCuentas<T extends PagoRecord>(pagos: T[] = []): T[] {
   return pagos.filter((p) => esPagoValido(p))
+}
+
+export function filtrarIngresosRealesSaldoAFavor<T extends PagoRecord>(movimientos: T[] = []): T[] {
+  return movimientos.filter((mov) => esIngresoRealSaldoAFavor(mov))
 }
 
 export function filtrarIngresosOperativos<T extends PagoRecord>(

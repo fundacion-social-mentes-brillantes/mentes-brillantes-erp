@@ -612,6 +612,25 @@ BEGIN
       AND COALESCE(LOWER(pa.metodo_pago::TEXT), '') <> 'saldo_a_favor'
     GROUP BY 1
   ),
+  saldo_favor_ingresos_agg AS (
+    SELECT LOWER(COALESCE(msf.metodo_pago::TEXT, 'otro')) AS metodo_pago,
+           SUM(msf.monto) AS monto
+    FROM movimientos_saldo_favor msf
+    WHERE msf.fecha BETWEEN v_inicio AND v_fin
+      AND COALESCE(LOWER(msf.tipo), '') = 'ingreso'
+      AND (msf.notas IS NULL OR msf.notas NOT ILIKE '%[ANULADO]%')
+      AND (
+        msf.notas IS NULL OR (
+          msf.notas NOT ILIKE '%Ajuste de aplicación de saldo a favor%'
+          AND msf.notas NOT ILIKE '%Ajuste de aplicacion de saldo a favor%'
+          AND msf.notas NOT ILIKE '%Ajuste de saldo a favor por edición del abono%'
+          AND msf.notas NOT ILIKE '%Ajuste de saldo a favor por edicion del abono%'
+          AND msf.notas NOT ILIKE '%Reversion automatica por anulacion del anticipo%'
+          AND msf.notas NOT ILIKE '%Reversion automatica por eliminacion del anticipo%'
+        )
+      )
+    GROUP BY 1
+  ),
   donaciones_agg AS (
     SELECT LOWER(COALESCE(d.metodo_pago::TEXT, 'otro')) AS metodo_pago,
            SUM(d.monto) AS monto
@@ -640,12 +659,13 @@ BEGIN
   resumen AS (
     SELECT
       m.metodo_pago::metodo_pago AS metodo_pago,
-      COALESCE(ab.monto, 0) AS ingresos_abonos,
+      COALESCE(ab.monto, 0) + COALESCE(sf.monto, 0) AS ingresos_abonos,
       COALESCE(dn.monto, 0) AS ingresos_donaciones,
       COALESCE(eg.monto, 0) AS salidas_egresos,
       COALESCE(ad.monto, 0) AS salidas_adelantos
     FROM metodos m
     LEFT JOIN abonos_agg ab ON ab.metodo_pago = m.metodo_pago
+    LEFT JOIN saldo_favor_ingresos_agg sf ON sf.metodo_pago = m.metodo_pago
     LEFT JOIN donaciones_agg dn ON dn.metodo_pago = m.metodo_pago
     LEFT JOIN egresos_agg eg ON eg.metodo_pago = m.metodo_pago
     LEFT JOIN adelantos_agg ad ON ad.metodo_pago = m.metodo_pago
