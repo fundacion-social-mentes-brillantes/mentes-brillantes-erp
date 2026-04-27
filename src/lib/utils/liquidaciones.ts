@@ -18,6 +18,7 @@ type ResumenMetodo = {
   saldo_neto_periodo: number
   ingresos_abonos?: number
   ingresos_donaciones?: number
+  ingresos_ventas_externas?: number
   salidas_egresos?: number
   salidas_adelantos?: number
 }
@@ -32,12 +33,14 @@ const normalizarMetodo = (m?: string | null): MetodoPago => {
 export function agruparPorMetodo({
   abonos = [],
   donaciones = [],
+  ventasExternas = [],
   egresos = [],
   adelantos = [],
   ingresosSaldoFavor = [],
 }: {
   abonos?: Movimiento[]
   donaciones?: Movimiento[]
+  ventasExternas?: Movimiento[]
   egresos?: Movimiento[]
   adelantos?: Movimiento[]
   ingresosSaldoFavor?: Movimiento[]
@@ -52,6 +55,7 @@ export function agruparPorMetodo({
         saldo_neto_periodo: 0,
         ingresos_abonos: 0,
         ingresos_donaciones: 0,
+        ingresos_ventas_externas: 0,
         salidas_egresos: 0,
         salidas_adelantos: 0,
       },
@@ -76,6 +80,13 @@ export function agruparPorMetodo({
       base[key].ingresos_donaciones = (base[key].ingresos_donaciones || 0) + Number(d.monto || 0)
     })
 
+  ventasExternas
+    .filter((v) => !esAnuladoCompleto(v))
+    .forEach((v) => {
+      const key = normalizarMetodo(v.metodo_pago)
+      base[key].ingresos_ventas_externas = (base[key].ingresos_ventas_externas || 0) + Number(v.monto || 0)
+    })
+
   egresos
     .filter((e) => !esAnuladoCompleto(e))
     .forEach((e) => {
@@ -90,7 +101,8 @@ export function agruparPorMetodo({
 
   const resumen = METODOS_PAGO_RESUMEN.map((m) => {
     const item = base[m]
-    item.total_ingresos = (item.ingresos_abonos || 0) + (item.ingresos_donaciones || 0)
+    item.total_ingresos =
+      (item.ingresos_abonos || 0) + (item.ingresos_donaciones || 0) + (item.ingresos_ventas_externas || 0)
     item.total_salidas = item.salidas_egresos || 0
     item.saldo_neto_periodo = item.total_ingresos - item.total_salidas
     return item
@@ -104,6 +116,8 @@ export function agruparPorMetodo({
       saldo_neto_periodo: acc.saldo_neto_periodo + r.saldo_neto_periodo,
       ingresos_abonos: (acc.ingresos_abonos || 0) + (r.ingresos_abonos || 0),
       ingresos_donaciones: (acc.ingresos_donaciones || 0) + (r.ingresos_donaciones || 0),
+      ingresos_ventas_externas:
+        (acc.ingresos_ventas_externas || 0) + (r.ingresos_ventas_externas || 0),
       salidas_egresos: (acc.salidas_egresos || 0) + (r.salidas_egresos || 0),
       salidas_adelantos: (acc.salidas_adelantos || 0) + (r.salidas_adelantos || 0),
     }),
@@ -114,6 +128,7 @@ export function agruparPorMetodo({
       saldo_neto_periodo: 0,
       ingresos_abonos: 0,
       ingresos_donaciones: 0,
+      ingresos_ventas_externas: 0,
       salidas_egresos: 0,
       salidas_adelantos: 0,
     }

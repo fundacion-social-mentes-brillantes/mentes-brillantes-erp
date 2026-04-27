@@ -9,6 +9,7 @@ import {
   Wallet,
   Receipt,
   TrendingDown,
+  ShoppingBag,
   Calculator,
   Settings,
   LogOut,
@@ -28,6 +29,7 @@ const adminNav = [
   { icon: History, label: "Movimientos", href: "/movimientos" },
   { icon: Users, label: "Asistentes", href: "/asistentes" },
   { icon: Receipt, label: "Cuentas por Cobrar", href: "/cuentas" },
+  { icon: ShoppingBag, label: "Ventas Externas", href: "/ventas-externas" },
   { icon: TrendingDown, label: "Egresos", href: "/egresos" },
   { icon: Wallet, label: "Socios & Adelantos", href: "/socios" },
   { icon: Calculator, label: "Liquidaciones", href: "/liquidaciones" },
@@ -42,6 +44,7 @@ const cajaNav = [
   { icon: History, label: "Movimientos", href: "/movimientos" },
   { icon: Users, label: "Asistentes", href: "/asistentes" },
   { icon: Receipt, label: "Cuentas por Cobrar", href: "/cuentas" },
+  { icon: ShoppingBag, label: "Ventas Externas", href: "/ventas-externas" },
   { icon: TrendingDown, label: "Egresos", href: "/egresos" },
 ];
 

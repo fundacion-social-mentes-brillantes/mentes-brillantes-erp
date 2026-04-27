@@ -65,6 +65,14 @@ async function getMovimientoEditableMeta(supabase: any, tipoMovimiento: string, 
         .single()
       return { data, error, fecha: data?.fecha, tabla: 'donaciones_asistentes' }
     }
+    case 'venta_externa': {
+      const { data, error } = await supabase
+        .from('ventas_externas')
+        .select('fecha, notas')
+        .eq('id', movimientoId)
+        .single()
+      return { data, error, fecha: data?.fecha, tabla: 'ventas_externas' }
+    }
     default:
       return { data: null, error: null, fecha: null, tabla: null }
   }
@@ -114,6 +122,9 @@ export async function anularMovimiento(
       return { error: ANTICIPO_BLOQUEADO }
     case 'donacion':
       tablaDestino = 'donaciones_asistentes'
+      break
+    case 'venta_externa':
+      tablaDestino = 'ventas_externas'
       break
     default:
       return { error: 'Tipo de movimiento no soportado para anulacion directa.' }
@@ -172,6 +183,7 @@ export async function anularMovimiento(
   revalidatePath('/movimientos')
   revalidatePath('/dashboard')
   revalidatePath('/asistentes')
+  revalidatePath('/ventas-externas')
   if (tipo_movimiento === 'abono') {
     revalidatePath('/cuentas')
   }
@@ -257,6 +269,14 @@ export async function editarMovimiento(
       delete updatePayload.concepto
       delete updatePayload.categoria
       break
+    case 'venta_externa':
+      tablaDestino = 'ventas_externas'
+      if (newData.fecha !== undefined) updatePayload.fecha = newData.fecha
+      if (newData.metodo_pago !== undefined) updatePayload.metodo_pago = newData.metodo_pago
+      if (newData.comprador_nombre !== undefined) updatePayload.comprador_nombre = newData.comprador_nombre
+      delete updatePayload.asistente_id
+      delete updatePayload.categoria
+      break
     default:
       return { error: 'Tipo de movimiento no soportado para edicion.' }
   }
@@ -264,7 +284,7 @@ export async function editarMovimiento(
   const nuevaFecha =
     tipo_movimiento === 'abono'
       ? updatePayload.fecha_pago
-      : tipo_movimiento === 'egreso' || tipo_movimiento === 'anticipo' || tipo_movimiento === 'donacion'
+      : tipo_movimiento === 'egreso' || tipo_movimiento === 'anticipo' || tipo_movimiento === 'donacion' || tipo_movimiento === 'venta_externa'
         ? updatePayload.fecha
         : null
 
@@ -296,6 +316,7 @@ export async function editarMovimiento(
   revalidatePath('/movimientos')
   revalidatePath('/dashboard')
   revalidatePath('/asistentes')
+  revalidatePath('/ventas-externas')
   if (tipo_movimiento === 'abono') {
     revalidatePath('/cuentas')
   }
@@ -332,6 +353,9 @@ export async function eliminarMovimiento(
       return { error: ANTICIPO_BLOQUEADO }
     case 'donacion':
       tablaDestino = 'donaciones_asistentes'
+      break
+    case 'venta_externa':
+      tablaDestino = 'ventas_externas'
       break
     default:
       return { error: 'Tipo de movimiento no soportado para el borrado duro.' }
@@ -382,6 +406,7 @@ export async function eliminarMovimiento(
   revalidatePath('/movimientos')
   revalidatePath('/dashboard')
   revalidatePath('/asistentes')
+  revalidatePath('/ventas-externas')
   if (tipo_movimiento === 'abono') {
     revalidatePath('/cuentas')
   }

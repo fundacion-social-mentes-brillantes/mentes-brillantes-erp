@@ -63,6 +63,14 @@ export async function Dashboard({ month }: { month?: string }) {
     .lte('fecha', lastDayOfMonth);
   const donacionesMes = Math.round((rawDonaciones ?? []).filter((item) => !esAnuladoCompleto(item)).reduce((acc, d) => acc + Number(d.monto), 0));
 
+  const { data: rawVentasExternas } = await supabase
+    .from('ventas_externas')
+    .select('monto, estado, notas, fecha')
+    .gte('fecha', firstDayOfMonth)
+    .lte('fecha', lastDayOfMonth);
+  const ventasExternasData = (rawVentasExternas ?? []).filter((item) => !esAnuladoCompleto(item));
+  const ventasExternasMes = Math.round(sumarMontos(ventasExternasData));
+
   // Egresos del Mes
   const { data: rawEgresosData } = await supabase
     .from('egresos')
@@ -74,7 +82,7 @@ export async function Dashboard({ month }: { month?: string }) {
   const egresosMes = Math.round(sumarMontos(egresosData));
   
   // Utilidad del Mes
-  const ingresosTotales = Math.round(ingresosMes + donacionesMes);
+  const ingresosTotales = Math.round(ingresosMes + donacionesMes + ventasExternasMes);
   const utilidadMes = Math.round(ingresosTotales - egresosMes);
 
   // Preparar datos para la grÃ¡fica de balance acumulado
@@ -96,6 +104,13 @@ export async function Dashboard({ month }: { month?: string }) {
   });
 
   saldoFavorIngresosMes?.forEach((item: any) => {
+    const date = item.fecha;
+    if (dailyData[date]) {
+      dailyData[date].ingresos += Number(item.monto);
+    }
+  });
+
+  ventasExternasData?.forEach((item) => {
     const date = item.fecha;
     if (dailyData[date]) {
       dailyData[date].ingresos += Number(item.monto);
@@ -150,7 +165,9 @@ export async function Dashboard({ month }: { month?: string }) {
   const ingresosPrev = Math.round(sumarMontos([...ingresosPrevData, ...saldoFavorIngresosPrev]));
   const { data: rawDonacionesPrev } = await supabase.from('donaciones_asistentes').select('monto, estado, notas').gte('fecha', firstDayOfPrevMonth).lte('fecha', lastDayOfPrevMonth);
   const donacionesPrev = Math.round((rawDonacionesPrev ?? []).filter((item) => !esAnuladoCompleto(item)).reduce((acc, d) => acc + Number(d.monto), 0));
-  const ingresosTotalesPrev = ingresosPrev + donacionesPrev;
+  const { data: rawVentasExternasPrev } = await supabase.from('ventas_externas').select('monto, estado, notas').gte('fecha', firstDayOfPrevMonth).lte('fecha', lastDayOfPrevMonth);
+  const ventasExternasPrev = Math.round((rawVentasExternasPrev ?? []).filter((item) => !esAnuladoCompleto(item)).reduce((acc, v) => acc + Number(v.monto), 0));
+  const ingresosTotalesPrev = ingresosPrev + donacionesPrev + ventasExternasPrev;
 
   const { data: rawEgresosPrevData } = await supabase.from('egresos').select('monto, estado, notas').gte('fecha', firstDayOfPrevMonth).lte('fecha', lastDayOfPrevMonth);
   const egresosPrevData = (rawEgresosPrevData ?? []).filter((item) => !esAnuladoCompleto(item));
@@ -172,6 +189,7 @@ export async function Dashboard({ month }: { month?: string }) {
 
   const ingresosTrend = getTrend(ingresosMes, ingresosPrev);
   const donacionesTrend = getTrend(donacionesMes, donacionesPrev);
+  const ventasExternasTrend = getTrend(ventasExternasMes, ventasExternasPrev);
   const ingresosTotalesTrend = getTrend(ingresosTotales, ingresosTotalesPrev);
   const egresosTrend = getTrend(egresosMes, egresosPrev);
   const utilidadTrend = getTrend(utilidadMes, utilidadPrev);
@@ -252,7 +270,7 @@ export async function Dashboard({ month }: { month?: string }) {
       icon: Banknote,
       color: "text-[rgb(var(--success))]",
       bg: "bg-[rgba(var(--success),0.1)]",
-      help: "Ingresos de cartera + donaciones del mes."
+      help: "Ingresos de cartera + donaciones + ventas externas del mes."
     },
     {
       name: "Egresos del Período",
@@ -306,6 +324,16 @@ export async function Dashboard({ month }: { month?: string }) {
       color: "text-[rgb(var(--info))]",
       bg: "bg-[rgba(var(--info),0.08)]",
       help: "Donaciones voluntarias registradas en el mes."
+    },
+    {
+      name: "Ventas Externas",
+      value: `$${ventasExternasMes.toLocaleString()}`,
+      trend: ventasExternasTrend,
+      goodIsUp: true,
+      icon: ShoppingCart,
+      color: "text-[rgb(var(--success))]",
+      bg: "bg-[rgba(var(--success),0.08)]",
+      help: "Ventas de productos o servicios sin cuenta por cobrar asociada."
     },
     {
       name: "Facturado del Período",
@@ -424,9 +452,9 @@ export async function Dashboard({ month }: { month?: string }) {
         <div className="rounded-xl border border-[rgba(var(--border),0.35)] bg-[rgba(var(--surface-1),0.5)] backdrop-blur p-3">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold text-[rgb(var(--text-primary))]">Detalle del período</h3>
-            <span className="text-xs text-[rgb(var(--text-muted))]">Ingresos de cartera, donaciones y facturado</span>
+            <span className="text-xs text-[rgb(var(--text-muted))]">Cartera, donaciones, ventas externas y facturado</span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
             {detailStats.map((stat) => {
               const isTrendPositive = stat.trend > 0;
               const isTrendNeutral = stat.trend === 0;

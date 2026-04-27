@@ -26,6 +26,7 @@ export default async function ConfiguracionPage() {
     "cuentas_por_cobrar",
     "pagos_abonos",
     "egresos",
+    "ventas_externas",
     "socios",
     "periodos",
     "adelantos_socios",

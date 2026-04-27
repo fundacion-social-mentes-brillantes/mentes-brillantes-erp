@@ -9,7 +9,7 @@ Esta es la referencia oficial de comportamiento financiero del ERP. Si codigo, S
 - Periodo cerrado: rango congelado; no admite nuevos cambios financieros.
 
 ## Reglas oficiales
-1. Ingresos validos del periodo = abonos validos + donaciones validas.
+1. Ingresos validos del periodo = abonos validos + donaciones validas + ventas externas validas.
 2. Aplicar saldo a favor a una cuenta no crea ingreso nuevo.
 3. Utilidad del periodo = ingresos validos - egresos validos.
 4. Adelantos a socios no reducen la utilidad; solo descuentan el neto a pagar del socio.
@@ -44,7 +44,8 @@ Esta es la referencia oficial de comportamiento financiero del ERP. Si codigo, S
 ## Liquidaciones
 - `ingresos_cobrados = abonos validos`
 - `donaciones_periodo = donaciones validas`
-- `ingresos_operativos = ingresos_cobrados + donaciones_periodo`
+- `ventas_externas_periodo = ventas externas validas`
+- `ingresos_operativos = ingresos_cobrados + donaciones_periodo + ventas_externas_periodo`
 - `egresos_periodo = egresos validos`
 - `utilidad_neta = ingresos_operativos - egresos_periodo`
 - `valor_correspondiente = utilidad_neta * porcentaje_participacion`
@@ -54,6 +55,7 @@ Esta es la referencia oficial de comportamiento financiero del ERP. Si codigo, S
 - Dashboard, liquidaciones abiertas, liquidaciones cerradas y vistas SQL deben usar la misma definicion de ingresos validos, egresos validos y anulados.
 - `liquidaciones_resumen_cuentas` guarda:
   - ingresos por metodo
+  - ventas externas por metodo
   - egresos por metodo
   - adelantos por metodo como dato de neteo, no como reduccion de utilidad
 - `saldo_neto_periodo` del resumen representa ingresos menos egresos, no utilidad menos adelantos.
@@ -68,5 +70,6 @@ Se audita como minimo:
 - generar saldo a favor por sobrepago
 - crear, editar y borrar egreso
 - crear, editar, anular y eliminar donacion
+- crear, editar, anular y eliminar venta externa
 - crear adelanto
 - cerrar liquidacion

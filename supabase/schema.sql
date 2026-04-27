@@ -122,6 +122,24 @@ CREATE TABLE donaciones_asistentes (
 CREATE INDEX idx_donaciones_asistente_fecha ON donaciones_asistentes (asistente_id, fecha DESC);
 CREATE INDEX idx_donaciones_estado ON donaciones_asistentes (estado);
 
+-- VENTAS EXTERNAS
+CREATE TABLE ventas_externas (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  legacy_row_id TEXT UNIQUE,
+  comprador_nombre TEXT,
+  concepto TEXT NOT NULL,
+  monto NUMERIC(12,2) NOT NULL CHECK (monto > 0),
+  metodo_pago metodo_pago NOT NULL,
+  fecha DATE NOT NULL DEFAULT CURRENT_DATE,
+  estado TEXT NOT NULL DEFAULT 'activo' CHECK (estado IN ('activo', 'anulado')),
+  notas TEXT,
+  usuario_id UUID REFERENCES auth.users(id),
+  creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_ventas_externas_fecha ON ventas_externas (fecha DESC);
+CREATE INDEX idx_ventas_externas_estado ON ventas_externas (estado);
+
 -- COACH
 CREATE TABLE coach_paquetes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -212,6 +230,7 @@ CREATE TABLE liquidaciones_resumen_cuentas (
   saldo_neto_periodo NUMERIC(12,2) NOT NULL DEFAULT 0,
   ingresos_abonos NUMERIC(12,2) NOT NULL DEFAULT 0,
   ingresos_donaciones NUMERIC(12,2) NOT NULL DEFAULT 0,
+  ingresos_ventas_externas NUMERIC(12,2) NOT NULL DEFAULT 0,
   salidas_egresos NUMERIC(12,2) NOT NULL DEFAULT 0,
   salidas_adelantos NUMERIC(12,2) NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -432,7 +451,31 @@ SELECT
   d.creado_en,
   NULL::TEXT AS categoria
 FROM donaciones_asistentes d
-LEFT JOIN asistentes a ON a.id = d.asistente_id;
+LEFT JOIN asistentes a ON a.id = d.asistente_id
+
+UNION ALL
+
+SELECT
+  v.id AS movimiento_id,
+  v.fecha,
+  'venta_externa' AS tipo_movimiento,
+  NULL::UUID AS asistente_id,
+  NULL::TEXT AS asistente_nombre,
+  v.concepto,
+  v.metodo_pago,
+  0::NUMERIC(12,2) AS valor_deuda,
+  CASE
+    WHEN COALESCE(v.estado, 'activo') <> 'anulado'
+      AND (v.notas IS NULL OR v.notas NOT ILIKE '%[ANULADO]%')
+    THEN v.monto
+    ELSE 0
+  END AS valor_ingreso,
+  0::NUMERIC(12,2) AS valor_egreso,
+  v.estado AS estado_o_saldo,
+  v.notas,
+  v.creado_en,
+  NULL::TEXT AS categoria
+FROM ventas_externas v;
 
 -- RPC PARA APLICAR SALDO A FAVOR SIN DESCUADRES
 CREATE OR REPLACE FUNCTION aplicar_saldo_favor_trx(
@@ -583,6 +626,7 @@ DECLARE
   v_egresos_periodo NUMERIC;
   v_utilidad_neta NUMERIC;
   v_donaciones_total NUMERIC;
+  v_ventas_externas_total NUMERIC;
 BEGIN
   SELECT fecha_inicio, fecha_fin, estado::TEXT
   INTO v_inicio, v_fin, v_estado
@@ -640,6 +684,15 @@ BEGIN
       AND (d.notas IS NULL OR d.notas NOT ILIKE '%[ANULADO]%')
     GROUP BY 1
   ),
+  ventas_externas_agg AS (
+    SELECT LOWER(COALESCE(v.metodo_pago::TEXT, 'otro')) AS metodo_pago,
+           SUM(v.monto) AS monto
+    FROM ventas_externas v
+    WHERE v.fecha BETWEEN v_inicio AND v_fin
+      AND COALESCE(v.estado, 'activo') <> 'anulado'
+      AND (v.notas IS NULL OR v.notas NOT ILIKE '%[ANULADO]%')
+    GROUP BY 1
+  ),
   egresos_agg AS (
     SELECT LOWER(COALESCE(e.metodo_pago::TEXT, 'otro')) AS metodo_pago,
            SUM(e.monto) AS monto
@@ -661,12 +714,14 @@ BEGIN
       m.metodo_pago::metodo_pago AS metodo_pago,
       COALESCE(ab.monto, 0) + COALESCE(sf.monto, 0) AS ingresos_abonos,
       COALESCE(dn.monto, 0) AS ingresos_donaciones,
+      COALESCE(ve.monto, 0) AS ingresos_ventas_externas,
       COALESCE(eg.monto, 0) AS salidas_egresos,
       COALESCE(ad.monto, 0) AS salidas_adelantos
     FROM metodos m
     LEFT JOIN abonos_agg ab ON ab.metodo_pago = m.metodo_pago
     LEFT JOIN saldo_favor_ingresos_agg sf ON sf.metodo_pago = m.metodo_pago
     LEFT JOIN donaciones_agg dn ON dn.metodo_pago = m.metodo_pago
+    LEFT JOIN ventas_externas_agg ve ON ve.metodo_pago = m.metodo_pago
     LEFT JOIN egresos_agg eg ON eg.metodo_pago = m.metodo_pago
     LEFT JOIN adelantos_agg ad ON ad.metodo_pago = m.metodo_pago
   )
@@ -678,6 +733,7 @@ BEGIN
     saldo_neto_periodo,
     ingresos_abonos,
     ingresos_donaciones,
+    ingresos_ventas_externas,
     salidas_egresos,
     salidas_adelantos,
     created_at,
@@ -686,11 +742,12 @@ BEGIN
   SELECT
     p_periodo_id,
     r.metodo_pago,
-    r.ingresos_abonos + r.ingresos_donaciones,
+    r.ingresos_abonos + r.ingresos_donaciones + r.ingresos_ventas_externas,
     r.salidas_egresos,
-    r.ingresos_abonos + r.ingresos_donaciones - r.salidas_egresos,
+    r.ingresos_abonos + r.ingresos_donaciones + r.ingresos_ventas_externas - r.salidas_egresos,
     r.ingresos_abonos,
     r.ingresos_donaciones,
+    r.ingresos_ventas_externas,
     r.salidas_egresos,
     r.salidas_adelantos,
     NOW(),
@@ -702,15 +759,17 @@ BEGIN
     saldo_neto_periodo = EXCLUDED.saldo_neto_periodo,
     ingresos_abonos = EXCLUDED.ingresos_abonos,
     ingresos_donaciones = EXCLUDED.ingresos_donaciones,
+    ingresos_ventas_externas = EXCLUDED.ingresos_ventas_externas,
     salidas_egresos = EXCLUDED.salidas_egresos,
     salidas_adelantos = EXCLUDED.salidas_adelantos,
     updated_at = NOW();
 
   SELECT
-    SUM(r.ingresos_abonos + r.ingresos_donaciones),
+    SUM(r.ingresos_abonos + r.ingresos_donaciones + r.ingresos_ventas_externas),
     SUM(r.salidas_egresos),
-    SUM(r.ingresos_donaciones)
-  INTO v_ingresos_operativos, v_egresos_periodo, v_donaciones_total
+    SUM(r.ingresos_donaciones),
+    SUM(r.ingresos_ventas_externas)
+  INTO v_ingresos_operativos, v_egresos_periodo, v_donaciones_total, v_ventas_externas_total
   FROM liquidaciones_resumen_cuentas r
   WHERE r.periodo_id = p_periodo_id;
 
@@ -732,7 +791,7 @@ BEGIN
   SELECT
     p_periodo_id,
     s.id,
-    COALESCE(v_ingresos_operativos, 0) - COALESCE(v_donaciones_total, 0) AS ingresos_cobrados,
+    COALESCE(v_ingresos_operativos, 0) - COALESCE(v_donaciones_total, 0) - COALESCE(v_ventas_externas_total, 0) AS ingresos_cobrados,
     COALESCE(v_donaciones_total, 0) AS donaciones_periodo,
     COALESCE(v_ingresos_operativos, 0) AS ingresos_operativos,
     COALESCE(v_egresos_periodo, 0) AS egresos_periodo,

@@ -45,4 +45,18 @@ describe('liquidaciones y saldo a favor', () => {
 
     expect(totales.total_ingresos).toBe(0)
   })
+
+  it('suma ventas externas validas a ingresos operativos y omite anuladas', () => {
+    const { resumen, totales } = agruparPorMetodo({
+      abonos: [{ monto: 50000, metodo_pago: 'efectivo' }],
+      donaciones: [{ monto: 20000, metodo_pago: 'nequi' }],
+      ventasExternas: [
+        { monto: 30000, metodo_pago: 'daviplata', estado: 'activo' },
+        { monto: 90000, metodo_pago: 'daviplata', estado: 'anulado' },
+      ],
+    })
+
+    expect(resumen.find((r) => r.metodo_pago === 'daviplata')?.ingresos_ventas_externas).toBe(30000)
+    expect(totales.total_ingresos).toBe(100000)
+  })
 })

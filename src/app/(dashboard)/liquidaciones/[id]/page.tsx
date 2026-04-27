@@ -39,6 +39,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
   // Cálculos en vivo si está abierto
   let ingresos_cobrados = 0
   let donaciones_periodo = 0
+  let ventas_externas_periodo = 0
   let ingresos_operativos = 0
   let egresos_periodo = 0
   let adelantos_periodo = 0
@@ -53,6 +54,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
     saldo_neto_periodo: number
     ingresos_abonos?: number
     ingresos_donaciones?: number
+    ingresos_ventas_externas?: number
     salidas_egresos?: number
     salidas_adelantos?: number
   }[] = []
@@ -102,6 +104,18 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
     donacionesValidas = (rawDonaciones || []).filter((d) => !esAnuladoCompleto(d))
     donaciones_periodo = Math.round(donacionesValidas.reduce((acc: number, curr: any) => acc + Number(curr.monto), 0))
 
+    const { data: rawVentasExternas, error: ventasExternasError } = await supabase
+      .from('ventas_externas')
+      .select('monto, estado, notas, metodo_pago, fecha')
+      .gte('fecha', periodo.fecha_inicio)
+      .lte('fecha', periodo.fecha_fin)
+    if (ventasExternasError) console.error('Error al consultar ventas externas:', ventasExternasError)
+
+    const ventasExternasValidas = (rawVentasExternas || []).filter((v) => !esAnuladoCompleto(v))
+    ventas_externas_periodo = Math.round(
+      ventasExternasValidas.reduce((acc: number, curr: any) => acc + Number(curr.monto), 0)
+    )
+
     const { data: rawEgresosData, error: egresosError } = await supabase
       .from('egresos')
       .select('monto, estado, notas, metodo_pago, fecha')
@@ -114,12 +128,13 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
     adelantos_periodo = Math.round(adelantos.reduce((acc: number, curr: any) => acc + Number(curr.monto), 0))
     egresos_periodo = egresosValidos
 
-    ingresos_operativos = ingresos_cobrados + donaciones_periodo
+    ingresos_operativos = ingresos_cobrados + donaciones_periodo + ventas_externas_periodo
 
     const { resumen, totales } = agruparPorMetodo({
       abonos: ingresosData,
       ingresosSaldoFavor: ingresosSaldoFavorData,
       donaciones: donacionesValidas,
+      ventasExternas: ventasExternasValidas,
       egresos: egresosData,
       adelantos,
     })
@@ -157,6 +172,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
             saldo_neto_periodo: Number(row.saldo_neto_periodo),
             ingresos_abonos: Number(row.ingresos_abonos ?? 0),
             ingresos_donaciones: Number(row.ingresos_donaciones ?? 0),
+            ingresos_ventas_externas: Number(row.ingresos_ventas_externas ?? 0),
             salidas_egresos: Number(row.salidas_egresos ?? 0),
             salidas_adelantos: Number(row.salidas_adelantos ?? 0),
           }
@@ -167,6 +183,9 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
     )
     egresos_periodo = Math.round(
       resumenPorCuenta.reduce((acc: number, row: any) => acc + Number(row.salidas_egresos ?? 0), 0)
+    )
+    ventas_externas_periodo = Math.round(
+      resumenPorCuenta.reduce((acc: number, row: any) => acc + Number(row.ingresos_ventas_externas ?? 0), 0)
     )
     resumenTotales = resumenPorCuenta.reduce(
       (acc, r) => ({
@@ -255,6 +274,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
             financiero={{
               ingresos_cartera: ingresos_cobrados,
               donaciones: donaciones_periodo,
+              ventas_externas: ventas_externas_periodo,
               ingresos_totales: ingresos_operativos,
               egresos: egresos_periodo,
               utilidad: utilidad_neta
@@ -268,7 +288,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
       </div>
 
       {/* Resumen Financiero */}
-      <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
         <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
           <p className="text-sm text-zinc-500">Ingresos cobrados (cartera)</p>
           <p className="text-2xl font-semibold text-emerald-600 mt-2">${ingresos_cobrados.toLocaleString()}</p>
@@ -276,6 +296,10 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
         <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
           <p className="text-sm text-zinc-500">Donaciones</p>
           <p className="text-2xl font-semibold text-teal-600 mt-2">${donaciones_periodo.toLocaleString()}</p>
+        </div>
+        <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
+          <p className="text-sm text-zinc-500">Ventas externas</p>
+          <p className="text-2xl font-semibold text-emerald-600 mt-2">${ventas_externas_periodo.toLocaleString()}</p>
         </div>
         <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
           <p className="text-sm text-zinc-500">Ingresos totales</p>
@@ -311,6 +335,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
               <tr>
                 <th className="px-4 py-3">Método</th>
                 <th className="px-4 py-3 text-right">Ingresos</th>
+                <th className="px-4 py-3 text-right">Ventas externas</th>
                 <th className="px-4 py-3 text-right">Egresos operativos</th>
                 <th className="px-4 py-3 text-right">Adelantos no operativos</th>
                 <th className="px-4 py-3 text-right">Saldo neto operativo</th>
@@ -321,6 +346,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                 <tr key={row.metodo_pago}>
                   <td className="px-4 py-3 font-medium text-zinc-900 capitalize">{row.metodo_pago}</td>
                   <td className="px-4 py-3 text-right text-emerald-700">${row.total_ingresos.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-right text-emerald-600">${Number(row.ingresos_ventas_externas ?? 0).toLocaleString()}</td>
                   <td className="px-4 py-3 text-right text-red-600">-${row.total_salidas.toLocaleString()}</td>
                   <td className="px-4 py-3 text-right text-amber-600">-${Number(row.salidas_adelantos ?? 0).toLocaleString()}</td>
                   <td className={`px-4 py-3 text-right font-semibold ${row.saldo_neto_periodo >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
@@ -331,6 +357,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
               <tr className="bg-zinc-50 font-semibold">
                 <td className="px-4 py-3">Total</td>
                 <td className="px-4 py-3 text-right text-emerald-700">${resumenTotales.total_ingresos.toLocaleString()}</td>
+                <td className="px-4 py-3 text-right text-emerald-600">${ventas_externas_periodo.toLocaleString()}</td>
                 <td className="px-4 py-3 text-right text-red-600">-${resumenTotales.total_salidas.toLocaleString()}</td>
                 <td className="px-4 py-3 text-right text-amber-600">-${adelantos_periodo.toLocaleString()}</td>
                 <td className="px-4 py-3 text-right">${resumenTotales.saldo_neto_periodo.toLocaleString()}</td>
