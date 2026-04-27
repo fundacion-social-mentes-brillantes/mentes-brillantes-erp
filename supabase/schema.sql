@@ -140,6 +140,64 @@ CREATE TABLE ventas_externas (
 CREATE INDEX idx_ventas_externas_fecha ON ventas_externas (fecha DESC);
 CREATE INDEX idx_ventas_externas_estado ON ventas_externas (estado);
 
+ALTER TABLE ventas_externas ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY ventas_externas_select_roles
+  ON ventas_externas
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM perfiles
+      WHERE perfiles.id = auth.uid()
+        AND perfiles.rol IN ('admin', 'caja', 'consulta')
+    )
+  );
+
+CREATE POLICY ventas_externas_insert_admin_caja
+  ON ventas_externas
+  FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1
+      FROM perfiles
+      WHERE perfiles.id = auth.uid()
+        AND perfiles.rol IN ('admin', 'caja')
+    )
+  );
+
+CREATE POLICY ventas_externas_update_admin
+  ON ventas_externas
+  FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM perfiles
+      WHERE perfiles.id = auth.uid()
+        AND perfiles.rol = 'admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1
+      FROM perfiles
+      WHERE perfiles.id = auth.uid()
+        AND perfiles.rol = 'admin'
+    )
+  );
+
+CREATE POLICY ventas_externas_delete_admin
+  ON ventas_externas
+  FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM perfiles
+      WHERE perfiles.id = auth.uid()
+        AND perfiles.rol = 'admin'
+    )
+  );
+
 -- COACH
 CREATE TABLE coach_paquetes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

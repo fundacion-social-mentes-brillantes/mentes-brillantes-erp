@@ -15,6 +15,68 @@ CREATE TABLE IF NOT EXISTS ventas_externas (
 CREATE INDEX IF NOT EXISTS idx_ventas_externas_fecha ON ventas_externas (fecha DESC);
 CREATE INDEX IF NOT EXISTS idx_ventas_externas_estado ON ventas_externas (estado);
 
+ALTER TABLE ventas_externas ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS ventas_externas_select_roles ON ventas_externas;
+CREATE POLICY ventas_externas_select_roles
+  ON ventas_externas
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM perfiles
+      WHERE perfiles.id = auth.uid()
+        AND perfiles.rol IN ('admin', 'caja', 'consulta')
+    )
+  );
+
+DROP POLICY IF EXISTS ventas_externas_insert_admin_caja ON ventas_externas;
+CREATE POLICY ventas_externas_insert_admin_caja
+  ON ventas_externas
+  FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1
+      FROM perfiles
+      WHERE perfiles.id = auth.uid()
+        AND perfiles.rol IN ('admin', 'caja')
+    )
+  );
+
+DROP POLICY IF EXISTS ventas_externas_update_admin ON ventas_externas;
+CREATE POLICY ventas_externas_update_admin
+  ON ventas_externas
+  FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM perfiles
+      WHERE perfiles.id = auth.uid()
+        AND perfiles.rol = 'admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1
+      FROM perfiles
+      WHERE perfiles.id = auth.uid()
+        AND perfiles.rol = 'admin'
+    )
+  );
+
+DROP POLICY IF EXISTS ventas_externas_delete_admin ON ventas_externas;
+CREATE POLICY ventas_externas_delete_admin
+  ON ventas_externas
+  FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM perfiles
+      WHERE perfiles.id = auth.uid()
+        AND perfiles.rol = 'admin'
+    )
+  );
+
 ALTER TABLE liquidaciones_resumen_cuentas
   ADD COLUMN IF NOT EXISTS ingresos_ventas_externas NUMERIC(12,2) NOT NULL DEFAULT 0;
 
