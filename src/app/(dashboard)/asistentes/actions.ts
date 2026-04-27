@@ -4,7 +4,13 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { requireAdmin, requireRoles } from '@/lib/utils/authz'
-import { calcularPendienteCuenta, parseMoneyInput } from '@/lib/utils/contable'
+import {
+  calcularPendienteCuenta,
+  calcularSaldoFavorDisponible,
+  normalizarCopEntero,
+  normalizarCopUsable,
+  parseMoneyInput,
+} from '@/lib/utils/contable'
 import { assertFechaEditable } from '@/lib/utils/periodos'
 
 export type ActionState = {
@@ -15,19 +21,9 @@ export type ActionState = {
 const notaReversionAnticipo = (anticipoId: string) =>
   `[REVERSO_ANTICIPO:${anticipoId}] Reversion contable de anticipo gestionada desde el perfil del asistente.`
 
-const calcularSaldoDisponible = (movimientos: Array<{ tipo?: string | null; monto?: number | string | null }> = []) => {
-  let totalIngresos = 0
-  let totalAplicado = 0
-
-  movimientos.forEach((mov) => {
-    const monto = Number(mov.monto || 0)
-    if (!Number.isFinite(monto)) return
-    if (mov.tipo === 'ingreso') totalIngresos += monto
-    if (mov.tipo === 'aplicacion') totalAplicado += monto
-  })
-
-  return Math.round(totalIngresos - totalAplicado)
-}
+const calcularSaldoDisponible = (
+  movimientos: Array<{ tipo?: string | null; monto?: number | string | null }> = []
+) => calcularSaldoFavorDisponible(movimientos)
 
 export async function saveAsistente(id: string | null, prevState: ActionState, formData: FormData): Promise<ActionState> {
   let supabase
@@ -184,7 +180,7 @@ export async function revertirAnticipo(asistente_id: string, anticipo_id: string
   }
 
   const saldoDisponible = calcularSaldoDisponible(movimientosSaldo || [])
-  const montoAnticipo = Number(anticipo.monto || 0)
+  const montoAnticipo = normalizarCopUsable(anticipo.monto)
 
   if (saldoDisponible < montoAnticipo) {
     return {
@@ -349,11 +345,14 @@ export async function pagarDeudasConSaldo(asistente_id: string): Promise<ActionS
   for (const cuenta of cuentas) {
     if (saldoDisponible <= 0) break
 
-    const pendiente = Math.round(calcularPendienteCuenta(Number(cuenta.valor_total), cuenta.pagos_abonos || []))
+    const pendiente = normalizarCopUsable(
+      calcularPendienteCuenta(normalizarCopEntero(cuenta.valor_total), cuenta.pagos_abonos || [])
+    )
 
     if (pendiente <= 0) continue
 
-    const montoAPagar = Math.min(saldoDisponible, pendiente)
+    const montoAPagar = normalizarCopUsable(Math.min(saldoDisponible, pendiente))
+    if (montoAPagar <= 0) continue
 
     const { error } = await supabase.rpc('aplicar_saldo_favor_trx', {
       p_cuenta_id: cuenta.id,
@@ -365,7 +364,7 @@ export async function pagarDeudasConSaldo(asistente_id: string): Promise<ActionS
       return { error: `Error al pagar cuenta: ${error.message}` }
     }
 
-    saldoDisponible -= montoAPagar
+    saldoDisponible = normalizarCopUsable(saldoDisponible - montoAPagar)
     pagosRealizados++
   }
 

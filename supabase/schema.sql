@@ -552,13 +552,19 @@ DECLARE
   v_valor_total NUMERIC;
   v_total_abonado NUMERIC;
   v_pendiente NUMERIC;
+  v_pendiente_usable NUMERIC;
   v_saldo_disponible NUMERIC;
+  v_saldo_usable NUMERIC;
   v_pago_id UUID;
   v_movimiento_id UUID;
   v_usuario_id UUID := auth.uid();
 BEGIN
   IF p_monto IS NULL OR p_monto <= 0 THEN
     RAISE EXCEPTION 'El monto debe ser mayor a 0.';
+  END IF;
+
+  IF p_monto <> FLOOR(p_monto) OR MOD(p_monto, 50) <> 0 THEN
+    RAISE EXCEPTION 'El monto debe estar en pesos enteros y multiplos de 50.';
   END IF;
 
   SELECT nombre, estado::TEXT
@@ -594,8 +600,17 @@ BEGIN
     AND (notas IS NULL OR notas NOT ILIKE '%[ANULADO]%');
 
   v_pendiente := GREATEST(v_valor_total - v_total_abonado, 0);
+  v_pendiente_usable := FLOOR(
+    GREATEST(
+      CASE
+        WHEN ABS(ROUND(v_pendiente) - v_pendiente) <= 0.05 THEN ROUND(v_pendiente)
+        ELSE FLOOR(v_pendiente)
+      END,
+      0
+    ) / 50
+  ) * 50;
 
-  IF p_monto > v_pendiente THEN
+  IF p_monto > v_pendiente_usable THEN
     RAISE EXCEPTION 'El monto excede el saldo pendiente de la cuenta.';
   END IF;
 
@@ -610,7 +625,17 @@ BEGIN
   FROM movimientos_saldo_favor
   WHERE asistente_id = p_asistente_id;
 
-  IF p_monto > v_saldo_disponible THEN
+  v_saldo_usable := FLOOR(
+    GREATEST(
+      CASE
+        WHEN ABS(ROUND(v_saldo_disponible) - v_saldo_disponible) <= 0.05 THEN ROUND(v_saldo_disponible)
+        ELSE FLOOR(v_saldo_disponible)
+      END,
+      0
+    ) / 50
+  ) * 50;
+
+  IF p_monto > v_saldo_usable THEN
     RAISE EXCEPTION 'El monto excede el saldo a favor disponible del asistente.';
   END IF;
 

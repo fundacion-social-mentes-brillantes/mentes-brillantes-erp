@@ -12,7 +12,7 @@ import {
 import { notFound } from "next/navigation"
 import { AnticipoForm } from "./AnticipoForm"
 import { PagarConSaldoButton } from "./PagarConSaldoButton"
-import { filtrarPagosValidos, sumarMontos, toSafeNumber } from "@/lib/utils/contable"
+import { filtrarPagosValidos, normalizarCopUsable, sumarMontos, toSafeNumber } from "@/lib/utils/contable"
 import { DonacionForm } from "./DonacionForm"
 import { DonacionActionsMenu } from "./DonacionActionsMenu"
 import { RevertAnticipoButton } from "./RevertAnticipoButton"
@@ -59,7 +59,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
     if (m.tipo === "ingreso") totalIngresosSaldo += toSafeNumber(m.monto)
     if (m.tipo === "aplicacion") totalAplicadoSaldo += toSafeNumber(m.monto)
   })
-  const saldoAFavor = Math.round(totalIngresosSaldo - totalAplicadoSaldo)
+  const saldoAFavor = normalizarCopUsable(totalIngresosSaldo - totalAplicadoSaldo)
 
   const { data: donacionesData } = await supabase
     .from("donaciones_asistentes")

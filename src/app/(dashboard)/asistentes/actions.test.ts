@@ -23,6 +23,8 @@ vi.mock('@/lib/utils/periodos', () => ({
   assertFechaEditable: (...args: unknown[]) => assertFechaEditableMock(...args),
 }))
 
+import { calcularSaldoFavorDisponible } from '@/lib/utils/contable'
+
 const { pagarDeudasConSaldo, revertirAnticipo, saveAnticipo } = await import('./actions')
 
 const buildFormData = (values: Record<string, string>) => {
@@ -147,6 +149,105 @@ describe('asistentes/actions', () => {
       p_asistente_id: 'asis-1',
       p_monto: 50000,
     })
+  })
+
+  it('pagarDeudasConSaldo aplica saldo con residuos decimales sin enviar decimales a la RPC', async () => {
+    assertFechaEditableMock.mockResolvedValue(null)
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'movimientos_saldo_favor') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn().mockResolvedValue({ data: [{ tipo: 'ingreso', monto: 50000.98 }], error: null }),
+            })),
+          }
+        }
+        if (table === 'cuentas_por_cobrar') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                neq: vi.fn(() => ({
+                  order: vi.fn().mockResolvedValue({
+                    data: [
+                      {
+                        id: 'cuenta-1',
+                        valor_total: 140000,
+                        fecha_emision: '2026-04-04',
+                        pagos_abonos: [],
+                      },
+                    ],
+                    error: null,
+                  }),
+                })),
+              })),
+            })),
+          }
+        }
+        return {}
+      }),
+      rpc: vi.fn().mockResolvedValue({ error: null }),
+    }
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+
+    const result = await pagarDeudasConSaldo('asis-1')
+
+    expect(result).toEqual({ success: true })
+    expect(supabase.rpc).toHaveBeenCalledWith('aplicar_saldo_favor_trx', {
+      p_cuenta_id: 'cuenta-1',
+      p_asistente_id: 'asis-1',
+      p_monto: 50000,
+    })
+  })
+
+  it('normaliza saldos historicos tipo 9999.98 como COP usable', () => {
+    expect(calcularSaldoFavorDisponible([{ tipo: 'ingreso', monto: 9999.98 }])).toBe(10000)
+  })
+
+  it('no aplica mas del saldo usable disponible', async () => {
+    assertFechaEditableMock.mockResolvedValue(null)
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'movimientos_saldo_favor') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn().mockResolvedValue({ data: [{ tipo: 'ingreso', monto: 50049.8 }], error: null }),
+            })),
+          }
+        }
+        if (table === 'cuentas_por_cobrar') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                neq: vi.fn(() => ({
+                  order: vi.fn().mockResolvedValue({
+                    data: [
+                      {
+                        id: 'cuenta-1',
+                        valor_total: 60000,
+                        fecha_emision: '2026-04-04',
+                        pagos_abonos: [],
+                      },
+                    ],
+                    error: null,
+                  }),
+                })),
+              })),
+            })),
+          }
+        }
+        return {}
+      }),
+      rpc: vi.fn().mockResolvedValue({ error: null }),
+    }
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+
+    const result = await pagarDeudasConSaldo('asis-1')
+
+    expect(result).toEqual({ success: true })
+    expect(supabase.rpc).toHaveBeenCalledWith(
+      'aplicar_saldo_favor_trx',
+      expect.objectContaining({ p_monto: 50000 })
+    )
   })
 
   it('reversa un anticipo solo si el saldo disponible actual alcanza y deja auditoria', async () => {

@@ -55,6 +55,38 @@ export const toSafeNumber = (value: unknown): number => {
   return num
 }
 
+export const COP_RESIDUO_TOLERANCIA = 0.05
+export const COP_MULTIPLO_OPERATIVO = 50
+
+export const normalizarCopEntero = (value: unknown): number => {
+  const num = toSafeNumber(value)
+  const cercano = Math.round(num)
+  if (Math.abs(cercano - num) <= COP_RESIDUO_TOLERANCIA) {
+    return cercano
+  }
+  return Math.floor(num)
+}
+
+export const normalizarCopUsable = (value: unknown): number => {
+  const entero = Math.max(0, normalizarCopEntero(value))
+  return Math.floor(entero / COP_MULTIPLO_OPERATIVO) * COP_MULTIPLO_OPERATIVO
+}
+
+export const calcularSaldoFavorDisponible = (
+  movimientos: Array<{ tipo?: string | null; monto?: number | string | null }> = []
+) => {
+  let totalIngresos = 0
+  let totalAplicado = 0
+
+  movimientos.forEach((mov) => {
+    const monto = toSafeNumber(mov.monto)
+    if (mov.tipo === 'ingreso') totalIngresos += monto
+    if (mov.tipo === 'aplicacion') totalAplicado += monto
+  })
+
+  return normalizarCopUsable(totalIngresos - totalAplicado)
+}
+
 export const parseMoneyInput = (value: unknown): number | null => {
   if (value === null || value === undefined) return null
 

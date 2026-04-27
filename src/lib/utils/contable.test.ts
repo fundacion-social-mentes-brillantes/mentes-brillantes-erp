@@ -18,6 +18,8 @@ import {
   calcularEstadoCuentaDesdePagos,
   calcularPendienteCuenta,
   calcularPendienteDespuesDeAbono,
+  normalizarCopEntero,
+  normalizarCopUsable,
   type PagoRecord,
 } from './contable'
 
@@ -33,6 +35,18 @@ describe('anulados', () => {
     PATRONES_NOTAS_AJUSTE_NO_INGRESO_SALDO_A_FAVOR.forEach((pattern) => {
       expect(esIngresoRealSaldoAFavor({ tipo: 'ingreso', notas: pattern })).toBe(false)
     })
+  })
+})
+
+describe('normalizacion COP', () => {
+  it('corrige residuos minimos de precision y baja a multiplos de 50', () => {
+    expect(normalizarCopUsable(50000.98)).toBe(50000)
+    expect(normalizarCopUsable(9999.98)).toBe(10000)
+  })
+
+  it('no redondea hacia arriba fuera de tolerancia', () => {
+    expect(normalizarCopEntero(50049.8)).toBe(50049)
+    expect(normalizarCopUsable(50049.8)).toBe(50000)
   })
 })
 
