@@ -336,7 +336,7 @@ SELECT
   c.asistente_id,
   a.nombre AS asistente_nombre,
   c.concepto,
-  NULL::metodo_pago AS metodo_pago,
+  NULL::TEXT AS metodo_pago,
   GREATEST(
     c.valor_total - COALESCE((
       SELECT SUM(pa.monto)
@@ -365,7 +365,7 @@ SELECT
   c.asistente_id,
   a.nombre AS asistente_nombre,
   c.concepto,
-  p.metodo_pago,
+  p.metodo_pago::TEXT AS metodo_pago,
   0::NUMERIC(12,2) AS valor_deuda,
   CASE
     WHEN COALESCE(p.estado, 'activo') <> 'anulado'
@@ -393,7 +393,7 @@ SELECT
   msf.asistente_id,
   a.nombre AS asistente_nombre,
   COALESCE(msf.notas, 'Saldo a favor') AS concepto,
-  msf.metodo_pago,
+  msf.metodo_pago::TEXT AS metodo_pago,
   0::NUMERIC(12,2) AS valor_deuda,
   CASE WHEN msf.tipo = 'ingreso' THEN msf.monto ELSE 0 END AS valor_ingreso,
   CASE WHEN msf.tipo = 'aplicacion' THEN msf.monto ELSE 0 END AS valor_egreso,
@@ -413,7 +413,7 @@ SELECT
   NULL::UUID AS asistente_id,
   NULL::TEXT AS asistente_nombre,
   e.concepto,
-  e.metodo_pago,
+  e.metodo_pago::TEXT AS metodo_pago,
   0::NUMERIC(12,2) AS valor_deuda,
   0::NUMERIC(12,2) AS valor_ingreso,
   CASE
@@ -437,7 +437,7 @@ SELECT
   d.asistente_id,
   a.nombre AS asistente_nombre,
   'Donacion' AS concepto,
-  d.metodo_pago,
+  d.metodo_pago::TEXT AS metodo_pago,
   0::NUMERIC(12,2) AS valor_deuda,
   CASE
     WHEN COALESCE(d.estado, 'activo') <> 'anulado'
@@ -462,7 +462,7 @@ SELECT
   NULL::UUID AS asistente_id,
   NULL::TEXT AS asistente_nombre,
   v.concepto,
-  v.metodo_pago,
+  v.metodo_pago::TEXT AS metodo_pago,
   0::NUMERIC(12,2) AS valor_deuda,
   CASE
     WHEN COALESCE(v.estado, 'activo') <> 'anulado'
