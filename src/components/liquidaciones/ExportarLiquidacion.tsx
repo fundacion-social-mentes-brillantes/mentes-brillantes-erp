@@ -32,7 +32,6 @@ type ExportProps = {
   financiero: {
     ingresos_cartera: number
     donaciones: number
-    ventas_externas?: number
     ingresos_totales: number
     egresos: number
     utilidad: number
@@ -171,7 +170,7 @@ export function ExportarLiquidacion({ empresa: initialEmpresa, periodo, financie
               <p className="text-sm mb-1" style={{ color: '#6b7280' }}>Ingresos Totales</p>
               <p className="text-xl font-bold" style={{ color: '#15803d' }}>{formatCurrency(financiero.ingresos_totales)}</p>
               <p className="text-xs mt-1" style={{ color: '#6b7280' }}>
-                Cartera: {formatCurrency(financiero.ingresos_cartera)} · Donaciones: {formatCurrency(financiero.donaciones)} · Ventas externas: {formatCurrency(financiero.ventas_externas ?? 0)}
+                Cartera: {formatCurrency(financiero.ingresos_cartera)} · Donaciones: {formatCurrency(financiero.donaciones)}
               </p>
             </div>
             <div className="p-4 rounded-lg" style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb' }}>

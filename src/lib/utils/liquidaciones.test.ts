@@ -59,4 +59,16 @@ describe('liquidaciones y saldo a favor', () => {
     expect(resumen.find((r) => r.metodo_pago === 'daviplata')?.ingresos_ventas_externas).toBe(30000)
     expect(totales.total_ingresos).toBe(100000)
   })
+
+  it('mantiene consistente el total de snapshot cerrado con ventas externas incluidas', () => {
+    const { resumen, totales } = agruparPorMetodo({
+      abonos: [{ monto: 70000, metodo_pago: 'efectivo' }],
+      donaciones: [{ monto: 10000, metodo_pago: 'efectivo' }],
+      ventasExternas: [{ monto: 25000, metodo_pago: 'efectivo' }],
+    })
+    const efectivo = resumen.find((r) => r.metodo_pago === 'efectivo')
+
+    expect(efectivo?.total_ingresos).toBe(105000)
+    expect(totales.total_ingresos).toBe(105000)
+  })
 })
