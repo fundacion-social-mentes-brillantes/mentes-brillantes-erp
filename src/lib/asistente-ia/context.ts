@@ -59,14 +59,35 @@ function searchTokens(question: string) {
   return Array.from(new Set(tokens)).slice(0, 8)
 }
 
-function matchesAsistente(asistente: any, tokens: string[]) {
-  if (tokens.length === 0) return false
+function exactIdentityTokens(question: string) {
+  return normalizeText(question)
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2)
+}
 
-  const haystack = normalizeText(
-    [asistente.nombre, asistente.codigo, asistente.cedula].filter(Boolean).join(" ")
-  )
+function rankAsistente(asistente: any, tokens: string[], exactTokens: string[]) {
+  const codigo = normalizeText(String(asistente.codigo || ""))
+  const cedula = normalizeText(String(asistente.cedula || ""))
+  const nombre = normalizeText(String(asistente.nombre || ""))
 
-  return tokens.some((token) => haystack.includes(token))
+  if (exactTokens.some((token) => token === codigo || token === cedula)) {
+    return { score: 100, reason: "codigo_o_cedula_exacta" }
+  }
+
+  if (tokens.length === 0) return { score: 0, reason: "sin_tokens" }
+
+  const nameMatches = tokens.filter((token) => nombre.includes(token))
+  if (nameMatches.length === tokens.length) {
+    return { score: 80 + nameMatches.length, reason: "nombre_contiene_todos_los_tokens" }
+  }
+
+  if (nameMatches.length > 0) {
+    return { score: 40 + nameMatches.length, reason: "nombre_contiene_algunos_tokens" }
+  }
+
+  return { score: 0, reason: "sin_coincidencia" }
 }
 
 function formatMoney(value: unknown) {
@@ -77,15 +98,15 @@ async function loadAsistenteContext(supabase: SupabaseClient, asistente: any) {
   const asistenteId = asistente.id
 
   const [
-    { data: cuentasData },
-    { data: movimientosSaldoData },
-    { data: donacionesData },
-    { data: paquetesCoachData },
-    { data: sesionesCoachData },
+    cuentasResult,
+    movimientosSaldoResult,
+    donacionesResult,
+    paquetesCoachResult,
+    sesionesCoachResult,
   ] = await Promise.all([
     supabase
       .from("cuentas_por_cobrar")
-      .select("id, concepto, valor_total, estado, fecha_emision, fecha_vencimiento, pagos_abonos (*)")
+      .select("id, concepto, valor_total, estado, fecha_emision, pagos_abonos (*)")
       .eq("asistente_id", asistenteId)
       .order("fecha_emision", { ascending: false }),
     supabase
@@ -109,11 +130,42 @@ async function loadAsistenteContext(supabase: SupabaseClient, asistente: any) {
       .order("fecha", { ascending: false }),
   ])
 
-  const cuentas = cuentasData || []
-  const movimientosSaldo = movimientosSaldoData || []
-  const donaciones = donacionesData || []
-  const paquetesCoach = paquetesCoachData || []
-  const sesionesCoach = sesionesCoachData || []
+  const queryErrors = [
+    { nombre: "cuentas_por_cobrar", error: cuentasResult.error },
+    { nombre: "movimientos_saldo_favor", error: movimientosSaldoResult.error },
+    { nombre: "donaciones_asistentes", error: donacionesResult.error },
+    { nombre: "coach_paquetes", error: paquetesCoachResult.error },
+    { nombre: "coach_sesiones", error: sesionesCoachResult.error },
+  ].filter((item) => item.error)
+
+  if (queryErrors.length > 0) {
+    console.error("[asistente-ia] error consultando contexto", {
+      asistente_id: asistenteId,
+      errores: queryErrors.map((item) => ({
+        consulta: item.nombre,
+        mensaje: item.error?.message,
+        codigo: item.error?.code,
+      })),
+    })
+
+    return {
+      asistente: {
+        id: asistente.id,
+        nombre: asistente.nombre,
+        codigo: asistente.codigo,
+        cedula: asistente.cedula,
+      },
+      error_consulta:
+        "No se pudo consultar toda la informacion del asistente. No uses cifras en cero ni calcules totales con datos incompletos.",
+      consultas_fallidas: queryErrors.map((item) => item.nombre),
+    }
+  }
+
+  const cuentas = cuentasResult.data || []
+  const movimientosSaldo = movimientosSaldoResult.data || []
+  const donaciones = donacionesResult.data || []
+  const paquetesCoach = paquetesCoachResult.data || []
+  const sesionesCoach = sesionesCoachResult.data || []
 
   const cuentasProcesadas = cuentas.map((cuenta: any) => {
     const pagosValidos = filtrarPagosValidos(cuenta.pagos_abonos || [])
@@ -126,7 +178,6 @@ async function loadAsistenteContext(supabase: SupabaseClient, asistente: any) {
       concepto: cuenta.concepto,
       estado: cuenta.estado,
       fecha_emision: cuenta.fecha_emision,
-      fecha_vencimiento: cuenta.fecha_vencimiento,
       valor_total_cop: valor,
       abonado_cop: abonado,
       pendiente_cop: pendiente,
@@ -159,6 +210,9 @@ async function loadAsistenteContext(supabase: SupabaseClient, asistente: any) {
     valida: donacion.estado !== "anulado",
   }))
 
+  const totalFacturado = cuentasProcesadas.reduce((acc: number, cuenta: any) => acc + cuenta.valor_total_cop, 0)
+  const totalAbonado = cuentasProcesadas.reduce((acc: number, cuenta: any) => acc + cuenta.abonado_cop, 0)
+  const totalPendiente = Math.max(0, totalFacturado - totalAbonado)
   const sesionesCompradas = paquetesCoach.reduce(
     (acc: number, paquete: any) => acc + formatMoney(paquete.sesiones_compradas),
     0
@@ -173,9 +227,9 @@ async function loadAsistenteContext(supabase: SupabaseClient, asistente: any) {
       cedula: asistente.cedula,
     },
     resumen_financiero: {
-      total_facturado_cop: cuentasProcesadas.reduce((acc: number, cuenta: any) => acc + cuenta.valor_total_cop, 0),
-      total_abonado_cop: cuentasProcesadas.reduce((acc: number, cuenta: any) => acc + cuenta.abonado_cop, 0),
-      total_pendiente_cop: cuentasProcesadas.reduce((acc: number, cuenta: any) => acc + cuenta.pendiente_cop, 0),
+      total_facturado_cop: totalFacturado,
+      total_abonado_cop: totalAbonado,
+      total_pendiente_cop: totalPendiente,
       saldo_a_favor_usable_cop: calcularSaldoFavorDisponible(movimientosSaldo),
       total_donado_valido_cop: donacionesProcesadas
         .filter((donacion: any) => donacion.valida)
@@ -209,6 +263,7 @@ async function loadAsistenteContext(supabase: SupabaseClient, asistente: any) {
 
 export async function buildAsistenteIaContext(supabase: SupabaseClient, question: string) {
   const tokens = searchTokens(question)
+  const exactTokens = exactIdentityTokens(question)
 
   const { data: asistentesData, error } = await supabase
     .from("asistentes")
@@ -217,17 +272,29 @@ export async function buildAsistenteIaContext(supabase: SupabaseClient, question
     .limit(500)
 
   if (error) {
+    console.error("[asistente-ia] error consultando asistentes", {
+      mensaje: error.message,
+      codigo: error.code,
+    })
+
     return {
       consulta: question,
-      error: "No se pudo consultar la lista de asistentes.",
+      error_consulta:
+        "No se pudo consultar la lista de asistentes. Informa que no fue posible consultar la informacion y no des cifras en cero.",
       coincidencias: [],
     }
   }
 
   const asistentes = asistentesData || []
-  const matches = asistentes.filter((asistente: any) => matchesAsistente(asistente, tokens)).slice(0, 3)
+  const rankedMatches = asistentes
+    .map((asistente: any) => {
+      const ranking = rankAsistente(asistente, tokens, exactTokens)
+      return { asistente, ...ranking }
+    })
+    .filter((match: any) => match.score > 0)
+    .sort((a: any, b: any) => b.score - a.score || String(a.asistente.nombre).localeCompare(String(b.asistente.nombre)))
 
-  if (matches.length === 0) {
+  if (rankedMatches.length === 0) {
     return {
       consulta: question,
       aviso: "No se encontro un asistente con los datos de la pregunta. Pide nombre, codigo o cedula.",
@@ -235,11 +302,29 @@ export async function buildAsistenteIaContext(supabase: SupabaseClient, question
     }
   }
 
-  const coincidencias = await Promise.all(matches.map((asistente: any) => loadAsistenteContext(supabase, asistente)))
+  const topScore = rankedMatches[0].score
+  const topMatches = rankedMatches.filter((match: any) => match.score === topScore)
+  const matchesToLoad = topScore >= 100 || topMatches.length === 1 ? [rankedMatches[0]] : topMatches.slice(0, 5)
+  const requiereSeleccion = matchesToLoad.length > 1
+  const coincidencias = requiereSeleccion
+    ? matchesToLoad.map((match: any) => ({
+        asistente: {
+          id: match.asistente.id,
+          nombre: match.asistente.nombre,
+          codigo: match.asistente.codigo,
+          cedula: match.asistente.cedula,
+        },
+        coincidencia: match.reason,
+      }))
+    : await Promise.all(matchesToLoad.map((match: any) => loadAsistenteContext(supabase, match.asistente)))
 
   return {
     consulta: question,
     modo: "solo_lectura",
+    requiere_seleccion: requiereSeleccion,
+    aviso: requiereSeleccion
+      ? "Hay varias coincidencias parecidas. Pide al usuario elegir una antes de responder cifras."
+      : undefined,
     coincidencias,
   }
 }
