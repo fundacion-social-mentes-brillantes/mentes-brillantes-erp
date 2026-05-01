@@ -1,7 +1,7 @@
 "use client"
 
-import { FormEvent, useState } from "react"
-import { Bot, Send } from "lucide-react"
+import { FormEvent, useEffect, useState } from "react"
+import { Bot, MessageSquare, Plus, Send, Trash2 } from "lucide-react"
 
 type Message = {
   role: "user" | "assistant"
@@ -15,6 +15,12 @@ type SelectionOption = {
   cedula: string | null
 }
 
+type Conversation = {
+  id: string
+  titulo: string | null
+  actualizado_en: string
+}
+
 const initialMessage: Message = {
   role: "assistant",
   content:
@@ -23,10 +29,62 @@ const initialMessage: Message = {
 
 export function AsistenteIAClient() {
   const [messages, setMessages] = useState<Message[]>([initialMessage])
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null)
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectionOptions, setSelectionOptions] = useState<SelectionOption[]>([])
+
+  async function loadConversations(id?: string) {
+    const suffix = id ? `?id=${encodeURIComponent(id)}` : ""
+    const response = await fetch(`/api/asistente-ia/conversaciones${suffix}`)
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(data.error || "No se pudo cargar el historial.")
+
+    setConversations(data.conversaciones || [])
+    setActiveConversationId(data.activeConversationId || null)
+    setMessages(
+      Array.isArray(data.messages) && data.messages.length
+        ? data.messages.map((message: any) => ({ role: message.role, content: message.content }))
+        : [initialMessage]
+    )
+    setSelectionOptions([])
+  }
+
+  useEffect(() => {
+    loadConversations().catch((err) => setError(err instanceof Error ? err.message : "No se pudo cargar el historial."))
+  }, [])
+
+  async function handleNewChat() {
+    setError(null)
+    setIsLoading(true)
+    try {
+      const response = await fetch("/api/asistente-ia/conversaciones", { method: "POST" })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || "No se pudo crear el chat.")
+      await loadConversations(data.conversacion.id)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo crear el chat.")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  async function handleDeleteChat(id: string) {
+    setError(null)
+    setIsLoading(true)
+    try {
+      const response = await fetch(`/api/asistente-ia/conversaciones?id=${encodeURIComponent(id)}`, { method: "DELETE" })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || "No se pudo borrar el chat.")
+      await loadConversations()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo borrar el chat.")
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -43,7 +101,7 @@ export function AsistenteIAClient() {
       const response = await fetch("/api/asistente-ia/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: nextMessages, selectionOptions }),
+        body: JSON.stringify({ messages: nextMessages, selectionOptions, conversationId: activeConversationId }),
       })
 
       const data = await response.json().catch(() => ({}))
@@ -52,6 +110,10 @@ export function AsistenteIAClient() {
       }
 
       setMessages((current) => [...current, { role: "assistant", content: data.answer }])
+      if (data.conversationId) {
+        setActiveConversationId(data.conversationId)
+        await loadConversations(data.conversationId)
+      }
       setSelectionOptions(Array.isArray(data.selectionOptions) ? data.selectionOptions : [])
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo consultar el asistente IA.")
@@ -61,7 +123,49 @@ export function AsistenteIAClient() {
   }
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-5xl flex-col overflow-hidden rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] shadow-sm">
+    <div className="mx-auto grid h-[calc(100vh-8rem)] max-w-6xl grid-cols-1 overflow-hidden rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] shadow-sm md:grid-cols-[260px_1fr]">
+      <aside className="border-b border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] md:border-b-0 md:border-r">
+        <div className="flex items-center justify-between gap-2 border-b border-[rgb(var(--border))] px-4 py-3">
+          <span className="text-sm font-semibold text-[rgb(var(--text-primary))]">Chats</span>
+          <button
+            type="button"
+            onClick={handleNewChat}
+            disabled={isLoading}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] text-[rgb(var(--text-primary))] hover:bg-[rgb(var(--surface-2))]"
+            title="Nuevo chat"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="max-h-44 space-y-1 overflow-y-auto p-2 md:max-h-none">
+          {conversations.map((conversation) => (
+            <div key={conversation.id} className="group flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => loadConversations(conversation.id).catch((err) => setError(err.message))}
+                className={
+                  conversation.id === activeConversationId
+                    ? "flex min-w-0 flex-1 items-center gap-2 rounded-md bg-[rgba(var(--accent),0.14)] px-2 py-2 text-left text-xs font-medium text-[rgb(var(--accent-strong))]"
+                    : "flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-left text-xs text-[rgb(var(--text-muted))] hover:bg-[rgb(var(--surface-1))]"
+                }
+              >
+                <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{conversation.titulo || "Nuevo chat"}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteChat(conversation.id)}
+                className="hidden h-7 w-7 items-center justify-center rounded-md text-[rgb(var(--text-muted))] hover:bg-red-50 hover:text-red-600 group-hover:inline-flex"
+                title="Borrar conversación"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      </aside>
+
+      <section className="flex min-h-0 flex-col">
       <div className="flex items-center gap-3 border-b border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] px-5 py-4">
         <div className="flex h-9 w-9 items-center justify-center rounded-md bg-[rgba(var(--accent),0.12)] text-[rgb(var(--accent-strong))]">
           <Bot className="h-5 w-5" />
@@ -114,6 +218,7 @@ export function AsistenteIAClient() {
           </button>
         </div>
       </form>
+      </section>
     </div>
   )
 }

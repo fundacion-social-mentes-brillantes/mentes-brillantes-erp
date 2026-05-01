@@ -12,7 +12,21 @@ import {
 
 type SupabaseClient = any
 
-const METODOS = ["efectivo", "nequi", "daviplata", "otro"]
+const MONTHS: Record<string, number> = {
+  enero: 1,
+  febrero: 2,
+  marzo: 3,
+  abril: 4,
+  mayo: 5,
+  junio: 6,
+  julio: 7,
+  agosto: 8,
+  septiembre: 9,
+  setiembre: 9,
+  octubre: 10,
+  noviembre: 11,
+  diciembre: 12,
+}
 
 function isoDate(date: Date) {
   return date.toISOString().split("T")[0]
@@ -58,6 +72,18 @@ function parseDateRange(question: string) {
 
 function money(value: unknown) {
   return Math.round(toSafeNumber(value))
+}
+
+function normalizeText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+}
+
+function monthFromQuestion(question: string) {
+  const normalized = normalizeText(question)
+  return Object.entries(MONTHS).find(([name]) => normalized.includes(name))?.[1] || null
 }
 
 function queryError(area: string, error: any) {
@@ -308,18 +334,98 @@ async function obtenerSaldosAFavor(supabase: SupabaseClient) {
 }
 
 async function obtenerUltimaLiquidacion(supabase: SupabaseClient) {
-  const { data: periodo, error } = await supabase
-    .from("periodos")
-    .select("*")
-    .order("fecha_fin", { ascending: false })
-    .limit(1)
-    .single()
-
-  const err = queryError("ultima_liquidacion_periodo", error)
-  if (err) return { error_consulta: err.mensaje }
+  const result = await listarPeriodosLiquidacion(supabase)
+  if (result.error_consulta) return result
+  const periodo = result.periodos?.[0]
   if (!periodo) return { aviso: "No hay periodos de liquidacion registrados." }
 
   return obtenerResumenLiquidacion(supabase, periodo)
+}
+
+async function obtenerLiquidacionAnterior(supabase: SupabaseClient) {
+  const result = await listarPeriodosLiquidacion(supabase)
+  if (result.error_consulta) return result
+  const periodo = result.periodos?.[1] || result.periodos?.[0]
+  if (!periodo) return { aviso: "No hay periodos de liquidacion registrados." }
+
+  return obtenerResumenLiquidacion(supabase, periodo)
+}
+
+export async function listarPeriodosLiquidacion(supabase: SupabaseClient) {
+  const { data, error } = await supabase
+    .from("periodos")
+    .select("*")
+    .order("fecha_fin", { ascending: false })
+
+  const err = queryError("periodos_liquidacion", error)
+  if (err) return { error_consulta: err.mensaje }
+
+  return {
+    periodos: (data || []).map((periodo: any) => ({
+      id: periodo.id,
+      nombre: periodo.nombre,
+      fecha_inicio: periodo.fecha_inicio,
+      fecha_fin: periodo.fecha_fin,
+      estado: periodo.estado,
+    })),
+  }
+}
+
+async function listarLiquidacionesPorEstado(supabase: SupabaseClient, estado: "abierto" | "cerrado") {
+  const result = await listarPeriodosLiquidacion(supabase)
+  if (result.error_consulta) return result
+  return {
+    estado,
+    periodos: (result.periodos || []).filter((periodo: any) => periodo.estado === estado),
+  }
+}
+
+async function obtenerLiquidacionPorNombre(supabase: SupabaseClient, question: string) {
+  const result = await listarPeriodosLiquidacion(supabase)
+  if (result.error_consulta) return result
+
+  const normalized = normalizeText(question)
+  const month = monthFromQuestion(question)
+  const matches = (result.periodos || []).filter((periodo: any) => {
+    const nombre = normalizeText(periodo.nombre || "")
+    const inicio = new Date(`${periodo.fecha_inicio}T00:00:00`)
+    const fin = new Date(`${periodo.fecha_fin}T00:00:00`)
+    const overlapsMonth = month ? inicio.getMonth() + 1 === month || fin.getMonth() + 1 === month : false
+    return overlapsMonth || normalized.includes(nombre)
+  })
+
+  if (matches.length === 0) {
+    return { aviso: "No encontre una liquidacion que coincida con esa referencia.", periodos_disponibles: result.periodos }
+  }
+  if (matches.length > 1) {
+    return {
+      requiere_seleccion_liquidacion: true,
+      aviso: "Hay varias liquidaciones que coinciden. Pide al usuario elegir una.",
+      coincidencias: matches.slice(0, 5),
+    }
+  }
+
+  return obtenerResumenLiquidacion(supabase, matches[0])
+}
+
+async function compararLiquidaciones(supabase: SupabaseClient) {
+  const result = await listarPeriodosLiquidacion(supabase)
+  if (result.error_consulta) return result
+  const periodos = result.periodos || []
+  if (periodos.length < 2) return { aviso: "No hay suficientes liquidaciones para comparar.", periodos }
+
+  const [periodoA, periodoB] = periodos
+  const [liquidacionA, liquidacionB] = await Promise.all([
+    obtenerResumenLiquidacion(supabase, periodoA),
+    obtenerResumenLiquidacion(supabase, periodoB),
+  ])
+
+  return {
+    comparacion: {
+      periodo_a: liquidacionA,
+      periodo_b: liquidacionB,
+    },
+  }
 }
 
 async function obtenerResumenLiquidacion(supabase: SupabaseClient, periodo: any) {
@@ -413,7 +519,7 @@ export function shouldUseContabilidadContext(question: string) {
   ].some((term) => q.includes(term))
 }
 
-export async function buildContabilidadContext(supabase: SupabaseClient, question: string) {
+async function buildContabilidadContextLegacy(supabase: SupabaseClient, question: string) {
   const rango = parseDateRange(question)
   const q = question.toLowerCase()
   const [movimientos, cartera, saldos] = await Promise.all([
@@ -430,6 +536,60 @@ export async function buildContabilidadContext(supabase: SupabaseClient, questio
     q.includes("liquidacion") || q.includes("liquidación") || q.includes("periodo") || q.includes("período")
       ? await obtenerUltimaLiquidacion(supabase)
       : null
+
+  return {
+    consulta: question,
+    modo: "solo_lectura_contable",
+    rango_consultado: rango,
+    movimientos,
+    cartera,
+    saldos_a_favor: saldos,
+    liquidacion,
+    instrucciones:
+      "Explica solo estos datos. No generes SQL, no registres pagos, no crees cuentas y no modifiques informacion.",
+  }
+}
+
+export async function buildContabilidadContext(supabase: SupabaseClient, question: string) {
+  const rango = parseDateRange(question)
+  const q = question.toLowerCase()
+  const normalized = normalizeText(question)
+  const preguntaLiquidaciones = normalized.includes("liquidacion") || normalized.includes("periodo")
+  const listarLiquidaciones =
+    preguntaLiquidaciones &&
+    (normalized.includes("que liquidaciones") ||
+      normalized.includes("hay liquidaciones") ||
+      normalized.includes("liquidaciones hay") ||
+      normalized.includes("muestrame liquidaciones") ||
+      normalized.includes("mostrar liquidaciones"))
+  const comparar = preguntaLiquidaciones && normalized.includes("compara")
+
+  const [movimientos, cartera, saldos] = await Promise.all([
+    consultarMovimientosRango(supabase, rango.fechaInicio, rango.fechaFin),
+    q.includes("deudor") || q.includes("cuentas pendientes") || q.includes("cartera")
+      ? obtenerCartera(supabase)
+      : Promise.resolve(null),
+    q.includes("saldos a favor") || q.includes("saldo a favor existen")
+      ? obtenerSaldosAFavor(supabase)
+      : Promise.resolve(null),
+  ])
+
+  let liquidacion = null
+  if (comparar) {
+    liquidacion = await compararLiquidaciones(supabase)
+  } else if (listarLiquidaciones && normalized.includes("cerrada")) {
+    liquidacion = await listarLiquidacionesPorEstado(supabase, "cerrado")
+  } else if (listarLiquidaciones && normalized.includes("abierta")) {
+    liquidacion = await listarLiquidacionesPorEstado(supabase, "abierto")
+  } else if (listarLiquidaciones) {
+    liquidacion = await listarPeriodosLiquidacion(supabase)
+  } else if (preguntaLiquidaciones && (normalized.includes("anterior") || normalized.includes("pasada"))) {
+    liquidacion = await obtenerLiquidacionAnterior(supabase)
+  } else if (preguntaLiquidaciones && monthFromQuestion(question)) {
+    liquidacion = await obtenerLiquidacionPorNombre(supabase, question)
+  } else if (preguntaLiquidaciones) {
+    liquidacion = await obtenerUltimaLiquidacion(supabase)
+  }
 
   return {
     consulta: question,

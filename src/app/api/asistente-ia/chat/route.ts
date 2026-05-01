@@ -68,6 +68,10 @@ function lastUserMessage(messages: ChatMessage[]) {
   return ""
 }
 
+function firstUserMessage(messages: ChatMessage[]) {
+  return messages.find((message) => message.role === "user")?.content.trim() || ""
+}
+
 function parseOptionNumber(message: string) {
   const normalized = normalizeText(message).trim()
   const match = normalized.match(/^(?:opcion|la|el|numero|num|nro)?\s*(\d{1,2})$/)
@@ -103,9 +107,14 @@ function extractSelectionOptions(context: any): AsistenteIaOption[] {
     }))
 }
 
+function conversationTitle(question: string) {
+  const clean = question.replace(/\s+/g, " ").trim()
+  return clean.length > 60 ? `${clean.slice(0, 57)}...` : clean || "Nuevo chat"
+}
+
 export async function POST(request: Request) {
   try {
-    const { supabase } = await requireRoles(["admin", "caja"])
+    const { supabase, user } = await requireRoles(["admin", "caja"])
     const body = await request.json().catch(() => ({}))
     const messages = sanitizeMessages(body.messages)
     const selectionOptions = sanitizeSelectionOptions(body.selectionOptions)
@@ -114,6 +123,31 @@ export async function POST(request: Request) {
 
     if (!question) {
       return NextResponse.json({ error: "Escribe una pregunta." }, { status: 400 })
+    }
+
+    let conversationId = typeof body.conversationId === "string" ? body.conversationId : null
+    if (!conversationId) {
+      const { data: conversation, error: conversationError } = await supabase
+        .from("asistente_ia_conversaciones")
+        .insert({ usuario_id: user.id, titulo: conversationTitle(question) })
+        .select("id")
+        .single()
+
+      if (conversationError) {
+        console.error("[asistente-ia] error creando conversacion", conversationError)
+        return NextResponse.json({ error: "No se pudo guardar el chat." }, { status: 500 })
+      }
+      conversationId = conversation.id
+    }
+
+    const { error: userMessageError } = await supabase.from("asistente_ia_mensajes").insert({
+      conversacion_id: conversationId,
+      rol: "user",
+      contenido: question,
+    })
+    if (userMessageError) {
+      console.error("[asistente-ia] error guardando pregunta", userMessageError)
+      return NextResponse.json({ error: "No se pudo guardar la pregunta." }, { status: 500 })
     }
 
     const apiKey = process.env.DEEPSEEK_API_KEY
@@ -180,7 +214,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "El asistente IA no devolvió una respuesta válida." }, { status: 502 })
     }
 
-    return NextResponse.json({ answer, selectionOptions: nextSelectionOptions })
+    const [{ error: assistantMessageError }, { error: updateConversationError }] = await Promise.all([
+      supabase.from("asistente_ia_mensajes").insert({
+        conversacion_id: conversationId,
+        rol: "assistant",
+        contenido: answer,
+      }),
+      supabase
+        .from("asistente_ia_conversaciones")
+        .update({ actualizado_en: new Date().toISOString(), titulo: conversationTitle(firstUserMessage(messages) || question) })
+        .eq("id", conversationId)
+        .eq("usuario_id", user.id),
+    ])
+
+    if (assistantMessageError || updateConversationError) {
+      console.error("[asistente-ia] error guardando respuesta", {
+        assistantMessageError,
+        updateConversationError,
+      })
+      return NextResponse.json({ error: "No se pudo guardar la respuesta." }, { status: 500 })
+    }
+
+    return NextResponse.json({ answer, selectionOptions: nextSelectionOptions, conversationId })
   } catch (error) {
     if (error instanceof AuthzError) {
       return NextResponse.json({ error: error.message }, { status: 403 })
