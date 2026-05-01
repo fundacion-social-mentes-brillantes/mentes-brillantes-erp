@@ -8,6 +8,13 @@ import {
 
 type SupabaseClient = any
 
+export type AsistenteIaOption = {
+  id: string
+  nombre: string
+  codigo: string | null
+  cedula: string | null
+}
+
 const STOP_WORDS = new Set([
   "cuanto",
   "cuanta",
@@ -94,7 +101,12 @@ function formatMoney(value: unknown) {
   return Math.round(toSafeNumber(value))
 }
 
-async function loadAsistenteContext(supabase: SupabaseClient, asistente: any) {
+function esCuentaRelacionadaConSesiones(cuenta: any) {
+  const concepto = normalizeText(String(cuenta.concepto || ""))
+  return concepto.includes("sesion") || concepto.includes("coach")
+}
+
+async function loadAsistenteContext(supabase: SupabaseClient, asistente: any, consulta?: string) {
   const asistenteId = asistente.id
 
   const [
@@ -218,8 +230,19 @@ async function loadAsistenteContext(supabase: SupabaseClient, asistente: any) {
     0
   )
   const sesionesRealizadas = sesionesCoach.length
+  const cuentasCoachConectadas = new Set(paquetesCoach.map((paquete: any) => paquete.cuenta_id).filter(Boolean))
+  const cuentasSesionesNoConectadas = cuentasProcesadas
+    .filter((cuenta: any) => esCuentaRelacionadaConSesiones(cuenta) && !cuentasCoachConectadas.has(cuenta.id))
+    .map((cuenta: any) => ({
+      id: cuenta.id,
+      concepto: cuenta.concepto,
+      valor_total_cop: cuenta.valor_total_cop,
+      abonado_cop: cuenta.abonado_cop,
+      pendiente_cop: cuenta.pendiente_cop,
+    }))
 
   return {
+    consulta,
     asistente: {
       id: asistente.id,
       nombre: asistente.nombre,
@@ -251,6 +274,9 @@ async function loadAsistenteContext(supabase: SupabaseClient, asistente: any) {
       compradas: sesionesCompradas,
       realizadas: sesionesRealizadas,
       restantes: Math.max(0, sesionesCompradas - sesionesRealizadas),
+      nota:
+        "En el contador actual aparecen las sesiones registradas en coach_sesiones. Puede haber sesiones antiguas no cargadas en el contador.",
+      cuentas_relacionadas_no_conectadas_al_contador: cuentasSesionesNoConectadas,
       historial: sesionesCoach.map((sesion: any) => ({
         id: sesion.id,
         fecha: sesion.fecha,
@@ -259,6 +285,81 @@ async function loadAsistenteContext(supabase: SupabaseClient, asistente: any) {
       })),
     },
   }
+}
+
+export async function buildAsistenteIaContextById(supabase: SupabaseClient, asistenteId: string, consulta: string) {
+  const { data: asistente, error } = await supabase
+    .from("asistentes")
+    .select("id, nombre, codigo, cedula")
+    .eq("id", asistenteId)
+    .single()
+
+  if (error || !asistente) {
+    console.error("[asistente-ia] error consultando asistente por id", {
+      asistente_id: asistenteId,
+      mensaje: error?.message,
+      codigo: error?.code,
+    })
+
+    return {
+      consulta,
+      error_consulta:
+        "No se pudo consultar el asistente seleccionado. Informa que no fue posible consultar la informacion y no des cifras en cero.",
+      coincidencias: [],
+    }
+  }
+
+  return {
+    consulta,
+    modo: "solo_lectura",
+    seleccion_resuelta: true,
+    coincidencias: [await loadAsistenteContext(supabase, asistente, consulta)],
+  }
+}
+
+export async function buildAsistenteIaContextByCodigo(supabase: SupabaseClient, codigo: string, consulta: string) {
+  const { data: asistentes, error } = await supabase
+    .from("asistentes")
+    .select("id, nombre, codigo, cedula")
+    .eq("codigo", codigo)
+    .limit(2)
+
+  if (error) {
+    console.error("[asistente-ia] error consultando asistente por codigo", {
+      codigo,
+      mensaje: error.message,
+      code: error.code,
+    })
+
+    return {
+      consulta,
+      error_consulta:
+        "No se pudo consultar el asistente por codigo. Informa que no fue posible consultar la informacion y no des cifras en cero.",
+      coincidencias: [],
+    }
+  }
+
+  if (!asistentes || asistentes.length === 0) {
+    return {
+      consulta,
+      aviso: "No se encontro un asistente con ese codigo.",
+      coincidencias: [],
+    }
+  }
+
+  if (asistentes.length > 1) {
+    return {
+      consulta,
+      requiere_seleccion: true,
+      aviso: "Hay varias coincidencias con ese codigo. Pide al usuario elegir una antes de responder cifras.",
+      coincidencias: asistentes.map((asistente: any) => ({
+        asistente,
+        coincidencia: "codigo_repetido",
+      })),
+    }
+  }
+
+  return buildAsistenteIaContextById(supabase, asistentes[0].id, consulta)
 }
 
 export async function buildAsistenteIaContext(supabase: SupabaseClient, question: string) {
@@ -316,7 +417,7 @@ export async function buildAsistenteIaContext(supabase: SupabaseClient, question
         },
         coincidencia: match.reason,
       }))
-    : await Promise.all(matchesToLoad.map((match: any) => loadAsistenteContext(supabase, match.asistente)))
+    : await Promise.all(matchesToLoad.map((match: any) => loadAsistenteContext(supabase, match.asistente, question)))
 
   return {
     consulta: question,

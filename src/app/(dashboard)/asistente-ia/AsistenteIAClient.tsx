@@ -8,6 +8,13 @@ type Message = {
   content: string
 }
 
+type SelectionOption = {
+  id: string
+  nombre: string
+  codigo: string | null
+  cedula: string | null
+}
+
 const initialMessage: Message = {
   role: "assistant",
   content:
@@ -19,6 +26,7 @@ export function AsistenteIAClient() {
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [selectionOptions, setSelectionOptions] = useState<SelectionOption[]>([])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -35,7 +43,7 @@ export function AsistenteIAClient() {
       const response = await fetch("/api/asistente-ia/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: nextMessages }),
+        body: JSON.stringify({ messages: nextMessages, selectionOptions }),
       })
 
       const data = await response.json().catch(() => ({}))
@@ -44,6 +52,7 @@ export function AsistenteIAClient() {
       }
 
       setMessages((current) => [...current, { role: "assistant", content: data.answer }])
+      setSelectionOptions(Array.isArray(data.selectionOptions) ? data.selectionOptions : [])
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo consultar el asistente IA.")
     } finally {
