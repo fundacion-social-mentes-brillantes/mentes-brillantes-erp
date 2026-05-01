@@ -10,6 +10,7 @@ import {
   Receipt,
   TrendingDown,
   ShoppingBag,
+  Bot,
   Calculator,
   Settings,
   LogOut,
@@ -26,6 +27,7 @@ type SidebarProps = {
 
 const adminNav = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/" },
+  { icon: Bot, label: "Asistente IA", href: "/asistente-ia" },
   { icon: History, label: "Movimientos", href: "/movimientos" },
   { icon: Users, label: "Asistentes", href: "/asistentes" },
   { icon: Receipt, label: "Cuentas por Cobrar", href: "/cuentas" },
@@ -41,6 +43,7 @@ const consultaNav = [
 
 const cajaNav = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/" },
+  { icon: Bot, label: "Asistente IA", href: "/asistente-ia" },
   { icon: History, label: "Movimientos", href: "/movimientos" },
   { icon: Users, label: "Asistentes", href: "/asistentes" },
   { icon: Receipt, label: "Cuentas por Cobrar", href: "/cuentas" },
