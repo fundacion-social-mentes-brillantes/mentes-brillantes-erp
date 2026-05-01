@@ -73,11 +73,18 @@ function queryError(area: string, error: any) {
   }
 }
 
+function dataOrEmpty(result: any, area: string) {
+  return {
+    data: result.error ? [] : result.data || [],
+    error: queryError(area, result.error),
+  }
+}
+
 async function consultarMovimientosRango(supabase: SupabaseClient, fechaInicio: string, fechaFin: string) {
   const [abonosRes, saldoFavorRes, donacionesRes, ventasRes, egresosRes] = await Promise.all([
     supabase
       .from("pagos_abonos")
-      .select("id, monto, metodo_pago, fecha_pago, estado, notas, origen_fondos, tipo, cuentas_por_cobrar(concepto, asistentes(nombre, codigo, cedula))")
+      .select("id, monto, metodo_pago, fecha_pago, estado, notas, origen_fondos, cuentas_por_cobrar(concepto, asistentes(nombre, codigo, cedula))")
       .gte("fecha_pago", fechaInicio)
       .lte("fecha_pago", fechaFin)
       .order("fecha_pago", { ascending: false }),
@@ -107,21 +114,24 @@ async function consultarMovimientosRango(supabase: SupabaseClient, fechaInicio: 
       .order("fecha", { ascending: false }),
   ])
 
+  const abonosQuery = dataOrEmpty(abonosRes, "pagos_abonos")
+  const saldoFavorQuery = dataOrEmpty(saldoFavorRes, "movimientos_saldo_favor")
+  const donacionesQuery = dataOrEmpty(donacionesRes, "donaciones_asistentes")
+  const ventasQuery = dataOrEmpty(ventasRes, "ventas_externas")
+  const egresosQuery = dataOrEmpty(egresosRes, "egresos")
   const errores = [
-    queryError("pagos_abonos", abonosRes.error),
-    queryError("movimientos_saldo_favor", saldoFavorRes.error),
-    queryError("donaciones_asistentes", donacionesRes.error),
-    queryError("ventas_externas", ventasRes.error),
-    queryError("egresos", egresosRes.error),
+    abonosQuery.error,
+    saldoFavorQuery.error,
+    donacionesQuery.error,
+    ventasQuery.error,
+    egresosQuery.error,
   ].filter(Boolean)
 
-  if (errores.length > 0) return { errores }
-
-  const abonos = abonosRes.data || []
-  const saldoFavor = saldoFavorRes.data || []
-  const donaciones = donacionesRes.data || []
-  const ventasExternas = ventasRes.data || []
-  const egresos = egresosRes.data || []
+  const abonos = abonosQuery.data
+  const saldoFavor = saldoFavorQuery.data
+  const donaciones = donacionesQuery.data
+  const ventasExternas = ventasQuery.data
+  const egresos = egresosQuery.data
   const abonosOperativos = filtrarIngresosOperativos(abonos, {
     excluirSaldoAFavor: true,
     excluirAplicacionSaldo: true,
@@ -144,7 +154,8 @@ async function consultarMovimientosRango(supabase: SupabaseClient, fechaInicio: 
   })
 
   return {
-    errores: [],
+    errores,
+    datos_incompletos: errores.length > 0,
     resumen: {
       fecha_inicio: fechaInicio,
       fecha_fin: fechaFin,
@@ -363,7 +374,6 @@ async function obtenerResumenLiquidacion(supabase: SupabaseClient, periodo: any)
   }
 
   const live = await consultarMovimientosRango(supabase, periodo.fecha_inicio, periodo.fecha_fin)
-  if (live.errores?.length) return { periodo, error_consulta: "No se pudo calcular completa la liquidacion abierta." }
   return {
     periodo,
     estado_datos: "proyeccion_en_vivo",
@@ -372,6 +382,8 @@ async function obtenerResumenLiquidacion(supabase: SupabaseClient, periodo: any)
     adelantos_no_operativos_cop: money(sumarMontos(adelantos || [])),
     socios: [],
     alertas: live.alertas,
+    advertencias_consulta: live.errores || [],
+    datos_incompletos: !!live.datos_incompletos,
   }
 }
 
