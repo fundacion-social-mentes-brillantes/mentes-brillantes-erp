@@ -6,109 +6,29 @@ import {
   sumarMontos,
   toSafeNumber,
 } from "@/lib/utils/contable"
+import type {
+  TelegramUser,
+  TelegramChat,
+  TelegramMessage,
+  TelegramUpdate,
+  TelegramConfig,
+  PendingAction,
+  DeepSeekIntent,
+  Intent,
+} from "@/lib/telegram-cajero/types"
+import {
+  getContext,
+  saveContext,
+  getPendingSelection,
+  savePendingSelection,
+  clearPendingSelection,
+  resolvePendingSelection,
+} from "@/lib/telegram-cajero/memory"
+import type { CajeroConversationContext } from "@/lib/telegram-cajero/memory"
 
 export const dynamic = "force-dynamic"
 
-type TelegramUser = {
-  id: number
-  first_name?: string
-  last_name?: string
-  username?: string
-}
-
-type TelegramChat = {
-  id: number
-  title?: string
-  type?: string
-}
-
-type TelegramMessage = {
-  message_id: number
-  text?: string
-  chat: TelegramChat
-  from?: TelegramUser
-  reply_to_message?: TelegramMessage
-}
-
-type TelegramUpdate = {
-  update_id: number
-  message?: TelegramMessage
-}
-
-type TelegramConfig = {
-  botToken: string
-  webhookSecret: string
-  allowedChatId?: string
-  allowedUserIds: Set<string>
-  deepseek: {
-    apiKey?: string
-    baseUrl?: string
-    model?: string
-  }
-}
-
-type PendingAction = "estado_persona" | "ultima_sesion_coach" | "sesiones_coach_persona" | "pagos_persona" | "ultimo_pago_persona" | "cuentas_pendientes_persona" | "saldo_favor_persona" | "donaciones_persona"
-type DeepSeekIntent = PendingAction | "ventas_externas" | "egresos" | "resumen_periodo" | "liquidacion_socio" | "busqueda_global" | "pregunta_general_erp" | "saludo" | "ayuda" | "id" | "no_entendido"
-
-type Intent = {
-  intent: DeepSeekIntent
-  persona_busqueda: string | null
-  socio_busqueda: string | null
-  termino_busqueda: string | null
-  fecha_desde: string | null
-  fecha_hasta: string | null
-  metodo_pago: string | null
-  concepto: string | null
-  necesita_aclaracion: boolean
-  pregunta_aclaracion: string | null
-}
-
-type PendingSelection = {
-  createdAt: number
-  action: PendingAction
-  matches: Array<{ nombre: string; codigo?: string | null; cedula?: string | null }>
-}
-
-type CajeroConversationContext = {
-  createdAt: number
-  lastMode: DeepSeekIntent
-  lastSearchTerm?: string
-  lastAsistente?: {
-    id: string
-    nombre: string
-    codigo?: string | null
-    cedula?: string | null
-  }
-}
-
 const BOT_USERNAME = "cajero_mb_pagos_bot"
-const PENDING_SELECTION_TTL_MS = 10 * 60 * 1000
-const CAJERO_CONTEXT_TTL_MS = 10 * 60 * 1000
-const pendingSelections = new Map<string, PendingSelection>()
-const cajeroContexts = new Map<string, CajeroConversationContext>()
-
-function pendingSelectionKey(message: TelegramMessage) {
-  const userId = message.from?.id
-  if (!userId) return null
-  return `${message.chat.id}:${userId}`
-}
-
-function getCajeroContext(message: TelegramMessage) {
-  const key = pendingSelectionKey(message)
-  if (!key) return null
-  const ctx = cajeroContexts.get(key)
-  if (!ctx) return null
-  if (Date.now() - ctx.createdAt > CAJERO_CONTEXT_TTL_MS) {
-    cajeroContexts.delete(key)
-    return null
-  }
-  return ctx
-}
-
-function saveCajeroContext(message: TelegramMessage, ctx: Omit<CajeroConversationContext, "createdAt">) {
-  const key = pendingSelectionKey(message)
-  if (key) cajeroContexts.set(key, { ...ctx, createdAt: Date.now() })
-}
 
 function extractPersonSearchTerm(text: string) {
   let term = text.trim()
@@ -268,7 +188,7 @@ function shouldBotRespond(message: TelegramMessage) {
   const text = message.text || ""
   const normalized = normalizeText(text)
   const pending = getPendingSelection(message)
-  const ctx = getCajeroContext(message)
+  const ctx = getContext(message)
   const isNumber = /^\d+$/.test(normalized)
 
   if (isNumber) {
@@ -303,70 +223,6 @@ function extractNaturalText(message: TelegramMessage) {
     .trim()
 }
 
-
-
-function getPendingSelection(message: TelegramMessage) {
-  const key = pendingSelectionKey(message)
-  if (!key) return null
-
-  const pending = pendingSelections.get(key)
-  if (!pending) return null
-
-  if (Date.now() - pending.createdAt > PENDING_SELECTION_TTL_MS) {
-    pendingSelections.delete(key)
-    return "expired" as const
-  }
-
-  return pending
-}
-
-function savePendingSelection(message: TelegramMessage, action: PendingAction, matches: PendingSelection["matches"]) {
-  const key = pendingSelectionKey(message)
-  if (!key) return
-  pendingSelections.set(key, { createdAt: Date.now(), action, matches })
-}
-
-function clearPendingSelection(message: TelegramMessage) {
-  const key = pendingSelectionKey(message)
-  if (key) pendingSelections.delete(key)
-}
-
-function resolvePendingSelection(message: TelegramMessage, text: string): { term: string, action: PendingAction } | "expired" | null {
-  const pending = getPendingSelection(message)
-  if (!pending) return null
-  if (pending === "expired") return "expired"
-
-  const normalized = normalizeText(text)
-  const codeMatch = normalized.match(/^(?:codigo|cod)\s+(\d{1,20})$/)
-  const code = codeMatch?.[1] || (/^\d{1,8}$/.test(normalized) ? normalized : null)
-
-  let resolvedTerm: string | null = null
-
-  if (/^\d{1,2}$/.test(normalized)) {
-    const index = Number(normalized) - 1
-    if (index >= 0 && index < pending.matches.length) {
-      resolvedTerm = pending.matches[index].codigo || pending.matches[index].cedula || pending.matches[index].nombre
-    }
-  }
-
-  if (!resolvedTerm && code) {
-    const byCode = pending.matches.find(
-      (match) => normalizeText(String(match.codigo || "")) === code || normalizeText(String(match.cedula || "")) === code
-    )
-    if (byCode) resolvedTerm = byCode.codigo || byCode.cedula || byCode.nombre
-  }
-
-  if (!resolvedTerm) {
-    const byName = pending.matches.find((match) => {
-      const name = normalizeText(match.nombre)
-      return name === normalized || name.includes(normalized) || normalized.includes(name)
-    })
-    if (byName) resolvedTerm = byName.codigo || byName.cedula || byName.nombre
-  }
-
-  if (resolvedTerm) return { term: resolvedTerm, action: pending.action }
-  return null
-}
 
 async function sendTelegramMessage(config: TelegramConfig, chatId: number, text: string) {
   const response = await fetch(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
@@ -645,7 +501,7 @@ async function searchAsistenteForAction(supabase: any, term: string, action: Pen
   }
 
   if (matchesList.length === 0) {
-     if (message) saveCajeroContext(message, { lastMode: action, lastSearchTerm: searchName })
+     if (message) saveContext(message, { lastMode: action, lastSearchTerm: searchName })
      return `Busqué "${searchName}" y no me aparece en asistentes con ese nombre. Puede estar registrada con otro apellido, código/cédula o puede que no esté migrada. Si me das otro dato la reviso.`
   }
 
@@ -669,7 +525,7 @@ async function searchAsistenteForAction(supabase: any, term: string, action: Pen
           cedula: a.cedula,
         }))
       )
-      saveCajeroContext(message, { lastMode: action, lastSearchTerm: searchName })
+      saveContext(message, { lastMode: action, lastSearchTerm: searchName })
     }
 
     return [
@@ -1028,7 +884,7 @@ async function executeActionForAsistente(term: string, action: PendingAction, me
   if (typeof asistenteOrMessage === "string") return asistenteOrMessage
 
   const asistente = asistenteOrMessage
-  if (message) saveCajeroContext(message, { lastMode: action, lastSearchTerm: term, lastAsistente: asistente })
+  if (message) saveContext(message, { lastMode: action, lastSearchTerm: term, lastAsistente: asistente })
 
   if (action === "estado_persona") return buildEstadoResponse(supabase, asistente)
   if (action === "ultima_sesion_coach") return buildUltimaSesionCoachResponse(supabase, asistente)
@@ -1080,7 +936,7 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig) {
   }
 
   const naturalText = extractNaturalText(message)
-  const ctx = getCajeroContext(message)
+  const ctx = getContext(message)
 
   if (ctx?.lastAsistente && referencesLastAsistente(naturalText || text)) {
     const followUpAction = inferFollowUpIntentFromContext(naturalText || text, ctx)
@@ -1089,7 +945,7 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig) {
       if (!supabase) return "No pude consultar el ERP en este momento."
 
       const asistente = ctx.lastAsistente
-      if (message) saveCajeroContext(message, { lastMode: followUpAction, lastSearchTerm: ctx.lastSearchTerm, lastAsistente: asistente })
+      if (message) saveContext(message, { lastMode: followUpAction, lastSearchTerm: ctx.lastSearchTerm, lastAsistente: asistente })
 
       if (followUpAction === "pagos_persona") return buildPagosPersonaResponse(supabase, asistente)
       if (followUpAction === "ultimo_pago_persona") return buildUltimoPagoPersonaResponse(supabase, asistente)
@@ -1130,7 +986,7 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig) {
 
   if (personIntents.includes(intent.intent)) {
     if (intent.necesita_aclaracion || !intent.persona_busqueda) {
-       if (ctx && personIntents.includes(ctx.lastMode)) {
+       if (ctx && personIntents.includes(ctx.lastMode as string)) {
          const term = extractPersonSearchTerm(naturalText || text)
          if (term.length >= 2) return executeActionForAsistente(term, ctx.lastMode as PendingAction, message)
        }
