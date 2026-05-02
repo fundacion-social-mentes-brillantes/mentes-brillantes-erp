@@ -73,6 +73,12 @@ type CajeroConversationContext = {
   createdAt: number
   lastMode: DeepSeekIntent
   lastSearchTerm?: string
+  lastAsistente?: {
+    id: string
+    nombre: string
+    codigo?: string | null
+    cedula?: string | null
+  }
 }
 
 const BOT_USERNAME = "cajero_mb_pagos_bot"
@@ -109,8 +115,47 @@ function extractPersonSearchTerm(text: string) {
   term = term.replace(/\?+$/, "").trim()
   term = term.replace(/^(cajero|cajerito|caja)\b[:,]?\s*/i, "")
   term = term.replace(/^(y|no hay|ninguna|ninguno|aparece|encuentra|encontraste|encuentras|busca|revisa|consulta|mira|tambien|también)\b\s*/gi, "")
-  term = term.replace(/^(y|no hay|ninguna|ninguno|aparece|encuentra|encontraste|encuentras|busca|revisa|consulta|mira|tambien|también)\b\s*/gi, "")
+  term = term.replace(/\b(tiene|tienes|tuvo|hicieron|hizo|cuando|cuándo|pagos|pago|sesiones|sesión|coach|cuantas|cuántas|quedan|restantes|ella|el|él|sus|le|los|las|de|la|ultima|última|mas|reciente|fue)\b/gi, " ")
+  term = term.replace(/\s+/g, " ")
   return term.trim()
+}
+
+function referencesLastAsistente(text: string) {
+  const normalized = normalizeText(text)
+  return (
+    /\b(ella|el|él|esa|ese|esta persona|esa persona|la misma|el mismo|sus|le)\b/.test(normalized) ||
+    /^(y\s+)?(los pagos|sus pagos|pagos|cuando pago|cuándo pago|cuando hizo los pagos|cuándo hizo los pagos|cuanto debe|cuánto debe|saldo|saldo a favor|sesiones|sesiones restantes|cuantas sesiones|cuántas sesiones|cuanto le queda|cuánto le queda|la ultima|la última)\b/.test(normalized)
+  )
+}
+
+function inferFollowUpIntentFromContext(text: string, ctx: CajeroConversationContext): PendingAction | null {
+  const normalized = normalizeText(text)
+
+  if (/\b(ultimo pago|último pago|pago mas reciente|pago más reciente|cuando pago|cuándo pago)\b/.test(normalized)) {
+    return "ultimo_pago_persona"
+  }
+
+  if (/\b(pagos|abonos|cuando hizo los pagos|cuándo hizo los pagos|sus pagos)\b/.test(normalized)) {
+    return "pagos_persona"
+  }
+
+  if (/\b(sesiones|sesiones coach|cuantas sesiones|cuántas sesiones|sesiones restantes|cuanto le queda|cuánto le queda)\b/.test(normalized)) {
+    return "sesiones_coach_persona"
+  }
+
+  if (/\b(ultima sesion|última sesión|sesion mas reciente|sesión más reciente|la ultima|la última)\b/.test(normalized)) {
+    return "ultima_sesion_coach"
+  }
+
+  if (/\b(debe|deuda|pendiente|cuanto debe|cuánto debe)\b/.test(normalized)) {
+    return "cuentas_pendientes_persona"
+  }
+
+  if (/\b(saldo|saldo a favor)\b/.test(normalized)) {
+    return "saldo_favor_persona"
+  }
+
+  return null
 }
 
 const PREGUNTAR_PERSONA = "Claro, ¿de qué persona quieres que revise pagos, deuda o saldo?"
@@ -983,7 +1028,7 @@ async function executeActionForAsistente(term: string, action: PendingAction, me
   if (typeof asistenteOrMessage === "string") return asistenteOrMessage
 
   const asistente = asistenteOrMessage
-  if (message) saveCajeroContext(message, { lastMode: action, lastSearchTerm: term })
+  if (message) saveCajeroContext(message, { lastMode: action, lastSearchTerm: term, lastAsistente: asistente })
 
   if (action === "estado_persona") return buildEstadoResponse(supabase, asistente)
   if (action === "ultima_sesion_coach") return buildUltimaSesionCoachResponse(supabase, asistente)
@@ -1036,6 +1081,25 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig) {
 
   const naturalText = extractNaturalText(message)
   const ctx = getCajeroContext(message)
+
+  if (ctx?.lastAsistente && referencesLastAsistente(naturalText || text)) {
+    const followUpAction = inferFollowUpIntentFromContext(naturalText || text, ctx)
+    if (followUpAction) {
+      const supabase = createAdminClient()
+      if (!supabase) return "No pude consultar el ERP en este momento."
+
+      const asistente = ctx.lastAsistente
+      if (message) saveCajeroContext(message, { lastMode: followUpAction, lastSearchTerm: ctx.lastSearchTerm, lastAsistente: asistente })
+
+      if (followUpAction === "pagos_persona") return buildPagosPersonaResponse(supabase, asistente)
+      if (followUpAction === "ultimo_pago_persona") return buildUltimoPagoPersonaResponse(supabase, asistente)
+      if (followUpAction === "sesiones_coach_persona") return buildSesionesCoachPersonaResponse(supabase, asistente)
+      if (followUpAction === "ultima_sesion_coach") return buildUltimaSesionCoachResponse(supabase, asistente)
+      if (followUpAction === "cuentas_pendientes_persona") return buildCuentasPendientesPersonaResponse(supabase, asistente)
+      if (followUpAction === "saldo_favor_persona") return buildSaldoFavorPersonaResponse(supabase, asistente)
+      if (followUpAction === "estado_persona") return buildEstadoResponse(supabase, asistente)
+    }
+  }
 
   let intent = await classifyIntentWithDeepSeek(naturalText || text, config)
   if (!intent) intent = fallbackClassifyIntent(naturalText || text)
