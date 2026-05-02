@@ -17,18 +17,152 @@ import type {
   Intent,
 } from "@/lib/telegram-cajero/types"
 import {
-  getContext,
-  saveContext,
-  getPendingSelection,
-  savePendingSelection,
-  clearPendingSelection,
-  resolvePendingSelection,
-} from "@/lib/telegram-cajero/memory"
-import type { CajeroConversationContext } from "@/lib/telegram-cajero/memory"
+  buildTelegramMemoryScope,
+  expiresAtFrom,
+  getTelegramMemoryStore,
+  newEmptySession,
+  type TelegramBotSession,
+  type TelegramMemoryScope,
+  type TelegramMemoryStore,
+  type TelegramPendingSelection,
+  type TelegramSessionState,
+} from "@/lib/telegram-cajero/memory/index"
+import { routeTelegramMessage } from "@/lib/telegram-cajero/router"
+import { resolveNaturalDateRange } from "@/lib/telegram-cajero/dates"
+import {
+  getAlerts,
+  getBusinessAlerts,
+  getPersonFinancialStatus,
+  getPersonLastPayment,
+  getPersonPayments,
+  getSummary,
+  searchGlobal,
+  type ToolResult,
+} from "@/lib/telegram-cajero/tools"
+import { cancelAction, confirmAction, detectDraftActionIntent, prepareDraftAction } from "@/lib/telegram-cajero/actions"
 
 export const dynamic = "force-dynamic"
 
 const BOT_USERNAME = "cajero_mb_pagos_bot"
+
+type CajeroConversationContext = TelegramSessionState & {
+  lastMode?: DeepSeekIntent
+  lastSearchTerm?: string | null
+}
+
+type LoadedMemory = {
+  store: TelegramMemoryStore
+  scope: TelegramMemoryScope
+  session: TelegramBotSession
+}
+
+function memoryScopeFromMessage(message: TelegramMessage): TelegramMemoryScope | null {
+  const userId = message.from?.id
+  if (!userId) return null
+  return buildTelegramMemoryScope({
+    chatId: message.chat.id,
+    userId,
+    threadId: message.reply_to_message?.message_id ?? null,
+  })
+}
+
+async function loadTelegramMemory(message: TelegramMessage): Promise<LoadedMemory | null> {
+  const scope = memoryScopeFromMessage(message)
+  if (!scope) return null
+  const store = getTelegramMemoryStore()
+  const session = (await store.get(scope)) || newEmptySession(scope)
+  return { store, scope, session }
+}
+
+function contextFromMemory(memory?: LoadedMemory | null): CajeroConversationContext | null {
+  if (!memory) return null
+  const state = memory.session.state || {}
+  if (!state.lastIntent && !state.lastAsistente && !state.lastSearchTerm) return null
+  return {
+    ...state,
+    lastMode: state.lastIntent as DeepSeekIntent,
+    lastSearchTerm: state.lastSearchTerm || null,
+  }
+}
+
+async function saveContext(memory: LoadedMemory | null | undefined, ctx: CajeroConversationContext) {
+  if (!memory) return
+  await memory.store.patch(memory.scope, {
+    state: {
+      ...memory.session.state,
+      ...ctx,
+      lastIntent: ctx.lastMode || ctx.lastIntent || null,
+      replyAnchor: memory.scope.threadId ? Number(memory.scope.threadId) : ctx.replyAnchor ?? null,
+    },
+    expiresAt: expiresAtFrom(),
+  })
+  memory.session = (await memory.store.get(memory.scope)) || memory.session
+}
+
+async function savePendingSelection(
+  memory: LoadedMemory | null | undefined,
+  action: PendingAction,
+  matches: TelegramPendingSelection["matches"]
+) {
+  if (!memory) return
+  await memory.store.patch(memory.scope, {
+    pendingSelection: { createdAt: Date.now(), action, matches },
+    expiresAt: expiresAtFrom(),
+  })
+  memory.session = (await memory.store.get(memory.scope)) || memory.session
+}
+
+async function clearPendingSelection(memory: LoadedMemory | null | undefined) {
+  if (!memory) return
+  await memory.store.patch(memory.scope, { pendingSelection: null, expiresAt: expiresAtFrom() })
+  memory.session = (await memory.store.get(memory.scope)) || memory.session
+}
+
+async function savePendingAction(memory: LoadedMemory | null | undefined, action: any) {
+  if (!memory) return
+  await memory.store.patch(memory.scope, { pendingAction: action, expiresAt: expiresAtFrom() })
+  memory.session = (await memory.store.get(memory.scope)) || memory.session
+}
+
+async function clearPendingAction(memory: LoadedMemory | null | undefined) {
+  if (!memory) return
+  await memory.store.patch(memory.scope, { pendingAction: null, expiresAt: expiresAtFrom() })
+  memory.session = (await memory.store.get(memory.scope)) || memory.session
+}
+
+function resolvePendingSelection(
+  memory: LoadedMemory | null | undefined,
+  rawText: string
+): { term: string; action: PendingAction } | "expired" | null {
+  const pending = memory?.session.pendingSelection
+  if (!pending) return null
+
+  if (Date.now() - pending.createdAt > 10 * 60 * 1000) return "expired"
+
+  const normalized = normalizeText(rawText)
+  if (/^\d{1,2}$/.test(normalized)) {
+    const index = Number(normalized) - 1
+    if (index >= 0 && index < pending.matches.length) {
+      const match = pending.matches[index]
+      return { term: match.codigo || match.cedula || match.nombre, action: pending.action }
+    }
+    return null
+  }
+
+  const codeMatch = normalized.match(/^(?:codigo|cod)\s+(\d{1,20})$/)
+  const code = codeMatch?.[1] ?? (/^\d{1,8}$/.test(normalized) ? normalized : null)
+  if (code) {
+    const byCode = pending.matches.find((m) => String(m.codigo || "") === code || String(m.cedula || "") === code)
+    if (byCode) return { term: byCode.codigo || byCode.cedula || byCode.nombre, action: pending.action }
+  }
+
+  const byName = pending.matches.find((m) => {
+    const nombre = normalizeText(m.nombre)
+    return nombre === normalized || nombre.includes(normalized) || normalized.includes(nombre)
+  })
+
+  return byName ? { term: byName.codigo || byName.cedula || byName.nombre, action: pending.action } : null
+}
 
 function extractPersonSearchTerm(text: string) {
   let term = text.trim()
@@ -184,34 +318,29 @@ function looksLikeCajeroRequest(text: string) {
   return false
 }
 
-function shouldBotRespond(message: TelegramMessage) {
+function shouldBotRespond(message: TelegramMessage, memory?: LoadedMemory | null) {
   const text = message.text || ""
   const normalized = normalizeText(text)
-  const pending = getPendingSelection(message)
-  const ctx = getContext(message)
+  const pending = memory?.session.pendingSelection
+  const ctx = contextFromMemory(memory)
   const isNumber = /^\d+$/.test(normalized)
+  const route = routeTelegramMessage(message, {
+    hasPendingSelection: Boolean(pending),
+    lastAsistente: ctx?.lastAsistente || null,
+    lastIntent: ctx?.lastMode || null,
+  })
 
   if (isNumber) {
-    if (pending && pending !== "expired") return true
+    if (pending) return true
     if (isReplyToBot(message)) return true
-    if (ctx && normalized.length <= 2) return true
+    if (route.shouldRespond && route.reason !== "silent") return true
     return false
   }
 
-  if (isSlashCommand(text)) return true
-  if (isReplyToBot(message)) return true
-  if (normalized.includes(`@${BOT_USERNAME}`)) return true
-  if (/^(cajero|cajerito|caja)\b/.test(normalized)) return true
-  if (normalized.includes(" cajero")) return true
-  if (looksLikeCajeroRequest(text)) return true
+  if (route.shouldRespond) return true
 
   if (/\b(gracias|agradecido)\b/.test(normalized)) {
     if (ctx || isReplyToBot(message)) return true
-  }
-
-  if (ctx) {
-     const words = normalized.split(/\s+/)
-     if (words.length <= 6) return true
   }
 
   return false
@@ -332,41 +461,10 @@ async function classifyIntentWithDeepSeek(text: string, config: TelegramConfig):
 
 function injectNaturalDates(text: string, intent: Intent) {
   if (intent.fecha_desde || intent.fecha_hasta) return
-  const normalized = normalizeText(text)
-  const today = new Date()
-  const year = today.getFullYear()
-  let month = today.getMonth()
-  let fromDate: Date | null = null
-  let toDate: Date | null = null
-
-  if (/\bhoy\b/.test(normalized)) {
-    fromDate = new Date(year, month, today.getDate())
-    toDate = new Date(year, month, today.getDate())
-  } else if (/\bayer\b/.test(normalized)) {
-    fromDate = new Date(year, month, today.getDate() - 1)
-    toDate = new Date(year, month, today.getDate() - 1)
-  } else if (/\beste mes\b|\bmes actual\b/.test(normalized)) {
-    fromDate = new Date(year, month, 1)
-    toDate = new Date(year, month + 1, 0)
-  } else {
-    const meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
-    for (let i = 0; i < meses.length; i++) {
-      if (new RegExp(`\\b${meses[i]}\\b`).test(normalized)) {
-        fromDate = new Date(year, i, 1)
-        toDate = new Date(year, i + 1, 0)
-        break
-      }
-    }
-  }
-
-  if (fromDate && toDate) {
-    const format = (d: Date) => {
-      const pad = (n: number) => String(n).padStart(2, "0")
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-    }
-    intent.fecha_desde = format(fromDate)
-    intent.fecha_hasta = format(toDate)
-  }
+  const range = resolveNaturalDateRange(text)
+  if (!range) return
+  intent.fecha_desde = range.from
+  intent.fecha_hasta = range.to
 }
 
 function fallbackClassifyIntent(text: string): Intent {
@@ -460,7 +558,13 @@ function findMatches(asistentes: any[], term: string) {
     .slice(0, 5)
 }
 
-async function searchAsistenteForAction(supabase: any, term: string, action: PendingAction, message?: TelegramMessage) {
+async function searchAsistenteForAction(
+  supabase: any,
+  term: string,
+  action: PendingAction,
+  message?: TelegramMessage,
+  memory?: LoadedMemory | null
+) {
   if (!term) return PREGUNTAR_PERSONA
 
   const searchName = extractPersonSearchTerm(term) || term
@@ -503,7 +607,7 @@ async function searchAsistenteForAction(supabase: any, term: string, action: Pen
   }
 
   if (matchesList.length === 0) {
-     if (message) saveContext(message, { lastMode: action, lastSearchTerm: searchName })
+     if (message) await saveContext(memory, { lastMode: action, lastSearchTerm: searchName })
      return `Busqué "${searchName}" y no me aparece en asistentes con ese nombre. Puede estar registrada con otro apellido, código/cédula o puede que no esté migrada. Si me das otro dato la reviso.`
   }
 
@@ -518,8 +622,8 @@ async function searchAsistenteForAction(supabase: any, term: string, action: Pen
 
   if (matchesList.length > 1) {
     if (message) {
-      savePendingSelection(
-        message,
+      await savePendingSelection(
+        memory,
         action,
         matchesList.map((a: any) => ({
           nombre: a.nombre,
@@ -527,7 +631,7 @@ async function searchAsistenteForAction(supabase: any, term: string, action: Pen
           cedula: a.cedula,
         }))
       )
-      saveContext(message, { lastMode: action, lastSearchTerm: searchName })
+      await saveContext(memory, { lastMode: action, lastSearchTerm: searchName })
     }
 
     return [
@@ -543,6 +647,74 @@ async function searchAsistenteForAction(supabase: any, term: string, action: Pen
 }
 
 async function buildEstadoResponse(supabase: any, asistente: any) {
+  {
+  const [statusResult, paymentsResult, paquetesCoachRes, sesionesCoachRes] = await Promise.all([
+    getPersonFinancialStatus(supabase, asistente.id),
+    getPersonPayments(supabase, asistente.id, 5),
+    supabase.from("coach_paquetes").select("id, cuenta_id, sesiones_compradas").eq("asistente_id", asistente.id),
+    supabase.from("coach_sesiones").select("id, fecha, notas, paquete_id").eq("asistente_id", asistente.id).order("fecha", { ascending: false }),
+  ])
+
+  const financial: any = statusResult.data || {}
+  const cuentas = financial.cuentas || []
+  const pendientes = cuentas.filter((cuenta: any) => cuenta.pendiente > 0)
+  const pagosRecientes = Array.isArray(paymentsResult.data) ? paymentsResult.data : []
+  const sesionesCompradas = (paquetesCoachRes.data || []).reduce(
+    (acc: number, paquete: any) => acc + Math.round(toSafeNumber(paquete.sesiones_compradas)),
+    0
+  )
+  const sesionesRealizadas = (sesionesCoachRes.data || []).length
+  const saldoFavor = financial.saldo_a_favor ?? 0
+  const partialErrors = [
+    ...statusResult.userSafeErrors,
+    ...paymentsResult.userSafeErrors,
+    paquetesCoachRes.error ? "No pude consultar paquetes coach." : null,
+    sesionesCoachRes.error ? "No pude consultar sesiones coach." : null,
+  ].filter(Boolean)
+
+  const lectura: string[] = ["\nMi lectura:"]
+  if (pendientes.length > 0) {
+    lectura.push("- Ojo: tiene cuentas pendientes. Yo revisaria primero estas cuentas antes de pedir o registrar otro pago.")
+  } else {
+    lectura.push("- Segun lo que veo, esta al dia en cuentas pendientes.")
+  }
+  if (saldoFavor > 0) {
+    lectura.push("- Ojo: tiene saldo a favor disponible. Antes de pedir otro pago, conviene revisar si se puede aplicar.")
+  }
+  if (pagosRecientes.length > 0) {
+    lectura.push("- Veo pagos recientes. Si van a registrar otro comprobante, conviene confirmar que no sea duplicado.")
+  }
+
+  return [
+    `Listo. Revise a ${asistente.nombre}.`,
+    `Codigo: ${asistente.codigo || "sin codigo"}`,
+    "",
+    `Total facturado: ${formatCop(financial.total_facturado || 0)}`,
+    `Total abonado: ${formatCop(financial.total_abonado || 0)}`,
+    `Saldo pendiente: ${formatCop(financial.total_pendiente || 0)}`,
+    "",
+    `Cuentas pendientes: ${pendientes.length}`,
+    pendientes.length
+      ? pendientes
+          .slice(0, 5)
+          .map((cuenta: any) => `- ${cuenta.concepto}: pendiente ${formatCop(cuenta.pendiente)} de ${formatCop(cuenta.valor)}`)
+          .join("\n")
+      : "- No tiene cuentas pendientes.",
+    "",
+    "Pagos recientes:",
+    pagosRecientes.length
+      ? pagosRecientes.map((pago: any) => `- ${pago.fecha_pago}: ${formatCop(pago.monto)} ${pago.metodo_pago || ""} | ${pago.concepto}`).join("\n")
+      : "- No veo pagos recientes.",
+    "",
+    `Saldo a favor usable: ${formatCop(saldoFavor)}`,
+    `Sesiones coach: ${sesionesRealizadas}/${sesionesCompradas} registradas, restantes ${Math.max(0, sesionesCompradas - sesionesRealizadas)}`,
+    ...lectura,
+    partialErrors.length ? `\nOjo: resultado parcial. ${partialErrors.join(" ")}` : "",
+  ]
+    .filter((line) => line !== null && line !== undefined && line !== "")
+    .join("\n")
+  }
+
   const [
     { data: cuentas, error: cuentasError },
     { data: movimientosSaldo, error: saldoError },
@@ -713,6 +885,17 @@ async function buildSesionesCoachPersonaResponse(supabase: any, asistente: any) 
 }
 
 async function buildPagosPersonaResponse(supabase: any, asistente: any) {
+  {
+  const result = await getPersonPayments(supabase, asistente.id, 10)
+  const pagosRecientes = Array.isArray(result.data) ? result.data : []
+  if (result.status === "error") return `No pude consultar pagos de ${asistente.nombre}. ${result.userSafeErrors.join(" ")}`
+  if (pagosRecientes.length === 0) return `Listo. No veo pagos registrados para ${asistente.nombre}.`
+  return [
+    `Listo. Ultimos pagos de ${asistente.nombre}:`,
+    ...pagosRecientes.map((pago: any) => `- ${pago.fecha_pago}: ${formatCop(pago.monto)} via ${pago.metodo_pago || "desconocido"}. Concepto: ${pago.concepto}`),
+  ].join("\n")
+  }
+
   const { data: cuentas } = await supabase
     .from("cuentas_por_cobrar")
     .select("concepto, pagos_abonos(id, monto, metodo_pago, fecha_pago, estado, notas)")
@@ -736,6 +919,15 @@ async function buildPagosPersonaResponse(supabase: any, asistente: any) {
 }
 
 async function buildUltimoPagoPersonaResponse(supabase: any, asistente: any) {
+  {
+  const result = await getPersonLastPayment(supabase, asistente.id)
+  const pagosRecientes = Array.isArray(result.data) ? result.data : []
+  if (result.status === "error") return `No pude consultar pagos de ${asistente.nombre}. ${result.userSafeErrors.join(" ")}`
+  if (pagosRecientes.length === 0) return `Listo. No veo pagos registrados para ${asistente.nombre}.`
+  const ultimo = pagosRecientes[0]
+  return `Listo. El ultimo pago que veo de ${asistente.nombre} fue el ${ultimo.fecha_pago} por ${formatCop(ultimo.monto)} via ${ultimo.metodo_pago || "desconocido"}, concepto: ${ultimo.concepto}.`
+  }
+
   const { data: cuentas } = await supabase
     .from("cuentas_por_cobrar")
     .select("concepto, pagos_abonos(id, monto, metodo_pago, fecha_pago, estado, notas)")
@@ -755,6 +947,18 @@ async function buildUltimoPagoPersonaResponse(supabase: any, asistente: any) {
 }
 
 async function buildCuentasPendientesPersonaResponse(supabase: any, asistente: any) {
+  {
+  const result = await getPersonFinancialStatus(supabase, asistente.id)
+  const financial: any = result.data || {}
+  if (result.status === "error") return `No pude consultar cuentas de ${asistente.nombre}. ${result.userSafeErrors.join(" ")}`
+  const pendientes = (financial.cuentas || []).filter((cuenta: any) => cuenta.pendiente > 0)
+  if (pendientes.length === 0) return `Listo. ${asistente.nombre} no tiene cuentas pendientes en este momento.`
+  return [
+    `Listo. Cuentas pendientes de ${asistente.nombre}:`,
+    ...pendientes.map((cuenta: any) => `- ${cuenta.concepto}: debe ${formatCop(cuenta.pendiente)} de ${formatCop(cuenta.valor)}`),
+  ].join("\n")
+  }
+
   const { data: cuentas } = await supabase
     .from("cuentas_por_cobrar")
     .select("concepto, valor_total, pagos_abonos(monto, estado)")
@@ -787,6 +991,13 @@ async function buildCuentasPendientesPersonaResponse(supabase: any, asistente: a
 }
 
 async function buildSaldoFavorPersonaResponse(supabase: any, asistente: any) {
+  {
+  const result = await getPersonFinancialStatus(supabase, asistente.id)
+  const financial: any = result.data || {}
+  if (result.status === "error") return `No pude consultar saldo a favor de ${asistente.nombre}. ${result.userSafeErrors.join(" ")}`
+  return `Listo. El saldo a favor disponible de ${asistente.nombre} es de ${formatCop(financial.saldo_a_favor || 0)}.`
+  }
+
   const { data: movimientosSaldo } = await supabase
       .from("movimientos_saldo_favor")
       .select("tipo, monto, fecha, metodo_pago, notas")
@@ -842,10 +1053,47 @@ async function buildEgresosResponse(supabase: any, intent: Intent) {
 }
 
 async function buildResumenPeriodoResponse(supabase: any, intent: Intent) {
+  const fallback = resolveNaturalDateRange("este mes")
+  const from = intent.fecha_desde || fallback?.from
+  const to = intent.fecha_hasta || fallback?.to
+  if (!from || !to) return "Necesito una fecha o periodo para hacer el resumen."
+
+  const result = await getSummary(supabase, from, to)
+  const data: any = result.data || {}
+  const alerts = getAlerts([result])
+
+  return [
+    `Resumen ${from} a ${to}:`,
+    `Ingresos operativos: ${formatCop(data.ingresos_operativos || 0)}`,
+    `Egresos: ${formatCop(data.egresos || 0)}`,
+    `Utilidad estimada: ${formatCop(data.utilidad_estimada || 0)}`,
+    `Cartera/abonos: ${formatCop(data.ingresos_cartera || 0)}`,
+    `Donaciones: ${formatCop(data.donaciones || 0)}`,
+    `Ventas externas: ${formatCop(data.ventas_externas || 0)}`,
+    result.status === "partial" ? `\nOjo: resumen parcial. ${result.userSafeErrors.join(" ")}` : "",
+    alerts.alerts.length ? `\nAlertas: ${alerts.alerts.map((a) => a.recommendation).join(" ")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n")
   return "El resumen de periodo requiere especificar el mes o revisar en el dashboard del ERP. Aún estoy aprendiendo a consolidar esa vista aquí."
 }
 
 async function buildBusquedaGlobalResponse(supabase: any, term: string) {
+  const tool = await searchGlobal(supabase, term)
+  if (tool.status === "empty") return `Busque "${term}" en el ERP y no encontre coincidencias. Si el termino es corto, dame mas detalle.`
+  if (tool.status === "error") return `No pude hacer la busqueda global. ${tool.userSafeErrors.join(" ")}`
+
+  const data: any = tool.data || {}
+  const sections = Object.entries(data)
+    .filter(([, rows]: any) => Array.isArray(rows) && rows.length > 0)
+    .map(([module, rows]: any) => {
+      const lines = rows
+        .slice(0, 5)
+        .map((row: any) => `- ${row.nombre || row.concepto || row.notas || row.comprador_nombre || row.id}`)
+      return `${module}:\n${lines.join("\n")}`
+    })
+
+  return [`Resultados de busqueda para "${term}":`, "", ...sections, "", `Busque en: ${tool.provenance.sources.join(", ")}.`].join("\n")
   if (!term || term.length < 3) return "Por favor dame un término más específico para la búsqueda global (al menos 3 letras)."
   
   const normalized = normalizeText(term)
@@ -878,15 +1126,20 @@ async function buildBusquedaGlobalResponse(supabase: any, term: string) {
   return `Resultados de búsqueda para "${term}":\n\n` + results.join("\n\n")
 }
 
-async function executeActionForAsistente(term: string, action: PendingAction, message?: TelegramMessage) {
+async function executeActionForAsistente(
+  term: string,
+  action: PendingAction,
+  message?: TelegramMessage,
+  memory?: LoadedMemory | null
+) {
   const supabase = createAdminClient()
   if (!supabase) return "No pude consultar el ERP en este momento."
 
-  const asistenteOrMessage = await searchAsistenteForAction(supabase, term, action, message)
+  const asistenteOrMessage = await searchAsistenteForAction(supabase, term, action, message, memory)
   if (typeof asistenteOrMessage === "string") return asistenteOrMessage
 
   const asistente = asistenteOrMessage
-  if (message) saveContext(message, { lastMode: action, lastSearchTerm: term, lastAsistente: asistente })
+  if (message) await saveContext(memory, { lastMode: action, lastSearchTerm: term, lastAsistente: asistente })
 
   if (action === "estado_persona") return buildEstadoResponse(supabase, asistente)
   if (action === "ultima_sesion_coach") return buildUltimaSesionCoachResponse(supabase, asistente)
@@ -909,40 +1162,59 @@ function buildIdResponse(message: TelegramMessage) {
   ].join("\n")
 }
 
-async function handleMessage(message: TelegramMessage, config: TelegramConfig) {
+async function handleMessage(message: TelegramMessage, config: TelegramConfig, memory?: LoadedMemory | null) {
   const text = message.text?.trim() || ""
 
   if (isSlashCommand(text)) {
     const { command, args } = parseCommand(text)
     if (command === "/ayuda" || command === "/start") return AYUDA
     if (command === "/id") return buildIdResponse(message)
-    if (command === "/estado") return executeActionForAsistente(args, "estado_persona", message)
+    if (command === "/estado") return executeActionForAsistente(args, "estado_persona", message, memory)
   }
 
-  const pendingSelection = resolvePendingSelection(message, text)
+  const pendingSelection = resolvePendingSelection(memory, text)
   if (pendingSelection === "expired") {
     return "Se me venció esa lista de opciones. Repíteme la búsqueda y te muestro las coincidencias de nuevo."
   }
   if (pendingSelection) {
-    clearPendingSelection(message)
-    return await executeActionForAsistente(pendingSelection.term, pendingSelection.action, message)
+    await clearPendingSelection(memory)
+    return await executeActionForAsistente(pendingSelection.term, pendingSelection.action, message, memory)
   }
 
   const normalizedText = normalizeText(text)
   const directCode = normalizedText.match(/^(?:codigo|cod)\s+(\d{1,20})$/)?.[1]
-  if (directCode) return executeActionForAsistente(directCode, "estado_persona", message)
+  if (directCode) return executeActionForAsistente(directCode, "estado_persona", message, memory)
   
   const isNumber = /^\d+$/.test(normalizedText)
   if (isNumber) {
-     const pending = getPendingSelection(message)
-     if (pending && pending !== "expired") {
+     const pending = memory?.session.pendingSelection
+     if (pending) {
          return `Ese número no está en las opciones. Por favor responde con un número del 1 al ${pending.matches.length}.`
      }
      return "No tengo una lista activa para elegir. Vuelve a hacer la búsqueda o responde directamente con código/nombre completo."
   }
 
+  if (/\b(confirmo|confirmar|si confirmo|sí confirmo)\b/.test(normalizedText)) {
+    const result = confirmAction(memory?.session.pendingAction as any)
+    await clearPendingAction(memory)
+    return result.message
+  }
+
+  if (/\b(cancela|cancelar|cancela eso|olvida eso)\b/.test(normalizedText)) {
+    const result = cancelAction(memory?.session.pendingAction as any)
+    await clearPendingAction(memory)
+    return result.message
+  }
+
+  const draftKind = detectDraftActionIntent(text)
+  if (draftKind) {
+    const draft = prepareDraftAction(draftKind, text, { rawText: text })
+    await savePendingAction(memory, draft.action)
+    return `${draft.message}\n\nBorrador: ${draft.action?.summary || text}\nSi respondes "confirmo", igual quedara bloqueado porque la escritura no esta activa.`
+  }
+
   const naturalText = extractNaturalText(message)
-  const ctx = getContext(message)
+  const ctx = contextFromMemory(memory)
 
   if (ctx?.lastAsistente && referencesLastAsistente(naturalText || text)) {
     const followUpAction = inferFollowUpIntentFromContext(naturalText || text, ctx)
@@ -951,7 +1223,7 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig) {
       if (!supabase) return "No pude consultar el ERP en este momento."
 
       const asistente = ctx.lastAsistente
-      if (message) saveContext(message, { lastMode: followUpAction, lastSearchTerm: ctx.lastSearchTerm, lastAsistente: asistente })
+      if (message) await saveContext(memory, { lastMode: followUpAction, lastSearchTerm: ctx.lastSearchTerm, lastAsistente: asistente })
 
       if (followUpAction === "pagos_persona") return buildPagosPersonaResponse(supabase, asistente)
       if (followUpAction === "ultimo_pago_persona") return buildUltimoPagoPersonaResponse(supabase, asistente)
@@ -979,6 +1251,19 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig) {
   if (intent.intent === "id") return buildIdResponse(message)
 
   const supabase = createAdminClient()
+  if (!supabase) return "No pude consultar el ERP en este momento."
+
+  if (/\b(alerta|alertas|raro|revisar hoy|debo revisar|algo raro)\b/.test(normalizedText)) {
+    const range = resolveNaturalDateRange(naturalText || text) || resolveNaturalDateRange("hoy")
+    const result = await getBusinessAlerts(supabase, range!.from, range!.to)
+    const alerts: any[] = Array.isArray(result.data) ? result.data : []
+    if (!alerts.length) return `No veo alertas claras para ${range!.label}. Igual conviene revisar si hubo movimientos fuera del ERP.`
+    return [
+      `Esto conviene revisar para ${range!.label}:`,
+      ...alerts.map((a) => `- ${a.type}: ${a.evidence?.[0] || "sin evidencia"} Recomendacion: ${a.recommendation}`),
+      result.status === "partial" ? `\nOjo: alertas parciales. ${result.userSafeErrors.join(" ")}` : "",
+    ].filter(Boolean).join("\n")
+  }
 
   if (intent.intent === "ventas_externas") return buildVentasExternasResponse(supabase, intent)
   if (intent.intent === "egresos") return buildEgresosResponse(supabase, intent)
@@ -994,11 +1279,11 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig) {
     if (intent.necesita_aclaracion || !intent.persona_busqueda) {
        if (ctx && personIntents.includes(ctx.lastMode as string)) {
          const term = extractPersonSearchTerm(naturalText || text)
-         if (term.length >= 2) return executeActionForAsistente(term, ctx.lastMode as PendingAction, message)
+         if (term.length >= 2) return executeActionForAsistente(term, ctx.lastMode as PendingAction, message, memory)
        }
        return intent.pregunta_aclaracion || PREGUNTAR_PERSONA
     }
-    return executeActionForAsistente(intent.persona_busqueda, intent.intent as PendingAction, message)
+    return executeActionForAsistente(intent.persona_busqueda, intent.intent as PendingAction, message, memory)
   }
 
   const directAddress = isReplyToBot(message) || normalizedText.includes(`@${BOT_USERNAME}`) || /^(cajero|cajerito|caja)\b/.test(normalizedText) || normalizedText.includes(" cajero")
@@ -1045,10 +1330,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true })
   }
 
-  if (!shouldBotRespond(message)) return NextResponse.json({ ok: true })
+  const memory = await loadTelegramMemory(message)
+
+  if (!shouldBotRespond(message, memory)) return NextResponse.json({ ok: true })
 
   try {
-    let responseText = await handleMessage(message, config)
+    let responseText = await handleMessage(message, config, memory)
     if (!responseText) return NextResponse.json({ ok: true })
     
     if (multilineWarning) {

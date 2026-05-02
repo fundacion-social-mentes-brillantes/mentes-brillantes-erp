@@ -25,4 +25,10 @@ describe("telegram cajero security", () => {
     expect(redactTraceValue("TELEGRAM_BOT_TOKEN bot123:abc")).toContain("[secret-name]")
     expect(redactTraceValue("TELEGRAM_BOT_TOKEN bot123:abc")).toContain("[telegram-token]")
   })
+
+  it("handler usa memoria durable explicita y no memory legacy", () => {
+    const handler = readFileSync(join(process.cwd(), "src/lib/telegram-cajero/handler.ts"), "utf8")
+    expect(handler).toContain("@/lib/telegram-cajero/memory/index")
+    expect(handler).not.toContain("@/lib/telegram-cajero/memory\"")
+  })
 })

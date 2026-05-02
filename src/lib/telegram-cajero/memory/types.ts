@@ -24,6 +24,7 @@ export type TelegramPendingAction = {
 export type TelegramSessionState = {
   lastIntent?: string | null
   lastModule?: string | null
+  lastSearchTerm?: string | null
   lastAsistente?: {
     id: string
     nombre: string
