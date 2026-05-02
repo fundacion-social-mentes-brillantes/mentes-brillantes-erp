@@ -54,19 +54,26 @@ type Intent = {
   pregunta_aclaracion: string | null
 }
 
+type PendingSelection = {
+  createdAt: number
+  matches: Array<{ nombre: string; codigo?: string | null; cedula?: string | null }>
+}
+
 const BOT_USERNAME = "cajero_mb_pagos_bot"
+const PENDING_SELECTION_TTL_MS = 10 * 60 * 1000
+const pendingSelections = new Map<string, PendingSelection>()
 const PREGUNTAR_PERSONA = "Claro, ¿de qué persona quieres que revise pagos, deuda o saldo?"
 const NO_ENTENDIDO =
-  "No te entendí del todo. Por ahora puedo consultar el estado de una persona. Escríbeme algo como: cajero cómo está María Pérez."
+  "No te entendí del todo. Por ahora puedo consultar el estado de una persona. Escríbeme algo como: como esta Maria Perez."
 
 const AYUDA = [
   "Bot cajero Mentes Brillantes (solo lectura).",
   "",
   "Puedes escribirme natural:",
-  "cajero cómo está María Pérez",
-  "cajero revisa deuda de Juan",
-  "cajero pagos de Alexandra",
-  "cajero saldo de Valeria",
+  "como esta Maria Perez",
+  "revisa deuda de Juan",
+  "pagos de Alexandra",
+  "saldo de Valeria",
   "",
   "Comandos disponibles:",
   "/ayuda - Ver esta ayuda.",
@@ -141,6 +148,44 @@ function isReplyToBot(message: TelegramMessage) {
   return message.reply_to_message?.from?.username?.toLowerCase() === BOT_USERNAME
 }
 
+function looksLikeCajeroRequest(text: string) {
+  const normalized = normalizeText(text)
+
+  if (!normalized) return false
+
+  const keywords = [
+    "estado",
+    "deuda",
+    "debe",
+    "deben",
+    "saldo",
+    "pagos",
+    "pago",
+    "abono",
+    "abonos",
+    "pendiente",
+    "pendientes",
+    "cuenta",
+    "cuentas",
+    "comprobante",
+    "consignacion",
+    "transferencia",
+    "nequi",
+    "daviplata",
+    "efectivo",
+    "coach",
+    "sesion",
+    "sesiones",
+  ]
+
+  if (keywords.some((word) => normalized.includes(word))) return true
+  if (/(como|cómo)\s+esta\b/.test(normalized)) return true
+  if (/^(revisa|consulta|mira|verifica)\b/.test(normalized)) return true
+  if (/^\d{1,8}$/.test(normalized)) return true
+
+  return false
+}
+
 function shouldBotRespond(message: TelegramMessage) {
   const text = message.text || ""
   const normalized = normalizeText(text)
@@ -150,6 +195,7 @@ function shouldBotRespond(message: TelegramMessage) {
   if (normalized.includes(`@${BOT_USERNAME}`)) return true
   if (/^(cajero|cajerito|caja)\b/.test(normalized)) return true
   if (normalized.includes(" cajero")) return true
+  if (looksLikeCajeroRequest(text)) return true
 
   return false
 }
@@ -158,7 +204,70 @@ function extractNaturalText(message: TelegramMessage) {
   return (message.text || "")
     .replace(new RegExp(`@${BOT_USERNAME}`, "gi"), "")
     .replace(/^(cajero|cajerito|caja)\b[:,]?\s*/i, "")
+    .replace(/\b(cajero|cajerito|caja)\b[:,]?\s*/gi, "")
     .trim()
+}
+
+function pendingSelectionKey(message: TelegramMessage) {
+  const userId = message.from?.id
+  if (!userId) return null
+  return `${message.chat.id}:${userId}`
+}
+
+function getPendingSelection(message: TelegramMessage) {
+  const key = pendingSelectionKey(message)
+  if (!key) return null
+
+  const pending = pendingSelections.get(key)
+  if (!pending) return null
+
+  if (Date.now() - pending.createdAt > PENDING_SELECTION_TTL_MS) {
+    pendingSelections.delete(key)
+    return "expired" as const
+  }
+
+  return pending
+}
+
+function savePendingSelection(message: TelegramMessage, matches: PendingSelection["matches"]) {
+  const key = pendingSelectionKey(message)
+  if (!key) return
+  pendingSelections.set(key, { createdAt: Date.now(), matches })
+}
+
+function clearPendingSelection(message: TelegramMessage) {
+  const key = pendingSelectionKey(message)
+  if (key) pendingSelections.delete(key)
+}
+
+function resolvePendingSelection(message: TelegramMessage, text: string) {
+  const pending = getPendingSelection(message)
+  if (!pending || pending === "expired") return pending
+
+  const normalized = normalizeText(text)
+  const codeMatch = normalized.match(/^(?:codigo|cod)\s+(\d{1,20})$/)
+  const code = codeMatch?.[1] || (/^\d{1,8}$/.test(normalized) ? normalized : null)
+
+  if (/^\d{1,2}$/.test(normalized)) {
+    const index = Number(normalized) - 1
+    if (index >= 0 && index < pending.matches.length) {
+      return pending.matches[index].codigo || pending.matches[index].cedula || pending.matches[index].nombre
+    }
+  }
+
+  if (code) {
+    const byCode = pending.matches.find(
+      (match) => normalizeText(String(match.codigo || "")) === code || normalizeText(String(match.cedula || "")) === code
+    )
+    if (byCode) return byCode.codigo || byCode.cedula || byCode.nombre
+  }
+
+  const byName = pending.matches.find((match) => {
+    const name = normalizeText(match.nombre)
+    return name === normalized || name.includes(normalized) || normalized.includes(name)
+  })
+
+  return byName?.codigo || byName?.cedula || byName?.nombre || null
 }
 
 async function sendTelegramMessage(config: TelegramConfig, chatId: number, text: string) {
@@ -271,7 +380,23 @@ function fallbackClassifyIntent(text: string): Intent {
     return { intent: "id", persona_busqueda: null, necesita_aclaracion: false, pregunta_aclaracion: null }
   }
 
-  const stateWords = ["estado", "debe", "deuda", "pagos", "pago", "saldo", "abona", "abonos", "como esta"]
+  const stateWords = [
+    "estado",
+    "debe",
+    "deuda",
+    "pagos",
+    "pago",
+    "saldo",
+    "abona",
+    "abonos",
+    "pendiente",
+    "cuenta",
+    "cuentas",
+    "coach",
+    "sesion",
+    "sesiones",
+    "como esta",
+  ]
   if (stateWords.some((word) => normalized.includes(word))) {
     const cleaned = text
       .replace(/^(cajero|cajerito|caja)\b[:,]?\s*/i, "")
@@ -313,7 +438,7 @@ function findMatches(asistentes: any[], term: string) {
     .slice(0, 5)
 }
 
-async function buildEstadoResponse(term: string) {
+async function buildEstadoResponse(term: string, message?: TelegramMessage) {
   if (!term) return PREGUNTAR_PERSONA
 
   const supabase = createAdminClient()
@@ -334,6 +459,17 @@ async function buildEstadoResponse(term: string) {
   if (matches.length === 0) return "No encontré una persona que coincida con esa búsqueda. ¿Me das nombre completo, código o cédula?"
 
   if (matches.length > 1 && matches[0].score < 100) {
+    if (message) {
+      savePendingSelection(
+        message,
+        matches.map((item) => ({
+          nombre: item.asistente.nombre,
+          codigo: item.asistente.codigo,
+          cedula: item.asistente.cedula,
+        }))
+      )
+    }
+
     return [
       "Encontré varias coincidencias. ¿Cuál de estas personas quieres que revise?",
       ...matches.map((item, index) => {
@@ -455,8 +591,22 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig) {
     const { command, args } = parseCommand(text)
     if (command === "/ayuda" || command === "/start") return AYUDA
     if (command === "/id") return buildIdResponse(message)
-    if (command === "/estado") return buildEstadoResponse(args)
+    if (command === "/estado") return buildEstadoResponse(args, message)
   }
+
+  const pendingSelection = resolvePendingSelection(message, text)
+  if (pendingSelection === "expired") {
+    return "Se me vencio esa lista de opciones. Repiteme la busqueda y te muestro las coincidencias de nuevo."
+  }
+  if (pendingSelection) {
+    clearPendingSelection(message)
+    return buildEstadoResponse(pendingSelection, message)
+  }
+
+  const normalizedText = normalizeText(text)
+  const directCode = normalizedText.match(/^(?:codigo|cod)\s+(\d{1,20})$/)?.[1]
+  if (directCode) return buildEstadoResponse(directCode, message)
+  if (/^\d{1,8}$/.test(normalizedText)) return buildEstadoResponse(normalizedText, message)
 
   // Phase 2 placeholders: OCR, comprobantes, confirmacion y operaciones pendientes.
   const naturalText = extractNaturalText(message)
@@ -465,11 +615,11 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig) {
   if (intent.intent === "ayuda") return AYUDA
   if (intent.intent === "id") return buildIdResponse(message)
   if (intent.intent === "saludo") {
-    return "Hola, aquí estoy. Por ahora puedo revisar estado, deuda, pagos, saldo a favor y sesiones de una persona. Por ejemplo: cajero cómo está María Pérez."
+    return "Hola, aquí estoy. Por ahora puedo revisar estado, deuda, pagos, saldo a favor y sesiones de una persona. Por ejemplo: como esta Maria Perez."
   }
   if (intent.intent === "estado_persona") {
     if (intent.necesita_aclaracion || !intent.persona_busqueda) return intent.pregunta_aclaracion || PREGUNTAR_PERSONA
-    return buildEstadoResponse(intent.persona_busqueda)
+    return buildEstadoResponse(intent.persona_busqueda, message)
   }
 
   return intent.pregunta_aclaracion || NO_ENTENDIDO
