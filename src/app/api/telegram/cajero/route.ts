@@ -795,9 +795,9 @@ export async function POST(request: Request) {
 
   try {
     const responseText = await handleMessage(message, config)
-    if (responseText) {
-      await sendTelegramMessage(config, message.chat.id, responseText)
-    }
+    if (!responseText) return NextResponse.json({ ok: true })
+    
+    await sendTelegramMessage(config, message.chat.id, responseText)
   } catch (error) {
     console.error("[telegram-cajero] error procesando mensaje", error)
     await sendTelegramMessage(config, message.chat.id, "No pude procesar el mensaje en este momento.")
