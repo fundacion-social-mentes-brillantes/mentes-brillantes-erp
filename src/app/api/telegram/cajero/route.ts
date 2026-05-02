@@ -47,21 +47,31 @@ type TelegramConfig = {
   }
 }
 
+type PendingAction = "estado_persona" | "ultima_sesion_coach" | "sesiones_coach_persona" | "pagos_persona" | "ultimo_pago_persona" | "cuentas_pendientes_persona" | "saldo_favor_persona" | "donaciones_persona"
+type DeepSeekIntent = PendingAction | "ventas_externas" | "egresos" | "resumen_periodo" | "liquidacion_socio" | "busqueda_global" | "pregunta_general_erp" | "saludo" | "ayuda" | "id" | "no_entendido"
+
 type Intent = {
-  intent: "ayuda" | "id" | "estado_persona" | "saludo" | "no_entendido"
+  intent: DeepSeekIntent
   persona_busqueda: string | null
+  socio_busqueda: string | null
+  termino_busqueda: string | null
+  fecha_desde: string | null
+  fecha_hasta: string | null
+  metodo_pago: string | null
+  concepto: string | null
   necesita_aclaracion: boolean
   pregunta_aclaracion: string | null
 }
 
 type PendingSelection = {
   createdAt: number
+  action: PendingAction
   matches: Array<{ nombre: string; codigo?: string | null; cedula?: string | null }>
 }
 
 type CajeroConversationContext = {
   createdAt: number
-  lastMode: "estado_persona" | "busqueda_persona"
+  lastMode: DeepSeekIntent
   lastSearchTerm?: string
 }
 
@@ -105,21 +115,22 @@ function extractPersonSearchTerm(text: string) {
 
 const PREGUNTAR_PERSONA = "Claro, ¿de qué persona quieres que revise pagos, deuda o saldo?"
 const NO_ENTENDIDO =
-  "No te entendí del todo. Por ahora puedo consultar el estado de una persona. Escríbeme algo como: como esta Maria Perez."
+  "No te entendí del todo. Por ahora puedo consultar estado, pagos, y más. Escríbeme algo como: la última sesión coach de Catalina."
 
 const AYUDA = [
   "Bot cajero Mentes Brillantes (solo lectura).",
   "",
   "Puedes escribirme natural:",
-  "como esta Maria Perez",
-  "revisa deuda de Juan",
-  "pagos de Alexandra",
-  "saldo de Valeria",
+  "la última sesión coach que tomó Catalina",
+  "último pago de Sandra",
+  "qué pagos hizo Alexandra",
+  "ventas externas de hoy",
+  "egresos de abril",
   "",
   "Comandos disponibles:",
   "/ayuda - Ver esta ayuda.",
   "/id - Ver chat_id y user_id para configurar permisos.",
-  "/estado nombre - Consultar estado de un asistente por nombre, código o cédula.",
+  "/estado nombre - Consultar estado general de una persona.",
   "",
   "Esta fase no registra pagos, no crea cuentas y no modifica datos financieros.",
 ].join("\n")
@@ -195,33 +206,15 @@ function looksLikeCajeroRequest(text: string) {
   if (!normalized) return false
 
   const keywords = [
-    "estado",
-    "deuda",
-    "debe",
-    "deben",
-    "saldo",
-    "pagos",
-    "pago",
-    "abono",
-    "abonos",
-    "pendiente",
-    "pendientes",
-    "cuenta",
-    "cuentas",
-    "comprobante",
-    "consignacion",
-    "transferencia",
-    "nequi",
-    "daviplata",
-    "efectivo",
-    "coach",
-    "sesion",
-    "sesiones",
+    "estado", "deuda", "debe", "deben", "saldo", "pagos", "pago", "abono", "abonos",
+    "pendiente", "pendientes", "cuenta", "cuentas", "comprobante", "consignacion",
+    "transferencia", "nequi", "daviplata", "efectivo", "coach", "sesion", "sesiones",
+    "venta", "ventas", "egreso", "egresos", "resumen", "periodo", "mes",
   ]
 
   if (keywords.some((word) => normalized.includes(word))) return true
   if (/(como|cómo)\s+esta\b/.test(normalized)) return true
-  if (/^(revisa|consulta|mira|verifica)\b/.test(normalized)) return true
+  if (/^(revisa|consulta|mira|verifica|busca)\b/.test(normalized)) return true
 
   return false
 }
@@ -282,10 +275,10 @@ function getPendingSelection(message: TelegramMessage) {
   return pending
 }
 
-function savePendingSelection(message: TelegramMessage, matches: PendingSelection["matches"]) {
+function savePendingSelection(message: TelegramMessage, action: PendingAction, matches: PendingSelection["matches"]) {
   const key = pendingSelectionKey(message)
   if (!key) return
-  pendingSelections.set(key, { createdAt: Date.now(), matches })
+  pendingSelections.set(key, { createdAt: Date.now(), action, matches })
 }
 
 function clearPendingSelection(message: TelegramMessage) {
@@ -293,34 +286,41 @@ function clearPendingSelection(message: TelegramMessage) {
   if (key) pendingSelections.delete(key)
 }
 
-function resolvePendingSelection(message: TelegramMessage, text: string) {
+function resolvePendingSelection(message: TelegramMessage, text: string): { term: string, action: PendingAction } | "expired" | null {
   const pending = getPendingSelection(message)
-  if (!pending || pending === "expired") return pending
+  if (!pending) return null
+  if (pending === "expired") return "expired"
 
   const normalized = normalizeText(text)
   const codeMatch = normalized.match(/^(?:codigo|cod)\s+(\d{1,20})$/)
   const code = codeMatch?.[1] || (/^\d{1,8}$/.test(normalized) ? normalized : null)
 
+  let resolvedTerm: string | null = null
+
   if (/^\d{1,2}$/.test(normalized)) {
     const index = Number(normalized) - 1
     if (index >= 0 && index < pending.matches.length) {
-      return pending.matches[index].codigo || pending.matches[index].cedula || pending.matches[index].nombre
+      resolvedTerm = pending.matches[index].codigo || pending.matches[index].cedula || pending.matches[index].nombre
     }
   }
 
-  if (code) {
+  if (!resolvedTerm && code) {
     const byCode = pending.matches.find(
       (match) => normalizeText(String(match.codigo || "")) === code || normalizeText(String(match.cedula || "")) === code
     )
-    if (byCode) return byCode.codigo || byCode.cedula || byCode.nombre
+    if (byCode) resolvedTerm = byCode.codigo || byCode.cedula || byCode.nombre
   }
 
-  const byName = pending.matches.find((match) => {
-    const name = normalizeText(match.nombre)
-    return name === normalized || name.includes(normalized) || normalized.includes(name)
-  })
+  if (!resolvedTerm) {
+    const byName = pending.matches.find((match) => {
+      const name = normalizeText(match.nombre)
+      return name === normalized || name.includes(normalized) || normalized.includes(name)
+    })
+    if (byName) resolvedTerm = byName.codigo || byName.cedula || byName.nombre
+  }
 
-  return byName?.codigo || byName?.cedula || byName?.nombre || null
+  if (resolvedTerm) return { term: resolvedTerm, action: pending.action }
+  return null
 }
 
 async function sendTelegramMessage(config: TelegramConfig, chatId: number, text: string) {
@@ -366,20 +366,26 @@ function parseJsonObject(value: string) {
 }
 
 function sanitizeIntent(value: any): Intent | null {
-  const allowed = new Set(["ayuda", "id", "estado_persona", "saludo", "no_entendido"])
+  const allowed = new Set([
+    "estado_persona", "ultima_sesion_coach", "sesiones_coach_persona", "pagos_persona", 
+    "ultimo_pago_persona", "cuentas_pendientes_persona", "saldo_favor_persona", 
+    "donaciones_persona", "ventas_externas", "egresos", "resumen_periodo", 
+    "liquidacion_socio", "busqueda_global", "pregunta_general_erp", "saludo", 
+    "ayuda", "id", "no_entendido"
+  ])
   if (!value || typeof value !== "object" || !allowed.has(value.intent)) return null
 
   return {
     intent: value.intent,
-    persona_busqueda:
-      typeof value.persona_busqueda === "string" && value.persona_busqueda.trim()
-        ? value.persona_busqueda.trim()
-        : null,
+    persona_busqueda: typeof value.persona_busqueda === "string" && value.persona_busqueda.trim() ? value.persona_busqueda.trim() : null,
+    socio_busqueda: typeof value.socio_busqueda === "string" && value.socio_busqueda.trim() ? value.socio_busqueda.trim() : null,
+    termino_busqueda: typeof value.termino_busqueda === "string" && value.termino_busqueda.trim() ? value.termino_busqueda.trim() : null,
+    fecha_desde: typeof value.fecha_desde === "string" && value.fecha_desde.trim() ? value.fecha_desde.trim() : null,
+    fecha_hasta: typeof value.fecha_hasta === "string" && value.fecha_hasta.trim() ? value.fecha_hasta.trim() : null,
+    metodo_pago: typeof value.metodo_pago === "string" && value.metodo_pago.trim() ? value.metodo_pago.trim() : null,
+    concepto: typeof value.concepto === "string" && value.concepto.trim() ? value.concepto.trim() : null,
     necesita_aclaracion: Boolean(value.necesita_aclaracion),
-    pregunta_aclaracion:
-      typeof value.pregunta_aclaracion === "string" && value.pregunta_aclaracion.trim()
-        ? value.pregunta_aclaracion.trim()
-        : null,
+    pregunta_aclaracion: typeof value.pregunta_aclaracion === "string" && value.pregunta_aclaracion.trim() ? value.pregunta_aclaracion.trim() : null,
   }
 }
 
@@ -401,7 +407,7 @@ async function classifyIntentWithDeepSeek(text: string, config: TelegramConfig):
           {
             role: "system",
             content:
-              'Eres Cajero Mentes Brillantes, asistente financiero interno del grupo PAGOS. Ayudas como una persona prudente y clara. Tu trabajo es revisar y orientar sobre pagos, deudas, cuentas pendientes, saldo a favor, abonos, comprobantes, donaciones, ventas externas y sesiones coach. No inventes información. No registres nada sin confirmación. En esta fase eres solo lectura. Puedes dar recomendaciones prudentes basadas en los datos del ERP. Devuelve SOLO JSON estricto con: intent ("ayuda" | "id" | "estado_persona" | "saludo" | "no_entendido"), persona_busqueda (string|null), necesita_aclaracion (boolean), pregunta_aclaracion (string|null). No inventes nombres.',
+              'Eres Cajero Mentes Brillantes, asistente financiero interno del grupo PAGOS. Ayudas como una persona prudente y clara. Tu trabajo es revisar y orientar sobre pagos, deudas, cuentas pendientes, saldo a favor, abonos, comprobantes, donaciones, ventas externas y sesiones coach. No inventes información. No registres nada sin confirmación. En esta fase eres solo lectura. Puedes dar recomendaciones prudentes basadas en los datos del ERP. Devuelve SOLO JSON estricto con: intent ("estado_persona" | "ultima_sesion_coach" | "sesiones_coach_persona" | "pagos_persona" | "ultimo_pago_persona" | "cuentas_pendientes_persona" | "saldo_favor_persona" | "donaciones_persona" | "ventas_externas" | "egresos" | "resumen_periodo" | "liquidacion_socio" | "busqueda_global" | "pregunta_general_erp" | "saludo" | "ayuda" | "id" | "no_entendido"), persona_busqueda (string|null), socio_busqueda (string|null), termino_busqueda (string|null), fecha_desde (string|null), fecha_hasta (string|null), metodo_pago (string|null), concepto (string|null), necesita_aclaracion (boolean), pregunta_aclaracion (string|null). No inventes nombres. Si preguntan por "última sesión", "sesión más reciente" o "cuándo fue la última coach", debes clasificar como ultima_sesion_coach.',
           },
           { role: "user", content: text },
         ],
@@ -423,32 +429,20 @@ async function classifyIntentWithDeepSeek(text: string, config: TelegramConfig):
 
 function fallbackClassifyIntent(text: string): Intent {
   const normalized = normalizeText(text)
+  const defaultIntent: Intent = { intent: "no_entendido", persona_busqueda: null, socio_busqueda: null, termino_busqueda: null, fecha_desde: null, fecha_hasta: null, metodo_pago: null, concepto: null, necesita_aclaracion: false, pregunta_aclaracion: null }
+  
   if (!normalized || /^(hola|buenas|buenos dias|buenas tardes|buenas noches)\b/.test(normalized) || /\b(gracias|listo gracias|ok gracias)\b/.test(normalized)) {
-    return { intent: "saludo", persona_busqueda: null, necesita_aclaracion: false, pregunta_aclaracion: null }
+    return { ...defaultIntent, intent: "saludo" }
   }
   if (normalized.includes("ayuda") || normalized.includes("comandos")) {
-    return { intent: "ayuda", persona_busqueda: null, necesita_aclaracion: false, pregunta_aclaracion: null }
+    return { ...defaultIntent, intent: "ayuda" }
   }
   if (normalized === "id" || normalized.includes("chat id") || normalized.includes("user id")) {
-    return { intent: "id", persona_busqueda: null, necesita_aclaracion: false, pregunta_aclaracion: null }
+    return { ...defaultIntent, intent: "id" }
   }
 
   const stateWords = [
-    "estado",
-    "debe",
-    "deuda",
-    "pagos",
-    "pago",
-    "saldo",
-    "abona",
-    "abonos",
-    "pendiente",
-    "cuenta",
-    "cuentas",
-    "coach",
-    "sesion",
-    "sesiones",
-    "como esta",
+    "estado", "debe", "deuda", "pagos", "pago", "saldo", "abona", "abonos", "pendiente", "cuenta", "cuentas", "coach", "sesion", "sesiones", "como esta",
   ]
   if (stateWords.some((word) => normalized.includes(word))) {
     const cleaned = text
@@ -460,6 +454,7 @@ function fallbackClassifyIntent(text: string): Intent {
       .trim()
 
     return {
+      ...defaultIntent,
       intent: "estado_persona",
       persona_busqueda: cleaned || null,
       necesita_aclaracion: !cleaned,
@@ -467,7 +462,7 @@ function fallbackClassifyIntent(text: string): Intent {
     }
   }
 
-  return { intent: "no_entendido", persona_busqueda: null, necesita_aclaracion: false, pregunta_aclaracion: null }
+  return defaultIntent
 }
 
 function findMatches(asistentes: any[], term: string) {
@@ -491,11 +486,8 @@ function findMatches(asistentes: any[], term: string) {
     .slice(0, 5)
 }
 
-async function buildEstadoResponse(term: string, message?: TelegramMessage) {
+async function searchAsistenteForAction(supabase: any, term: string, action: PendingAction, message?: TelegramMessage) {
   if (!term) return PREGUNTAR_PERSONA
-
-  const supabase = createAdminClient()
-  if (!supabase) return "No pude consultar el ERP en este momento."
 
   const searchName = extractPersonSearchTerm(term) || term
   const normalized = normalizeText(searchName)
@@ -537,7 +529,7 @@ async function buildEstadoResponse(term: string, message?: TelegramMessage) {
   }
 
   if (matchesList.length === 0) {
-     if (message) saveCajeroContext(message, { lastMode: "busqueda_persona", lastSearchTerm: searchName })
+     if (message) saveCajeroContext(message, { lastMode: action, lastSearchTerm: searchName })
      return `Busqué "${searchName}" y no me aparece en asistentes con ese nombre. Puede estar registrada con otro apellido, código/cédula o puede que no esté migrada. Si me das otro dato la reviso.`
   }
 
@@ -554,13 +546,14 @@ async function buildEstadoResponse(term: string, message?: TelegramMessage) {
     if (message) {
       savePendingSelection(
         message,
+        action,
         matchesList.map((a: any) => ({
           nombre: a.nombre,
           codigo: a.codigo,
           cedula: a.cedula,
         }))
       )
-      saveCajeroContext(message, { lastMode: "busqueda_persona", lastSearchTerm: searchName })
+      saveCajeroContext(message, { lastMode: action, lastSearchTerm: searchName })
     }
 
     return [
@@ -572,10 +565,10 @@ async function buildEstadoResponse(term: string, message?: TelegramMessage) {
     ].join("\n")
   }
 
-  const asistente = matchedAsistente
-  if (message) {
-     saveCajeroContext(message, { lastMode: "estado_persona", lastSearchTerm: searchName })
-  }
+  return matchedAsistente
+}
+
+async function buildEstadoResponse(supabase: any, asistente: any) {
   const [
     { data: cuentas, error: cuentasError },
     { data: movimientosSaldo, error: saldoError },
@@ -684,6 +677,255 @@ async function buildEstadoResponse(term: string, message?: TelegramMessage) {
     .join("\n")
 }
 
+async function buildUltimaSesionCoachResponse(supabase: any, asistente: any) {
+  const [
+    { data: sesionesCoach },
+    { data: paquetesCoach }
+  ] = await Promise.all([
+    supabase.from("coach_sesiones").select("id, fecha, notas, paquete_id").eq("asistente_id", asistente.id).order("fecha", { ascending: false }).limit(1),
+    supabase.from("coach_paquetes").select("id, cuenta_id, sesiones_compradas").eq("asistente_id", asistente.id)
+  ])
+
+  const sesionesCompradas = (paquetesCoach || []).reduce(
+    (acc: number, paquete: any) => acc + Math.round(toSafeNumber(paquete.sesiones_compradas)),
+    0
+  )
+  const { count } = await supabase.from("coach_sesiones").select("id", { count: "exact", head: true }).eq("asistente_id", asistente.id)
+  const sesionesRealizadas = count || 0
+
+  if (!sesionesCoach || sesionesCoach.length === 0) {
+    return `Listo. No veo sesiones coach registradas para ${asistente.nombre}.`
+  }
+
+  const ultima = sesionesCoach[0]
+  let text = `Listo. La última sesión coach registrada de ${asistente.nombre} fue el ${ultima.fecha}.`
+  if (sesionesCompradas > 0) {
+    text += ` Tiene ${sesionesRealizadas}/${sesionesCompradas} sesiones registradas, le quedan ${Math.max(0, sesionesCompradas - sesionesRealizadas)}.`
+  }
+  return text
+}
+
+async function buildSesionesCoachPersonaResponse(supabase: any, asistente: any) {
+  const [
+    { data: sesionesCoach },
+    { data: paquetesCoach }
+  ] = await Promise.all([
+    supabase.from("coach_sesiones").select("id, fecha, notas, paquete_id").eq("asistente_id", asistente.id).order("fecha", { ascending: false }).limit(5),
+    supabase.from("coach_paquetes").select("id, cuenta_id, sesiones_compradas").eq("asistente_id", asistente.id)
+  ])
+
+  const sesionesCompradas = (paquetesCoach || []).reduce(
+    (acc: number, paquete: any) => acc + Math.round(toSafeNumber(paquete.sesiones_compradas)),
+    0
+  )
+  const { count } = await supabase.from("coach_sesiones").select("id", { count: "exact", head: true }).eq("asistente_id", asistente.id)
+  const sesionesRealizadas = count || 0
+
+  if (!sesionesCoach || sesionesCoach.length === 0) {
+    return `Listo. No veo sesiones coach registradas para ${asistente.nombre}.`
+  }
+
+  const response = [
+    `Listo. Encontré ${sesionesRealizadas} sesiones de ${asistente.nombre}.`,
+  ]
+  if (sesionesCompradas > 0) {
+    response.push(`Compradas: ${sesionesCompradas}. Restantes: ${Math.max(0, sesionesCompradas - sesionesRealizadas)}.`)
+  }
+  response.push("\nÚltimas 5 sesiones:")
+  sesionesCoach.forEach((s: any) => {
+    response.push(`- ${s.fecha}${s.notas ? `: ${s.notas}` : ""}`)
+  })
+  return response.join("\n")
+}
+
+async function buildPagosPersonaResponse(supabase: any, asistente: any) {
+  const { data: cuentas } = await supabase
+    .from("cuentas_por_cobrar")
+    .select("concepto, pagos_abonos(id, monto, metodo_pago, fecha_pago, estado, notas)")
+    .eq("asistente_id", asistente.id)
+
+  const pagosRecientes = (cuentas || [])
+    .flatMap((cuenta: any) => cuenta.pagos_abonos.map((pago: any) => ({ ...pago, concepto: cuenta.concepto })))
+    .filter((pago: any) => pago.estado === "aprobado")
+    .sort((a: any, b: any) => new Date(b.fecha_pago).getTime() - new Date(a.fecha_pago).getTime())
+    .slice(0, 10)
+
+  if (pagosRecientes.length === 0) {
+    return `Listo. No veo pagos registrados para ${asistente.nombre}.`
+  }
+
+  const response = [`Listo. Últimos pagos de ${asistente.nombre}:`]
+  pagosRecientes.forEach((pago: any) => {
+    response.push(`- ${pago.fecha_pago}: ${formatCop(pago.monto)} vía ${pago.metodo_pago || "desconocido"}. Concepto: ${pago.concepto}`)
+  })
+  return response.join("\n")
+}
+
+async function buildUltimoPagoPersonaResponse(supabase: any, asistente: any) {
+  const { data: cuentas } = await supabase
+    .from("cuentas_por_cobrar")
+    .select("concepto, pagos_abonos(id, monto, metodo_pago, fecha_pago, estado, notas)")
+    .eq("asistente_id", asistente.id)
+
+  const pagosRecientes = (cuentas || [])
+    .flatMap((cuenta: any) => cuenta.pagos_abonos.map((pago: any) => ({ ...pago, concepto: cuenta.concepto })))
+    .filter((pago: any) => pago.estado === "aprobado")
+    .sort((a: any, b: any) => new Date(b.fecha_pago).getTime() - new Date(a.fecha_pago).getTime())
+
+  if (pagosRecientes.length === 0) {
+    return `Listo. No veo pagos registrados para ${asistente.nombre}.`
+  }
+
+  const ultimo = pagosRecientes[0]
+  return `Listo. El último pago que veo de ${asistente.nombre} fue el ${ultimo.fecha_pago} por ${formatCop(ultimo.monto)} vía ${ultimo.metodo_pago || "desconocido"}, concepto: ${ultimo.concepto}.`
+}
+
+async function buildCuentasPendientesPersonaResponse(supabase: any, asistente: any) {
+  const { data: cuentas } = await supabase
+    .from("cuentas_por_cobrar")
+    .select("concepto, valor_total, pagos_abonos(monto, estado)")
+    .eq("asistente_id", asistente.id)
+    .order("fecha_emision", { ascending: false })
+
+  const cuentasProcesadas = (cuentas || []).map((cuenta: any) => {
+    const pagosValidos = filtrarPagosValidos(cuenta.pagos_abonos || [])
+    const abonado = Math.round(sumarMontos(pagosValidos))
+    const valor = Math.round(toSafeNumber(cuenta.valor_total))
+    return {
+      concepto: cuenta.concepto,
+      valor,
+      abonado,
+      pendiente: Math.max(0, valor - abonado),
+    }
+  })
+
+  const pendientes = cuentasProcesadas.filter((cuenta: any) => cuenta.pendiente > 0)
+
+  if (pendientes.length === 0) {
+    return `Listo. ${asistente.nombre} no tiene cuentas pendientes en este momento.`
+  }
+
+  const response = [`Listo. Cuentas pendientes de ${asistente.nombre}:`]
+  pendientes.forEach((cuenta: any) => {
+    response.push(`- ${cuenta.concepto}: debe ${formatCop(cuenta.pendiente)} de ${formatCop(cuenta.valor)}`)
+  })
+  return response.join("\n")
+}
+
+async function buildSaldoFavorPersonaResponse(supabase: any, asistente: any) {
+  const { data: movimientosSaldo } = await supabase
+      .from("movimientos_saldo_favor")
+      .select("tipo, monto, fecha, metodo_pago, notas")
+      .eq("asistente_id", asistente.id)
+      .order("fecha", { ascending: false })
+      
+  const saldoFavor = calcularSaldoFavorDisponible(movimientosSaldo || [])
+  return `Listo. El saldo a favor disponible de ${asistente.nombre} es de ${formatCop(saldoFavor)}.`
+}
+
+async function buildVentasExternasResponse(supabase: any, intent: Intent) {
+  let query = supabase.from("ventas_externas").select("*").order("fecha", { ascending: false }).limit(10)
+  
+  if (intent.fecha_desde) query = query.gte("fecha", intent.fecha_desde)
+  if (intent.fecha_hasta) query = query.lte("fecha", intent.fecha_hasta)
+  
+  const { data: ventas } = await query
+  
+  if (!ventas || ventas.length === 0) {
+    return "No encontré ventas externas registradas con esos filtros."
+  }
+  
+  const total = ventas.reduce((acc: number, v: any) => acc + toSafeNumber(v.monto), 0)
+  
+  const response = [`Encontré ${ventas.length} ventas externas (mostrando más recientes):`]
+  ventas.forEach((v: any) => {
+    response.push(`- ${v.fecha}: ${formatCop(v.monto)} | ${v.comprador_nombre || "Anónimo"} | ${v.concepto}`)
+  })
+  response.push(`\nTotal de estas ventas: ${formatCop(total)}`)
+  return response.join("\n")
+}
+
+async function buildEgresosResponse(supabase: any, intent: Intent) {
+  let query = supabase.from("egresos").select("*").order("fecha", { ascending: false }).limit(10)
+  
+  if (intent.fecha_desde) query = query.gte("fecha", intent.fecha_desde)
+  if (intent.fecha_hasta) query = query.lte("fecha", intent.fecha_hasta)
+  
+  const { data: egresos } = await query
+  
+  if (!egresos || egresos.length === 0) {
+    return "No encontré egresos registrados con esos filtros."
+  }
+  
+  const total = egresos.reduce((acc: number, v: any) => acc + toSafeNumber(v.monto), 0)
+  
+  const response = [`Encontré ${egresos.length} egresos (mostrando más recientes):`]
+  egresos.forEach((v: any) => {
+    response.push(`- ${v.fecha}: ${formatCop(v.monto)} | ${v.categoria || "Sin categoría"} | ${v.concepto}`)
+  })
+  response.push(`\nTotal de estos egresos: ${formatCop(total)}`)
+  return response.join("\n")
+}
+
+async function buildResumenPeriodoResponse(supabase: any, intent: Intent) {
+  return "El resumen de periodo requiere especificar el mes o revisar en el dashboard del ERP. Aún estoy aprendiendo a consolidar esa vista aquí."
+}
+
+async function buildBusquedaGlobalResponse(supabase: any, term: string) {
+  if (!term || term.length < 3) return "Por favor dame un término más específico para la búsqueda global (al menos 3 letras)."
+  
+  const normalized = normalizeText(term)
+  
+  const [
+    { data: asistentes },
+    { data: cuentas },
+    { data: pagos },
+    { data: egresos },
+    { data: ventas }
+  ] = await Promise.all([
+    supabase.from("asistentes").select("nombre, codigo, cedula").ilike("nombre", `%${normalized}%`).limit(3),
+    supabase.from("cuentas_por_cobrar").select("concepto").ilike("concepto", `%${normalized}%`).limit(3),
+    supabase.from("pagos_abonos").select("notas").ilike("notas", `%${normalized}%`).limit(3),
+    supabase.from("egresos").select("concepto, notas").or(`concepto.ilike.%${normalized}%,notas.ilike.%${normalized}%`).limit(3),
+    supabase.from("ventas_externas").select("comprador_nombre, concepto, notas").or(`comprador_nombre.ilike.%${normalized}%,concepto.ilike.%${normalized}%,notas.ilike.%${normalized}%`).limit(3)
+  ])
+  
+  const results = []
+  if (asistentes?.length) results.push(`Asistentes:\n` + asistentes.map((a: any) => `- ${a.nombre}`).join("\n"))
+  if (cuentas?.length) results.push(`Cuentas:\n` + cuentas.map((c: any) => `- ${c.concepto}`).join("\n"))
+  if (pagos?.length) results.push(`Pagos/Notas:\n` + pagos.map((p: any) => `- ${p.notas}`).join("\n"))
+  if (egresos?.length) results.push(`Egresos:\n` + egresos.map((e: any) => `- ${e.concepto} ${e.notas ? `(${e.notas})` : ""}`).join("\n"))
+  if (ventas?.length) results.push(`Ventas:\n` + ventas.map((v: any) => `- ${v.concepto} a ${v.comprador_nombre || "Anónimo"}`).join("\n"))
+  
+  if (results.length === 0) {
+    return `Buscando "${term}" en todo el ERP... no encontré coincidencias.`
+  }
+  
+  return `Resultados de búsqueda para "${term}":\n\n` + results.join("\n\n")
+}
+
+async function executeActionForAsistente(term: string, action: PendingAction, message?: TelegramMessage) {
+  const supabase = createAdminClient()
+  if (!supabase) return "No pude consultar el ERP en este momento."
+
+  const asistenteOrMessage = await searchAsistenteForAction(supabase, term, action, message)
+  if (typeof asistenteOrMessage === "string") return asistenteOrMessage
+
+  const asistente = asistenteOrMessage
+  if (message) saveCajeroContext(message, { lastMode: action, lastSearchTerm: term })
+
+  if (action === "estado_persona") return buildEstadoResponse(supabase, asistente)
+  if (action === "ultima_sesion_coach") return buildUltimaSesionCoachResponse(supabase, asistente)
+  if (action === "sesiones_coach_persona") return buildSesionesCoachPersonaResponse(supabase, asistente)
+  if (action === "pagos_persona") return buildPagosPersonaResponse(supabase, asistente)
+  if (action === "ultimo_pago_persona") return buildUltimoPagoPersonaResponse(supabase, asistente)
+  if (action === "cuentas_pendientes_persona") return buildCuentasPendientesPersonaResponse(supabase, asistente)
+  if (action === "saldo_favor_persona") return buildSaldoFavorPersonaResponse(supabase, asistente)
+  if (action === "donaciones_persona") return "Aún estoy aprendiendo a buscar donaciones."
+
+  return "Acción no soportada para personas."
+}
+
 function buildIdResponse(message: TelegramMessage) {
   return [
     `chat_id: ${message.chat.id}`,
@@ -700,21 +942,21 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig) {
     const { command, args } = parseCommand(text)
     if (command === "/ayuda" || command === "/start") return AYUDA
     if (command === "/id") return buildIdResponse(message)
-    if (command === "/estado") return buildEstadoResponse(args, message)
+    if (command === "/estado") return executeActionForAsistente(args, "estado_persona", message)
   }
 
   const pendingSelection = resolvePendingSelection(message, text)
   if (pendingSelection === "expired") {
-    return "Se me vencio esa lista de opciones. Repiteme la busqueda y te muestro las coincidencias de nuevo."
+    return "Se me venció esa lista de opciones. Repíteme la búsqueda y te muestro las coincidencias de nuevo."
   }
   if (pendingSelection) {
     clearPendingSelection(message)
-    return buildEstadoResponse(pendingSelection, message)
+    return await executeActionForAsistente(pendingSelection.term, pendingSelection.action, message)
   }
 
   const normalizedText = normalizeText(text)
   const directCode = normalizedText.match(/^(?:codigo|cod)\s+(\d{1,20})$/)?.[1]
-  if (directCode) return buildEstadoResponse(directCode, message)
+  if (directCode) return executeActionForAsistente(directCode, "estado_persona", message)
   
   const isNumber = /^\d+$/.test(normalizedText)
   if (isNumber) {
@@ -738,20 +980,27 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig) {
   if (intent.intent === "ayuda") return AYUDA
   if (intent.intent === "id") return buildIdResponse(message)
 
-  if (intent.intent === "estado_persona") {
+  const supabase = createAdminClient()
+
+  if (intent.intent === "ventas_externas") return buildVentasExternasResponse(supabase, intent)
+  if (intent.intent === "egresos") return buildEgresosResponse(supabase, intent)
+  if (intent.intent === "resumen_periodo") return buildResumenPeriodoResponse(supabase, intent)
+  if (intent.intent === "busqueda_global" || intent.intent === "pregunta_general_erp") {
+    const term = intent.termino_busqueda || naturalText
+    return buildBusquedaGlobalResponse(supabase, term)
+  }
+
+  const personIntents = ["estado_persona", "ultima_sesion_coach", "sesiones_coach_persona", "pagos_persona", "ultimo_pago_persona", "cuentas_pendientes_persona", "saldo_favor_persona", "donaciones_persona"]
+
+  if (personIntents.includes(intent.intent)) {
     if (intent.necesita_aclaracion || !intent.persona_busqueda) {
-       if (ctx) {
+       if (ctx && personIntents.includes(ctx.lastMode)) {
          const term = extractPersonSearchTerm(naturalText || text)
-         if (term.length >= 2) return buildEstadoResponse(term, message)
+         if (term.length >= 2) return executeActionForAsistente(term, ctx.lastMode as PendingAction, message)
        }
        return intent.pregunta_aclaracion || PREGUNTAR_PERSONA
     }
-    return buildEstadoResponse(intent.persona_busqueda, message)
-  }
-
-  if (ctx) {
-    const term = extractPersonSearchTerm(naturalText || text)
-    if (term.length >= 2) return buildEstadoResponse(term, message)
+    return executeActionForAsistente(intent.persona_busqueda, intent.intent as PendingAction, message)
   }
 
   const directAddress = isReplyToBot(message) || normalizedText.includes(`@${BOT_USERNAME}`) || /^(cajero|cajerito|caja)\b/.test(normalizedText) || normalizedText.includes(" cajero")
