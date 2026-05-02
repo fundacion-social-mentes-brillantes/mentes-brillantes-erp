@@ -1,6 +1,6 @@
 {
   "node": {
-    "70573645f197400eed3763b58608ea160081befa08": {
+    "70007b0642bb5b28eed652521735e29acb796f1a4d": {
       "workers": {
         "app/(dashboard)/egresos/nuevo/page": {
           "moduleId": 75181,

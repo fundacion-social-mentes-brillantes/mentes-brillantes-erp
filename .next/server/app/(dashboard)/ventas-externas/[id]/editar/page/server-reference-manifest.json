@@ -1,0 +1,35 @@
+{
+  "node": {
+    "604f489d64a59a43138dd845234a8c4ec1b2b77c41": {
+      "workers": {
+        "app/(dashboard)/ventas-externas/[id]/editar/page": {
+          "moduleId": 95678,
+          "async": false,
+          "exportedName": "crearVentaExterna",
+          "filename": "src/app/(dashboard)/ventas-externas/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/ventas-externas/[id]/editar/page": "action-browser"
+      },
+      "exportedName": "crearVentaExterna",
+      "filename": "src/app/(dashboard)/ventas-externas/actions.ts"
+    },
+    "70547d3ec6af093bd045c06ad14f5839e0aada8145": {
+      "workers": {
+        "app/(dashboard)/ventas-externas/[id]/editar/page": {
+          "moduleId": 95678,
+          "async": false,
+          "exportedName": "editarVentaExterna",
+          "filename": "src/app/(dashboard)/ventas-externas/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/ventas-externas/[id]/editar/page": "action-browser"
+      },
+      "exportedName": "editarVentaExterna",
+      "filename": "src/app/(dashboard)/ventas-externas/actions.ts"
+    }
+  },
+  "edge": {}
+}

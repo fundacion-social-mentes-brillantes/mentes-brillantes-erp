@@ -1,6 +1,6 @@
 {
   "node": {
-    "70c5c65add8f188c41c29fe7ab463c0a58cb234ca7": {
+    "708c8514dd91afa55b721e519cefa740d228fe9314": {
       "workers": {
         "app/(dashboard)/liquidaciones/[id]/page": {
           "moduleId": 50687,
@@ -15,7 +15,7 @@
       "exportedName": "saveAdelanto",
       "filename": "src/app/(dashboard)/liquidaciones/actions.ts"
     },
-    "40c52b70c2362611f7bc8bd00f625f1615036c46fe": {
+    "40d6e64f55fafee6db86f21f48ed47d0452cdf18b0": {
       "workers": {
         "app/(dashboard)/liquidaciones/[id]/page": {
           "moduleId": 50687,

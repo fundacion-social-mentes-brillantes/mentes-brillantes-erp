@@ -1,6 +1,6 @@
 {
   "node": {
-    "70bce54fb64f76f10006899b698ca72bc4f7b26497": {
+    "70f8228b164ca5a1851d8962f7923da135c70914b6": {
       "workers": {
         "app/(dashboard)/socios/[id]/editar/page": {
           "moduleId": 37621,

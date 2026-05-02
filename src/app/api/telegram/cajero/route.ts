@@ -59,9 +59,50 @@ type PendingSelection = {
   matches: Array<{ nombre: string; codigo?: string | null; cedula?: string | null }>
 }
 
+type CajeroConversationContext = {
+  createdAt: number
+  lastMode: "estado_persona" | "busqueda_persona"
+  lastSearchTerm?: string
+}
+
 const BOT_USERNAME = "cajero_mb_pagos_bot"
 const PENDING_SELECTION_TTL_MS = 10 * 60 * 1000
+const CAJERO_CONTEXT_TTL_MS = 10 * 60 * 1000
 const pendingSelections = new Map<string, PendingSelection>()
+const cajeroContexts = new Map<string, CajeroConversationContext>()
+
+function pendingSelectionKey(message: TelegramMessage) {
+  const userId = message.from?.id
+  if (!userId) return null
+  return `${message.chat.id}:${userId}`
+}
+
+function getCajeroContext(message: TelegramMessage) {
+  const key = pendingSelectionKey(message)
+  if (!key) return null
+  const ctx = cajeroContexts.get(key)
+  if (!ctx) return null
+  if (Date.now() - ctx.createdAt > CAJERO_CONTEXT_TTL_MS) {
+    cajeroContexts.delete(key)
+    return null
+  }
+  return ctx
+}
+
+function saveCajeroContext(message: TelegramMessage, ctx: Omit<CajeroConversationContext, "createdAt">) {
+  const key = pendingSelectionKey(message)
+  if (key) cajeroContexts.set(key, { ...ctx, createdAt: Date.now() })
+}
+
+function extractPersonSearchTerm(text: string) {
+  let term = text.trim()
+  term = term.replace(/\?+$/, "").trim()
+  term = term.replace(/^(cajero|cajerito|caja)\b[:,]?\s*/i, "")
+  term = term.replace(/^(y|no hay|ninguna|ninguno|aparece|encuentra|encontraste|encuentras|busca|revisa|consulta|mira|tambien|también)\b\s*/gi, "")
+  term = term.replace(/^(y|no hay|ninguna|ninguno|aparece|encuentra|encontraste|encuentras|busca|revisa|consulta|mira|tambien|también)\b\s*/gi, "")
+  return term.trim()
+}
+
 const PREGUNTAR_PERSONA = "Claro, ¿de qué persona quieres que revise pagos, deuda o saldo?"
 const NO_ENTENDIDO =
   "No te entendí del todo. Por ahora puedo consultar el estado de una persona. Escríbeme algo como: como esta Maria Perez."
@@ -181,7 +222,6 @@ function looksLikeCajeroRequest(text: string) {
   if (keywords.some((word) => normalized.includes(word))) return true
   if (/(como|cómo)\s+esta\b/.test(normalized)) return true
   if (/^(revisa|consulta|mira|verifica)\b/.test(normalized)) return true
-  if (/^\d{1,8}$/.test(normalized)) return true
 
   return false
 }
@@ -189,6 +229,14 @@ function looksLikeCajeroRequest(text: string) {
 function shouldBotRespond(message: TelegramMessage) {
   const text = message.text || ""
   const normalized = normalizeText(text)
+  const pending = getPendingSelection(message)
+  const ctx = getCajeroContext(message)
+  const isNumber = /^\d+$/.test(normalized)
+
+  if (isNumber) {
+    if (pending && pending !== "expired") return true
+    return false
+  }
 
   if (isSlashCommand(text)) return true
   if (isReplyToBot(message)) return true
@@ -196,6 +244,15 @@ function shouldBotRespond(message: TelegramMessage) {
   if (/^(cajero|cajerito|caja)\b/.test(normalized)) return true
   if (normalized.includes(" cajero")) return true
   if (looksLikeCajeroRequest(text)) return true
+
+  if (/\b(gracias|agradecido)\b/.test(normalized)) {
+    if (ctx || isReplyToBot(message)) return true
+  }
+
+  if (ctx) {
+     const words = normalized.split(/\s+/)
+     if (words.length <= 6) return true
+  }
 
   return false
 }
@@ -208,11 +265,7 @@ function extractNaturalText(message: TelegramMessage) {
     .trim()
 }
 
-function pendingSelectionKey(message: TelegramMessage) {
-  const userId = message.from?.id
-  if (!userId) return null
-  return `${message.chat.id}:${userId}`
-}
+
 
 function getPendingSelection(message: TelegramMessage) {
   const key = pendingSelectionKey(message)
@@ -444,43 +497,85 @@ async function buildEstadoResponse(term: string, message?: TelegramMessage) {
   const supabase = createAdminClient()
   if (!supabase) return "No pude consultar el ERP en este momento."
 
-  const { data: asistentes, error: asistentesError } = await supabase
-    .from("asistentes")
-    .select("id, nombre, codigo, cedula")
-    .order("nombre", { ascending: true })
-    .limit(800)
+  const searchName = extractPersonSearchTerm(term) || term
+  const normalized = normalizeText(searchName)
 
-  if (asistentesError) {
-    console.error("[telegram-cajero] error consultando asistentes", asistentesError)
-    return "No pude consultar asistentes en este momento."
+  let matchesList: any[] = []
+
+  if (/^\d+$/.test(normalized)) {
+     const { data: exact } = await supabase
+       .from("asistentes")
+       .select("id, nombre, codigo, cedula")
+       .or(`codigo.eq.${normalized},cedula.eq.${normalized}`)
+     if (exact && exact.length > 0) matchesList = exact
   }
 
-  const matches = findMatches(asistentes || [], term)
-  if (matches.length === 0) return "No encontré una persona que coincida con esa búsqueda. ¿Me das nombre completo, código o cédula?"
+  if (matchesList.length === 0) {
+    const { data: ilikeMatches } = await supabase
+      .from("asistentes")
+      .select("id, nombre, codigo, cedula")
+      .ilike("nombre", `%${searchName}%`)
+      .limit(20)
+    if (ilikeMatches && ilikeMatches.length > 0) matchesList = ilikeMatches
+  }
 
-  if (matches.length > 1 && matches[0].score < 100) {
+  if (matchesList.length === 0) {
+    const tokens = normalized.split(/\s+/).filter((t: string) => t.length >= 3)
+    if (tokens.length > 0) {
+       const orQuery = tokens.map((t: string) => `nombre.ilike.%${t}%`).join(",")
+       const { data: tokenMatches } = await supabase
+         .from("asistentes")
+         .select("id, nombre, codigo, cedula")
+         .or(orQuery)
+         .limit(50)
+         
+       if (tokenMatches && tokenMatches.length > 0) {
+          const ranked = findMatches(tokenMatches, searchName)
+          matchesList = ranked.map((r: any) => r.asistente)
+       }
+    }
+  }
+
+  if (matchesList.length === 0) {
+     if (message) saveCajeroContext(message, { lastMode: "busqueda_persona", lastSearchTerm: searchName })
+     return `Busqué "${searchName}" y no me aparece en asistentes con ese nombre. Puede estar registrada con otro apellido, código/cédula o puede que no esté migrada. Si me das otro dato la reviso.`
+  }
+
+  let matchedAsistente = matchesList[0]
+  if (matchesList.length > 1) {
+    const exactMatch = matchesList.find((a: any) => normalizeText(a.nombre) === normalized)
+    if (exactMatch) {
+       matchedAsistente = exactMatch
+       matchesList = [exactMatch]
+    }
+  }
+
+  if (matchesList.length > 1) {
     if (message) {
       savePendingSelection(
         message,
-        matches.map((item) => ({
-          nombre: item.asistente.nombre,
-          codigo: item.asistente.codigo,
-          cedula: item.asistente.cedula,
+        matchesList.map((a: any) => ({
+          nombre: a.nombre,
+          codigo: a.codigo,
+          cedula: a.cedula,
         }))
       )
+      saveCajeroContext(message, { lastMode: "busqueda_persona", lastSearchTerm: searchName })
     }
 
     return [
-      "Encontré varias personas parecidas. Para no equivocarme, dime cuál es:",
-      ...matches.map((item, index) => {
-        const a = item.asistente
+      `Encontré varias personas parecidas a "${searchName}". Para no equivocarme, dime cuál es:`,
+      ...matchesList.map((a: any, index: number) => {
         return `${index + 1}. ${a.nombre} | código ${a.codigo || "sin código"}`
       }),
       "Puedes responder con el número, el código o escribir el nombre más completo.",
     ].join("\n")
   }
 
-  const asistente = matches[0].asistente
+  const asistente = matchedAsistente
+  if (message) {
+     saveCajeroContext(message, { lastMode: "estado_persona", lastSearchTerm: searchName })
+  }
   const [
     { data: cuentas, error: cuentasError },
     { data: movimientosSaldo, error: saldoError },
@@ -620,24 +715,47 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig) {
   const normalizedText = normalizeText(text)
   const directCode = normalizedText.match(/^(?:codigo|cod)\s+(\d{1,20})$/)?.[1]
   if (directCode) return buildEstadoResponse(directCode, message)
-  if (/^\d{1,8}$/.test(normalizedText)) return buildEstadoResponse(normalizedText, message)
+  
+  const isNumber = /^\d+$/.test(normalizedText)
+  if (isNumber) {
+     return null
+  }
 
-  // Phase 2 placeholders: OCR, comprobantes, confirmacion y operaciones pendientes.
   const naturalText = extractNaturalText(message)
-  const intent = (await classifyIntentWithDeepSeek(naturalText || text, config)) || fallbackClassifyIntent(naturalText || text)
+  const ctx = getCajeroContext(message)
 
-  if (intent.intent === "ayuda") return AYUDA
-  if (intent.intent === "id") return buildIdResponse(message)
+  let intent = await classifyIntentWithDeepSeek(naturalText || text, config)
+  if (!intent) intent = fallbackClassifyIntent(naturalText || text)
+
   if (intent.intent === "saludo") {
     if (/\b(gracias|agradecido)\b/.test(normalizedText)) {
       return "Con gusto. Aquí estoy pendiente de los pagos."
     }
+    if (ctx) return null
     return "Hola. Aquí estoy para revisar cuentas, pagos o saldos. ¿De quién consultamos?"
   }
+
+  if (intent.intent === "ayuda") return AYUDA
+  if (intent.intent === "id") return buildIdResponse(message)
+
   if (intent.intent === "estado_persona") {
-    if (intent.necesita_aclaracion || !intent.persona_busqueda) return intent.pregunta_aclaracion || PREGUNTAR_PERSONA
+    if (intent.necesita_aclaracion || !intent.persona_busqueda) {
+       if (ctx) {
+         const term = extractPersonSearchTerm(naturalText || text)
+         if (term.length >= 2) return buildEstadoResponse(term, message)
+       }
+       return intent.pregunta_aclaracion || PREGUNTAR_PERSONA
+    }
     return buildEstadoResponse(intent.persona_busqueda, message)
   }
+
+  if (ctx) {
+    const term = extractPersonSearchTerm(naturalText || text)
+    if (term.length >= 2) return buildEstadoResponse(term, message)
+  }
+
+  const directAddress = isReplyToBot(message) || normalizedText.includes(`@${BOT_USERNAME}`) || /^(cajero|cajerito|caja)\b/.test(normalizedText) || normalizedText.includes(" cajero")
+  if (!directAddress && ctx) return null
 
   return intent.pregunta_aclaracion || NO_ENTENDIDO
 }
@@ -677,7 +795,9 @@ export async function POST(request: Request) {
 
   try {
     const responseText = await handleMessage(message, config)
-    await sendTelegramMessage(config, message.chat.id, responseText)
+    if (responseText) {
+      await sendTelegramMessage(config, message.chat.id, responseText)
+    }
   } catch (error) {
     console.error("[telegram-cajero] error procesando mensaje", error)
     await sendTelegramMessage(config, message.chat.id, "No pude procesar el mensaje en este momento.")

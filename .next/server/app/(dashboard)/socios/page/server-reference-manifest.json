@@ -1,6 +1,6 @@
 {
   "node": {
-    "609a74b0028efc14f941fd5afa5af46c0d63798812": {
+    "602bb37a405c4867722e3bd5d981ec73b2226b90e4": {
       "workers": {
         "app/(dashboard)/socios/page": {
           "moduleId": 79502,
@@ -15,7 +15,7 @@
       "exportedName": "toggleSocioEstado",
       "filename": "src/app/(dashboard)/socios/actions.ts"
     },
-    "70bce54fb64f76f10006899b698ca72bc4f7b26497": {
+    "70f8228b164ca5a1851d8962f7923da135c70914b6": {
       "workers": {
         "app/(dashboard)/socios/page": {
           "moduleId": 79502,

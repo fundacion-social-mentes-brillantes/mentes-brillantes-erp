@@ -1,6 +1,6 @@
 {
   "node": {
-    "407740fb768543e18d3c3bc9be3686072cab599bcc": {
+    "40863dbd54fcd2f627c0c1d668924542a31e776906": {
       "workers": {
         "app/(dashboard)/egresos/page": {
           "moduleId": 37412,

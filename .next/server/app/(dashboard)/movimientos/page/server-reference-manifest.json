@@ -1,6 +1,6 @@
 {
   "node": {
-    "788459562f1e7f8191e1c4a8de9531d1d5e0b8853e": {
+    "7841a766edc47aa8e64ba7375a6bab44b2323ac8eb": {
       "workers": {
         "app/(dashboard)/movimientos/page": {
           "moduleId": 21382,
@@ -15,7 +15,7 @@
       "exportedName": "anularMovimiento",
       "filename": "src/app/(dashboard)/movimientos/actions.ts"
     },
-    "7008c6d0671c3010c21069d2ae3b545fea42aa7a26": {
+    "70b8f92f912fb3e05d244d5fb74fe4bd02eb8f2e32": {
       "workers": {
         "app/(dashboard)/movimientos/page": {
           "moduleId": 21382,
@@ -30,7 +30,7 @@
       "exportedName": "editarMovimiento",
       "filename": "src/app/(dashboard)/movimientos/actions.ts"
     },
-    "787715dd8966617be26f6e634acd1352931f01492e": {
+    "78df2e2f086d89d54397b77cb3726f0f9edeacdcd0": {
       "workers": {
         "app/(dashboard)/movimientos/page": {
           "moduleId": 21382,

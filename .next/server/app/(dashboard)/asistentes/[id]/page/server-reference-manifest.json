@@ -1,6 +1,6 @@
 {
   "node": {
-    "702721c167d8bf1b4a739194312152470e814ff4e7": {
+    "70f27c7ee3fa3f4c161243d5eb0ac6833d951ca94e": {
       "workers": {
         "app/(dashboard)/asistentes/[id]/page": {
           "moduleId": 92762,
@@ -15,7 +15,7 @@
       "exportedName": "saveAnticipo",
       "filename": "src/app/(dashboard)/asistentes/actions.ts"
     },
-    "405c2b15ea7adf96401437b7418f39f543987d93dc": {
+    "40500c464ef8c0c1fe8ab0e210570b0ab2f47e3e05": {
       "workers": {
         "app/(dashboard)/asistentes/[id]/page": {
           "moduleId": 92762,
@@ -30,7 +30,7 @@
       "exportedName": "pagarDeudasConSaldo",
       "filename": "src/app/(dashboard)/asistentes/actions.ts"
     },
-    "6023caf8c929b99e4cef27ddedf674bc327e24a22f": {
+    "608c96797a105eac1d4fc1f76617d150601a214bdb": {
       "workers": {
         "app/(dashboard)/asistentes/[id]/page": {
           "moduleId": 92762,
@@ -45,7 +45,7 @@
       "exportedName": "crearDonacion",
       "filename": "src/app/(dashboard)/asistentes/donacionesActions.ts"
     },
-    "606c5c27f2254c08b07868eba2e8eaa6fa57b67d99": {
+    "60c72dc9d10c4040d0b0b728f42ea88a8468e52c95": {
       "workers": {
         "app/(dashboard)/asistentes/[id]/page": {
           "moduleId": 92762,
@@ -60,7 +60,7 @@
       "exportedName": "anularDonacionForm",
       "filename": "src/app/(dashboard)/asistentes/donacionesActions.ts"
     },
-    "60d52707dcaed3c2957e4afa6c5ca6ec414e46c412": {
+    "606c166278ea085bcbd832790e2d3950b9789d8a26": {
       "workers": {
         "app/(dashboard)/asistentes/[id]/page": {
           "moduleId": 92762,
@@ -75,7 +75,7 @@
       "exportedName": "editarDonacionForm",
       "filename": "src/app/(dashboard)/asistentes/donacionesActions.ts"
     },
-    "60c6c51caadfc3375c014a0870b717df9c77667ce5": {
+    "60acc80114ed60c32a67e4316c16530f2326200634": {
       "workers": {
         "app/(dashboard)/asistentes/[id]/page": {
           "moduleId": 92762,
@@ -90,7 +90,22 @@
       "exportedName": "eliminarDonacionForm",
       "filename": "src/app/(dashboard)/asistentes/donacionesActions.ts"
     },
-    "60a7a61b03c8adc5f27800adeaad42dfae7f2ce3c8": {
+    "60db273d8e623bd793e8965aa77cf4f41ac6b42af6": {
+      "workers": {
+        "app/(dashboard)/asistentes/[id]/page": {
+          "moduleId": 92762,
+          "async": false,
+          "exportedName": "revertirAnticipo",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/asistentes/[id]/page": "action-browser"
+      },
+      "exportedName": "revertirAnticipo",
+      "filename": "src/app/(dashboard)/asistentes/actions.ts"
+    },
+    "60faca60d90b4e575e3dfdaf558bc6cb6936fa48d9": {
       "workers": {
         "app/(dashboard)/asistentes/[id]/page": {
           "moduleId": 92762,
@@ -105,7 +120,7 @@
       "exportedName": "registrarSesion",
       "filename": "src/app/(dashboard)/coach/actions.ts"
     },
-    "60baf280fca60e856eac7a78e3a49d34b7d0aad377": {
+    "602dc75537d71b878ee0495092959a890d43839a86": {
       "workers": {
         "app/(dashboard)/asistentes/[id]/page": {
           "moduleId": 92762,
@@ -120,7 +135,7 @@
       "exportedName": "editarSesion",
       "filename": "src/app/(dashboard)/coach/actions.ts"
     },
-    "60fe3d6ad5e1212042a7f3b6863dda90b0350b579e": {
+    "6049ff5c3907368ac4afd09a987d09e561a57801f4": {
       "workers": {
         "app/(dashboard)/asistentes/[id]/page": {
           "moduleId": 92762,

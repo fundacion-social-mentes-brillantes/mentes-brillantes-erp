@@ -1,6 +1,6 @@
 {
   "node": {
-    "70ae9e74d487422f0c370d485c6bdd801b6cc1449d": {
+    "7096b8cb5a9e48c0815a57b923bef837342ed45acc": {
       "workers": {
         "app/(dashboard)/cuentas/[id]/page": {
           "moduleId": 17388,
@@ -15,7 +15,7 @@
       "exportedName": "saveAbono",
       "filename": "src/app/(dashboard)/cuentas/actions.ts"
     },
-    "7c1eb733892264e852221712a813cc4340e0e80762": {
+    "7c2d1661a0c4f1b4f914dda30788a2467d2cc7ebb2": {
       "workers": {
         "app/(dashboard)/cuentas/[id]/page": {
           "moduleId": 17388,
@@ -30,7 +30,7 @@
       "exportedName": "aplicarSaldoFavor",
       "filename": "src/app/(dashboard)/cuentas/actions.ts"
     },
-    "7893c192503f791fde76a98b6773f723dbfe50d4ce": {
+    "78750a3a7bb23437895def8dcd3ce91e790428975f": {
       "workers": {
         "app/(dashboard)/cuentas/[id]/page": {
           "moduleId": 17388,
@@ -45,7 +45,7 @@
       "exportedName": "editValorCuenta",
       "filename": "src/app/(dashboard)/cuentas/actions.ts"
     },
-    "7c4ab43d547ea07a88b2cbfe75f2f282b8e0338850": {
+    "7cf04ff007200970479079a2416be90fdceac02321": {
       "workers": {
         "app/(dashboard)/cuentas/[id]/page": {
           "moduleId": 17388,
@@ -60,7 +60,7 @@
       "exportedName": "editMontoAbono",
       "filename": "src/app/(dashboard)/cuentas/actions.ts"
     },
-    "40e10b46c78c382c25f312b94e4422cbece45c60d9": {
+    "40931a6773c325e01a032ea03e2733661554c01b1e": {
       "workers": {
         "app/(dashboard)/cuentas/[id]/page": {
           "moduleId": 17388,
@@ -75,7 +75,7 @@
       "exportedName": "deleteCuenta",
       "filename": "src/app/(dashboard)/cuentas/actions.ts"
     },
-    "60a7a61b03c8adc5f27800adeaad42dfae7f2ce3c8": {
+    "60faca60d90b4e575e3dfdaf558bc6cb6936fa48d9": {
       "workers": {
         "app/(dashboard)/cuentas/[id]/page": {
           "moduleId": 17388,
@@ -90,7 +90,7 @@
       "exportedName": "registrarSesion",
       "filename": "src/app/(dashboard)/coach/actions.ts"
     },
-    "60baf280fca60e856eac7a78e3a49d34b7d0aad377": {
+    "602dc75537d71b878ee0495092959a890d43839a86": {
       "workers": {
         "app/(dashboard)/cuentas/[id]/page": {
           "moduleId": 17388,
@@ -105,7 +105,7 @@
       "exportedName": "editarSesion",
       "filename": "src/app/(dashboard)/coach/actions.ts"
     },
-    "60fe3d6ad5e1212042a7f3b6863dda90b0350b579e": {
+    "6049ff5c3907368ac4afd09a987d09e561a57801f4": {
       "workers": {
         "app/(dashboard)/cuentas/[id]/page": {
           "moduleId": 17388,

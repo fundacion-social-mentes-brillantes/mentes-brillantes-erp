@@ -1,6 +1,6 @@
 {
   "node": {
-    "60b6a95a80a3e9cd6a8c86ae3a321fa5447305fe79": {
+    "60aa995aa9bda85770c62e71a024a3560039f51944": {
       "workers": {
         "app/(dashboard)/configuracion/page": {
           "moduleId": 49746,
@@ -15,7 +15,7 @@
       "exportedName": "procesarMigracion",
       "filename": "src/app/(dashboard)/configuracion/actions.ts"
     },
-    "40dd7baafe51e9ed44e7d7eef1c14deeec647803f7": {
+    "402da07127ac4992f4efa0b304c3174f925a7d1522": {
       "workers": {
         "app/(dashboard)/configuracion/page": {
           "moduleId": 49746,

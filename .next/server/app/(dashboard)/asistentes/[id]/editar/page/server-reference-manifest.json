@@ -1,6 +1,6 @@
 {
   "node": {
-    "704b4bbf6b4505735c5b7b9e0d7c5630a203a2a0fd": {
+    "70c8642dddd664b47c1296f697b9e976bbd96e195b": {
       "workers": {
         "app/(dashboard)/asistentes/[id]/editar/page": {
           "moduleId": 43564,

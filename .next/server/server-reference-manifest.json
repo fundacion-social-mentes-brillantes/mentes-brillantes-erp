@@ -1,6 +1,6 @@
 {
   "node": {
-    "001acdabd1ba3e013f1c86a59e8ba861193afae23e": {
+    "0011c88c803f1896e8269576053d61c61942b0700c": {
       "workers": {
         "app/(dashboard)/asistentes/nuevo/page": {
           "moduleId": 52174,
@@ -22,7 +22,29 @@
       "filename": "src/app/(dashboard)/asistentes/actions.ts",
       "exportedName": "obtenerSiguienteCodigoAsistente"
     },
-    "405c2b15ea7adf96401437b7418f39f543987d93dc": {
+    "4028dfd4589e5b7273814b48d53eea9d1e01132117": {
+      "workers": {
+        "app/(dashboard)/asistentes/nuevo/page": {
+          "moduleId": 52174,
+          "async": false,
+          "exportedName": "deleteAsistente",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        },
+        "app/(dashboard)/asistentes/page": {
+          "moduleId": 61258,
+          "async": false,
+          "exportedName": "deleteAsistente",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/asistentes/nuevo/page": "rsc",
+        "app/(dashboard)/asistentes/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/asistentes/actions.ts",
+      "exportedName": "deleteAsistente"
+    },
+    "40500c464ef8c0c1fe8ab0e210570b0ab2f47e3e05": {
       "workers": {
         "app/(dashboard)/asistentes/[id]/page": {
           "moduleId": 92762,
@@ -51,29 +73,7 @@
       "filename": "src/app/(dashboard)/asistentes/actions.ts",
       "exportedName": "pagarDeudasConSaldo"
     },
-    "40828c33aa9e246a9dda1ace9ceae33c486526ee5e": {
-      "workers": {
-        "app/(dashboard)/asistentes/nuevo/page": {
-          "moduleId": 52174,
-          "async": false,
-          "exportedName": "deleteAsistente",
-          "filename": "src/app/(dashboard)/asistentes/actions.ts"
-        },
-        "app/(dashboard)/asistentes/page": {
-          "moduleId": 61258,
-          "async": false,
-          "exportedName": "deleteAsistente",
-          "filename": "src/app/(dashboard)/asistentes/actions.ts"
-        }
-      },
-      "layer": {
-        "app/(dashboard)/asistentes/nuevo/page": "rsc",
-        "app/(dashboard)/asistentes/page": "action-browser"
-      },
-      "filename": "src/app/(dashboard)/asistentes/actions.ts",
-      "exportedName": "deleteAsistente"
-    },
-    "60534b88d59bec6ba50675c2f32966299eadbd092f": {
+    "60da2f11f64fbf7ba455000a5d089eba2bc67d41b4": {
       "workers": {
         "app/(dashboard)/asistentes/nuevo/page": {
           "moduleId": 52174,
@@ -95,24 +95,24 @@
       "filename": "src/app/(dashboard)/asistentes/actions.ts",
       "exportedName": "toggleAsistenteEstado"
     },
-    "702721c167d8bf1b4a739194312152470e814ff4e7": {
+    "60db273d8e623bd793e8965aa77cf4f41ac6b42af6": {
       "workers": {
         "app/(dashboard)/asistentes/[id]/page": {
           "moduleId": 92762,
           "async": false,
-          "exportedName": "saveAnticipo",
+          "exportedName": "revertirAnticipo",
           "filename": "src/app/(dashboard)/asistentes/actions.ts"
         },
         "app/(dashboard)/asistentes/nuevo/page": {
           "moduleId": 52174,
           "async": false,
-          "exportedName": "saveAnticipo",
+          "exportedName": "revertirAnticipo",
           "filename": "src/app/(dashboard)/asistentes/actions.ts"
         },
         "app/(dashboard)/asistentes/page": {
           "moduleId": 61258,
           "async": false,
-          "exportedName": "saveAnticipo",
+          "exportedName": "revertirAnticipo",
           "filename": "src/app/(dashboard)/asistentes/actions.ts"
         }
       },
@@ -122,9 +122,9 @@
         "app/(dashboard)/asistentes/page": "rsc"
       },
       "filename": "src/app/(dashboard)/asistentes/actions.ts",
-      "exportedName": "saveAnticipo"
+      "exportedName": "revertirAnticipo"
     },
-    "704b4bbf6b4505735c5b7b9e0d7c5630a203a2a0fd": {
+    "70c8642dddd664b47c1296f697b9e976bbd96e195b": {
       "workers": {
         "app/(dashboard)/asistentes/[id]/editar/page": {
           "moduleId": 43564,
@@ -153,7 +153,36 @@
       "filename": "src/app/(dashboard)/asistentes/actions.ts",
       "exportedName": "saveAsistente"
     },
-    "6023caf8c929b99e4cef27ddedf674bc327e24a22f": {
+    "70f27c7ee3fa3f4c161243d5eb0ac6833d951ca94e": {
+      "workers": {
+        "app/(dashboard)/asistentes/[id]/page": {
+          "moduleId": 92762,
+          "async": false,
+          "exportedName": "saveAnticipo",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        },
+        "app/(dashboard)/asistentes/nuevo/page": {
+          "moduleId": 52174,
+          "async": false,
+          "exportedName": "saveAnticipo",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        },
+        "app/(dashboard)/asistentes/page": {
+          "moduleId": 61258,
+          "async": false,
+          "exportedName": "saveAnticipo",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/asistentes/[id]/page": "action-browser",
+        "app/(dashboard)/asistentes/nuevo/page": "rsc",
+        "app/(dashboard)/asistentes/page": "rsc"
+      },
+      "filename": "src/app/(dashboard)/asistentes/actions.ts",
+      "exportedName": "saveAnticipo"
+    },
+    "608c96797a105eac1d4fc1f76617d150601a214bdb": {
       "workers": {
         "app/(dashboard)/asistentes/[id]/page": {
           "moduleId": 92762,
@@ -168,7 +197,7 @@
       "filename": "src/app/(dashboard)/asistentes/donacionesActions.ts",
       "exportedName": "crearDonacion"
     },
-    "606c5c27f2254c08b07868eba2e8eaa6fa57b67d99": {
+    "60c72dc9d10c4040d0b0b728f42ea88a8468e52c95": {
       "workers": {
         "app/(dashboard)/asistentes/[id]/page": {
           "moduleId": 92762,
@@ -183,7 +212,7 @@
       "filename": "src/app/(dashboard)/asistentes/donacionesActions.ts",
       "exportedName": "anularDonacionForm"
     },
-    "60d52707dcaed3c2957e4afa6c5ca6ec414e46c412": {
+    "606c166278ea085bcbd832790e2d3950b9789d8a26": {
       "workers": {
         "app/(dashboard)/asistentes/[id]/page": {
           "moduleId": 92762,
@@ -198,7 +227,7 @@
       "filename": "src/app/(dashboard)/asistentes/donacionesActions.ts",
       "exportedName": "editarDonacionForm"
     },
-    "60c6c51caadfc3375c014a0870b717df9c77667ce5": {
+    "60acc80114ed60c32a67e4316c16530f2326200634": {
       "workers": {
         "app/(dashboard)/asistentes/[id]/page": {
           "moduleId": 92762,
@@ -213,7 +242,7 @@
       "filename": "src/app/(dashboard)/asistentes/donacionesActions.ts",
       "exportedName": "eliminarDonacionForm"
     },
-    "60a7a61b03c8adc5f27800adeaad42dfae7f2ce3c8": {
+    "60faca60d90b4e575e3dfdaf558bc6cb6936fa48d9": {
       "workers": {
         "app/(dashboard)/asistentes/[id]/page": {
           "moduleId": 92762,
@@ -235,7 +264,7 @@
       "filename": "src/app/(dashboard)/coach/actions.ts",
       "exportedName": "registrarSesion"
     },
-    "60baf280fca60e856eac7a78e3a49d34b7d0aad377": {
+    "602dc75537d71b878ee0495092959a890d43839a86": {
       "workers": {
         "app/(dashboard)/asistentes/[id]/page": {
           "moduleId": 92762,
@@ -257,7 +286,7 @@
       "filename": "src/app/(dashboard)/coach/actions.ts",
       "exportedName": "editarSesion"
     },
-    "60fe3d6ad5e1212042a7f3b6863dda90b0350b579e": {
+    "6049ff5c3907368ac4afd09a987d09e561a57801f4": {
       "workers": {
         "app/(dashboard)/asistentes/[id]/page": {
           "moduleId": 92762,
@@ -279,7 +308,7 @@
       "filename": "src/app/(dashboard)/coach/actions.ts",
       "exportedName": "eliminarSesion"
     },
-    "60b6a95a80a3e9cd6a8c86ae3a321fa5447305fe79": {
+    "60aa995aa9bda85770c62e71a024a3560039f51944": {
       "workers": {
         "app/(dashboard)/configuracion/page": {
           "moduleId": 49746,
@@ -294,7 +323,7 @@
       "filename": "src/app/(dashboard)/configuracion/actions.ts",
       "exportedName": "procesarMigracion"
     },
-    "40dd7baafe51e9ed44e7d7eef1c14deeec647803f7": {
+    "402da07127ac4992f4efa0b304c3174f925a7d1522": {
       "workers": {
         "app/(dashboard)/configuracion/page": {
           "moduleId": 49746,
@@ -309,7 +338,7 @@
       "filename": "src/app/(dashboard)/configuracion/actions.ts",
       "exportedName": "actualizarConfiguracionEmpresa"
     },
-    "600b00d166e69f0aceb57ce1abe00346d353f5200a": {
+    "60d88b3030f1c3c70ac107cfbb5c769a13374d5ffc": {
       "workers": {
         "app/(dashboard)/configuracion/usuarios/page": {
           "moduleId": 58084,
@@ -324,7 +353,7 @@
       "filename": "src/app/(dashboard)/configuracion/usuarios/actions.ts",
       "exportedName": "actualizarUsuario"
     },
-    "6034a9de68cd79a8bd526fbf71b02c73576837c790": {
+    "60b79ceb8f4eeaa4aa0ba97ae4f2ccac30c88bb99d": {
       "workers": {
         "app/(dashboard)/configuracion/usuarios/page": {
           "moduleId": 58084,
@@ -339,7 +368,7 @@
       "filename": "src/app/(dashboard)/configuracion/usuarios/actions.ts",
       "exportedName": "crearUsuario"
     },
-    "40e10b46c78c382c25f312b94e4422cbece45c60d9": {
+    "40931a6773c325e01a032ea03e2733661554c01b1e": {
       "workers": {
         "app/(dashboard)/cuentas/[id]/page": {
           "moduleId": 17388,
@@ -361,7 +390,7 @@
       "filename": "src/app/(dashboard)/cuentas/actions.ts",
       "exportedName": "deleteCuenta"
     },
-    "70ae9e74d487422f0c370d485c6bdd801b6cc1449d": {
+    "7096b8cb5a9e48c0815a57b923bef837342ed45acc": {
       "workers": {
         "app/(dashboard)/cuentas/[id]/page": {
           "moduleId": 17388,
@@ -376,7 +405,7 @@
       "filename": "src/app/(dashboard)/cuentas/actions.ts",
       "exportedName": "saveAbono"
     },
-    "7c1eb733892264e852221712a813cc4340e0e80762": {
+    "7c2d1661a0c4f1b4f914dda30788a2467d2cc7ebb2": {
       "workers": {
         "app/(dashboard)/cuentas/[id]/page": {
           "moduleId": 17388,
@@ -391,7 +420,7 @@
       "filename": "src/app/(dashboard)/cuentas/actions.ts",
       "exportedName": "aplicarSaldoFavor"
     },
-    "7893c192503f791fde76a98b6773f723dbfe50d4ce": {
+    "78750a3a7bb23437895def8dcd3ce91e790428975f": {
       "workers": {
         "app/(dashboard)/cuentas/[id]/page": {
           "moduleId": 17388,
@@ -406,7 +435,7 @@
       "filename": "src/app/(dashboard)/cuentas/actions.ts",
       "exportedName": "editValorCuenta"
     },
-    "7c4ab43d547ea07a88b2cbfe75f2f282b8e0338850": {
+    "7cf04ff007200970479079a2416be90fdceac02321": {
       "workers": {
         "app/(dashboard)/cuentas/[id]/page": {
           "moduleId": 17388,
@@ -421,7 +450,7 @@
       "filename": "src/app/(dashboard)/cuentas/actions.ts",
       "exportedName": "editMontoAbono"
     },
-    "6022e871bb4eba4e41362377ca970d0397a742cefd": {
+    "60bf16faa07cd7f75b21f806e3234b7e3332ee889e": {
       "workers": {
         "app/(dashboard)/cuentas/nueva/page": {
           "moduleId": 89602,
@@ -436,7 +465,7 @@
       "filename": "src/app/(dashboard)/cuentas/actions.ts",
       "exportedName": "saveCuenta"
     },
-    "407740fb768543e18d3c3bc9be3686072cab599bcc": {
+    "40863dbd54fcd2f627c0c1d668924542a31e776906": {
       "workers": {
         "app/(dashboard)/egresos/page": {
           "moduleId": 37412,
@@ -451,7 +480,7 @@
       "filename": "src/app/(dashboard)/egresos/actions.ts",
       "exportedName": "deleteEgreso"
     },
-    "70573645f197400eed3763b58608ea160081befa08": {
+    "70007b0642bb5b28eed652521735e29acb796f1a4d": {
       "workers": {
         "app/(dashboard)/egresos/[id]/editar/page": {
           "moduleId": 48365,
@@ -473,7 +502,7 @@
       "filename": "src/app/(dashboard)/egresos/actions.ts",
       "exportedName": "saveEgreso"
     },
-    "70c5c65add8f188c41c29fe7ab463c0a58cb234ca7": {
+    "708c8514dd91afa55b721e519cefa740d228fe9314": {
       "workers": {
         "app/(dashboard)/liquidaciones/[id]/page": {
           "moduleId": 50687,
@@ -488,7 +517,7 @@
       "filename": "src/app/(dashboard)/liquidaciones/actions.ts",
       "exportedName": "saveAdelanto"
     },
-    "40c52b70c2362611f7bc8bd00f625f1615036c46fe": {
+    "40d6e64f55fafee6db86f21f48ed47d0452cdf18b0": {
       "workers": {
         "app/(dashboard)/liquidaciones/[id]/page": {
           "moduleId": 50687,
@@ -503,7 +532,7 @@
       "filename": "src/app/(dashboard)/liquidaciones/actions.ts",
       "exportedName": "generarLiquidacion"
     },
-    "60ea32531942099a13c60725324fc4cc7977918d28": {
+    "606141a7330e9ba0c3db8a23b92f332b9203acfa0a": {
       "workers": {
         "app/(dashboard)/liquidaciones/nuevo/page": {
           "moduleId": 68465,
@@ -518,7 +547,7 @@
       "filename": "src/app/(dashboard)/liquidaciones/actions.ts",
       "exportedName": "savePeriodo"
     },
-    "788459562f1e7f8191e1c4a8de9531d1d5e0b8853e": {
+    "7841a766edc47aa8e64ba7375a6bab44b2323ac8eb": {
       "workers": {
         "app/(dashboard)/movimientos/page": {
           "moduleId": 21382,
@@ -533,7 +562,7 @@
       "filename": "src/app/(dashboard)/movimientos/actions.ts",
       "exportedName": "anularMovimiento"
     },
-    "7008c6d0671c3010c21069d2ae3b545fea42aa7a26": {
+    "70b8f92f912fb3e05d244d5fb74fe4bd02eb8f2e32": {
       "workers": {
         "app/(dashboard)/movimientos/page": {
           "moduleId": 21382,
@@ -548,7 +577,7 @@
       "filename": "src/app/(dashboard)/movimientos/actions.ts",
       "exportedName": "editarMovimiento"
     },
-    "787715dd8966617be26f6e634acd1352931f01492e": {
+    "78df2e2f086d89d54397b77cb3726f0f9edeacdcd0": {
       "workers": {
         "app/(dashboard)/movimientos/page": {
           "moduleId": 21382,
@@ -563,7 +592,7 @@
       "filename": "src/app/(dashboard)/movimientos/actions.ts",
       "exportedName": "eliminarMovimiento"
     },
-    "609a74b0028efc14f941fd5afa5af46c0d63798812": {
+    "602bb37a405c4867722e3bd5d981ec73b2226b90e4": {
       "workers": {
         "app/(dashboard)/socios/page": {
           "moduleId": 79502,
@@ -578,7 +607,7 @@
       "filename": "src/app/(dashboard)/socios/actions.ts",
       "exportedName": "toggleSocioEstado"
     },
-    "70bce54fb64f76f10006899b698ca72bc4f7b26497": {
+    "70f8228b164ca5a1851d8962f7923da135c70914b6": {
       "workers": {
         "app/(dashboard)/socios/[id]/editar/page": {
           "moduleId": 37621,
@@ -607,7 +636,81 @@
       "filename": "src/app/(dashboard)/socios/actions.ts",
       "exportedName": "saveSocio"
     },
-    "602e9e623e28af22b11a3d02e7b496a5678c53cb0d": {
+    "40378e3e9b391a0e5c771bd1f12d08f9bc114cb59d": {
+      "workers": {
+        "app/(dashboard)/ventas-externas/page": {
+          "moduleId": 43273,
+          "async": false,
+          "exportedName": "anularVentaExterna",
+          "filename": "src/app/(dashboard)/ventas-externas/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/ventas-externas/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/ventas-externas/actions.ts",
+      "exportedName": "anularVentaExterna"
+    },
+    "40b3478a435c0d460b24924ac6c50fa8ecaf12a220": {
+      "workers": {
+        "app/(dashboard)/ventas-externas/page": {
+          "moduleId": 43273,
+          "async": false,
+          "exportedName": "eliminarVentaExterna",
+          "filename": "src/app/(dashboard)/ventas-externas/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/ventas-externas/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/ventas-externas/actions.ts",
+      "exportedName": "eliminarVentaExterna"
+    },
+    "604f489d64a59a43138dd845234a8c4ec1b2b77c41": {
+      "workers": {
+        "app/(dashboard)/ventas-externas/[id]/editar/page": {
+          "moduleId": 95678,
+          "async": false,
+          "exportedName": "crearVentaExterna",
+          "filename": "src/app/(dashboard)/ventas-externas/actions.ts"
+        },
+        "app/(dashboard)/ventas-externas/nueva/page": {
+          "moduleId": 82821,
+          "async": false,
+          "exportedName": "crearVentaExterna",
+          "filename": "src/app/(dashboard)/ventas-externas/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/ventas-externas/[id]/editar/page": "action-browser",
+        "app/(dashboard)/ventas-externas/nueva/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/ventas-externas/actions.ts",
+      "exportedName": "crearVentaExterna"
+    },
+    "70547d3ec6af093bd045c06ad14f5839e0aada8145": {
+      "workers": {
+        "app/(dashboard)/ventas-externas/[id]/editar/page": {
+          "moduleId": 95678,
+          "async": false,
+          "exportedName": "editarVentaExterna",
+          "filename": "src/app/(dashboard)/ventas-externas/actions.ts"
+        },
+        "app/(dashboard)/ventas-externas/nueva/page": {
+          "moduleId": 82821,
+          "async": false,
+          "exportedName": "editarVentaExterna",
+          "filename": "src/app/(dashboard)/ventas-externas/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/ventas-externas/[id]/editar/page": "action-browser",
+        "app/(dashboard)/ventas-externas/nueva/page": "action-browser"
+      },
+      "filename": "src/app/(dashboard)/ventas-externas/actions.ts",
+      "exportedName": "editarVentaExterna"
+    },
+    "60d4cb87e557297908af0421102038a54a262c6584": {
       "workers": {
         "app/login/page": {
           "moduleId": 40246,
@@ -622,7 +725,7 @@
       "filename": "src/app/login/actions.ts",
       "exportedName": "loginAction"
     },
-    "607317c9f2f63baf4a1279b4ca65d30bc10852bd4a": {
+    "606039482d75960d0fb84e4f3a287bff223c4891ef": {
       "workers": {
         "app/registro/page": {
           "moduleId": 51113,
@@ -639,5 +742,5 @@
     }
   },
   "edge": {},
-  "encryptionKey": "X9FeO1NjQBpLNX9vrcm4mWCbmN9G8VfWtwfWlUjMRS0="
+  "encryptionKey": "xivs69beLyK7W9RlDmM5DvF2RKkMTtFuuDtAvQFyN98="
 }

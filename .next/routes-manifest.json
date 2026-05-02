@@ -76,6 +76,14 @@
         "nxtPid": "nxtPid"
       },
       "namedRegex": "^/socios/(?<nxtPid>[^/]+?)/editar(?:/)?$"
+    },
+    {
+      "page": "/ventas-externas/[id]/editar",
+      "regex": "^/ventas\\-externas/([^/]+?)/editar(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/ventas\\-externas/(?<nxtPid>[^/]+?)/editar(?:/)?$"
     }
   ],
   "staticRoutes": [
@@ -96,6 +104,36 @@
       "regex": "^/_not\\-found(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/_not\\-found(?:/)?$"
+    },
+    {
+      "page": "/api/asistente-ia/chat",
+      "regex": "^/api/asistente\\-ia/chat(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/asistente\\-ia/chat(?:/)?$"
+    },
+    {
+      "page": "/api/asistente-ia/conversaciones",
+      "regex": "^/api/asistente\\-ia/conversaciones(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/asistente\\-ia/conversaciones(?:/)?$"
+    },
+    {
+      "page": "/api/telegram/cajero",
+      "regex": "^/api/telegram/cajero(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/telegram/cajero(?:/)?$"
+    },
+    {
+      "page": "/api/telegram/cajero/setup-webhook",
+      "regex": "^/api/telegram/cajero/setup\\-webhook(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/telegram/cajero/setup\\-webhook(?:/)?$"
+    },
+    {
+      "page": "/asistente-ia",
+      "regex": "^/asistente\\-ia(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/asistente\\-ia(?:/)?$"
     },
     {
       "page": "/asistentes",
@@ -210,6 +248,18 @@
       "regex": "^/socios/nuevo(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/socios/nuevo(?:/)?$"
+    },
+    {
+      "page": "/ventas-externas",
+      "regex": "^/ventas\\-externas(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ventas\\-externas(?:/)?$"
+    },
+    {
+      "page": "/ventas-externas/nueva",
+      "regex": "^/ventas\\-externas/nueva(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ventas\\-externas/nueva(?:/)?$"
     }
   ],
   "dataRoutes": [],

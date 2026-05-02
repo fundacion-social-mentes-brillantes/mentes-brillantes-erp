@@ -47,6 +47,15 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
 }
 
 
+// Validate ../../src/app/(dashboard)/asistente-ia/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/asistente-ia">> = Specific
+  const handler = {} as typeof import("../../src/app/(dashboard)/asistente-ia/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../src/app/(dashboard)/asistentes/[id]/editar/page.tsx
 {
   type __IsExpected<Specific extends AppPageConfig<"/asistentes/[id]/editar">> = Specific
@@ -245,6 +254,33 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../src/app/(dashboard)/ventas-externas/[id]/editar/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/ventas-externas/[id]/editar">> = Specific
+  const handler = {} as typeof import("../../src/app/(dashboard)/ventas-externas/[id]/editar/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/(dashboard)/ventas-externas/nueva/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/ventas-externas/nueva">> = Specific
+  const handler = {} as typeof import("../../src/app/(dashboard)/ventas-externas/nueva/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/(dashboard)/ventas-externas/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/ventas-externas">> = Specific
+  const handler = {} as typeof import("../../src/app/(dashboard)/ventas-externas/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../src/app/login/page.tsx
 {
   type __IsExpected<Specific extends AppPageConfig<"/login">> = Specific
@@ -263,10 +299,46 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../src/app/api/asistente-ia/chat/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/asistente-ia/chat">> = Specific
+  const handler = {} as typeof import("../../src/app/api/asistente-ia/chat/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/api/asistente-ia/conversaciones/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/asistente-ia/conversaciones">> = Specific
+  const handler = {} as typeof import("../../src/app/api/asistente-ia/conversaciones/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../src/app/api/backup/[resource]/route.ts
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/api/backup/[resource]">> = Specific
   const handler = {} as typeof import("../../src/app/api/backup/[resource]/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/api/telegram/cajero/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/telegram/cajero">> = Specific
+  const handler = {} as typeof import("../../src/app/api/telegram/cajero/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/api/telegram/cajero/setup-webhook/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/telegram/cajero/setup-webhook">> = Specific
+  const handler = {} as typeof import("../../src/app/api/telegram/cajero/setup-webhook/route.js")
   type __Check = __IsExpected<typeof handler>
   // @ts-ignore
   type __Unused = __Check

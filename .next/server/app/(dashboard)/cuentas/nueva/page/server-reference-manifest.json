@@ -1,6 +1,6 @@
 {
   "node": {
-    "6022e871bb4eba4e41362377ca970d0397a742cefd": {
+    "60bf16faa07cd7f75b21f806e3234b7e3332ee889e": {
       "workers": {
         "app/(dashboard)/cuentas/nueva/page": {
           "moduleId": 89602,

@@ -1,6 +1,6 @@
 {
   "node": {
-    "001acdabd1ba3e013f1c86a59e8ba861193afae23e": {
+    "0011c88c803f1896e8269576053d61c61942b0700c": {
       "workers": {
         "app/(dashboard)/asistentes/page": {
           "moduleId": 61258,
@@ -15,22 +15,7 @@
       "exportedName": "obtenerSiguienteCodigoAsistente",
       "filename": "src/app/(dashboard)/asistentes/actions.ts"
     },
-    "405c2b15ea7adf96401437b7418f39f543987d93dc": {
-      "workers": {
-        "app/(dashboard)/asistentes/page": {
-          "moduleId": 61258,
-          "async": false,
-          "exportedName": "pagarDeudasConSaldo",
-          "filename": "src/app/(dashboard)/asistentes/actions.ts"
-        }
-      },
-      "layer": {
-        "app/(dashboard)/asistentes/page": "rsc"
-      },
-      "exportedName": "pagarDeudasConSaldo",
-      "filename": "src/app/(dashboard)/asistentes/actions.ts"
-    },
-    "40828c33aa9e246a9dda1ace9ceae33c486526ee5e": {
+    "4028dfd4589e5b7273814b48d53eea9d1e01132117": {
       "workers": {
         "app/(dashboard)/asistentes/page": {
           "moduleId": 61258,
@@ -45,7 +30,22 @@
       "exportedName": "deleteAsistente",
       "filename": "src/app/(dashboard)/asistentes/actions.ts"
     },
-    "60534b88d59bec6ba50675c2f32966299eadbd092f": {
+    "40500c464ef8c0c1fe8ab0e210570b0ab2f47e3e05": {
+      "workers": {
+        "app/(dashboard)/asistentes/page": {
+          "moduleId": 61258,
+          "async": false,
+          "exportedName": "pagarDeudasConSaldo",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/asistentes/page": "rsc"
+      },
+      "exportedName": "pagarDeudasConSaldo",
+      "filename": "src/app/(dashboard)/asistentes/actions.ts"
+    },
+    "60da2f11f64fbf7ba455000a5d089eba2bc67d41b4": {
       "workers": {
         "app/(dashboard)/asistentes/page": {
           "moduleId": 61258,
@@ -60,22 +60,22 @@
       "exportedName": "toggleAsistenteEstado",
       "filename": "src/app/(dashboard)/asistentes/actions.ts"
     },
-    "702721c167d8bf1b4a739194312152470e814ff4e7": {
+    "60db273d8e623bd793e8965aa77cf4f41ac6b42af6": {
       "workers": {
         "app/(dashboard)/asistentes/page": {
           "moduleId": 61258,
           "async": false,
-          "exportedName": "saveAnticipo",
+          "exportedName": "revertirAnticipo",
           "filename": "src/app/(dashboard)/asistentes/actions.ts"
         }
       },
       "layer": {
         "app/(dashboard)/asistentes/page": "rsc"
       },
-      "exportedName": "saveAnticipo",
+      "exportedName": "revertirAnticipo",
       "filename": "src/app/(dashboard)/asistentes/actions.ts"
     },
-    "704b4bbf6b4505735c5b7b9e0d7c5630a203a2a0fd": {
+    "70c8642dddd664b47c1296f697b9e976bbd96e195b": {
       "workers": {
         "app/(dashboard)/asistentes/page": {
           "moduleId": 61258,
@@ -88,6 +88,21 @@
         "app/(dashboard)/asistentes/page": "rsc"
       },
       "exportedName": "saveAsistente",
+      "filename": "src/app/(dashboard)/asistentes/actions.ts"
+    },
+    "70f27c7ee3fa3f4c161243d5eb0ac6833d951ca94e": {
+      "workers": {
+        "app/(dashboard)/asistentes/page": {
+          "moduleId": 61258,
+          "async": false,
+          "exportedName": "saveAnticipo",
+          "filename": "src/app/(dashboard)/asistentes/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/asistentes/page": "rsc"
+      },
+      "exportedName": "saveAnticipo",
       "filename": "src/app/(dashboard)/asistentes/actions.ts"
     }
   },

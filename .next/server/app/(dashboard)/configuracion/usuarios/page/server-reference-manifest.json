@@ -1,6 +1,6 @@
 {
   "node": {
-    "600b00d166e69f0aceb57ce1abe00346d353f5200a": {
+    "60d88b3030f1c3c70ac107cfbb5c769a13374d5ffc": {
       "workers": {
         "app/(dashboard)/configuracion/usuarios/page": {
           "moduleId": 58084,
@@ -15,7 +15,7 @@
       "exportedName": "actualizarUsuario",
       "filename": "src/app/(dashboard)/configuracion/usuarios/actions.ts"
     },
-    "6034a9de68cd79a8bd526fbf71b02c73576837c790": {
+    "60b79ceb8f4eeaa4aa0ba97ae4f2ccac30c88bb99d": {
       "workers": {
         "app/(dashboard)/configuracion/usuarios/page": {
           "moduleId": 58084,
