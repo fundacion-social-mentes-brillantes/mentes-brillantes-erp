@@ -193,6 +193,8 @@ function shouldBotRespond(message: TelegramMessage) {
 
   if (isNumber) {
     if (pending && pending !== "expired") return true
+    if (isReplyToBot(message)) return true
+    if (ctx && normalized.length <= 2) return true
     return false
   }
 
@@ -932,7 +934,11 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig) {
   
   const isNumber = /^\d+$/.test(normalizedText)
   if (isNumber) {
-     return null
+     const pending = getPendingSelection(message)
+     if (pending && pending !== "expired") {
+         return `Ese número no está en las opciones. Por favor responde con un número del 1 al ${pending.matches.length}.`
+     }
+     return "No tengo una lista activa para elegir. Vuelve a hacer la búsqueda o responde directamente con código/nombre completo."
   }
 
   const naturalText = extractNaturalText(message)
@@ -1024,6 +1030,13 @@ export async function POST(request: Request) {
   const message = update.message
   if (!message?.chat?.id || !message.text) return NextResponse.json({ ok: true })
 
+  let multilineWarning = ""
+  const lines = message.text.split('\n').map(l => l.trim()).filter(Boolean)
+  if (lines.length > 1) {
+    message.text = lines[0]
+    multilineWarning = `\n\n(Nota: Veo que enviaste varios pasos en un solo mensaje. Para no mezclar datos, solo procesé la primera línea: "${lines[0]}". Por favor envía lo demás paso a paso.)`
+  }
+
   if (!isAuthorized(message, config)) {
     console.warn("[telegram-cajero] mensaje rechazado por permisos", {
       chat_id: message.chat.id,
@@ -1035,8 +1048,12 @@ export async function POST(request: Request) {
   if (!shouldBotRespond(message)) return NextResponse.json({ ok: true })
 
   try {
-    const responseText = await handleMessage(message, config)
+    let responseText = await handleMessage(message, config)
     if (!responseText) return NextResponse.json({ ok: true })
+    
+    if (multilineWarning) {
+      responseText += multilineWarning
+    }
     
     await sendTelegramMessage(config, message.chat.id, responseText)
   } catch (error) {
