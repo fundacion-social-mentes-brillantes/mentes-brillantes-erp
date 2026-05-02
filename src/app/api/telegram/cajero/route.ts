@@ -407,7 +407,7 @@ async function classifyIntentWithDeepSeek(text: string, config: TelegramConfig):
           {
             role: "system",
             content:
-              'Eres Cajero Mentes Brillantes, asistente financiero interno del grupo PAGOS. Ayudas como una persona prudente y clara. Tu trabajo es revisar y orientar sobre pagos, deudas, cuentas pendientes, saldo a favor, abonos, comprobantes, donaciones, ventas externas y sesiones coach. No inventes información. No registres nada sin confirmación. En esta fase eres solo lectura. Puedes dar recomendaciones prudentes basadas en los datos del ERP. Devuelve SOLO JSON estricto con: intent ("estado_persona" | "ultima_sesion_coach" | "sesiones_coach_persona" | "pagos_persona" | "ultimo_pago_persona" | "cuentas_pendientes_persona" | "saldo_favor_persona" | "donaciones_persona" | "ventas_externas" | "egresos" | "resumen_periodo" | "liquidacion_socio" | "busqueda_global" | "pregunta_general_erp" | "saludo" | "ayuda" | "id" | "no_entendido"), persona_busqueda (string|null), socio_busqueda (string|null), termino_busqueda (string|null), fecha_desde (string|null), fecha_hasta (string|null), metodo_pago (string|null), concepto (string|null), necesita_aclaracion (boolean), pregunta_aclaracion (string|null). No inventes nombres. Si preguntan por "última sesión", "sesión más reciente" o "cuándo fue la última coach", debes clasificar como ultima_sesion_coach.',
+              'Eres Cajero Mentes Brillantes, asistente financiero interno del grupo PAGOS. Ayudas como una persona prudente y clara. Tu trabajo es revisar y orientar sobre pagos, deudas, cuentas pendientes, saldo a favor, abonos, comprobantes, donaciones, ventas externas y sesiones coach. No inventes información. No registres nada sin confirmación. En esta fase eres solo lectura. Puedes dar recomendaciones prudentes basadas en los datos del ERP. Devuelve SOLO JSON estricto con: intent ("estado_persona" | "ultima_sesion_coach" | "sesiones_coach_persona" | "pagos_persona" | "ultimo_pago_persona" | "cuentas_pendientes_persona" | "saldo_favor_persona" | "donaciones_persona" | "ventas_externas" | "egresos" | "resumen_periodo" | "liquidacion_socio" | "busqueda_global" | "pregunta_general_erp" | "saludo" | "ayuda" | "id" | "no_entendido"), persona_busqueda (string|null), socio_busqueda (string|null), termino_busqueda (string|null), fecha_desde (string|null), fecha_hasta (string|null), metodo_pago (string|null), concepto (string|null), necesita_aclaracion (boolean), pregunta_aclaracion (string|null). No inventes nombres. Si preguntan por "última sesión", "sesión más reciente" o "cuándo fue la última coach", debes clasificar como ultima_sesion_coach. Si te piden buscar algo genérico o no sabes qué tabla usar, clasifica como busqueda_global y extrae el termino_busqueda.',
           },
           { role: "user", content: text },
         ],
@@ -427,6 +427,45 @@ async function classifyIntentWithDeepSeek(text: string, config: TelegramConfig):
   }
 }
 
+function injectNaturalDates(text: string, intent: Intent) {
+  if (intent.fecha_desde || intent.fecha_hasta) return
+  const normalized = normalizeText(text)
+  const today = new Date()
+  const year = today.getFullYear()
+  let month = today.getMonth()
+  let fromDate: Date | null = null
+  let toDate: Date | null = null
+
+  if (/\bhoy\b/.test(normalized)) {
+    fromDate = new Date(year, month, today.getDate())
+    toDate = new Date(year, month, today.getDate())
+  } else if (/\bayer\b/.test(normalized)) {
+    fromDate = new Date(year, month, today.getDate() - 1)
+    toDate = new Date(year, month, today.getDate() - 1)
+  } else if (/\beste mes\b|\bmes actual\b/.test(normalized)) {
+    fromDate = new Date(year, month, 1)
+    toDate = new Date(year, month + 1, 0)
+  } else {
+    const meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+    for (let i = 0; i < meses.length; i++) {
+      if (new RegExp(`\\b${meses[i]}\\b`).test(normalized)) {
+        fromDate = new Date(year, i, 1)
+        toDate = new Date(year, i + 1, 0)
+        break
+      }
+    }
+  }
+
+  if (fromDate && toDate) {
+    const format = (d: Date) => {
+      const pad = (n: number) => String(n).padStart(2, "0")
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+    }
+    intent.fecha_desde = format(fromDate)
+    intent.fecha_hasta = format(toDate)
+  }
+}
+
 function fallbackClassifyIntent(text: string): Intent {
   const normalized = normalizeText(text)
   const defaultIntent: Intent = { intent: "no_entendido", persona_busqueda: null, socio_busqueda: null, termino_busqueda: null, fecha_desde: null, fecha_hasta: null, metodo_pago: null, concepto: null, necesita_aclaracion: false, pregunta_aclaracion: null }
@@ -441,18 +480,50 @@ function fallbackClassifyIntent(text: string): Intent {
     return { ...defaultIntent, intent: "id" }
   }
 
-  const stateWords = [
-    "estado", "debe", "deuda", "pagos", "pago", "saldo", "abona", "abonos", "pendiente", "cuenta", "cuentas", "coach", "sesion", "sesiones", "como esta",
-  ]
-  if (stateWords.some((word) => normalized.includes(word))) {
-    const cleaned = text
+  const extractPerson = () => {
+    return text
       .replace(/^(cajero|cajerito|caja)\b[:,]?\s*/i, "")
       .replace(/^(como|cómo)\s+esta\s+/i, "")
-      .replace(/^(revisa|consulta|mira|verifica)\s+/i, "")
-      .replace(/\b(estado|deuda|debe|pagos|pago|saldo|abonos|abono|de|del|la|el|a|para|por|que|qué)\b/gi, " ")
+      .replace(/^(revisa|consulta|mira|verifica|busca|encuentra)\s+/i, "")
+      .replace(/\b(estado|deuda|debe|pagos|pago|saldo|abonos|abono|de|del|la|el|a|para|por|que|qué|ultima|ultimo|sesion|coach|mas|reciente|cuando|fue|cuantas|le|quedan|hizo|ventas|externas|egresos|gastos|este|mes)\b/gi, " ")
       .replace(/\s+/g, " ")
       .trim()
+  }
 
+  const cleaned = extractPerson()
+
+  if (/\b(ultima sesion|última sesión|sesion mas reciente|sesión más reciente|cuando fue la ultima coach)\b/.test(normalized)) {
+    return { ...defaultIntent, intent: "ultima_sesion_coach", persona_busqueda: cleaned || null }
+  }
+  if (/\b(sesiones coach|cuantas sesiones|cuántas sesiones|sesiones restantes|cuantas le quedan|cuántas le quedan)\b/.test(normalized)) {
+    return { ...defaultIntent, intent: "sesiones_coach_persona", persona_busqueda: cleaned || null }
+  }
+  if (/\b(ultimo pago|último pago|pago mas reciente|pago más reciente)\b/.test(normalized)) {
+    return { ...defaultIntent, intent: "ultimo_pago_persona", persona_busqueda: cleaned || null }
+  }
+  if (/\b(pagos de|que pagos hizo|qué pagos hizo|abonos de)\b/.test(normalized)) {
+    return { ...defaultIntent, intent: "pagos_persona", persona_busqueda: cleaned || null }
+  }
+  if (/\b(cuanto debe|cuánto debe|que debe|qué debe|deuda|pendiente)\b/.test(normalized)) {
+    return { ...defaultIntent, intent: "cuentas_pendientes_persona", persona_busqueda: cleaned || null }
+  }
+  if (/\b(saldo a favor)\b/.test(normalized)) {
+    return { ...defaultIntent, intent: "saldo_favor_persona", persona_busqueda: cleaned || null }
+  }
+  if (/\b(ventas externas)\b/.test(normalized)) {
+    return { ...defaultIntent, intent: "ventas_externas" }
+  }
+  if (/\b(egresos|gastos)\b/.test(normalized)) {
+    return { ...defaultIntent, intent: "egresos" }
+  }
+  if (/\b(busca|buscar|encuentra|camiseta|termo)\b/.test(normalized)) {
+    return { ...defaultIntent, intent: "busqueda_global", termino_busqueda: text.replace(/^(cajero|cajerito|caja)\b[:,]?\s*/i, "").replace(/^(busca|buscar|encuentra)\s+/i, "").trim() }
+  }
+
+  const stateWords = [
+    "estado", "como esta",
+  ]
+  if (stateWords.some((word) => normalized.includes(word))) {
     return {
       ...defaultIntent,
       intent: "estado_persona",
@@ -746,7 +817,7 @@ async function buildPagosPersonaResponse(supabase: any, asistente: any) {
 
   const pagosRecientes = (cuentas || [])
     .flatMap((cuenta: any) => cuenta.pagos_abonos.map((pago: any) => ({ ...pago, concepto: cuenta.concepto })))
-    .filter((pago: any) => pago.estado === "aprobado")
+    .filter((pago: any) => pago.estado !== "anulado")
     .sort((a: any, b: any) => new Date(b.fecha_pago).getTime() - new Date(a.fecha_pago).getTime())
     .slice(0, 10)
 
@@ -769,7 +840,7 @@ async function buildUltimoPagoPersonaResponse(supabase: any, asistente: any) {
 
   const pagosRecientes = (cuentas || [])
     .flatMap((cuenta: any) => cuenta.pagos_abonos.map((pago: any) => ({ ...pago, concepto: cuenta.concepto })))
-    .filter((pago: any) => pago.estado === "aprobado")
+    .filter((pago: any) => pago.estado !== "anulado")
     .sort((a: any, b: any) => new Date(b.fecha_pago).getTime() - new Date(a.fecha_pago).getTime())
 
   if (pagosRecientes.length === 0) {
@@ -968,6 +1039,7 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig) {
 
   let intent = await classifyIntentWithDeepSeek(naturalText || text, config)
   if (!intent) intent = fallbackClassifyIntent(naturalText || text)
+  injectNaturalDates(naturalText || text, intent)
 
   if (intent.intent === "saludo") {
     if (/\b(gracias|agradecido)\b/.test(normalizedText)) {
