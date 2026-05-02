@@ -348,7 +348,7 @@ async function classifyIntentWithDeepSeek(text: string, config: TelegramConfig):
           {
             role: "system",
             content:
-              'Clasifica mensajes para un bot cajero de un ERP. Devuelve SOLO JSON estricto con: intent ("ayuda" | "id" | "estado_persona" | "saludo" | "no_entendido"), persona_busqueda (string|null), necesita_aclaracion (boolean), pregunta_aclaracion (string|null). No inventes nombres.',
+              'Eres Cajero Mentes Brillantes, asistente financiero interno del grupo PAGOS. Ayudas como una persona prudente y clara. Tu trabajo es revisar y orientar sobre pagos, deudas, cuentas pendientes, saldo a favor, abonos, comprobantes, donaciones, ventas externas y sesiones coach. No inventes información. No registres nada sin confirmación. En esta fase eres solo lectura. Puedes dar recomendaciones prudentes basadas en los datos del ERP. Devuelve SOLO JSON estricto con: intent ("ayuda" | "id" | "estado_persona" | "saludo" | "no_entendido"), persona_busqueda (string|null), necesita_aclaracion (boolean), pregunta_aclaracion (string|null). No inventes nombres.',
           },
           { role: "user", content: text },
         ],
@@ -370,7 +370,7 @@ async function classifyIntentWithDeepSeek(text: string, config: TelegramConfig):
 
 function fallbackClassifyIntent(text: string): Intent {
   const normalized = normalizeText(text)
-  if (!normalized || /^(hola|buenas|buenos dias|buenas tardes|buenas noches)\b/.test(normalized)) {
+  if (!normalized || /^(hola|buenas|buenos dias|buenas tardes|buenas noches)\b/.test(normalized) || /\b(gracias|listo gracias|ok gracias)\b/.test(normalized)) {
     return { intent: "saludo", persona_busqueda: null, necesita_aclaracion: false, pregunta_aclaracion: null }
   }
   if (normalized.includes("ayuda") || normalized.includes("comandos")) {
@@ -471,12 +471,12 @@ async function buildEstadoResponse(term: string, message?: TelegramMessage) {
     }
 
     return [
-      "Encontré varias coincidencias. ¿Cuál de estas personas quieres que revise?",
+      "Encontré varias personas parecidas. Para no equivocarme, dime cuál es:",
       ...matches.map((item, index) => {
         const a = item.asistente
         return `${index + 1}. ${a.nombre} | código ${a.codigo || "sin código"}`
       }),
-      "Puedes responder con el código o escribir el nombre más completo.",
+      "Puedes responder con el número, el código o escribir el nombre más completo.",
     ].join("\n")
   }
 
@@ -548,6 +548,19 @@ async function buildEstadoResponse(term: string, message?: TelegramMessage) {
   const sesionesRealizadas = (sesionesCoach || []).length
   const saldoFavor = calcularSaldoFavorDisponible(movimientosSaldo || [])
 
+  const lectura: string[] = ["\nMi lectura:"]
+  if (pendientes.length > 0) {
+    lectura.push("- Ojo: tiene cuentas pendientes. Yo revisaría primero estas cuentas antes de pedir o registrar otro pago.")
+  } else {
+    lectura.push("- Según lo que veo, está al día en cuentas pendientes.")
+  }
+  if (saldoFavor > 0) {
+    lectura.push("- Ojo: tiene saldo a favor disponible. Antes de pedir otro pago, conviene revisar si se puede aplicar.")
+  }
+  if (pagosRecientes.length > 0) {
+    lectura.push("- Veo pagos recientes. Si van a registrar otro comprobante, conviene confirmar que no sea duplicado.")
+  }
+
   return [
     `Listo. Revisé a ${asistente.nombre}.`,
     `Código: ${asistente.codigo || "sin código"}`,
@@ -569,9 +582,10 @@ async function buildEstadoResponse(term: string, message?: TelegramMessage) {
     "",
     `Saldo a favor usable: ${formatCop(saldoFavor)}`,
     `Sesiones coach: ${sesionesRealizadas}/${sesionesCompradas} registradas, restantes ${Math.max(0, sesionesCompradas - sesionesRealizadas)}`,
+    ...lectura,
     errors.length ? `\nOjo: no pude consultar completamente ${errors.join(", ")}.` : "",
   ]
-    .filter(Boolean)
+    .filter((line) => line !== null && line !== undefined && line !== "")
     .join("\n")
 }
 
@@ -615,7 +629,10 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig) {
   if (intent.intent === "ayuda") return AYUDA
   if (intent.intent === "id") return buildIdResponse(message)
   if (intent.intent === "saludo") {
-    return "Hola, aquí estoy. Por ahora puedo revisar estado, deuda, pagos, saldo a favor y sesiones de una persona. Por ejemplo: como esta Maria Perez."
+    if (/\b(gracias|agradecido)\b/.test(normalizedText)) {
+      return "Con gusto. Aquí estoy pendiente de los pagos."
+    }
+    return "Hola. Aquí estoy para revisar cuentas, pagos o saldos. ¿De quién consultamos?"
   }
   if (intent.intent === "estado_persona") {
     if (intent.necesita_aclaracion || !intent.persona_busqueda) return intent.pregunta_aclaracion || PREGUNTAR_PERSONA
