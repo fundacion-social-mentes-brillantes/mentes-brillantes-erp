@@ -16,18 +16,32 @@ export async function searchGlobal(supabase: SupabaseReader, term: string) {
     })
   }
 
-  const [asistentes, cuentas, egresos, ventas] = await Promise.all([
+  const [asistentes, cuentas, pagos, saldoFavor, donaciones, egresos, ventas, coachSesiones, coachPaquetes, socios, periodos] = await Promise.all([
     supabase.from("asistentes").select("id, nombre, codigo, cedula").ilike("nombre", `%${normalized}%`).limit(5),
-    supabase.from("cuentas_por_cobrar").select("id, concepto").ilike("concepto", `%${normalized}%`).limit(5),
+    supabase.from("cuentas_por_cobrar").select("id, concepto, asistentes(nombre, codigo)").ilike("concepto", `%${normalized}%`).limit(5),
+    supabase.from("pagos_abonos").select("id, monto, metodo_pago, fecha_pago, notas, cuentas_por_cobrar(concepto, asistentes(nombre, codigo))").or(`notas.ilike.%${normalized}%,metodo_pago.ilike.%${normalized}%`).limit(5),
+    supabase.from("movimientos_saldo_favor").select("id, tipo, monto, fecha, metodo_pago, notas, asistentes(nombre, codigo)").or(`notas.ilike.%${normalized}%,metodo_pago.ilike.%${normalized}%`).limit(5),
+    supabase.from("donaciones_asistentes").select("id, monto, metodo_pago, fecha, notas, asistentes(nombre, codigo)").or(`notas.ilike.%${normalized}%,metodo_pago.ilike.%${normalized}%`).limit(5),
     supabase.from("egresos").select("id, concepto, notas").or(`concepto.ilike.%${normalized}%,notas.ilike.%${normalized}%`).limit(5),
     supabase.from("ventas_externas").select("id, comprador_nombre, concepto, notas").or(`comprador_nombre.ilike.%${normalized}%,concepto.ilike.%${normalized}%,notas.ilike.%${normalized}%`).limit(5),
+    supabase.from("coach_sesiones").select("id, fecha, notas, asistentes(nombre, codigo)").ilike("notas", `%${normalized}%`).limit(5),
+    supabase.from("coach_paquetes").select("id, sesiones_compradas, cuentas_por_cobrar(concepto, asistentes(nombre, codigo))").ilike("cuentas_por_cobrar.concepto", `%${normalized}%`).limit(5),
+    supabase.from("socios").select("id, nombre").ilike("nombre", `%${normalized}%`).limit(5),
+    supabase.from("periodos_liquidacion").select("id, nombre, estado").ilike("nombre", `%${normalized}%`).limit(5),
   ])
 
   const data = {
     asistentes: asistentes.error ? [] : asistentes.data || [],
     cuentas: cuentas.error ? [] : cuentas.data || [],
+    pagos_abonos: pagos.error ? [] : pagos.data || [],
+    movimientos_saldo_favor: saldoFavor.error ? [] : saldoFavor.data || [],
+    donaciones_asistentes: donaciones.error ? [] : donaciones.data || [],
     egresos: egresos.error ? [] : egresos.data || [],
     ventas_externas: ventas.error ? [] : ventas.data || [],
+    coach_sesiones: coachSesiones.error ? [] : coachSesiones.data || [],
+    coach_paquetes: coachPaquetes.error ? [] : coachPaquetes.data || [],
+    socios: socios.error ? [] : socios.data || [],
+    periodos_liquidacion: periodos.error ? [] : periodos.data || [],
   }
   const count = Object.values(data).reduce((acc, rows: any) => acc + rows.length, 0)
 
@@ -35,7 +49,19 @@ export async function searchGlobal(supabase: SupabaseReader, term: string) {
     toolName: "searchGlobal",
     status: count ? "ok" : "empty",
     queryScope,
-    sources: ["asistentes", "cuentas_por_cobrar", "egresos", "ventas_externas"],
+    sources: [
+      "asistentes",
+      "cuentas_por_cobrar",
+      "pagos_abonos",
+      "movimientos_saldo_favor",
+      "donaciones_asistentes",
+      "egresos",
+      "ventas_externas",
+      "coach_sesiones",
+      "coach_paquetes",
+      "socios",
+      "periodos_liquidacion",
+    ],
     resultCount: count,
     data,
   })
