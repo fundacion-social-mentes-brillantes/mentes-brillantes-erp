@@ -35,11 +35,17 @@ import {
   getPersonFinancialStatus,
   getPersonLastPayment,
   getPersonPayments,
+  getOpenReceivablesSummary,
+  getPersonPurchasesOrConcepts,
   getSummary,
   searchGlobal,
-  type ToolResult,
 } from "@/lib/telegram-cajero/tools"
 import { cancelAction, confirmAction, detectDraftActionIntent, prepareDraftAction } from "@/lib/telegram-cajero/actions"
+import {
+  resolveTelegramContext,
+  shouldUseLastAsistenteForText,
+} from "@/lib/telegram-cajero/context-resolver"
+import { buildTelegramInternalContext } from "@/lib/telegram-cajero/internal-context-adapter"
 
 export const dynamic = "force-dynamic"
 
@@ -62,7 +68,7 @@ function memoryScopeFromMessage(message: TelegramMessage): TelegramMemoryScope |
   return buildTelegramMemoryScope({
     chatId: message.chat.id,
     userId,
-    threadId: message.reply_to_message?.message_id ?? null,
+    threadId: null,
   })
 }
 
@@ -92,7 +98,7 @@ async function saveContext(memory: LoadedMemory | null | undefined, ctx: CajeroC
       ...memory.session.state,
       ...ctx,
       lastIntent: ctx.lastMode || ctx.lastIntent || null,
-      replyAnchor: memory.scope.threadId ? Number(memory.scope.threadId) : ctx.replyAnchor ?? null,
+      replyAnchor: ctx.replyAnchor ?? memory.session.state.replyAnchor ?? null,
     },
     expiresAt: expiresAtFrom(),
   })
@@ -176,7 +182,7 @@ function extractPersonSearchTerm(text: string) {
 
 function referencesLastAsistente(text: string) {
   const normalized = normalizeText(text)
-  return (
+  return shouldUseLastAsistenteForText(text) || (
     /\b(ella|el|él|esa|ese|esta persona|esa persona|la misma|el mismo|sus|le)\b/.test(normalized) ||
     /^(y\s+)?(los pagos|sus pagos|pagos|cuando pago|cuándo pago|cuando hizo los pagos|cuándo hizo los pagos|cuanto debe|cuánto debe|saldo|saldo a favor|sesiones|sesiones restantes|cuantas sesiones|cuántas sesiones|cuanto le queda|cuánto le queda|la ultima|la última)\b/.test(normalized)
   )
@@ -270,6 +276,30 @@ function formatCop(value: unknown) {
   return `$${Math.round(toSafeNumber(value)).toLocaleString("es-CO")}`
 }
 
+function compactLine(value: unknown, fallback = "Sin dato") {
+  const text = String(value || "").trim()
+  return text || fallback
+}
+
+function buildContextualHelp(ctx: CajeroConversationContext | null) {
+  if (ctx?.lastResultSummary) {
+    return [
+      `Lo ultimo que revise fue: ${String(ctx.lastResultSummary).slice(0, 220)}`,
+      "",
+      "Puedo aclararlo, ampliar pagos, deuda, saldo, compras o ficha completa.",
+    ].join("\n")
+  }
+  if (ctx?.lastAsistente) {
+    return `Estoy con ${ctx.lastAsistente.nombre}. Puedo revisar sus pagos, deuda, saldo a favor, compras o ficha completa. Que quieres ver?`
+  }
+  return "Puedo revisar personas, pagos, deudas, saldos, cartera pendiente, ingresos, egresos o alertas. Por ejemplo: quien debe dinero?"
+}
+
+function summarizeToolError(prefix: string, result: any) {
+  const detail = Array.isArray(result?.userSafeErrors) ? result.userSafeErrors.join(" ") : ""
+  return `${prefix}${detail ? ` ${detail}` : ""}`
+}
+
 function visibleName(user?: TelegramUser) {
   if (!user) return "No disponible"
   return [user.first_name, user.last_name].filter(Boolean).join(" ") || user.username || String(user.id)
@@ -335,6 +365,10 @@ function shouldBotRespond(message: TelegramMessage, memory?: LoadedMemory | null
     if (isReplyToBot(message)) return true
     if (route.shouldRespond && route.reason !== "silent") return true
     return false
+  }
+
+  if ((normalized === "?" || normalized === "no entendi" || normalized === "no entiendo") && (ctx || isReplyToBot(message))) {
+    return true
   }
 
   if (route.shouldRespond) return true
@@ -492,6 +526,19 @@ function fallbackClassifyIntent(text: string): Intent {
   }
 
   const cleaned = extractPerson()
+
+  if (
+    /\b(quien|quienes|personas|lista|mayores|cartera)\b/.test(normalized) &&
+    /\b(debe|deben|deuda|dinero|pendiente|pendientes|deudores)\b/.test(normalized)
+  ) {
+    return { ...defaultIntent, intent: "cartera_pendiente_global" }
+  }
+  if (/\b(toda la informacion|ficha|resumen completo|estado completo|datos completos|que sabes)\b/.test(normalized)) {
+    return { ...defaultIntent, intent: "estado_completo_persona", persona_busqueda: cleaned || null, necesita_aclaracion: !cleaned, pregunta_aclaracion: cleaned ? null : PREGUNTAR_PERSONA }
+  }
+  if (/\b(que compro|lo que compro|que tiene comprado|conceptos|compras|que pago|ha comprado)\b/.test(normalized)) {
+    return { ...defaultIntent, intent: "compras_persona", persona_busqueda: cleaned || null, necesita_aclaracion: !cleaned, pregunta_aclaracion: cleaned ? null : PREGUNTAR_PERSONA }
+  }
 
   if (/\b(ultima sesion|última sesión|sesion mas reciente|sesión más reciente|cuando fue la ultima coach)\b/.test(normalized)) {
     return { ...defaultIntent, intent: "ultima_sesion_coach", persona_busqueda: cleaned || null }
@@ -884,6 +931,99 @@ async function buildSesionesCoachPersonaResponse(supabase: any, asistente: any) 
   return response.join("\n")
 }
 
+async function buildComprasPersonaResponse(supabase: any, asistente: any) {
+  const result = await getPersonPurchasesOrConcepts(supabase, asistente.id, 12)
+  if (result.status === "error") return summarizeToolError(`No pude consultar las compras/conceptos de ${asistente.nombre}.`, result)
+
+  const compras: any[] = Array.isArray(result.data) ? result.data : []
+  if (!compras.length) return `No veo cuentas o conceptos comprados para ${asistente.nombre}.`
+
+  return [
+    `Esto tiene registrado ${asistente.nombre}:`,
+    ...compras.slice(0, 8).map((item) => {
+      const estado = item.estado_pago === "pagado" ? "pagado" : item.estado_pago === "parcial" ? "parcial" : "pendiente"
+      return `- ${compactLine(item.concepto)}: ${formatCop(item.valor_total)} | abonado ${formatCop(item.abonado)} | pendiente ${formatCop(item.pendiente)} | ${estado}`
+    }),
+    compras.length > 8 ? `Y ${compras.length - 8} concepto(s) mas. Puedo ampliar si quieres.` : "",
+    "Consulté cuentas por cobrar y pagos válidos; pagos anulados no cuentan.",
+  ]
+    .filter(Boolean)
+    .join("\n")
+}
+
+async function buildEstadoCompletoPersonaResponse(supabase: any, asistente: any, question = "") {
+  const [internalContext, estado, compras, pagos, ultimoPago] = await Promise.all([
+    buildTelegramInternalContext(supabase, question || `ficha completa de ${asistente.nombre}`, { asistenteId: asistente.id }),
+    getPersonFinancialStatus(supabase, asistente.id),
+    getPersonPurchasesOrConcepts(supabase, asistente.id, 10),
+    getPersonPayments(supabase, asistente.id, 5),
+    getPersonLastPayment(supabase, asistente.id),
+  ])
+
+  const data: any = estado.data || {}
+  const cuentas = Array.isArray(data.cuentas) ? data.cuentas : []
+  const pendientes = cuentas.filter((cuenta: any) => cuenta.pendiente > 0)
+  const comprasData: any[] = Array.isArray(compras.data) ? compras.data : []
+  const pagosData: any[] = Array.isArray(pagos.data) ? pagos.data : []
+  const lastPayment: any = Array.isArray(ultimoPago.data) ? ultimoPago.data[0] : null
+  const errors = [
+    ...estado.userSafeErrors,
+    ...compras.userSafeErrors,
+    ...pagos.userSafeErrors,
+    ...ultimoPago.userSafeErrors,
+    ...internalContext.userSafeErrors,
+  ].filter(Boolean)
+
+  return [
+    `Listo, revisé a ${asistente.nombre}.`,
+    `Código: ${asistente.codigo || "sin código"}${asistente.cedula ? ` | Cédula: ${asistente.cedula}` : ""}`,
+    "",
+    `Facturado: ${formatCop(data.total_facturado || 0)}`,
+    `Abonado: ${formatCop(data.total_abonado || 0)}`,
+    `Pendiente: ${formatCop(data.total_pendiente || 0)}`,
+    `Saldo a favor usable: ${formatCop(data.saldo_a_favor || 0)}`,
+    "",
+    pendientes.length
+      ? `Cuentas pendientes:\n${pendientes.slice(0, 5).map((c: any) => `- ${compactLine(c.concepto)}: ${formatCop(c.pendiente)}`).join("\n")}`
+      : "Cuentas pendientes: no veo saldo pendiente.",
+    "",
+    lastPayment
+      ? `Último pago: ${lastPayment.fecha_pago} | ${formatCop(lastPayment.monto)} | ${lastPayment.metodo_pago || "sin método"} | ${compactLine(lastPayment.concepto)}`
+      : "Último pago: no veo pagos recientes.",
+    pagosData.length > 1
+      ? `Pagos recientes:\n${pagosData.slice(0, 4).map((p) => `- ${p.fecha_pago}: ${formatCop(p.monto)} ${p.metodo_pago || ""} | ${compactLine(p.concepto)}`).join("\n")}`
+      : "",
+    "",
+    comprasData.length
+      ? `Compras/conceptos:\n${comprasData.slice(0, 5).map((c) => `- ${compactLine(c.concepto)}: ${formatCop(c.valor_total)} (${c.estado_pago})`).join("\n")}`
+      : "Compras/conceptos: no veo cuentas registradas.",
+    "",
+    "Consulté asistentes, cuentas, pagos, saldo a favor y contexto financiero estructurado.",
+    errors.length ? `Ojo: resultado parcial. ${errors.join(" ")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n")
+}
+
+async function buildCarteraPendienteGlobalResponse(supabase: any) {
+  const result = await getOpenReceivablesSummary(supabase)
+  if (result.status === "error") return summarizeToolError("No pude consultar cartera pendiente.", result)
+
+  const data: any = result.data || {}
+  if (!data.cuentas_pendientes) return "No veo cartera pendiente en este momento. Si hay un error de consulta, te lo diria aparte."
+
+  const top = Array.isArray(data.top_personas) ? data.top_personas : []
+  return [
+    `Veo ${data.personas_con_deuda} persona(s) con saldo pendiente.`,
+    `Total cartera pendiente: ${formatCop(data.total_cartera)}`,
+    "",
+    "Mayores pendientes:",
+    ...top.slice(0, 10).map((item: any, index: number) => `${index + 1}. ${item.nombre}${item.codigo ? ` | código ${item.codigo}` : ""} - ${formatCop(item.pendiente)} (${item.cuentas} cuenta(s))`),
+    "",
+    "Esto excluye pagos anulados y no cuenta saldo a favor como ingreso nuevo.",
+  ].join("\n")
+}
+
 async function buildPagosPersonaResponse(supabase: any, asistente: any) {
   {
   const result = await getPersonPayments(supabase, asistente.id, 10)
@@ -1142,12 +1282,14 @@ async function executeActionForAsistente(
   if (message) await saveContext(memory, { lastMode: action, lastSearchTerm: term, lastAsistente: asistente })
 
   if (action === "estado_persona") return buildEstadoResponse(supabase, asistente)
+  if (action === "estado_completo_persona") return buildEstadoCompletoPersonaResponse(supabase, asistente, term)
   if (action === "ultima_sesion_coach") return buildUltimaSesionCoachResponse(supabase, asistente)
   if (action === "sesiones_coach_persona") return buildSesionesCoachPersonaResponse(supabase, asistente)
   if (action === "pagos_persona") return buildPagosPersonaResponse(supabase, asistente)
   if (action === "ultimo_pago_persona") return buildUltimoPagoPersonaResponse(supabase, asistente)
   if (action === "cuentas_pendientes_persona") return buildCuentasPendientesPersonaResponse(supabase, asistente)
   if (action === "saldo_favor_persona") return buildSaldoFavorPersonaResponse(supabase, asistente)
+  if (action === "compras_persona") return buildComprasPersonaResponse(supabase, asistente)
   if (action === "donaciones_persona") return "Aún estoy aprendiendo a buscar donaciones."
 
   return "Acción no soportada para personas."
@@ -1210,11 +1352,58 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig, m
   if (draftKind) {
     const draft = prepareDraftAction(draftKind, text, { rawText: text })
     await savePendingAction(memory, draft.action)
-    return `${draft.message}\n\nBorrador: ${draft.action?.summary || text}\nSi respondes "confirmo", igual quedara bloqueado porque la escritura no esta activa.`
+    return [
+      "Estoy en modo solo lectura. Puedo preparar un borrador, pero no voy a registrar ni modificar nada.",
+      "",
+      `Borrador preparado: ${draft.action?.summary || text}`,
+      "Si respondes \"confirmo\", lo dejare bloqueado porque la escritura del cajero no esta activa.",
+    ].join("\n")
   }
 
   const naturalText = extractNaturalText(message)
   const ctx = contextFromMemory(memory)
+  const resolvedContext = resolveTelegramContext(naturalText || text, { lastAsistente: ctx?.lastAsistente || null })
+
+  if (resolvedContext?.intent === "context_help") {
+    return buildContextualHelp(ctx)
+  }
+
+  if (resolvedContext?.needsPersonClarification) {
+    return "De que persona hablas? Dame nombre, codigo o cedula y la reviso."
+  }
+
+  if (resolvedContext?.intent === "cartera_pendiente_global") {
+    const supabase = createAdminClient()
+    if (!supabase) return "No pude consultar el ERP en este momento."
+    return buildCarteraPendienteGlobalResponse(supabase)
+  }
+
+  if (resolvedContext) {
+    if (resolvedContext.useLastAsistente && ctx?.lastAsistente) {
+      const supabase = createAdminClient()
+      if (!supabase) return "No pude consultar el ERP en este momento."
+      const asistente = ctx.lastAsistente
+      await saveContext(memory, { lastMode: resolvedContext.intent as DeepSeekIntent, lastSearchTerm: ctx.lastSearchTerm, lastAsistente: asistente })
+
+      const parts: string[] = []
+      const intents = [resolvedContext.intent, ...resolvedContext.secondaryIntents].filter(
+        (item, index, arr) => arr.indexOf(item) === index
+      )
+      for (const item of intents.slice(0, 3)) {
+        if (item === "estado_completo_persona") parts.push(await buildEstadoCompletoPersonaResponse(supabase, asistente, naturalText || text))
+        if (item === "compras_persona") parts.push(await buildComprasPersonaResponse(supabase, asistente))
+        if (item === "ultimo_pago_persona") parts.push(await buildUltimoPagoPersonaResponse(supabase, asistente))
+        if (item === "pagos_persona") parts.push(await buildPagosPersonaResponse(supabase, asistente))
+        if (item === "cuentas_pendientes_persona") parts.push(await buildCuentasPendientesPersonaResponse(supabase, asistente))
+        if (item === "saldo_favor_persona") parts.push(await buildSaldoFavorPersonaResponse(supabase, asistente))
+      }
+      return parts.filter(Boolean).join("\n\n")
+    }
+
+    if (resolvedContext.personQuery) {
+      return executeActionForAsistente(resolvedContext.personQuery, resolvedContext.intent as PendingAction, message, memory)
+    }
+  }
 
   if (ctx?.lastAsistente && referencesLastAsistente(naturalText || text)) {
     const followUpAction = inferFollowUpIntentFromContext(naturalText || text, ctx)
@@ -1273,7 +1462,9 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig, m
     return buildBusquedaGlobalResponse(supabase, term)
   }
 
-  const personIntents = ["estado_persona", "ultima_sesion_coach", "sesiones_coach_persona", "pagos_persona", "ultimo_pago_persona", "cuentas_pendientes_persona", "saldo_favor_persona", "donaciones_persona"]
+  if (intent.intent === "cartera_pendiente_global") return buildCarteraPendienteGlobalResponse(supabase)
+
+  const personIntents = ["estado_persona", "estado_completo_persona", "ultima_sesion_coach", "sesiones_coach_persona", "pagos_persona", "ultimo_pago_persona", "cuentas_pendientes_persona", "saldo_favor_persona", "donaciones_persona", "compras_persona"]
 
   if (personIntents.includes(intent.intent)) {
     if (intent.necesita_aclaracion || !intent.persona_busqueda) {
@@ -1340,6 +1531,13 @@ export async function POST(request: Request) {
     
     if (multilineWarning) {
       responseText += multilineWarning
+    }
+    if (memory && responseText) {
+      const ctx = contextFromMemory(memory) || {}
+      await saveContext(memory, {
+        ...ctx,
+        lastResultSummary: responseText.replace(/\s+/g, " ").slice(0, 280),
+      })
     }
     
     await sendTelegramMessage(config, message.chat.id, responseText)

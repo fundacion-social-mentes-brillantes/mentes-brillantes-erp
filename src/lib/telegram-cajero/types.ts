@@ -42,6 +42,7 @@ export type TelegramConfig = {
 
 export type PendingAction =
   | "estado_persona"
+  | "estado_completo_persona"
   | "ultima_sesion_coach"
   | "sesiones_coach_persona"
   | "pagos_persona"
@@ -49,6 +50,7 @@ export type PendingAction =
   | "cuentas_pendientes_persona"
   | "saldo_favor_persona"
   | "donaciones_persona"
+  | "compras_persona"
 
 export type DeepSeekIntent =
   | PendingAction
@@ -56,6 +58,7 @@ export type DeepSeekIntent =
   | "egresos"
   | "resumen_periodo"
   | "liquidacion_socio"
+  | "cartera_pendiente_global"
   | "busqueda_global"
   | "pregunta_general_erp"
   | "saludo"

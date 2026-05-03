@@ -47,8 +47,14 @@ export function classifyByRules(text: string): Intent {
     return withIntent("saludo")
   }
   if (/\b(ultimo pago|pago mas reciente)\b/.test(normalized)) return withIntent("ultimo_pago_persona")
+  if (/\b(toda la informacion|ficha|resumen completo|estado completo|datos completos|que sabes)\b/.test(normalized)) return withIntent("estado_completo_persona")
+  if (/\b(que compro|lo que compro|conceptos|compras|que tiene comprado)\b/.test(normalized)) return withIntent("compras_persona")
   if (/\b(pagos|abonos)\b/.test(normalized)) return withIntent("pagos_persona")
   if (/\b(saldo a favor)\b/.test(normalized)) return withIntent("saldo_favor_persona")
+  if (
+    /\b(quien|quienes|personas|lista|mayores|cartera)\b/.test(normalized) &&
+    /\b(debe|deben|deuda|dinero|pendiente|pendientes|deudores)\b/.test(normalized)
+  ) return withIntent("cartera_pendiente_global")
   if (/\b(debe|deuda|pendiente|pendientes)\b/.test(normalized)) return withIntent("cuentas_pendientes_persona")
   if (/\b(ultima sesion|sesion mas reciente)\b/.test(normalized)) return withIntent("ultima_sesion_coach")
   if (/\b(sesiones|coach)\b/.test(normalized)) return withIntent("sesiones_coach_persona")

@@ -44,4 +44,16 @@ describe("telegram cajero router", () => {
     const result = routeTelegramMessage(msg("cuanto debe Ana y cuales fueron sus ultimos pagos"))
     expect(result.plannedTasks.length).toBeGreaterThan(1)
   })
+
+  it("detecta ficha completa", () => {
+    const result = routeTelegramMessage(msg("muestrame toda la informacion de jessica becerra"))
+    expect(result.shouldRespond).toBe(true)
+    expect(result.intent.intent).toBe("estado_completo_persona")
+  })
+
+  it("detecta cartera pendiente global", () => {
+    const result = routeTelegramMessage(msg("Cajero quienes deben dinero?"))
+    expect(result.shouldRespond).toBe(true)
+    expect(result.intent.intent).toBe("cartera_pendiente_global")
+  })
 })

@@ -30,5 +30,13 @@ describe("telegram cajero security", () => {
     const handler = readFileSync(join(process.cwd(), "src/lib/telegram-cajero/handler.ts"), "utf8")
     expect(handler).toContain("@/lib/telegram-cajero/memory/index")
     expect(handler).not.toContain("@/lib/telegram-cajero/memory\"")
+    expect(handler).not.toContain("threadId: message.reply_to_message?.message_id")
+    expect(handler).toContain("threadId: null")
+  })
+
+  it("busqueda global usa tabla periodos real", () => {
+    const source = readFileSync(join(process.cwd(), "src/lib/telegram-cajero/tools/global-search.ts"), "utf8")
+    expect(source).toContain('from("periodos")')
+    expect(source).not.toContain(`periodos_${"liquidacion"}`)
   })
 })

@@ -27,7 +27,7 @@ export async function searchGlobal(supabase: SupabaseReader, term: string) {
     supabase.from("coach_sesiones").select("id, fecha, notas, asistentes(nombre, codigo)").ilike("notas", `%${normalized}%`).limit(5),
     supabase.from("coach_paquetes").select("id, sesiones_compradas, cuentas_por_cobrar(concepto, asistentes(nombre, codigo))").ilike("cuentas_por_cobrar.concepto", `%${normalized}%`).limit(5),
     supabase.from("socios").select("id, nombre").ilike("nombre", `%${normalized}%`).limit(5),
-    supabase.from("periodos_liquidacion").select("id, nombre, estado").ilike("nombre", `%${normalized}%`).limit(5),
+    supabase.from("periodos").select("id, nombre, estado").ilike("nombre", `%${normalized}%`).limit(5),
   ])
 
   const data = {
@@ -41,7 +41,7 @@ export async function searchGlobal(supabase: SupabaseReader, term: string) {
     coach_sesiones: coachSesiones.error ? [] : coachSesiones.data || [],
     coach_paquetes: coachPaquetes.error ? [] : coachPaquetes.data || [],
     socios: socios.error ? [] : socios.data || [],
-    periodos_liquidacion: periodos.error ? [] : periodos.data || [],
+    periodos: periodos.error ? [] : periodos.data || [],
   }
   const count = Object.values(data).reduce((acc, rows: any) => acc + rows.length, 0)
 
@@ -60,7 +60,7 @@ export async function searchGlobal(supabase: SupabaseReader, term: string) {
       "coach_sesiones",
       "coach_paquetes",
       "socios",
-      "periodos_liquidacion",
+      "periodos",
     ],
     resultCount: count,
     data,

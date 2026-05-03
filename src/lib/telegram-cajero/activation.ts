@@ -38,6 +38,10 @@ export function looksLikeCajeroRequest(text: string) {
     "egreso",
     "egresos",
     "resumen",
+    "informacion",
+    "ficha",
+    "compras",
+    "conceptos",
     "periodo",
     "mes",
   ]
