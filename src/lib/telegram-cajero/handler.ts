@@ -46,6 +46,7 @@ import {
   shouldUseLastAsistenteForText,
 } from "@/lib/telegram-cajero/context-resolver"
 import { buildTelegramInternalContext } from "@/lib/telegram-cajero/internal-context-adapter"
+import { analyzeErpQuestion, mergeWorkspaceEntity } from "@/lib/telegram-cajero/erp-analyst"
 
 export const dynamic = "force-dynamic"
 
@@ -101,6 +102,34 @@ async function saveContext(memory: LoadedMemory | null | undefined, ctx: CajeroC
       ...ctx,
       lastIntent: ctx.lastMode || ctx.lastIntent || null,
       replyAnchor: ctx.replyAnchor ?? memory.session.state.replyAnchor ?? null,
+    },
+    expiresAt: expiresAtFrom(),
+  })
+  memory.session = (await memory.store.get(memory.scope)) || memory.session
+}
+
+async function saveStructuredResult(
+  memory: LoadedMemory | null | undefined,
+  result: NonNullable<TelegramSessionState["lastStructuredResult"]>
+) {
+  if (!memory) return
+  const workspace = result.asistente
+    ? mergeWorkspaceEntity(memory.session.state, {
+        type: "asistente",
+        id: result.asistente.id,
+        nombre: result.asistente.nombre,
+        lastQuery: result.type,
+        totals: result.totals,
+        items: result.items,
+      })
+    : memory.session.state.conversationWorkspace || null
+  await memory.store.patch(memory.scope, {
+    state: {
+      ...memory.session.state,
+      lastStructuredResult: result,
+      conversationWorkspace: workspace,
+      lastModule: result.module || result.type,
+      toolTraceSummary: result.sources?.join(", ") || memory.session.state.toolTraceSummary || null,
     },
     expiresAt: expiresAtFrom(),
   })
@@ -1026,6 +1055,60 @@ async function buildCarteraPendienteGlobalResponse(supabase: any) {
   ].join("\n")
 }
 
+async function buildStructuredResultForAsistente(
+  supabase: any,
+  asistente: any,
+  action: PendingAction
+): Promise<NonNullable<TelegramSessionState["lastStructuredResult"]> | null> {
+  if (["cuentas_pendientes_persona", "estado_persona", "estado_completo_persona"].includes(action)) {
+    const result = await getPersonFinancialStatus(supabase, asistente.id)
+    const financial: any = result.data || {}
+    const cuentas = Array.isArray(financial.cuentas) ? financial.cuentas : []
+    const pendientes = cuentas.filter((cuenta: any) => Number(cuenta.pendiente || 0) > 0)
+    return {
+      type: action,
+      module: "asistentes",
+      asistente: { id: asistente.id, nombre: asistente.nombre, codigo: asistente.codigo || null },
+      totals: {
+        pendiente: Math.round(toSafeNumber(financial.total_pendiente || 0)),
+        facturado: Math.round(toSafeNumber(financial.total_facturado || 0)),
+        abonado: Math.round(toSafeNumber(financial.total_abonado || 0)),
+        saldo_a_favor: Math.round(toSafeNumber(financial.saldo_a_favor || 0)),
+      },
+      items: pendientes.map((cuenta: any) => ({
+        concepto: cuenta.concepto,
+        pendiente: Math.round(toSafeNumber(cuenta.pendiente)),
+        valor: Math.round(toSafeNumber(cuenta.valor)),
+        abonado: Math.round(toSafeNumber(cuenta.abonado)),
+      })),
+      sources: ["cuentas_por_cobrar", "pagos_abonos", "movimientos_saldo_favor"],
+    }
+  }
+
+  if (action === "compras_persona") {
+    const result = await getPersonPurchasesOrConcepts(supabase, asistente.id, 12)
+    const items = Array.isArray(result.data) ? result.data : []
+    return {
+      type: action,
+      module: "cuentas_por_cobrar",
+      asistente: { id: asistente.id, nombre: asistente.nombre, codigo: asistente.codigo || null },
+      totals: {
+        total: items.reduce((acc: number, item: any) => acc + Math.round(toSafeNumber(item.valor_total)), 0),
+        pendiente: items.reduce((acc: number, item: any) => acc + Math.round(toSafeNumber(item.pendiente)), 0),
+      },
+      items: items.map((item: any) => ({
+        concepto: item.concepto,
+        valor_total: item.valor_total,
+        pendiente: item.pendiente,
+        abonado: item.abonado,
+      })),
+      sources: ["cuentas_por_cobrar", "pagos_abonos"],
+    }
+  }
+
+  return null
+}
+
 async function buildPagosPersonaResponse(supabase: any, asistente: any) {
   {
   const result = await getPersonPayments(supabase, asistente.id, 10)
@@ -1283,18 +1366,22 @@ async function executeActionForAsistente(
   const asistente = asistenteOrMessage
   if (message) await saveContext(memory, { lastMode: action, lastSearchTerm: term, lastAsistente: asistente })
 
-  if (action === "estado_persona") return buildEstadoResponse(supabase, asistente)
-  if (action === "estado_completo_persona") return buildEstadoCompletoPersonaResponse(supabase, asistente, term)
-  if (action === "ultima_sesion_coach") return buildUltimaSesionCoachResponse(supabase, asistente)
-  if (action === "sesiones_coach_persona") return buildSesionesCoachPersonaResponse(supabase, asistente)
-  if (action === "pagos_persona") return buildPagosPersonaResponse(supabase, asistente)
-  if (action === "ultimo_pago_persona") return buildUltimoPagoPersonaResponse(supabase, asistente)
-  if (action === "cuentas_pendientes_persona") return buildCuentasPendientesPersonaResponse(supabase, asistente)
-  if (action === "saldo_favor_persona") return buildSaldoFavorPersonaResponse(supabase, asistente)
-  if (action === "compras_persona") return buildComprasPersonaResponse(supabase, asistente)
-  if (action === "donaciones_persona") return "Aún estoy aprendiendo a buscar donaciones."
+  let response: string
+  if (action === "estado_persona") response = await buildEstadoResponse(supabase, asistente)
+  else if (action === "estado_completo_persona") response = await buildEstadoCompletoPersonaResponse(supabase, asistente, term)
+  else if (action === "ultima_sesion_coach") response = await buildUltimaSesionCoachResponse(supabase, asistente)
+  else if (action === "sesiones_coach_persona") response = await buildSesionesCoachPersonaResponse(supabase, asistente)
+  else if (action === "pagos_persona") response = await buildPagosPersonaResponse(supabase, asistente)
+  else if (action === "ultimo_pago_persona") response = await buildUltimoPagoPersonaResponse(supabase, asistente)
+  else if (action === "cuentas_pendientes_persona") response = await buildCuentasPendientesPersonaResponse(supabase, asistente)
+  else if (action === "saldo_favor_persona") response = await buildSaldoFavorPersonaResponse(supabase, asistente)
+  else if (action === "compras_persona") response = await buildComprasPersonaResponse(supabase, asistente)
+  else if (action === "donaciones_persona") response = "Aun estoy aprendiendo a buscar donaciones."
+  else response = "Accion no soportada para personas."
 
-  return "Acción no soportada para personas."
+  const structured = await buildStructuredResultForAsistente(supabase, asistente, action)
+  if (structured) await saveStructuredResult(memory, structured)
+  return response
 }
 
 function buildIdResponse(message: TelegramMessage) {
@@ -1364,6 +1451,30 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig, m
 
   const naturalText = extractNaturalText(message)
   const ctx = contextFromMemory(memory)
+  const analyst = analyzeErpQuestion(naturalText || text, memory?.session.state || {})
+  if (analyst.kind === "answer" || analyst.kind === "clarify" || analyst.kind === "compare_periods") {
+    return analyst.text
+  }
+  if (analyst.kind === "tool") {
+    const supabase = createAdminClient()
+    if (!supabase) return "No pude consultar el ERP en este momento."
+    if (analyst.tool === "open_receivables") return buildCarteraPendienteGlobalResponse(supabase)
+    if (analyst.tool === "summary_month") {
+      const range = resolveNaturalDateRange("este mes")
+      return buildResumenPeriodoResponse(supabase, {
+        intent: "resumen_periodo",
+        persona_busqueda: null,
+        socio_busqueda: null,
+        termino_busqueda: null,
+        fecha_desde: range?.from || null,
+        fecha_hasta: range?.to || null,
+        metodo_pago: null,
+        concepto: null,
+        necesita_aclaracion: false,
+        pregunta_aclaracion: null,
+      })
+    }
+  }
   const resolvedContext = resolveTelegramContext(naturalText || text, { lastAsistente: ctx?.lastAsistente || null })
 
   if (resolvedContext?.intent === "context_help") {
@@ -1399,6 +1510,8 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig, m
         if (item === "cuentas_pendientes_persona") parts.push(await buildCuentasPendientesPersonaResponse(supabase, asistente))
         if (item === "saldo_favor_persona") parts.push(await buildSaldoFavorPersonaResponse(supabase, asistente))
       }
+      const structured = await buildStructuredResultForAsistente(supabase, asistente, resolvedContext.intent as PendingAction)
+      if (structured) await saveStructuredResult(memory, structured)
       return parts.filter(Boolean).join("\n\n")
     }
 
@@ -1550,3 +1663,4 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ ok: true })
 }
+

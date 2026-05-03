@@ -35,6 +35,26 @@ export type TelegramSessionState = {
   lastFilters?: Record<string, string | null>
   lastResultIds?: string[]
   lastResultSummary?: string | null
+  lastStructuredResult?: {
+    type: string
+    asistente?: { id: string; nombre: string; codigo?: string | null } | null
+    totals?: Record<string, number>
+    items?: Array<Record<string, unknown>>
+    sources?: string[]
+    module?: string | null
+  } | null
+  conversationWorkspace?: {
+    activeEntities?: Array<{
+      type: "asistente" | "modulo"
+      id?: string
+      nombre: string
+      lastQuery?: string
+      totals?: Record<string, number>
+      items?: Array<Record<string, unknown>>
+    }>
+    lastComparison?: Record<string, unknown> | null
+    threadSummary?: string | null
+  } | null
   toolTraceSummary?: string | null
   replyAnchor?: number | null
   updatedAt?: number
