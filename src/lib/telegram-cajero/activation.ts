@@ -52,6 +52,19 @@ export function looksLikeCajeroRequest(text: string) {
   return false
 }
 
+export function isClearlySocialText(text: string) {
+  const normalized = normalizeText(text)
+  return /^(gracias|ok|okay|listo|dale|bueno|perfecto|super|súper|si|sí|no|ajá|aja|vale)[.!?]*$/.test(normalized)
+}
+
+export function shouldProcessDedicatedGroupText(message: TelegramMessage, hasContext = false) {
+  const text = message.text?.trim() || ""
+  if (!text) return false
+  if (message.from?.is_bot) return false
+  if (isClearlySocialText(text) && !hasContext && !isReplyToBot(message)) return false
+  return true
+}
+
 export function isDirectlyAddressed(message: TelegramMessage) {
   const normalized = normalizeText(message.text || "")
   return (

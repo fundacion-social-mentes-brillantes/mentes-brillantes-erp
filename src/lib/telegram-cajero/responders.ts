@@ -1,7 +1,7 @@
 export const PREGUNTAR_PERSONA = "Claro, ¿de qué persona quieres que revise pagos, deuda o saldo?"
 
 export const NO_ENTENDIDO =
-  "No te entendí del todo. Por ahora puedo consultar estado, pagos y saldos. Escríbeme algo como: último pago de Catalina."
+  "Puedo revisar una persona, cartera pendiente, pagos, ingresos/egresos, liquidaciones o el ultimo resultado. Dame un nombre, codigo, concepto o dime que quieres analizar."
 
 export const AYUDA = [
   "Bot cajero Mentes Brillantes (solo lectura).",

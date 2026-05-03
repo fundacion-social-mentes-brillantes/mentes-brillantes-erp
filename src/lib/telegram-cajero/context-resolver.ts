@@ -115,7 +115,7 @@ export function resolveTelegramContext(
         /datos completos/gi,
         /que sabes/gi,
         /revisa completo/gi,
-        /cuanto debe|debe|deuda|pendiente/gi,
+        /cuanto debe|debe|deuda|deudas|pendiente/gi,
         /ultimo pago|pago mas reciente|cuando pago/gi,
         /pagos|abonos|saldo a favor|saldo|conceptos|compras|cuentas|que compro|lo que compro/gi,
       ])

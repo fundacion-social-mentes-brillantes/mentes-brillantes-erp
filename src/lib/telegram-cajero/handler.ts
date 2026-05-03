@@ -47,6 +47,7 @@ import {
 } from "@/lib/telegram-cajero/context-resolver"
 import { buildTelegramInternalContext } from "@/lib/telegram-cajero/internal-context-adapter"
 import { analyzeErpQuestion, mergeWorkspaceEntity } from "@/lib/telegram-cajero/erp-analyst"
+import { shouldProcessDedicatedGroupText } from "@/lib/telegram-cajero/activation"
 
 export const dynamic = "force-dynamic"
 
@@ -201,6 +202,29 @@ function resolvePendingSelection(
   return byName ? { term: byName.codigo || byName.cedula || byName.nombre, action: pending.action } : null
 }
 
+export function resolvePendingSelections(
+  memory: LoadedMemory | null | undefined,
+  rawText: string
+): Array<{ term: string; action: PendingAction }> | "expired" | null {
+  const pending = memory?.session.pendingSelection
+  if (!pending) return null
+  if (Date.now() - pending.createdAt > 10 * 60 * 1000) return "expired"
+
+  const normalized = normalizeText(rawText)
+  const numericTokens = normalized.match(/\d{1,2}/g) || []
+  if (numericTokens.length < 2) return null
+
+  const selections = numericTokens
+    .map((token) => Number(token) - 1)
+    .filter((index, pos, arr) => index >= 0 && index < pending.matches.length && arr.indexOf(index) === pos)
+    .map((index) => {
+      const match = pending.matches[index]
+      return { term: match.codigo || match.cedula || match.nombre, action: pending.action }
+    })
+
+  return selections.length > 1 ? selections : null
+}
+
 function extractPersonSearchTerm(text: string) {
   let term = text.trim()
   term = term.replace(/\?+$/, "").trim()
@@ -251,7 +275,7 @@ function inferFollowUpIntentFromContext(text: string, ctx: CajeroConversationCon
 
 const PREGUNTAR_PERSONA = "Claro, ¿de qué persona quieres que revise pagos, deuda o saldo?"
 const NO_ENTENDIDO =
-  "No te entendí del todo. Por ahora puedo consultar estado, pagos, y más. Escríbeme algo como: la última sesión coach de Catalina."
+  "Puedo revisar una persona, cartera pendiente, pagos, ingresos/egresos, liquidaciones o el ultimo resultado. Dame un nombre, codigo, concepto o dime que quieres analizar."
 
 const AYUDA = [
   "Bot cajero Mentes Brillantes (solo lectura).",
@@ -380,10 +404,12 @@ function looksLikeCajeroRequest(text: string) {
 }
 
 function shouldBotRespond(message: TelegramMessage, memory?: LoadedMemory | null) {
+  if (message.from?.is_bot) return false
   const text = message.text || ""
   const normalized = normalizeText(text)
   const pending = memory?.session.pendingSelection
   const ctx = contextFromMemory(memory)
+  if (shouldProcessDedicatedGroupText(message, Boolean(ctx || pending))) return true
   const isNumber = /^\d+$/.test(normalized)
   const route = routeTelegramMessage(message, {
     hasPendingSelection: Boolean(pending),
@@ -1055,6 +1081,51 @@ async function buildCarteraPendienteGlobalResponse(supabase: any) {
   ].join("\n")
 }
 
+export function inferActionFromTextOrContext(text: string, ctx: CajeroConversationContext | null): PendingAction {
+  const normalized = normalizeText(text)
+  if (/\b(pagos|abonos|pago)\b/.test(normalized)) return "pagos_persona"
+  if (/\b(ultimo pago|pago mas reciente|cuando pago)\b/.test(normalized)) return "ultimo_pago_persona"
+  if (/\b(saldo)\b/.test(normalized)) return "saldo_favor_persona"
+  if (/\b(ficha|toda la informacion|estado completo|que sabes)\b/.test(normalized)) return "estado_completo_persona"
+  if (/\b(compro|compras|conceptos)\b/.test(normalized)) return "compras_persona"
+  if (ctx?.lastMode && ["cuentas_pendientes_persona", "pagos_persona", "estado_completo_persona", "compras_persona"].includes(ctx.lastMode)) {
+    return ctx.lastMode as PendingAction
+  }
+  if (ctx?.lastStructuredResult?.type === "cuentas_pendientes_persona") return "cuentas_pendientes_persona"
+  return "cuentas_pendientes_persona"
+}
+
+function stripQueryWordsForPeople(text: string) {
+  return text
+    .replace(/^(cajero|cajerito|caja)\b[:,]?\s*/i, "")
+    .replace(/\?+$/g, "")
+    .replace(/\b(cuanto|cuánto|debe|deben|deuda|revisa|consulta|mira|pagos|pago|saldo|ficha|completa|informacion|información|compara|comparame|compárame|suma|lo que|de|a|por|favor|tiene|tienen)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+export function extractMultiplePersonTerms(text: string) {
+  const cleaned = stripQueryWordsForPeople(text)
+  if (!cleaned) return []
+  const parts = cleaned
+    .split(/\s*(?:,|;|\by\b|\be\b)\s*/i)
+    .map((part) => part.trim())
+    .filter((part) => part.length >= 3 && !/^(los|las|dos|tres|eso|esa|esas|estos|estas)$/i.test(part))
+  return parts.length > 1 ? Array.from(new Set(parts)) : []
+}
+
+function extractBareFollowUpPerson(text: string) {
+  const normalized = normalizeText(text)
+  if (!/^(y\s+)?[a-z0-9\s]+[?]?$/.test(normalized)) return null
+  if (/\b(cuanto|debe|deuda|pago|pagos|saldo|ficha|compro|compras|conceptos|revisa|consulta|mira)\b/.test(normalized)) return null
+  const cleaned = text
+    .replace(/^(cajero|cajerito|caja)\b[:,]?\s*/i, "")
+    .replace(/^y\s+/i, "")
+    .replace(/\?+$/g, "")
+    .trim()
+  return cleaned.length >= 3 ? cleaned : null
+}
+
 async function buildStructuredResultForAsistente(
   supabase: any,
   asistente: any,
@@ -1384,6 +1455,21 @@ async function executeActionForAsistente(
   return response
 }
 
+async function executeActionForMultipleAsistentes(
+  terms: string[],
+  action: PendingAction,
+  message?: TelegramMessage,
+  memory?: LoadedMemory | null
+) {
+  const uniqueTerms = Array.from(new Set(terms.map((term) => term.trim()).filter(Boolean))).slice(0, 4)
+  if (!uniqueTerms.length) return null
+  const responses: string[] = []
+  for (const term of uniqueTerms) {
+    responses.push(await executeActionForAsistente(term, action, message, memory))
+  }
+  return responses.join("\n\n")
+}
+
 function buildIdResponse(message: TelegramMessage) {
   return [
     `chat_id: ${message.chat.id}`,
@@ -1401,6 +1487,20 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig, m
     if (command === "/ayuda" || command === "/start") return AYUDA
     if (command === "/id") return buildIdResponse(message)
     if (command === "/estado") return executeActionForAsistente(args, "estado_persona", message, memory)
+  }
+
+  const pendingSelections = resolvePendingSelections(memory, text)
+  if (pendingSelections === "expired") {
+    return "Se me vencio esa lista de opciones. Repiteme la busqueda y te muestro las coincidencias de nuevo."
+  }
+  if (pendingSelections?.length) {
+    await clearPendingSelection(memory)
+    return executeActionForMultipleAsistentes(
+      pendingSelections.map((selection) => selection.term),
+      pendingSelections[0].action,
+      message,
+      memory
+    )
   }
 
   const pendingSelection = resolvePendingSelection(memory, text)
@@ -1459,6 +1559,13 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig, m
     const supabase = createAdminClient()
     if (!supabase) return "No pude consultar el ERP en este momento."
     if (analyst.tool === "open_receivables") return buildCarteraPendienteGlobalResponse(supabase)
+    if (analyst.tool === "business_alerts") {
+      const range = resolveNaturalDateRange("hoy")
+      const result = await getBusinessAlerts(supabase, range!.from, range!.to)
+      const alerts: any[] = Array.isArray(result.data) ? result.data : []
+      if (!alerts.length) return "No veo alertas claras para hoy. Si quieres, puedo revisar el mes completo."
+      return ["Esto conviene revisar:", ...alerts.map((a) => `- ${a.type}: ${a.evidence?.[0] || "sin evidencia"}`)].join("\n")
+    }
     if (analyst.tool === "summary_month") {
       const range = resolveNaturalDateRange("este mes")
       return buildResumenPeriodoResponse(supabase, {
@@ -1475,6 +1582,21 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig, m
       })
     }
   }
+
+  const multiPersonTerms = extractMultiplePersonTerms(naturalText || text)
+  if (multiPersonTerms.length > 1) {
+    const action = inferActionFromTextOrContext(naturalText || text, ctx)
+    return executeActionForMultipleAsistentes(multiPersonTerms, action, message, memory)
+  }
+
+  const bareFollowUpPerson = extractBareFollowUpPerson(naturalText || text)
+  if (bareFollowUpPerson && ctx?.lastMode) {
+    return executeActionForAsistente(bareFollowUpPerson, inferActionFromTextOrContext(naturalText || text, ctx), message, memory)
+  }
+  if (bareFollowUpPerson && !ctx) {
+    return `Veo "${bareFollowUpPerson}". Puedo revisar deuda, pagos, saldo, compras o ficha completa. ¿Qué quieres ver?`
+  }
+
   const resolvedContext = resolveTelegramContext(naturalText || text, { lastAsistente: ctx?.lastAsistente || null })
 
   if (resolvedContext?.intent === "context_help") {
@@ -1595,7 +1717,10 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig, m
   const directAddress = isReplyToBot(message) || normalizedText.includes(`@${BOT_USERNAME}`) || /^(cajero|cajerito|caja)\b/.test(normalizedText) || normalizedText.includes(" cajero")
   if (!directAddress && ctx) return null
 
-  return intent.pregunta_aclaracion || NO_ENTENDIDO
+  return (
+    intent.pregunta_aclaracion ||
+    "Puedo ayudarte a revisar una persona, cartera pendiente, pagos, ingresos/egresos, liquidaciones o el ultimo resultado. Dame un nombre, codigo, concepto o dime que quieres analizar."
+  )
 }
 
 export async function GET() {

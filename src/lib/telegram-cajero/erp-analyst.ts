@@ -6,7 +6,7 @@ type WorkspaceEntity = NonNullable<NonNullable<TelegramSessionState["conversatio
 
 export type AnalystDecision =
   | { kind: "answer"; text: string }
-  | { kind: "tool"; tool: "open_receivables" | "summary_month" }
+  | { kind: "tool"; tool: "open_receivables" | "summary_month" | "business_alerts" }
   | { kind: "clarify"; text: string }
   | { kind: "compare_periods"; text: string }
   | { kind: "none" }
@@ -87,6 +87,16 @@ export function analyzeErpQuestion(text: string, state: TelegramSessionState = {
   const last = state.lastStructuredResult || null
   const entities = activeEntities(state)
 
+  if (/\b(compara|comparame|comparalos|comparalas).*(dos|personas|ellas|ellos)\b/.test(normalized) && entities.length >= 2) {
+    const sorted = [...entities].sort((a, b) => (b.totals?.pendiente || 0) - (a.totals?.pendiente || 0))
+    return { kind: "answer", text: ["Comparacion de lo revisado:", ...sorted.map((entity) => `- ${entity.nombre}: ${money(entity.totals?.pendiente || 0)}`)].join("\n") }
+  }
+
+  if (/\b(cual|cuál)\s+(esta|está)\s+peor\b/.test(normalized) && entities.length >= 2) {
+    const sorted = [...entities].sort((a, b) => (b.totals?.pendiente || 0) - (a.totals?.pendiente || 0))
+    return { kind: "answer", text: `La situacion mas pesada es ${sorted[0].nombre}: ${money(sorted[0].totals?.pendiente || 0)} pendiente.` }
+  }
+
   if (/\b(quien|quién|cual|cuál)\s+debe\s+mas\b/.test(normalized)) {
     if (entities.length >= 2) {
       const sorted = [...entities].sort((a, b) => (b.totals?.pendiente || 0) - (a.totals?.pendiente || 0))
@@ -114,10 +124,21 @@ export function analyzeErpQuestion(text: string, state: TelegramSessionState = {
     }
   }
 
+  if (/\bsuma\s+(los|las)\s+dos\b|\bsuma\s+esas\b|\bsuma\s+esos\b/.test(normalized)) {
+    const selected = /\bdos\b/.test(normalized) ? entities.slice(-2) : entities
+    if (selected.length < 2) return { kind: "clarify", text: "Necesito al menos dos resultados claros para sumarlos. Dime cuales personas quieres sumar." }
+    const total = selected.reduce((acc, entity) => acc + (entity.totals?.pendiente || 0), 0)
+    return { kind: "answer", text: [`La suma da ${money(total)}.`, ...selected.map((entity) => `- ${entity.nombre}: ${money(entity.totals?.pendiente || 0)}`)].join("\n") }
+  }
+
   const index = ordinalIndex(normalized)
   if (index !== null && /\b(explica|explicame|explícame|segunda|primera|tercera)\b/.test(normalized)) {
     if (!entities[index]) return { kind: "clarify", text: "No tengo esa posición clara en la conversación. ¿Te refieres a una persona o a una cuenta específica?" }
     return { kind: "answer", text: explainEntity(entities[index], index) }
+  }
+
+  if (/\b(que esta raro|que ves raro|alertas?)\b/.test(normalized)) {
+    return { kind: "tool", tool: "business_alerts" }
   }
 
   if (/\b(que observas|qué observas|ves algo|que deberia revisar|qué debería revisar|observa)\b/.test(normalized)) {

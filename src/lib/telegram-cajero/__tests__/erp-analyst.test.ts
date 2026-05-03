@@ -84,6 +84,37 @@ describe("telegram cajero erp analyst", () => {
     expect(second.text).toContain("Sandra")
   })
 
+  it("suma los dos y compara desde workspace", () => {
+    const state: TelegramSessionState = {
+      conversationWorkspace: {
+        activeEntities: [
+          { type: "asistente", id: "m1", nombre: "Marcela", totals: { pendiente: 819000 }, items: [] },
+          { type: "asistente", id: "s1", nombre: "Sandra", totals: { pendiente: 0 }, items: [] },
+        ],
+      },
+    }
+    expect(analyzeErpQuestion("suma los dos", state).text).toContain("$819.000")
+    expect(analyzeErpQuestion("comparalos dos", state).text).toContain("Marcela")
+    expect(analyzeErpQuestion("cual esta peor", state).text).toContain("Marcela")
+  })
+
+  it("la segunda resuelve desde workspace", () => {
+    const state: TelegramSessionState = {
+      conversationWorkspace: {
+        activeEntities: [
+          { type: "asistente", id: "m1", nombre: "Marcela", totals: { pendiente: 819000 }, items: [] },
+          { type: "asistente", id: "s1", nombre: "Sandra", totals: { pendiente: 0 }, items: [] },
+        ],
+      },
+    }
+    expect(analyzeErpQuestion("explicame la segunda", state).text).toContain("Sandra")
+  })
+
+  it("que esta raro activa alertas", () => {
+    expect(analyzeErpQuestion("que esta raro?", {}).kind).toBe("tool")
+    expect((analyzeErpQuestion("que esta raro?", {}) as any).tool).toBe("business_alerts")
+  })
+
   it("pide aclaracion si faltan entidades para las 3", () => {
     const decision = analyzeErpQuestion("suma las 3", {
       conversationWorkspace: { activeEntities: [{ type: "asistente", id: "m1", nombre: "Marcela", totals: { pendiente: 1 } }] },
