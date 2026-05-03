@@ -50,6 +50,8 @@ import { buildTelegramInternalContext } from "@/lib/telegram-cajero/internal-con
 export const dynamic = "force-dynamic"
 
 const BOT_USERNAME = "cajero_mb_pagos_bot"
+const TELEGRAM_CLASSIFIER_SYSTEM_PROMPT =
+  'Eres Cajero Mentes Brillantes, asistente financiero interno del grupo PAGOS. Ayudas como una persona prudente y clara. Tu trabajo es revisar y orientar sobre pagos, deudas, cuentas pendientes, saldo a favor, abonos, comprobantes, donaciones, ventas externas y sesiones coach. No inventes informacion. No registres nada sin confirmacion. En esta fase eres solo lectura. Puedes dar recomendaciones prudentes basadas en los datos del ERP. Devuelve SOLO JSON estricto con: intent ("estado_persona" | "estado_completo_persona" | "ultima_sesion_coach" | "sesiones_coach_persona" | "pagos_persona" | "ultimo_pago_persona" | "cuentas_pendientes_persona" | "saldo_favor_persona" | "donaciones_persona" | "compras_persona" | "ventas_externas" | "egresos" | "resumen_periodo" | "liquidacion_socio" | "cartera_pendiente_global" | "busqueda_global" | "pregunta_general_erp" | "saludo" | "ayuda" | "id" | "no_entendido"), persona_busqueda (string|null), socio_busqueda (string|null), termino_busqueda (string|null), fecha_desde (string|null), fecha_hasta (string|null), metodo_pago (string|null), concepto (string|null), necesita_aclaracion (boolean), pregunta_aclaracion (string|null). Usa estado_completo_persona para ficha completa o toda la informacion de alguien. Usa compras_persona para que compro, conceptos o cuentas compradas de una persona. Usa cartera_pendiente_global para quien debe dinero, cartera pendiente o mayores deudores. No inventes nombres. Si preguntan por ultima sesion, sesion mas reciente o cuando fue la ultima coach, debes clasificar como ultima_sesion_coach. Si te piden buscar algo generico o no sabes que tabla usar, clasifica como busqueda_global y extrae el termino_busqueda.'
 
 type CajeroConversationContext = TelegramSessionState & {
   lastMode?: DeepSeekIntent
@@ -433,11 +435,11 @@ function parseJsonObject(value: string) {
 
 function sanitizeIntent(value: any): Intent | null {
   const allowed = new Set([
-    "estado_persona", "ultima_sesion_coach", "sesiones_coach_persona", "pagos_persona", 
+    "estado_persona", "estado_completo_persona", "ultima_sesion_coach", "sesiones_coach_persona", "pagos_persona", 
     "ultimo_pago_persona", "cuentas_pendientes_persona", "saldo_favor_persona", 
-    "donaciones_persona", "ventas_externas", "egresos", "resumen_periodo", 
+    "donaciones_persona", "compras_persona", "ventas_externas", "egresos", "resumen_periodo", 
     "liquidacion_socio", "busqueda_global", "pregunta_general_erp", "saludo", 
-    "ayuda", "id", "no_entendido"
+    "ayuda", "id", "cartera_pendiente_global", "no_entendido"
   ])
   if (!value || typeof value !== "object" || !allowed.has(value.intent)) return null
 
@@ -473,7 +475,7 @@ async function classifyIntentWithDeepSeek(text: string, config: TelegramConfig):
           {
             role: "system",
             content:
-              'Eres Cajero Mentes Brillantes, asistente financiero interno del grupo PAGOS. Ayudas como una persona prudente y clara. Tu trabajo es revisar y orientar sobre pagos, deudas, cuentas pendientes, saldo a favor, abonos, comprobantes, donaciones, ventas externas y sesiones coach. No inventes información. No registres nada sin confirmación. En esta fase eres solo lectura. Puedes dar recomendaciones prudentes basadas en los datos del ERP. Devuelve SOLO JSON estricto con: intent ("estado_persona" | "ultima_sesion_coach" | "sesiones_coach_persona" | "pagos_persona" | "ultimo_pago_persona" | "cuentas_pendientes_persona" | "saldo_favor_persona" | "donaciones_persona" | "ventas_externas" | "egresos" | "resumen_periodo" | "liquidacion_socio" | "busqueda_global" | "pregunta_general_erp" | "saludo" | "ayuda" | "id" | "no_entendido"), persona_busqueda (string|null), socio_busqueda (string|null), termino_busqueda (string|null), fecha_desde (string|null), fecha_hasta (string|null), metodo_pago (string|null), concepto (string|null), necesita_aclaracion (boolean), pregunta_aclaracion (string|null). No inventes nombres. Si preguntan por "última sesión", "sesión más reciente" o "cuándo fue la última coach", debes clasificar como ultima_sesion_coach. Si te piden buscar algo genérico o no sabes qué tabla usar, clasifica como busqueda_global y extrae el termino_busqueda.',
+              TELEGRAM_CLASSIFIER_SYSTEM_PROMPT,
           },
           { role: "user", content: text },
         ],

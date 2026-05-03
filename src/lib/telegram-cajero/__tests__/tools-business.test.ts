@@ -23,12 +23,13 @@ describe("telegram cajero business tools", () => {
     expect(purchase.estado_pago).toBe("parcial")
   })
 
-  it("summarizeOpenReceivables calcula cartera pendiente sin pagos anulados", () => {
+  it("summarizeOpenReceivables calcula cartera cobrable y excluye estados no cobrables", () => {
     const summary = summarizeOpenReceivables([
       {
         id: "c1",
         asistente_id: "a1",
         concepto: "Proceso",
+        estado: "pendiente",
         valor_total: 200000,
         fecha_emision: "2026-04-01",
         asistentes: { nombre: "Ana", codigo: "1" },
@@ -38,15 +39,49 @@ describe("telegram cajero business tools", () => {
         id: "c2",
         asistente_id: "a2",
         concepto: "Taller",
+        estado: "parcial",
         valor_total: 80000,
         fecha_emision: "2026-04-02",
         asistentes: { nombre: "Bea", codigo: "2" },
         pagos_abonos: [{ monto: 80000, estado: "anulado", origen_fondos: "pago" }],
+      },
+      {
+        id: "c3",
+        asistente_id: "a3",
+        concepto: "Pagada",
+        estado: "pagada",
+        valor_total: 90000,
+        fecha_emision: "2026-04-03",
+        asistentes: { nombre: "Cami", codigo: "3" },
+        pagos_abonos: [],
+      },
+      {
+        id: "c4",
+        asistente_id: "a4",
+        concepto: "Anulada",
+        estado: "anulada",
+        valor_total: 70000,
+        fecha_emision: "2026-04-04",
+        asistentes: { nombre: "Dani", codigo: "4" },
+        pagos_abonos: [],
+      },
+      {
+        id: "c5",
+        asistente_id: "a5",
+        concepto: "Cancelada",
+        estado: "cancelada",
+        valor_total: 60000,
+        fecha_emision: "2026-04-05",
+        asistentes: { nombre: "Eva", codigo: "5" },
+        pagos_abonos: [],
       },
     ])
 
     expect(summary.total_cartera).toBe(230000)
     expect(summary.personas_con_deuda).toBe(2)
     expect(summary.top_personas[0].nombre).toBe("Ana")
+    expect(summary.top_personas.map((item) => item.nombre)).not.toContain("Cami")
+    expect(summary.top_personas.map((item) => item.nombre)).not.toContain("Dani")
+    expect(summary.top_personas.map((item) => item.nombre)).not.toContain("Eva")
   })
 })

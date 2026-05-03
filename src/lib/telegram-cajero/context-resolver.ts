@@ -32,7 +32,7 @@ function cleanPersonQuery(text: string, patterns: RegExp[]) {
 
 export function hasContextPronoun(text: string) {
   const normalized = normalizeText(text)
-  return /\b(su|sus|ella|esa persona|la misma|el mismo|lo que compro|que compro|que tiene comprado)\b/.test(normalized)
+  return /\b(su|sus|ella|esa persona|la misma|el mismo)\b/.test(normalized)
 }
 
 export function isContextHelp(text: string) {
@@ -44,7 +44,8 @@ export function shouldUseLastAsistenteForText(text: string) {
   const normalized = normalizeText(text)
   return (
     hasContextPronoun(text) ||
-    /^(y\s+)(sus\s+)?(pagos|abonos|cuanto debe|deuda|saldo|saldo a favor|cuentas|compras|conceptos|que compro|lo que compro|ultimo pago|cuando pago|toda la informacion|muestrame todo|que mas sabes)\b/.test(
+    /^(y\s+)?(sus\s+)?(lo que compro|que compro|que tiene comprado)\b/.test(normalized) ||
+    /^(y\s+)(sus\s+)?(pagos|abonos|cuanto debe|deuda|saldo|saldo a favor|cuentas|compras|conceptos|ultimo pago|cuando pago|toda la informacion|muestrame todo|que mas sabes)\b/.test(
       normalized
     )
   )
@@ -106,10 +107,7 @@ export function resolveTelegramContext(
 
   if (!intent) return null
 
-  const useLastAsistente = shouldUseLastAsistenteForText(original)
-  const personQuery = useLastAsistente
-    ? null
-    : cleanPersonQuery(original, [
+  const explicitPersonQuery = hasContextPronoun(original) ? null : cleanPersonQuery(original, [
         /muestrame/gi,
         /toda la informacion/gi,
         /estado completo/gi,
@@ -121,6 +119,8 @@ export function resolveTelegramContext(
         /ultimo pago|pago mas reciente|cuando pago/gi,
         /pagos|abonos|saldo a favor|saldo|conceptos|compras|cuentas|que compro|lo que compro/gi,
       ])
+  const useLastAsistente = shouldUseLastAsistenteForText(original) && !explicitPersonQuery
+  const personQuery = useLastAsistente ? null : explicitPersonQuery
 
   return {
     intent,

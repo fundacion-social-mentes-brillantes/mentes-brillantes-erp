@@ -4,6 +4,7 @@ import { toolError, toolResult } from "./types"
 
 export function summarizeOpenReceivables(cuentas: any[]) {
   const rows = (cuentas || [])
+    .filter((cuenta: any) => ["pendiente", "parcial"].includes(String(cuenta.estado || "").toLowerCase()))
     .map((cuenta: any) => {
       const valor = Math.round(toSafeNumber(cuenta.valor_total))
       const abonado = Math.round(sumarMontos(filtrarPagosValidos(cuenta.pagos_abonos || [])))
@@ -46,6 +47,7 @@ export async function getOpenReceivablesSummary(supabase: SupabaseReader, limit 
   const { data, error } = await supabase
     .from("cuentas_por_cobrar")
     .select("id, asistente_id, concepto, valor_total, estado, fecha_emision, asistentes(nombre, codigo), pagos_abonos(id, monto, estado, origen_fondos)")
+    .in("estado", ["pendiente", "parcial"])
     .order("fecha_emision", { ascending: true })
     .limit(limit)
 

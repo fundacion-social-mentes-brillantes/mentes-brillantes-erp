@@ -36,6 +36,34 @@ describe("telegram cajero context resolver", () => {
     expect(result?.personQuery).toBe("Sandra")
   })
 
+  it("persona explicita gana sobre memoria en compras", () => {
+    const result = resolveTelegramContext("que compro Sandra", { lastAsistente: { id: "m1", nombre: "Marcela" } })
+    expect(result?.intent).toBe("compras_persona")
+    expect(result?.useLastAsistente).toBe(false)
+    expect(result?.personQuery).toBe("Sandra")
+  })
+
+  it("persona explicita gana sobre memoria en ultimo pago", () => {
+    const result = resolveTelegramContext("ultimo pago de Sandra", { lastAsistente: { id: "m1", nombre: "Marcela" } })
+    expect(result?.intent).toBe("ultimo_pago_persona")
+    expect(result?.useLastAsistente).toBe(false)
+    expect(result?.personQuery).toBe("Sandra")
+  })
+
+  it("persona explicita gana sobre memoria en ficha completa", () => {
+    const result = resolveTelegramContext("toda la informacion de Sandra", { lastAsistente: { id: "m1", nombre: "Marcela" } })
+    expect(result?.intent).toBe("estado_completo_persona")
+    expect(result?.useLastAsistente).toBe(false)
+    expect(result?.personQuery).toBe("Sandra")
+  })
+
+  it("usa memoria cuando no hay persona explicita", () => {
+    const result = resolveTelegramContext("y que compro", { lastAsistente })
+    expect(result?.intent).toBe("compras_persona")
+    expect(result?.useLastAsistente).toBe(true)
+    expect(result?.personQuery).toBeNull()
+  })
+
   it("resuelve pregunta contextual", () => {
     const result = resolveTelegramContext("?", { lastAsistente })
     expect(result?.intent).toBe("context_help")

@@ -39,4 +39,14 @@ describe("telegram cajero security", () => {
     expect(source).toContain('from("periodos")')
     expect(source).not.toContain(`periodos_${"liquidacion"}`)
   })
+
+  it("clasificador DeepSeek permite los intents nuevos", () => {
+    const handler = readFileSync(join(process.cwd(), "src/lib/telegram-cajero/handler.ts"), "utf8")
+    expect(handler).toContain("estado_completo_persona")
+    expect(handler).toContain("compras_persona")
+    expect(handler).toContain("cartera_pendiente_global")
+    expect(handler).toContain("Usa estado_completo_persona")
+    expect(handler).toContain("Usa compras_persona")
+    expect(handler).toContain("Usa cartera_pendiente_global")
+  })
 })
