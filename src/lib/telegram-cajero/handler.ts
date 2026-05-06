@@ -48,6 +48,9 @@ import {
 import { buildTelegramInternalContext } from "@/lib/telegram-cajero/internal-context-adapter"
 import { analyzeErpQuestion, mergeWorkspaceEntity } from "@/lib/telegram-cajero/erp-analyst"
 import { shouldProcessDedicatedGroupText } from "@/lib/telegram-cajero/activation"
+import { planWithAi } from "@/lib/telegram-cajero/ai-planner"
+import { executeAiToolPlan } from "@/lib/telegram-cajero/tool-executor"
+import { writeAiResponse } from "@/lib/telegram-cajero/ai-response-writer"
 
 export const dynamic = "force-dynamic"
 
@@ -131,6 +134,48 @@ async function saveStructuredResult(
       conversationWorkspace: workspace,
       lastModule: result.module || result.type,
       toolTraceSummary: result.sources?.join(", ") || memory.session.state.toolTraceSummary || null,
+    },
+    expiresAt: expiresAtFrom(),
+  })
+  memory.session = (await memory.store.get(memory.scope)) || memory.session
+}
+
+async function saveStructuredResults(
+  memory: LoadedMemory | null | undefined,
+  results: NonNullable<TelegramSessionState["lastStructuredResult"]>[]
+) {
+  if (!memory || !results.length) return
+  let workspace: TelegramSessionState["conversationWorkspace"] = memory.session.state.conversationWorkspace || null
+  for (const result of results) {
+    if (!result.asistente) continue
+    workspace = mergeWorkspaceEntity(
+      { ...memory.session.state, conversationWorkspace: workspace },
+      {
+        type: "asistente",
+        id: result.asistente.id,
+        nombre: result.asistente.nombre,
+        lastQuery: result.type,
+        totals: result.totals,
+        items: result.items,
+      }
+    )
+  }
+  const last = results[results.length - 1]
+  await memory.store.patch(memory.scope, {
+    state: {
+      ...memory.session.state,
+      lastStructuredResult: last,
+      conversationWorkspace: workspace,
+      lastModule: last.module || last.type,
+      lastIntent: last.type,
+      lastAsistente: last.asistente
+        ? {
+            id: last.asistente.id,
+            nombre: last.asistente.nombre,
+            codigo: last.asistente.codigo || null,
+          }
+        : memory.session.state.lastAsistente || null,
+      toolTraceSummary: Array.from(new Set(results.flatMap((result) => result.sources || []))).join(", ") || memory.session.state.toolTraceSummary || null,
     },
     expiresAt: expiresAtFrom(),
   })
@@ -1581,6 +1626,38 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig, m
         pregunta_aclaracion: null,
       })
     }
+  }
+
+  const aiPlan = await planWithAi(naturalText || text, config, memory?.session.state || {})
+  if (aiPlan.mode === "clarify" && aiPlan.clarification) {
+    return aiPlan.clarification
+  }
+  if (aiPlan.mode === "answer_from_memory") {
+    return writeAiResponse({
+      text: naturalText || text,
+      plan: aiPlan,
+      bundle: { status: "empty", results: [], pendingSelection: null, structuredResults: [], userSafeErrors: [] },
+      state: memory?.session.state || {},
+      config,
+    })
+  }
+  if (aiPlan.mode === "tool_plan" && aiPlan.tools.length) {
+    const supabase = createAdminClient()
+    if (!supabase) return "No pude consultar el ERP en este momento."
+    const bundle = await executeAiToolPlan(supabase, aiPlan)
+    if (bundle.pendingSelection) {
+      await savePendingSelection(memory, bundle.pendingSelection.action, bundle.pendingSelection.matches)
+    }
+    if (bundle.structuredResults.length) {
+      await saveStructuredResults(memory, bundle.structuredResults)
+    }
+    return writeAiResponse({
+      text: naturalText || text,
+      plan: aiPlan,
+      bundle,
+      state: memory?.session.state || {},
+      config,
+    })
   }
 
   const multiPersonTerms = extractMultiplePersonTerms(naturalText || text)

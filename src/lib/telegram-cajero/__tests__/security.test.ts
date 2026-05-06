@@ -49,4 +49,25 @@ describe("telegram cajero security", () => {
     expect(handler).toContain("Usa compras_persona")
     expect(handler).toContain("Usa cartera_pendiente_global")
   })
+
+  it("handler ejecuta ai planner antes del fallback legacy", () => {
+    const handler = readFileSync(join(process.cwd(), "src/lib/telegram-cajero/handler.ts"), "utf8")
+    const planIndex = handler.indexOf("planWithAi")
+    const multiIndex = handler.indexOf("extractMultiplePersonTerms(naturalText || text)")
+    const fallbackIndex = handler.indexOf("fallbackClassifyIntent(naturalText || text)")
+
+    expect(planIndex).toBeGreaterThan(-1)
+    expect(planIndex).toBeLessThan(multiIndex)
+    expect(planIndex).toBeLessThan(fallbackIndex)
+  })
+
+  it("evita respuesta generica vieja en modulos vivos del cajero", () => {
+    const root = join(process.cwd(), "src/lib/telegram-cajero")
+    const source = files(root)
+      .filter((file) => file.endsWith(".ts") && !file.endsWith("security.test.ts"))
+      .map((file) => readFileSync(file, "utf8"))
+      .join("\n")
+
+    expect(source).not.toContain(`No te entend${"í"} del todo`)
+  })
 })
