@@ -85,16 +85,16 @@ export function Header({ userEmail, userRole = 'user' }: { userEmail?: string, u
   };
 
   return (
-    <header className="border-b border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] px-4 sm:px-6 py-3 sm:py-0 pl-14 sm:pl-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 sm:h-16 sticky top-0 z-10 shadow-soft transition-colors">
+    <header className="border-b border-[rgba(var(--border),0.62)] bg-[rgba(var(--surface-1),0.82)] px-4 sm:px-6 py-3 sm:py-0 pl-14 sm:pl-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 sm:h-16 sticky top-0 z-10 shadow-soft transition-colors backdrop-blur-xl">
       <div className="flex items-center gap-3 sm:gap-4 flex-1 w-full">
         <form onSubmit={onSearch} className="relative w-full max-w-full sm:max-w-md">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-[rgb(var(--text-muted))]" />
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-[rgb(var(--warning))]" />
           <Input
             type="search"
             placeholder="Buscar asistentes, cuentas o movimientos..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="pl-9 bg-[rgb(var(--surface-2))] border-[rgb(var(--border))] focus-visible:ring-[rgb(var(--accent))] focus-visible:ring-offset-2 focus-visible:ring-offset-[rgb(var(--surface-1))]"
+            className="pl-10 rounded-full bg-[rgba(var(--surface-2),0.72)] border-[rgba(var(--border),0.68)] focus-visible:ring-[rgb(var(--ring-color))] focus-visible:ring-offset-2 focus-visible:ring-offset-[rgb(var(--surface-1))] shadow-[inset_0_1px_0_rgba(var(--glass-highlight),0.08)]"
           />
         </form>
       </div>
@@ -105,16 +105,16 @@ export function Header({ userEmail, userRole = 'user' }: { userEmail?: string, u
           <button
             type="button"
             onClick={() => setAlertsOpen((v) => !v)}
-            className="relative p-2 text-[rgb(var(--text-muted))] hover:bg-[rgb(var(--surface-2))] rounded-full transition-colors border border-transparent"
+            className="relative p-2 text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))] hover:bg-[rgba(var(--surface-2),0.82)] rounded-full transition-colors border border-[rgba(var(--border),0.48)] shadow-soft"
             aria-expanded={alertsOpen}
             aria-haspopup="true"
           >
             <Bell className="w-5 h-5" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[rgb(var(--danger))] rounded-full border-2 border-[rgb(var(--surface-1))]"></span>
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[rgb(var(--danger))] rounded-full border-2 border-[rgb(var(--surface-1))] shadow-[0_0_0_3px_rgba(var(--danger),0.12)]"></span>
           </button>
           {alertsOpen && (
-            <div className="absolute right-0 mt-2 w-80 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] shadow-lg z-20 overflow-hidden">
-              <div className="px-4 py-3 border-b border-[rgb(var(--border))] flex items-center justify-between">
+            <div className="absolute right-0 mt-2 w-80 rounded-2xl border border-[rgba(var(--border),0.72)] bg-[rgba(var(--surface-1),0.96)] shadow-strong z-20 overflow-hidden backdrop-blur-xl">
+              <div className="px-4 py-3 border-b border-[rgba(var(--border),0.58)] flex items-center justify-between bg-[rgba(var(--surface-2),0.46)]">
                 <span className="text-sm font-semibold text-[rgb(var(--text-primary))]">Alertas operativas</span>
                 <Link href="/cuentas?estado=pendiente" className="text-xs text-[rgb(var(--info))] hover:underline">Ver cuentas</Link>
               </div>
@@ -128,7 +128,7 @@ export function Header({ userEmail, userRole = 'user' }: { userEmail?: string, u
                 {!loadingAlerts && alerts.length > 0 && (
                   <ul className="divide-y divide-[rgb(var(--border))]">
                     {alerts.map((alert, idx) => (
-                      <li key={`${alert.href}-${idx}`} className="p-4 hover:bg-[rgb(var(--surface-2))] transition-colors">
+                      <li key={`${alert.href}-${idx}`} className="p-4 hover:bg-[rgba(var(--surface-2),0.72)] transition-colors">
                         <Link href={alert.href} className="flex items-start gap-3">
                           <div className="mt-0.5">
                             {alert.icon === "clock" ? (
@@ -150,20 +150,20 @@ export function Header({ userEmail, userRole = 'user' }: { userEmail?: string, u
             </div>
           )}
         </div>
-        <div className="flex items-center gap-3 border-l border-[rgb(var(--border))] pl-4 ml-2">
+        <div className="flex items-center gap-3 border-l border-[rgba(var(--border),0.58)] pl-4 ml-2">
           <div className="flex flex-col items-end">
             <span className="text-sm font-medium text-[rgb(var(--text-primary))]">{userEmail}</span>
             {userRole === 'admin' ? (
-              <span className="text-[10px] sm:text-xs font-semibold bg-[rgba(var(--accent),0.14)] text-[rgb(var(--accent-strong))] border border-[rgba(var(--accent),0.4)] px-2 py-0.5 rounded-full mt-0.5">
+              <span className="text-[10px] sm:text-xs font-semibold premium-badge px-2 py-0.5 rounded-full mt-0.5">
                 Administrador
               </span>
             ) : (
-              <span className="text-[10px] sm:text-xs font-medium bg-[rgba(var(--muted-surface),0.6)] text-[rgb(var(--text-muted))] border border-[rgb(var(--border))] px-2 py-0.5 rounded-full mt-0.5">
+              <span className="text-[10px] sm:text-xs font-medium bg-[rgba(var(--muted-surface),0.6)] text-[rgb(var(--text-muted))] border border-[rgba(var(--border),0.6)] px-2 py-0.5 rounded-full mt-0.5">
                 Usuario
               </span>
             )}
           </div>
-          <div className="h-8 w-8 rounded-full bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))] flex items-center justify-center text-sm font-medium shadow-soft border border-[rgba(var(--accent),0.4)]">
+          <div className="h-9 w-9 rounded-full bg-[linear-gradient(135deg,rgb(var(--gold)),rgb(var(--accent)))] text-[rgb(var(--accent-foreground))] flex items-center justify-center text-sm font-bold shadow-soft border border-[rgba(var(--gold),0.38)]">
             {initial}
           </div>
         </div>

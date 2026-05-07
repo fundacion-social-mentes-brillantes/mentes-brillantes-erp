@@ -116,7 +116,7 @@ export function ExportarLiquidacion({ empresa: initialEmpresa, periodo, financie
         <button
           onClick={() => generateImage('pdf')}
           disabled={isExporting}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-zinc-700 bg-white border border-zinc-200 rounded-md hover:bg-zinc-50 hover:text-zinc-900 transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-[rgb(var(--text-primary))] bg-[rgba(var(--surface-1),0.78)] border border-[rgba(var(--border),0.68)] rounded-xl hover:bg-[rgba(var(--surface-2),0.82)] transition-colors disabled:opacity-50 shadow-soft"
         >
           <FileText className="w-4 h-4 text-red-500" />
           PDF
@@ -124,7 +124,7 @@ export function ExportarLiquidacion({ empresa: initialEmpresa, periodo, financie
         <button
           onClick={() => generateImage('png')}
           disabled={isExporting}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-zinc-700 bg-white border border-zinc-200 rounded-md hover:bg-zinc-50 hover:text-zinc-900 transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-[rgb(var(--text-primary))] bg-[rgba(var(--surface-1),0.78)] border border-[rgba(var(--border),0.68)] rounded-xl hover:bg-[rgba(var(--surface-2),0.82)] transition-colors disabled:opacity-50 shadow-soft"
         >
           <ImageIcon className="w-4 h-4 text-blue-500" />
           PNG
@@ -140,6 +140,11 @@ export function ExportarLiquidacion({ empresa: initialEmpresa, periodo, financie
         >
           {/* Header */}
           <div className="pb-6 mb-8 text-center" style={{ borderBottom: '2px solid #374151' }}>
+            <img
+              src="/logo-mentes-brillantes.png"
+              alt="Gimnasio Emocional Mentes Brillantes"
+              style={{ width: '170px', height: '86px', objectFit: 'contain', margin: '0 auto 12px auto' }}
+            />
             <h1 className="text-3xl font-bold uppercase tracking-wide mb-2" style={{ color: '#111827' }}>
               {empresa.nombre}
             </h1>

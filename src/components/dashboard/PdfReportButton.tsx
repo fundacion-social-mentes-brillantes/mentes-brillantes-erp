@@ -5,6 +5,17 @@ import { FileDown, Loader2 } from 'lucide-react'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 
+async function loadLogoDataUrl() {
+  const response = await fetch('/logo-mentes-brillantes.png')
+  const blob = await response.blob()
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onloadend = () => resolve(String(reader.result))
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
+
 export function PdfReportButton({ displayMonthName }: { displayMonthName: string }) {
   const [isGenerating, setIsGenerating] = useState(false)
 
@@ -110,6 +121,12 @@ export function PdfReportButton({ displayMonthName }: { displayMonthName: string
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width
 
       // Cabecera del Documento
+      try {
+        const logo = await loadLogoDataUrl()
+        pdf.addImage(logo, 'PNG', pdfWidth - 48, 9, 34, 20, undefined, 'FAST')
+      } catch {
+        // El logo es decorativo en el PDF; si falla, el reporte sigue generando.
+      }
       pdf.setFontSize(22)
       pdf.setTextColor(24, 24, 27) // zinc-900
       pdf.text('Mentes Brillantes - Reporte Gerencial', 10, 20)
@@ -142,8 +159,8 @@ export function PdfReportButton({ displayMonthName }: { displayMonthName: string
     <button
       onClick={handleGeneratePdf}
       disabled={isGenerating}
-      className={`inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:pointer-events-none disabled:opacity-50
-        bg-emerald-600 text-white shadow-md hover:bg-emerald-700 hover:shadow-lg h-10 px-4 py-2 ${isGenerating ? 'animate-pulse' : ''}`}
+      className={`inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--ring-color))] disabled:pointer-events-none disabled:opacity-50
+        bg-[linear-gradient(135deg,rgb(var(--accent)),rgb(var(--accent-strong)))] text-[rgb(var(--accent-foreground))] shadow-soft hover:shadow-strong h-10 px-4 py-2 border border-[rgba(var(--accent),0.32)] ${isGenerating ? 'animate-pulse' : ''}`}
     >
       {isGenerating ? (
         <Loader2 className="w-4 h-4 animate-spin" />

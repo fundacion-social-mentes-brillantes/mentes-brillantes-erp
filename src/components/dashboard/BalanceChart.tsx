@@ -31,14 +31,14 @@ export function BalanceChart({ data, utilidadMes, displayMonthName }: BalanceCha
     mutedSurface: 'rgb(var(--muted-surface))',
     success: 'rgb(var(--success))',
     danger: 'rgb(var(--danger))',
-    info: 'rgb(var(--info))',
+    info: 'rgb(var(--warning))',
     cursor: 'rgba(var(--muted-surface),0.35)',
   } as const;
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-[rgba(var(--surface-1),0.9)] backdrop-blur-md border border-[rgb(var(--border))] p-4 rounded-xl shadow-soft flex flex-col gap-2 min-w-[200px]">
+        <div className="bg-[rgba(var(--surface-1),0.94)] backdrop-blur-md border border-[rgba(var(--border),0.7)] p-4 rounded-2xl shadow-strong flex flex-col gap-2 min-w-[200px]">
           <p className="text-[rgb(var(--text-muted))] font-medium text-xs mb-1 uppercase tracking-wider">Día {label}</p>
           {payload.map((entry: any, index: number) => (
             <div key={index} className="flex items-center justify-between gap-4">
@@ -61,9 +61,9 @@ export function BalanceChart({ data, utilidadMes, displayMonthName }: BalanceCha
     <div className="flex-1 flex flex-col min-h-[350px]">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
         <div>
-          <p className="text-sm font-medium text-[rgb(var(--text-muted))] mb-1">Utilidad Bruta ({displayMonthName})</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[rgb(var(--text-muted))] mb-1">Utilidad Bruta ({displayMonthName})</p>
           <div className="flex items-end gap-3">
-            <p className={`text-4xl font-extrabold tracking-tight ${utilidadMes >= 0 ? 'text-[rgb(var(--success))]' : 'text-[rgb(var(--danger))]'}`}>
+            <p className={`text-4xl font-extrabold tracking-tight ${utilidadMes >= 0 ? 'text-[rgb(var(--warning))]' : 'text-[rgb(var(--danger))]'}`}>
               ${formatCurrency(utilidadMes)}
             </p>
           </div>

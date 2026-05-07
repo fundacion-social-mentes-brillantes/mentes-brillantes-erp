@@ -1,6 +1,7 @@
 ﻿import { ArrowUpRight, ArrowDownRight, Users, Wallet, AlertCircle, Receipt, History, Info, Banknote, ShoppingCart, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
+import Image from "next/image";
 import { MonthSelector } from "./MonthSelector";
 import { BalanceChart } from "./BalanceChart";
 import { PdfReportButton } from "./PdfReportButton";
@@ -367,14 +368,43 @@ export async function Dashboard({ month }: { month?: string }) {
 
   return (
     <div id="dashboard-content" className="space-y-8 pb-8">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[rgb(var(--text-primary))]">Dashboard</h1>
-          <p className="text-[rgb(var(--text-muted))] text-sm">Resumen financiero y estado de cartera.</p>
+      <div className="premium-panel rounded-3xl p-5 md:p-6 overflow-hidden">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+          <div className="flex items-center gap-4 min-w-0">
+            <div className="relative hidden sm:block h-16 w-16 shrink-0 rounded-2xl border border-[rgba(var(--gold),0.34)] bg-[rgba(var(--surface-1),0.6)] shadow-soft overflow-hidden">
+              <Image
+                src="/logo-mentes-brillantes.png"
+                alt="Gimnasio Emocional Mentes Brillantes"
+                fill
+                className="object-contain p-1.5"
+                sizes="64px"
+                priority
+              />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.24em] text-[rgb(var(--warning))] font-semibold">Panel financiero</p>
+              <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-[rgb(var(--text-primary))]">Dashboard</h1>
+              <p className="text-[rgb(var(--text-muted))] text-sm">Resumen ejecutivo y estado de cartera de Mentes Brillantes.</p>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <PdfReportButton displayMonthName={displayMonthName} />
+            <MonthSelector currentMonth={currentMonthValue} />
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <PdfReportButton displayMonthName={displayMonthName} />
-          <MonthSelector currentMonth={currentMonthValue} />
+        <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="rounded-2xl border border-[rgba(var(--border),0.56)] bg-[rgba(var(--surface-1),0.5)] p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[rgb(var(--text-muted))]">Ingresos</p>
+            <p className="mt-1 text-2xl font-bold text-[rgb(var(--success))]">${ingresosTotales.toLocaleString()}</p>
+          </div>
+          <div className="rounded-2xl border border-[rgba(var(--border),0.56)] bg-[rgba(var(--surface-1),0.5)] p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[rgb(var(--text-muted))]">Egresos</p>
+            <p className="mt-1 text-2xl font-bold text-[rgb(var(--danger))]">${egresosMes.toLocaleString()}</p>
+          </div>
+          <div className="rounded-2xl border border-[rgba(var(--border),0.56)] bg-[rgba(var(--surface-1),0.5)] p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[rgb(var(--text-muted))]">Utilidad</p>
+            <p className={`mt-1 text-2xl font-bold ${utilidadMes >= 0 ? 'text-[rgb(var(--warning))]' : 'text-[rgb(var(--danger))]'}`}>${utilidadMes.toLocaleString()}</p>
+          </div>
         </div>
       </div>
 
@@ -399,7 +429,7 @@ export async function Dashboard({ month }: { month?: string }) {
             return (
               <div
                 key={stat.name}
-                className="rounded-2xl border border-[rgba(var(--border),0.6)] bg-[rgba(var(--surface-1),0.7)] backdrop-blur-xl p-5 shadow-sm"
+                className="premium-card rounded-2xl p-5"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex flex-col gap-1">
@@ -416,7 +446,7 @@ export async function Dashboard({ month }: { month?: string }) {
                     </div>
                     <p className="text-2xl font-bold tracking-tight text-[rgb(var(--text-primary))]">{stat.value}</p>
                   </div>
-                  <div className={`p-2 rounded-xl ${stat.bg}`}>
+                  <div className={`p-2.5 rounded-xl ${stat.bg} border border-[rgba(var(--border),0.36)] shadow-[inset_0_1px_0_rgba(var(--glass-highlight),0.08)]`}>
                     <stat.icon className={`h-4 w-4 ${stat.color}`} />
                   </div>
                 </div>
@@ -438,7 +468,7 @@ export async function Dashboard({ month }: { month?: string }) {
         </div>
 
         {/* Detalle del período */}
-        <div className="rounded-xl border border-[rgba(var(--border),0.35)] bg-[rgba(var(--surface-1),0.5)] backdrop-blur p-3">
+        <div className="premium-panel rounded-2xl p-4">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold text-[rgb(var(--text-primary))]">Detalle del período</h3>
             <span className="text-xs text-[rgb(var(--text-muted))]">Ingresos de cartera, donaciones y facturado</span>
@@ -449,7 +479,7 @@ export async function Dashboard({ month }: { month?: string }) {
               const isTrendNeutral = stat.trend === 0;
               const trendIsGood = (isTrendPositive && stat.goodIsUp) || (!isTrendPositive && !stat.goodIsUp);
               return (
-                <div key={stat.name} className="rounded-lg border border-[rgba(var(--border),0.5)] bg-[rgba(var(--surface-2),0.7)] p-3">
+                <div key={stat.name} className="rounded-xl border border-[rgba(var(--border),0.5)] bg-[rgba(var(--surface-2),0.64)] p-3 shadow-[inset_0_1px_0_rgba(var(--glass-highlight),0.06)]">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-2">
@@ -490,14 +520,14 @@ export async function Dashboard({ month }: { month?: string }) {
 
       {/* Indicadores históricos / cartera */}
       <section className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
-        <h2 className="text-lg font-semibold text-[rgb(var(--text-primary))] border-b border-[rgb(var(--border))] pb-2">
+        <h2 className="text-lg font-semibold text-[rgb(var(--text-primary))] border-b premium-divider pb-2">
           Indicadores históricos y cartera <span className="text-[rgb(var(--text-muted))] font-normal text-sm ml-2">(Acumulado general)</span>
         </h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {historicalStats.map((stat) => (
             <div
               key={stat.name}
-              className="relative overflow-hidden rounded-xl border border-[rgba(var(--border),0.45)] bg-[rgba(var(--surface-1),0.55)] backdrop-blur-lg p-4 shadow-sm"
+              className="premium-card rounded-2xl p-4"
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -523,11 +553,11 @@ export async function Dashboard({ month }: { month?: string }) {
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-1000">
-        <div className="lg:col-span-2 rounded-2xl border border-[rgba(var(--border),0.5)] bg-[rgba(var(--surface-1),0.6)] backdrop-blur-xl p-6 shadow-sm flex flex-col">
+        <div className="lg:col-span-2 premium-panel rounded-3xl p-6 flex flex-col">
           <BalanceChart data={chartData} utilidadMes={utilidadMes} displayMonthName={displayMonthName} />
         </div>
         
-        <div className="rounded-2xl border border-[rgba(var(--border),0.5)] bg-[rgba(var(--surface-1),0.6)] backdrop-blur-xl p-6 shadow-sm flex flex-col">
+        <div className="premium-panel rounded-3xl p-6 flex flex-col">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base font-semibold text-[rgb(var(--text-primary))]">Cuentas Recientes Pendientes</h3>
             <Link href="/cuentas?estado=pendiente" className="text-xs font-medium text-[rgb(var(--info))] hover:text-[rgb(var(--info))]">Ver todas</Link>
@@ -537,7 +567,7 @@ export async function Dashboard({ month }: { month?: string }) {
               const saldo = cuenta.monto_pendiente || 0;
               const isOverdue = new Date(cuenta.fecha_emision) < new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // MÃ¡s de 30 dÃ­as
               return (
-                <Link key={cuenta.id} href={`/cuentas/${cuenta.id}`} className="flex items-center justify-between border-b border-[rgb(var(--muted-surface))] pb-4 last:border-0 last:pb-0 hover:bg-zinc-50 p-2 -mx-2 rounded-lg transition-colors">
+                <Link key={cuenta.id} href={`/cuentas/${cuenta.id}`} className="flex items-center justify-between border-b border-[rgba(var(--border),0.42)] pb-4 last:border-0 last:pb-0 hover:bg-[rgba(var(--gold),0.07)] p-2 -mx-2 rounded-xl transition-colors">
                   <div className="flex-1 min-w-0 pr-4">
                     <p className="text-sm font-medium text-[rgb(var(--text-primary))] truncate">{cuenta.asistentes?.nombre}</p>
                     <p className="text-xs text-[rgb(var(--text-muted))] truncate">{cuenta.concepto}</p>

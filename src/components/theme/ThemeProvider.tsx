@@ -87,13 +87,13 @@ export function ThemeToggle() {
     <button
       type="button"
       onClick={toggleTheme}
-      className="flex items-center gap-2 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] px-3 py-2 text-sm font-medium text-[rgb(var(--text-primary))] shadow-soft hover:bg-[rgb(var(--surface-3))] transition-colors"
+      className="flex items-center gap-2 rounded-full border border-[rgba(var(--gold),0.32)] bg-[linear-gradient(135deg,rgba(var(--surface-1),0.9),rgba(var(--surface-2),0.72))] px-3 py-2 text-sm font-semibold text-[rgb(var(--text-primary))] shadow-soft hover:border-[rgba(var(--gold),0.56)] hover:bg-[rgba(var(--surface-3),0.82)] transition-all"
       aria-label={isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
     >
       {isDark ? (
-        <Sun className="h-4 w-4 text-[rgb(var(--accent))]" />
+        <Sun className="h-4 w-4 text-[rgb(var(--warning))]" />
       ) : (
-        <Moon className="h-4 w-4 text-[rgb(var(--accent))]" />
+        <Moon className="h-4 w-4 text-[rgb(var(--warning))]" />
       )}
       <span className="hidden sm:inline">{isDark ? 'Claro' : 'Oscuro'}</span>
     </button>
