@@ -101,12 +101,20 @@ function describeCoach(item: ToolExecutionItem) {
   const data: any = item.result?.data || {}
   const name = item.person?.nombre || "la persona"
   const sesiones = Array.isArray(data.sesiones) ? data.sesiones : []
+  const fechasTomadas = Array.isArray(data.fechas_tomadas) ? data.fechas_tomadas : sesiones.map((sesion: any) => sesion.fecha).filter(Boolean).reverse()
+  const paquetes = Array.isArray(data.paquetes) ? data.paquetes : []
+  const estado = data.interpretacion?.estado || null
   return [
     `Sesiones coach de ${name}:`,
-    `Compradas: ${data.sesiones_compradas || 0}. Registradas: ${data.sesiones_realizadas || 0}. Restantes: ${data.sesiones_restantes || 0}.`,
-    sesiones[0] ? `Ultima registrada: ${sesiones[0].fecha}${sesiones[0].notas ? ` | ${sesiones[0].notas}` : ""}.` : "No veo sesiones registradas en el contador actual.",
-    "Puede haber sesiones antiguas no cargadas en el contador.",
-  ].join("\n")
+    `Compradas: ${data.sesiones_compradas || 0}. Tomadas/registradas: ${data.sesiones_realizadas || 0}. Restantes: ${data.sesiones_restantes || 0}.`,
+    estado === "con_sesiones_restantes" ? "Estado: aun tiene sesiones disponibles." : estado === "sin_sesiones_restantes" ? "Estado: no quedan sesiones disponibles registradas." : "Estado: no veo paquete coach registrado.",
+    fechasTomadas.length
+      ? ["Fechas tomadas:", ...fechasTomadas.slice(0, 20).map((fecha: string, index: number) => `${index + 1}. ${fecha}`)].join("\n")
+      : "No veo fechas de sesiones tomadas en el contador actual.",
+    sesiones[0] ? `Ultima registrada: ${sesiones[0].fecha}${sesiones[0].notas ? ` | ${sesiones[0].notas}` : ""}.` : "",
+    paquetes.length ? `Paquetes registrados: ${paquetes.length}.` : "",
+    "Puede haber sesiones antiguas no cargadas en el contador si no fueron migradas al modulo coach.",
+  ].filter(Boolean).join("\n")
 }
 
 function describePurchases(item: ToolExecutionItem) {
@@ -186,13 +194,13 @@ function shouldUseDeepSeekForWriting(plan: AiPlannerPlan, bundle: ToolExecutionB
   if (bundle.status === "ambiguous") return false
   if (plan.needsCalculation || plan.calculation === "analyze" || plan.calculation === "compare" || plan.calculation === "explain") return true
   if (bundle.results.length > 1) return true
-  if (plan.intent === "estado_completo_persona" || plan.intent === "cartera_pendiente_global" || plan.intent === "resumen_periodo") return true
+  if (plan.intent === "estado_completo_persona" || plan.intent === "cartera_pendiente_global" || plan.intent === "resumen_periodo" || plan.intent === "sesiones_coach_persona") return true
   return false
 }
 
 function advancedWritingNeeded(plan: AiPlannerPlan, text: string) {
   const normalized = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
-  return Boolean(plan.needsCalculation || plan.calculation || /\b(analiza|analizalo|compara|explica|explicame|que observas|que ves|revisar primero|esta raro)\b/.test(normalized))
+  return Boolean(plan.needsCalculation || plan.calculation || /\b(analiza|analizalo|compara|explica|explicame|que observas|que ves|revisar primero|esta raro|coach|sesiones|fechas)\b/.test(normalized))
 }
 
 async function callDeepSeekWriter({
@@ -222,7 +230,7 @@ async function callDeepSeekWriter({
       {
         role: "system",
         content:
-          "Eres Cajero, analista interno del ERP. Redacta corto, claro y natural para Telegram. Usa solo los datos JSON entregados. No inventes cifras, nombres, fechas ni pagos. Si falta informacion, dilo claramente. No sugieras escrituras automaticas.",
+          "Eres Cajero, especialista en sesiones coach y analista interno del ERP. Redacta corto, claro y natural para Telegram. Para sesiones coach, siempre explica compradas, tomadas/registradas, restantes, fechas tomadas, ultima sesion y si puede haber sesiones antiguas no cargadas. Usa solo los datos JSON entregados. No inventes cifras, nombres, fechas ni pagos. Si falta informacion, dilo claramente. No sugieras escrituras automaticas.",
       },
       {
         role: "user",
