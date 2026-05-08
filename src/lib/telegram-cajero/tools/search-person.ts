@@ -74,7 +74,6 @@ const NON_PERSON_WORDS = new Set([
   "para",
   "pendiente",
   "pendientes",
-  "persona",
   "por",
   "que",
   "queda",
