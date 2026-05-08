@@ -132,6 +132,16 @@ function describeAlerts(item: ToolExecutionItem) {
   return ["Esto conviene revisar:", ...alerts.slice(0, 5).map((alert) => `- ${alert.type}: ${alert.evidence?.[0] || "sin evidencia"}`)].join("\n")
 }
 
+function describeFullProfile(item: ToolExecutionItem) {
+  const data: any = item.result?.data || {}
+  return [
+    describePersonFinancial({ ...item, result: { ...item.result!, data: data.financial } }),
+    describePurchases({ ...item, result: { ...item.result!, data: data.purchases } }),
+    describePayments({ ...item, result: { ...item.result!, data: data.payments } }),
+    describeCoach({ ...item, result: { ...item.result!, data: data.coach } }),
+  ].filter(Boolean).join("\n\n")
+}
+
 export function buildDeterministicResponse(plan: AiPlannerPlan, bundle: ToolExecutionBundle, state: TelegramSessionState = {}) {
   if (bundle.status === "ambiguous" && bundle.pendingSelection?.matches.length) {
     return [
@@ -154,14 +164,7 @@ export function buildDeterministicResponse(plan: AiPlannerPlan, bundle: ToolExec
     if (item.requestedTool === "getPersonPayments" || item.requestedTool === "getPersonLastPayment") return describePayments(item)
     if (item.requestedTool === "getCoachSessions") return describeCoach(item)
     if (item.requestedTool === "getPersonPurchasesOrConcepts") return describePurchases(item)
-    if (item.requestedTool === "getPersonFullProfile") {
-      const data: any = item.result?.data || {}
-      return [
-        describePersonFinancial({ ...item, result: { ...item.result!, data: data.financial } }),
-        describePayments({ ...item, result: { ...item.result!, data: data.payments } }),
-        describeCoach({ ...item, result: { ...item.result!, data: data.coach } }),
-      ].join("\n\n")
-    }
+    if (item.requestedTool === "getPersonFullProfile") return describeFullProfile(item)
     if (item.requestedTool === "getSummary") return describeSummary(item)
     if (item.requestedTool === "getBusinessAlerts") return describeAlerts(item)
     if (item.requestedTool === "getOpenReceivablesSummary") {
@@ -177,6 +180,96 @@ export function buildDeterministicResponse(plan: AiPlannerPlan, bundle: ToolExec
 
   const partial = bundle.userSafeErrors.length ? `\n\nOjo: resultado parcial. ${Array.from(new Set(bundle.userSafeErrors)).join(" ")}` : ""
   return parts.filter(Boolean).join("\n\n") + partial
+}
+
+function shouldUseDeepSeekForWriting(plan: AiPlannerPlan, bundle: ToolExecutionBundle) {
+  if (bundle.status === "ambiguous") return false
+  if (plan.needsCalculation || plan.calculation === "analyze" || plan.calculation === "compare" || plan.calculation === "explain") return true
+  if (bundle.results.length > 1) return true
+  if (plan.intent === "estado_completo_persona" || plan.intent === "cartera_pendiente_global" || plan.intent === "resumen_periodo") return true
+  return false
+}
+
+function advancedWritingNeeded(plan: AiPlannerPlan, text: string) {
+  const normalized = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+  return Boolean(plan.needsCalculation || plan.calculation || /\b(analiza|analizalo|compara|explica|explicame|que observas|que ves|revisar primero|esta raro)\b/.test(normalized))
+}
+
+async function callDeepSeekWriter({
+  text,
+  plan,
+  bundle,
+  state,
+  config,
+  fallback,
+  advanced,
+}: {
+  text: string
+  plan: AiPlannerPlan
+  bundle: ToolExecutionBundle
+  state: TelegramSessionState
+  config: TelegramConfig
+  fallback: string
+  advanced: boolean
+}) {
+  const { apiKey, baseUrl, model } = config.deepseek || {}
+  if (!apiKey || !baseUrl || !model) return null
+
+  const body: Record<string, unknown> = {
+    model,
+    temperature: advanced ? 0.15 : 0.05,
+    messages: [
+      {
+        role: "system",
+        content:
+          "Eres Cajero, analista interno del ERP. Redacta corto, claro y natural para Telegram. Usa solo los datos JSON entregados. No inventes cifras, nombres, fechas ni pagos. Si falta informacion, dilo claramente. No sugieras escrituras automaticas.",
+      },
+      {
+        role: "user",
+        content: JSON.stringify({
+          pregunta: text,
+          plan,
+          memoria: {
+            lastAsistente: state.lastAsistente || null,
+            lastIntent: state.lastIntent || null,
+          },
+          resultados_reales: bundle.results.map((item) => ({
+            tool: item.requestedTool,
+            status: item.result?.status || item.status,
+            person: item.person || null,
+            data: item.result?.data ?? null,
+            errors: item.result?.userSafeErrors || [],
+            sources: item.result?.provenance.sources || [],
+          })),
+          calculo_deterministico: getCalculationText(plan, state, bundle),
+          fallback_seguro: fallback,
+        }),
+      },
+    ],
+  }
+
+  if (advanced) {
+    body.thinking = { type: "enabled" }
+    body.reasoning_effort = "max"
+  } else {
+    body.thinking = { type: "disabled" }
+  }
+
+  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    console.error("[telegram-cajero] ai-response-writer DeepSeek no-ok", { status: response.status, model, advanced })
+    return null
+  }
+  const json = await response.json()
+  const content = json?.choices?.[0]?.message?.content
+  return typeof content === "string" && content.trim() ? content.trim() : null
 }
 
 export async function writeAiResponse({
@@ -195,48 +288,19 @@ export async function writeAiResponse({
   const fallback = buildDeterministicResponse(plan, bundle, state)
   const { apiKey, baseUrl, model } = config.deepseek || {}
   if (!apiKey || !baseUrl || !model) return fallback
-  if (bundle.status === "ambiguous") return fallback
+  if (!shouldUseDeepSeekForWriting(plan, bundle)) return fallback
 
   try {
-    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.2,
-        messages: [
-          {
-            role: "system",
-            content:
-              "Eres Cajero, analista interno del ERP. Redacta corto y natural para Telegram. Usa solo los datos JSON entregados. No inventes cifras, nombres, fechas ni pagos. Si falta informacion, dilo claramente. No sugieras escrituras automaticas.",
-          },
-          {
-            role: "user",
-            content: JSON.stringify({
-              pregunta: text,
-              plan,
-              resultados_reales: bundle.results.map((item) => ({
-                tool: item.requestedTool,
-                status: item.result?.status || item.status,
-                person: item.person || null,
-                data: item.result?.data ?? null,
-                errors: item.result?.userSafeErrors || [],
-                sources: item.result?.provenance.sources || [],
-              })),
-              calculo_deterministico: getCalculationText(plan, state, bundle),
-              fallback_seguro: fallback,
-            }),
-          },
-        ],
-      }),
-    })
-    if (!response.ok) return fallback
-    const json = await response.json()
-    const content = json?.choices?.[0]?.message?.content
-    return typeof content === "string" && content.trim() ? content.trim() : fallback
+    const advanced = advancedWritingNeeded(plan, text)
+    const content = await callDeepSeekWriter({ text, plan, bundle, state, config, fallback, advanced })
+    if (content) return content
+
+    if (advanced) {
+      const basicRetry = await callDeepSeekWriter({ text, plan, bundle, state, config, fallback, advanced: false })
+      if (basicRetry) return basicRetry
+    }
+
+    return fallback
   } catch (error: any) {
     console.error("[telegram-cajero] ai-response-writer fallo; usando plantilla", { message: error?.message })
     return fallback
