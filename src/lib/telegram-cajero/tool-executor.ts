@@ -209,6 +209,53 @@ function structuredFromItem(item: ToolExecutionItem): NonNullable<TelegramSessio
   const data: any = result.data || {}
   const person = item.person || data.asistente || null
 
+  if (item.requestedTool === "getPersonFullProfile" && person) {
+    const financial = data.financial || {}
+    const purchases = Array.isArray(data.purchases) ? data.purchases : []
+    const payments = Array.isArray(data.payments) ? data.payments : []
+    const coach = data.coach || {}
+    const cuentas = Array.isArray(financial.cuentas) ? financial.cuentas : []
+    const pendientes = cuentas.filter((cuenta: any) => Number(cuenta.pendiente || 0) > 0)
+    return {
+      type: "estado_completo_persona",
+      module: "asistentes",
+      asistente: { id: person.id, nombre: person.nombre, codigo: person.codigo || null },
+      totals: {
+        pendiente: moneyNumber(financial.total_pendiente),
+        facturado: moneyNumber(financial.total_facturado),
+        abonado: moneyNumber(financial.total_abonado),
+        saldo_a_favor: moneyNumber(financial.saldo_a_favor),
+        sesiones_compradas: moneyNumber(coach.sesiones_compradas),
+        sesiones_realizadas: moneyNumber(coach.sesiones_realizadas),
+        sesiones_restantes: moneyNumber(coach.sesiones_restantes),
+      },
+      items: [
+        ...pendientes.slice(0, 8).map((cuenta: any) => ({
+          tipo: "cuenta_pendiente",
+          concepto: cuenta.concepto,
+          pendiente: moneyNumber(cuenta.pendiente),
+          valor: moneyNumber(cuenta.valor),
+          abonado: moneyNumber(cuenta.abonado),
+        })),
+        ...payments.slice(0, 5).map((pago: any) => ({
+          tipo: "pago",
+          fecha: pago.fecha_pago,
+          monto: moneyNumber(pago.monto),
+          metodo_pago: pago.metodo_pago || null,
+          concepto: pago.concepto || null,
+        })),
+        ...purchases.slice(0, 5).map((row: any) => ({
+          tipo: "compra",
+          concepto: row.concepto,
+          valor_total: moneyNumber(row.valor_total),
+          pendiente: moneyNumber(row.pendiente),
+          abonado: moneyNumber(row.abonado),
+        })),
+      ],
+      sources: result.provenance.sources,
+    }
+  }
+
   if (item.requestedTool === "getPersonFinancialStatus" && person) {
     const cuentas = Array.isArray(data.cuentas) ? data.cuentas : []
     const pendientes = cuentas.filter((cuenta: any) => Number(cuenta.pendiente || 0) > 0)
