@@ -50,11 +50,17 @@ const NON_PERSON_WORDS = new Set([
   "estado",
   "esta",
   "este",
+  "esa",
+  "esas",
+  "ese",
+  "esos",
   "favor",
   "fecha",
   "fechas",
   "fue",
   "general",
+  "ha",
+  "han",
   "habias",
   "hay",
   "hizo",
@@ -92,6 +98,10 @@ const NON_PERSON_WORDS = new Set([
   "sus",
   "tiene",
   "tienen",
+  "tomada",
+  "tomadas",
+  "tomado",
+  "tomados",
   "tomo",
   "tomar",
   "tomaron",
@@ -127,12 +137,38 @@ function tokenize(value: string) {
     .filter((token) => token.length >= 2 && !NON_PERSON_WORDS.has(token))
 }
 
+function editDistanceAtMostOne(a: string, b: string) {
+  if (a === b) return true
+  if (Math.abs(a.length - b.length) > 1) return false
+  let i = 0
+  let j = 0
+  let edits = 0
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      i += 1
+      j += 1
+      continue
+    }
+    edits += 1
+    if (edits > 1) return false
+    if (a.length > b.length) i += 1
+    else if (b.length > a.length) j += 1
+    else {
+      i += 1
+      j += 1
+    }
+  }
+  if (i < a.length || j < b.length) edits += 1
+  return edits <= 1
+}
+
 function tokenMatchesName(token: string, nameTokens: string[], normalizedName: string) {
   if (normalizedName.includes(token)) return true
   return nameTokens.some((nameToken) => {
     if (nameToken === token) return true
     if (token.length >= 4 && nameToken.includes(token)) return true
     if (nameToken.length >= 4 && token.includes(nameToken)) return true
+    if (token.length >= 5 && nameToken.length >= 5 && editDistanceAtMostOne(token, nameToken)) return true
     return false
   })
 }
