@@ -88,11 +88,18 @@ function monthFromQuestion(question: string) {
 
 function queryError(area: string, error: any) {
   if (!error) return null
-  console.error("[asistente-ia] error consultando contabilidad", {
-    area,
-    mensaje: error.message,
-    codigo: error.code,
-  })
+  if (process.env.NODE_ENV === "production") {
+    console.error("[asistente-ia] error consultando contabilidad", {
+      area,
+      codigo: typeof error.code === "string" ? error.code : undefined,
+    })
+  } else {
+    console.error("[asistente-ia] error consultando contabilidad", {
+      area,
+      mensaje: error.message,
+      codigo: error.code,
+    })
+  }
   return {
     area,
     mensaje: "No se pudo consultar esta informacion. No uses cifras en cero para esta seccion.",
