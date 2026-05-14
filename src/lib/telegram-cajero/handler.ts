@@ -343,19 +343,21 @@ const AYUDA = [
 function getConfig(): TelegramConfig | null {
   const botToken = process.env.TELEGRAM_BOT_TOKEN
   const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET
+  const allowedChatId = process.env.TELEGRAM_ALLOWED_CHAT_ID?.trim() || undefined
+  const allowedUserIds = new Set(
+    (process.env.TELEGRAM_ALLOWED_USER_IDS || "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean)
+  )
 
-  if (!botToken || !webhookSecret) return null
+  if (!botToken || !webhookSecret || !allowedChatId || allowedUserIds.size === 0) return null
 
   return {
     botToken,
     webhookSecret,
-    allowedChatId: process.env.TELEGRAM_ALLOWED_CHAT_ID?.trim() || undefined,
-    allowedUserIds: new Set(
-      (process.env.TELEGRAM_ALLOWED_USER_IDS || "")
-        .split(",")
-        .map((id) => id.trim())
-        .filter(Boolean)
-    ),
+    allowedChatId,
+    allowedUserIds,
     deepseek: {
       apiKey: process.env.DEEPSEEK_TELEGRAM_API_KEY,
       baseUrl: process.env.DEEPSEEK_TELEGRAM_BASE_URL,
@@ -379,6 +381,22 @@ function formatCop(value: unknown) {
 function compactLine(value: unknown, fallback = "Sin dato") {
   const text = String(value || "").trim()
   return text || fallback
+}
+
+function safeErrorDetails(error: any) {
+  return {
+    name: error instanceof Error ? error.name : "Error",
+    code: typeof error?.code === "string" ? error.code : undefined,
+    status: typeof error?.status === "number" ? error.status : undefined,
+  }
+}
+
+function logTelegramError(scope: string, error?: any) {
+  if (process.env.NODE_ENV === "production") {
+    console.error(`[telegram-cajero] ${scope}`)
+    return
+  }
+  console.error(`[telegram-cajero] ${scope}`, safeErrorDetails(error))
 }
 
 function buildContextualHelp(ctx: CajeroConversationContext | null) {
@@ -411,12 +429,11 @@ function assertWebhookSecret(request: Request, config: TelegramConfig) {
 }
 
 function isAuthorized(message: TelegramMessage, config: TelegramConfig) {
-  if (config.allowedChatId && String(message.chat.id) !== config.allowedChatId) return false
+  if (!config.allowedChatId || config.allowedUserIds.size === 0) return false
+  if (String(message.chat.id) !== config.allowedChatId) return false
 
-  if (config.allowedUserIds.size > 0) {
-    const userId = message.from?.id
-    if (!userId || !config.allowedUserIds.has(String(userId))) return false
-  }
+  const userId = message.from?.id
+  if (!userId || !config.allowedUserIds.has(String(userId))) return false
 
   return true
 }
@@ -588,9 +605,7 @@ async function classifyIntentWithDeepSeek(text: string, config: TelegramConfig):
     if (typeof content !== "string") return null
     return sanitizeIntent(parseJsonObject(content))
   } catch (error) {
-    console.error("[telegram-cajero] DeepSeek fallo al clasificar", {
-      message: error instanceof Error ? error.message : "unknown",
-    })
+    logTelegramError("DeepSeek fallo al clasificar", error)
     return null
   }
 }
@@ -896,13 +911,7 @@ async function buildEstadoResponse(supabase: any, asistente: any) {
   ].filter(Boolean)
 
   if (cuentasError || saldoError || paquetesError || sesionesError) {
-    console.error("[telegram-cajero] error consultando estado", {
-      asistente_id: asistente.id,
-      cuentasError,
-      saldoError,
-      paquetesError,
-      sesionesError,
-    })
+    logTelegramError("error consultando estado", cuentasError || saldoError || paquetesError || sesionesError)
   }
 
   const cuentasProcesadas = (cuentas || []).map((cuenta: any) => {
@@ -1831,10 +1840,7 @@ export async function POST(request: Request) {
   }
 
   if (!isAuthorized(message, config)) {
-    console.warn("[telegram-cajero] mensaje rechazado por permisos", {
-      chat_id: message.chat.id,
-      user_id: message.from?.id,
-    })
+    console.warn("[telegram-cajero] mensaje rechazado por permisos")
     return NextResponse.json({ ok: true })
   }
 
@@ -1859,7 +1865,7 @@ export async function POST(request: Request) {
     
     await sendTelegramMessage(config, message.chat.id, responseText)
   } catch (error) {
-    console.error("[telegram-cajero] error procesando mensaje", error)
+    logTelegramError("error procesando mensaje", error)
     await sendTelegramMessage(config, message.chat.id, "No pude procesar el mensaje en este momento.")
   }
 

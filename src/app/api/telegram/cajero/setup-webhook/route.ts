@@ -1,14 +1,29 @@
 import { NextResponse } from "next/server"
+import { timingSafeEqual } from "crypto"
 
 const WEBHOOK_URL = "https://mentes-brillantes-erp.vercel.app/api/telegram/cajero"
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url)
-  const adminSecret = searchParams.get("admin_secret")
+function safeEqual(a: string, b: string) {
+  const left = Buffer.from(a)
+  const right = Buffer.from(b)
+  return left.length === right.length && timingSafeEqual(left, right)
+}
+
+function hasSetupPermission(request: Request, webhookSecret: string) {
+  const headerSecret = request.headers.get("x-telegram-admin-secret")?.trim() || ""
+  const bearerSecret = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim() || ""
+  return safeEqual(headerSecret || bearerSecret, webhookSecret)
+}
+
+export async function GET() {
+  return NextResponse.json({ ok: false }, { status: 405 })
+}
+
+export async function POST(request: Request) {
   const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET
   const botToken = process.env.TELEGRAM_BOT_TOKEN
 
-  if (!webhookSecret || adminSecret !== webhookSecret) {
+  if (!webhookSecret || !hasSetupPermission(request, webhookSecret)) {
     return NextResponse.json({ ok: false }, { status: 401 })
   }
 
