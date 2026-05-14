@@ -26,9 +26,9 @@ const calcularSaldoDisponible = (
 ) => calcularSaldoFavorDisponible(movimientos)
 
 export async function saveAsistente(id: string | null, prevState: ActionState, formData: FormData): Promise<ActionState> {
-  let supabase
+  let supabase, perfil
   try {
-    ;({ supabase } = await requireRoles(['admin', 'caja']))
+    ;({ supabase, perfil } = await requireRoles(['admin', 'caja']))
   } catch (e: any) {
     return { error: e?.message || 'Acceso denegado' }
   }
@@ -45,14 +45,17 @@ export async function saveAsistente(id: string | null, prevState: ActionState, f
     return { error: 'El nombre es obligatorio' }
   }
 
-  const data = {
+  const data: Record<string, string | null> = {
     nombre,
     cedula: cedula || null,
     correo: correo || null,
     telefono: telefono || null,
     codigo: codigo || null,
-    fecha_registro: fecha_registro || null,
-    fecha_inicio_proceso: fecha_inicio_proceso || null,
+  }
+
+  if (perfil.rol === 'admin') {
+    data.fecha_registro = fecha_registro || null
+    data.fecha_inicio_proceso = fecha_inicio_proceso || null
   }
 
   if (id) {

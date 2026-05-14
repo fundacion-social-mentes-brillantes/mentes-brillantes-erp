@@ -7,7 +7,6 @@ import { createClient } from '@/lib/supabase/server'
 export type LoginState = {
   error?: string;
   email?: string;
-  password?: string;
 } | null;
 
 export async function loginAction(prevState: LoginState, formData: FormData): Promise<LoginState> {
@@ -17,7 +16,7 @@ export async function loginAction(prevState: LoginState, formData: FormData): Pr
   const password = formData.get('password') as string
 
   if (!supabase) {
-    return { error: 'Configuración de Supabase pendiente', email, password }
+    return { error: 'Configuración de Supabase pendiente', email }
   }
 
   try {
@@ -34,17 +33,17 @@ export async function loginAction(prevState: LoginState, formData: FormData): Pr
         errorMessage = 'Error de red. Por favor verifica tu conexión a internet.';
       }
 
-      return { error: errorMessage, email, password }
+      return { error: errorMessage, email }
     }
   } catch (err: any) {
-    return { error: 'Ocurrió un error inesperado al intentar iniciar sesión.', email, password }
+    return { error: 'Ocurrió un error inesperado al intentar iniciar sesión.', email }
   }
 
   // Obtener rol para redirigir correctamente
   const { data: userData } = await supabase.auth.getUser()
   const userId = userData?.user?.id
   if (!userId) {
-    return { error: 'No se pudo validar la sesión.', email, password }
+    return { error: 'No se pudo validar la sesión.', email }
   }
 
   const { data: perfil, error: perfilError } = await supabase
@@ -54,7 +53,7 @@ export async function loginAction(prevState: LoginState, formData: FormData): Pr
     .single()
 
   if (perfilError || !perfil?.rol) {
-    return { error: 'No se pudo obtener el perfil del usuario.', email, password }
+    return { error: 'No se pudo obtener el perfil del usuario.', email }
   }
 
   revalidatePath('/', 'layout')

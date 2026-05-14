@@ -36,7 +36,7 @@ export function LoginForm() {
           id="password"
           name="password"
           type="password"
-          defaultValue={state?.password || ''}
+          defaultValue=""
           required
           disabled={isPending}
         />
