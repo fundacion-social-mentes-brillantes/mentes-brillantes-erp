@@ -12,15 +12,57 @@ export type RegistroState = {
   cedula?: string
 } | null
 
+const REGISTRO_GENERIC_ERROR = 'No se pudo completar el registro. Verifica tus datos o solicita ayuda a la Fundación.'
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000
+const RATE_LIMIT_MAX_ATTEMPTS = 5
+const registroAttempts = new Map<string, { count: number; firstAttemptAt: number }>()
+
+function normalizeCredential(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, '')
+}
+
+function getRateLimitKey(email: string, codigo: string, cedula: string) {
+  return `${normalizeCredential(email)}:${normalizeCredential(codigo)}:${normalizeCredential(cedula)}`
+}
+
+function isRateLimited(key: string) {
+  const now = Date.now()
+  const current = registroAttempts.get(key)
+  if (!current || now - current.firstAttemptAt > RATE_LIMIT_WINDOW_MS) {
+    registroAttempts.set(key, { count: 1, firstAttemptAt: now })
+    return false
+  }
+  if (current.count >= RATE_LIMIT_MAX_ATTEMPTS) return true
+  current.count += 1
+  return false
+}
+
+function clearRateLimit(key: string) {
+  registroAttempts.delete(key)
+}
+
 export async function registroAction(prevState: RegistroState, formData: FormData): Promise<RegistroState> {
   const email = (formData.get('email') as string | null)?.trim().toLowerCase() || ''
   const password = (formData.get('password') as string | null) || ''
   const confirm = (formData.get('confirm') as string | null) || ''
   const codigo = (formData.get('codigo') as string | null)?.trim() || ''
   const cedula = (formData.get('cedula') as string | null)?.trim() || ''
+  const rateLimitKey = getRateLimitKey(email, codigo, cedula)
 
   if (!email || !password || !confirm || !codigo || !cedula) {
     return { error: 'Todos los campos son obligatorios.', email, codigo, cedula }
+  }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { error: 'Ingresa un correo válido.', email, codigo, cedula }
+  }
+
+  if (!/^[a-zA-Z0-9-]{2,32}$/.test(codigo) || !/^[a-zA-Z0-9.-]{4,32}$/.test(cedula)) {
+    return { error: REGISTRO_GENERIC_ERROR, email, codigo, cedula }
+  }
+
+  if (isRateLimited(rateLimitKey)) {
+    return { error: 'Demasiados intentos. Espera unos minutos antes de volver a intentar.', email, codigo, cedula }
   }
 
   if (password.length < 8) {
@@ -45,7 +87,7 @@ export async function registroAction(prevState: RegistroState, formData: FormDat
     .maybeSingle()
 
   if (asistenteError || !asistente) {
-    return { error: 'C\u00f3digo o c\u00e9dula inv\u00e1lidos.', email, codigo, cedula }
+    return { error: REGISTRO_GENERIC_ERROR, email, codigo, cedula }
   }
 
   // 2) Verificar que no exista perfil previo con ese asistente
@@ -56,11 +98,11 @@ export async function registroAction(prevState: RegistroState, formData: FormDat
     .maybeSingle()
 
   if (perfilError) {
-    return { error: 'No se pudo validar el asistente. Int\u00e9ntalo de nuevo.', email, codigo, cedula }
+    return { error: REGISTRO_GENERIC_ERROR, email, codigo, cedula }
   }
 
   if (perfilExistente) {
-    return { error: 'Este consultante ya tiene una cuenta registrada.', email, codigo, cedula }
+    return { error: REGISTRO_GENERIC_ERROR, email, codigo, cedula }
   }
 
   // 3) Crear usuario en Auth
@@ -71,11 +113,7 @@ export async function registroAction(prevState: RegistroState, formData: FormDat
   })
 
   if (signUpError || !signUpData?.user?.id) {
-    const message = signUpError?.message || ''
-    if (message.includes('already registered')) {
-      return { error: 'Ya existe una cuenta con este correo.', email, codigo, cedula }
-    }
-    return { error: 'No se pudo crear la cuenta. Int\u00e9ntalo de nuevo.', email, codigo, cedula }
+    return { error: REGISTRO_GENERIC_ERROR, email, codigo, cedula }
   }
 
   const userId = signUpData.user.id
@@ -91,8 +129,10 @@ export async function registroAction(prevState: RegistroState, formData: FormDat
   if (perfilInsertError) {
     // rollback del usuario auth
     await admin.auth.admin.deleteUser(userId)
-    return { error: 'No se pudo completar el registro. Int\u00e9ntalo de nuevo.', email, codigo, cedula }
+    return { error: REGISTRO_GENERIC_ERROR, email, codigo, cedula }
   }
+
+  clearRateLimit(rateLimitKey)
 
   // 5) Iniciar sesi\u00f3n autom\u00e1ticamente
   const supabase = await createClient()

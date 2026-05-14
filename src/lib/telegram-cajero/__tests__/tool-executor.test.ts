@@ -18,19 +18,20 @@ function makeQuery(data: any, calls: string[]) {
   return query
 }
 
-function fakeSupabase(options: { ambiguous?: boolean } = {}) {
+function fakeSupabase(options: { ambiguous?: boolean; people?: string[] } = {}) {
   const calls: string[] = []
   const supabase = {
     calls,
     from(table: string) {
       calls.push(table)
       if (table === "asistentes") {
+        const personIndex = calls.filter((item) => item === "asistentes").length - 1
         const data = options.ambiguous
           ? [
               { id: "a1", nombre: "Sandra Uno", codigo: "1", cedula: null },
               { id: "a2", nombre: "Sandra Dos", codigo: "2", cedula: null },
             ]
-          : [{ id: `id-${calls.filter((item) => item === "asistentes").length}`, nombre: "Persona", codigo: "1", cedula: null }]
+          : [{ id: `id-${personIndex + 1}`, nombre: options.people?.[personIndex] || `Persona ${personIndex}`, codigo: "1", cedula: null }]
         return makeQuery(data, calls)
       }
       if (table === "cuentas_por_cobrar") {
@@ -98,7 +99,7 @@ describe("telegram cajero tool executor", () => {
 
   it("ejecuta personas multiples por separado y crea resultados estructurados", async () => {
     const bundle = await executeAiToolPlan(
-      fakeSupabase() as any,
+      fakeSupabase({ people: ["Sandra", "Michael"] }) as any,
       plan([
         { name: "getPersonFinancialStatus", args: { personQuery: "Sandra" } },
         { name: "getPersonFinancialStatus", args: { personQuery: "Michael" } },

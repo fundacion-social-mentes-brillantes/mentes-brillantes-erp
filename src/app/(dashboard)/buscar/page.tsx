@@ -1,6 +1,6 @@
-import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
+import { AuthzError, requireRoles, type Role } from "@/lib/utils/authz";
 
 export const dynamic = "force-dynamic";
 
@@ -10,17 +10,21 @@ type SearchResult = {
   movimientos: any[];
 };
 
-async function runSearch(q: string): Promise<SearchResult> {
-  const supabase = await createClient();
+async function runSearch(q: string, role: Role, supabase: any): Promise<SearchResult> {
   if (!supabase) return { asistentes: [], cuentas: [], movimientos: [] };
 
   const term = `%${q}%`;
+  const isAdmin = role === "admin";
+  const asistentesFields = isAdmin ? "id, nombre, codigo, cedula" : "id, nombre, codigo";
+  const asistentesFilter = isAdmin
+    ? `nombre.ilike.${term},codigo.ilike.${term},cedula.ilike.${term}`
+    : `nombre.ilike.${term},codigo.ilike.${term}`;
 
   const [{ data: asistentes }, { data: cuentas }, { data: movimientos }] = await Promise.all([
     supabase
       .from("asistentes")
-      .select("id, nombre, codigo, cedula")
-      .or(`nombre.ilike.${term},codigo.ilike.${term},cedula.ilike.${term}`)
+      .select(asistentesFields)
+      .or(asistentesFilter)
       .limit(10),
     supabase
       .from("cuentas_por_cobrar")
@@ -42,6 +46,20 @@ async function runSearch(q: string): Promise<SearchResult> {
 }
 
 export default async function BuscarPage({ searchParams }: { searchParams?: { q?: string } }) {
+  let perfil: { rol: Role };
+  let supabase: any;
+
+  try {
+    const auth = await requireRoles(["admin", "caja"]);
+    perfil = auth.perfil;
+    supabase = auth.supabase;
+  } catch (error) {
+    if (error instanceof AuthzError) {
+      redirect("/mi-estado");
+    }
+    throw error;
+  }
+
   const q = searchParams?.q?.trim();
   if (!q) {
     return (
@@ -52,7 +70,7 @@ export default async function BuscarPage({ searchParams }: { searchParams?: { q?
     );
   }
 
-  const results = await runSearch(q);
+  const results = await runSearch(q, perfil.rol, supabase);
   const hasResults = results.asistentes.length || results.cuentas.length || results.movimientos.length;
 
   if (!hasResults) {
@@ -80,7 +98,7 @@ export default async function BuscarPage({ searchParams }: { searchParams?: { q?
                 <p className="font-medium text-[rgb(var(--text-primary))]">{a.nombre}</p>
                 <p className="text-xs text-[rgb(var(--text-muted))] flex gap-2">
                   {a.codigo && <span>Cod: {a.codigo}</span>}
-                  {a.cedula && <span>CC: {a.cedula}</span>}
+                  {perfil.rol === "admin" && a.cedula && <span>CC: {a.cedula}</span>}
                 </p>
               </Link>
             ))}

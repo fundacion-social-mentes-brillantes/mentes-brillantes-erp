@@ -109,11 +109,13 @@ const NON_NAME_WORDS = new Set([
   "para",
   "pendiente",
   "pendientes",
+  "pero",
   "persona",
   "por",
   "que",
   "queda",
   "quedan",
+  "raro",
   "registrada",
   "registradas",
   "revisa",
@@ -121,10 +123,13 @@ const NON_NAME_WORDS = new Set([
   "saldo",
   "sesion",
   "sesiones",
+  "si",
   "su",
   "sus",
+  "hoy",
   "tiene",
   "tienen",
+  "tienes",
   "todo",
   "toda",
   "tomar",
@@ -264,11 +269,10 @@ function cleanPersonQuery(value: string) {
 function personEntitiesFromDebtQuestion(normalized: string): AiPlannerEntity[] {
   const match = normalized.match(/(?:cuanto debe|cuanta deuda tiene|deuda de|que debe|debe)\s+(.+)/)
   if (!match) return []
-  const cleaned = cleanPersonQuery(match[1])
-  if (!cleaned) return []
-  return cleaned
+  return match[1]
     .split(/\s+(?:y|e)\s+|,\s*/)
-    .map((query) => query.trim())
+    .map((query) => cleanPersonQuery(query))
+    .filter((query): query is string => Boolean(query))
     .filter((query) => query.length >= 2 && !/\b(su|ella|el|eso|esos|esas)\b/.test(query))
     .slice(0, 4)
     .map((query, index) => ({ type: "person", query, role: index === 0 ? "primary" : "comparison" }) as AiPlannerEntity)
