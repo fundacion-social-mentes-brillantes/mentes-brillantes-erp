@@ -22,11 +22,13 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
   const [valorTotal, setValorTotal] = useState('')
   const [abonoInicial, setAbonoInicial] = useState('')
   const modalidadValorCero = tipo === 'coach' && modalidadCobro !== 'normal'
-  const prefijoModalidad = modalidadCobro === 'cortesia'
-    ? '[Cortesia]'
-    : modalidadCobro === 'cubierto_por_otro_proceso'
-      ? '[Cubierto por otro proceso/familiar]'
-      : ''
+  const prefijoModalidad = tipo === 'coach'
+    ? modalidadCobro === 'cortesia'
+      ? '[Cortesia]'
+      : modalidadCobro === 'cubierto_por_otro_proceso'
+        ? '[Cubierto por otro proceso/familiar]'
+        : ''
+    : ''
   const conceptoCoachBase = useMemo(() => `Sesión guía coach - ${sesiones || 1} sesiones`, [sesiones])
   const conceptoCoach = useMemo(
     () => prefijoModalidad ? `${prefijoModalidad} ${conceptoCoachBase}` : conceptoCoachBase,
@@ -45,6 +47,9 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
   useEffect(() => {
     if (tipo !== 'coach') {
       setModalidadCobro('normal')
+      setConcepto('')
+      setValorTotal('')
+      setAbonoInicial('')
     }
   }, [tipo])
 
@@ -54,6 +59,18 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
       setAbonoInicial('')
     }
   }, [modalidadValorCero])
+
+  const seleccionarGeneral = () => {
+    setTipo('general')
+    setModalidadCobro('normal')
+    setConcepto('')
+    setValorTotal('')
+    setAbonoInicial('')
+  }
+
+  const seleccionarCoach = () => {
+    setTipo('coach')
+  }
 
   return (
     <form action={formAction} className="space-y-6 w-full max-w-2xl bg-white p-4 md:p-6 rounded-xl border border-zinc-200 shadow-sm">
@@ -80,7 +97,7 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
                 name="tipo_cuenta_radio"
                 value="general"
                 checked={tipo === 'general'}
-                onChange={() => setTipo('general')}
+                onChange={seleccionarGeneral}
                 disabled={isPending}
               />
               General
@@ -91,7 +108,7 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
                 name="tipo_cuenta_radio"
                 value="coach"
                 checked={tipo === 'coach'}
-                onChange={() => setTipo('coach')}
+                onChange={seleccionarCoach}
                 disabled={isPending}
               />
               Paquete coach

@@ -42,7 +42,7 @@ CREATE TABLE cuentas_por_cobrar (
   asistente_id UUID NOT NULL REFERENCES asistentes(id) ON DELETE RESTRICT,
   legacy_row_id TEXT UNIQUE,
   concepto TEXT NOT NULL,
-  valor_total NUMERIC(12,2) NOT NULL CHECK (valor_total > 0),
+  valor_total NUMERIC(12,2) NOT NULL CHECK (valor_total >= 0),
   fecha_emision DATE NOT NULL,
   estado estado_cuenta NOT NULL DEFAULT 'pendiente',
   creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
