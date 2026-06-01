@@ -42,6 +42,36 @@ const overflowMarker = (abonoId: string) => `[ABONO:${abonoId}]`
 
 const overflowNote = (abonoId: string, motivo: string) => `${overflowMarker(abonoId)} ${motivo}`
 
+const MODALIDADES_VALOR_CERO = ["cortesia", "cubierto_por_otro_proceso"] as const
+
+type ModalidadCobroValorCero = (typeof MODALIDADES_VALOR_CERO)[number]
+type ModalidadCobro = "normal" | ModalidadCobroValorCero
+
+const PREFIJO_CONCEPTO_MODALIDAD: Record<ModalidadCobroValorCero, string> = {
+  cortesia: "[Cortesia]",
+  cubierto_por_otro_proceso: "[Cubierto por otro proceso/familiar]",
+}
+
+const isModalidadValorCero = (modalidad: ModalidadCobro): modalidad is ModalidadCobroValorCero =>
+  modalidad !== "normal"
+
+const normalizarModalidadCobro = (value: FormDataEntryValue | null): ModalidadCobro => {
+  const modalidad = typeof value === "string" ? value.trim() : ""
+  if (MODALIDADES_VALOR_CERO.includes(modalidad as ModalidadCobroValorCero)) {
+    return modalidad as ModalidadCobroValorCero
+  }
+  return "normal"
+}
+
+const marcarConceptoModalidad = (concepto: string, modalidad: ModalidadCobro) => {
+  if (!isModalidadValorCero(modalidad)) return concepto
+
+  const prefijo = PREFIJO_CONCEPTO_MODALIDAD[modalidad]
+  if (concepto.toLowerCase().includes(prefijo.toLowerCase())) return concepto
+
+  return `${prefijo} ${concepto}`
+}
+
 async function getOverflowAsociadoAbono(supabase: any, cuentaId: string, abonoId: string) {
   const { data, error } = await supabase
     .from("movimientos_saldo_favor")
@@ -456,17 +486,23 @@ export async function editValorCuenta(
   try {
     const { supabase, user } = await requireAdmin()
 
-    const valorNuevo = toSafeNumber(formData.get("valor_nuevo"))
+    const valorNuevo = parseMoneyInput(formData.get("valor_nuevo"))
     const motivo = ((formData.get("motivo") as string) || "").trim()
 
-    if (valorNuevo <= 0) return { error: "El nuevo valor debe ser mayor a 0." }
+    if (valorNuevo === null) return { error: "El nuevo valor no tiene un formato valido." }
+    if (valorNuevo < 0) return { error: "El nuevo valor no puede ser negativo." }
 
     const { data: cuentaBase, error: cuentaBaseError } = await supabase
       .from("cuentas_por_cobrar")
-      .select("fecha_emision")
+      .select("fecha_emision, pagos_abonos(id, monto, notas, estado, metodo_pago, origen_fondos)")
       .eq("id", cuentaId)
       .single()
     if (cuentaBaseError || !cuentaBase) return { error: "No se encontrÃ³ la cuenta." }
+
+    const abonosActivos = filtrarPagosValidosCuentas(cuentaBase.pagos_abonos || [])
+    if (valorNuevo === 0 && abonosActivos.length > 0) {
+      return { error: "No se puede dejar la cuenta en 0 porque tiene abonos activos." }
+    }
 
     const periodoError = await assertFechaEditable(supabase, cuentaBase.fecha_emision, "Editar el valor de la cuenta")
     if (periodoError) return { error: periodoError }
@@ -668,11 +704,13 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
     const fecha_emision = (formData.get("fecha_emision") as string) || new Date().toISOString().slice(0, 10)
     const returnTo = (formData.get("return_to") as string) || null
     const tipoCuenta = (formData.get("tipo_cuenta") as string) || "general"
+    const modalidadCobro = normalizarModalidadCobro(formData.get("modalidad_cobro"))
     const sesionesCoach = Math.max(1, toSafeNumber(formData.get("sesiones_coach")) || 1)
     const abonoInicialRaw = ((formData.get("abono_inicial") as string) || "").trim()
     const abonoInicial = abonoInicialRaw === "" ? 0 : parseMoneyInput(abonoInicialRaw)
     const metodoPago = ((formData.get("metodo_pago") as string) || "").trim() || null
     const paqueteCoach = tipoCuenta === "coach"
+    const modalidadPermiteValorCero = isModalidadValorCero(modalidadCobro)
 
     if (!asistente_id) return { error: "Debes seleccionar un asistente." }
     if (!concepto) return { error: "El concepto es obligatorio." }
@@ -681,8 +719,21 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
       return { error: "El abono inicial no tiene un formato valido." }
     }
     const abonoInicialValue = abonoInicial ?? 0
-    if (valor_total <= 0) return { error: "El valor debe ser mayor a 0." }
+    const valorTotalCero = valor_total === 0
+    if (valor_total < 0) return { error: "El valor no puede ser negativo." }
+    if (modalidadPermiteValorCero && !paqueteCoach) {
+      return { error: "La modalidad de cortesia o cubierta por otro proceso solo aplica a paquetes coach." }
+    }
+    if (modalidadPermiteValorCero && valor_total > 0) {
+      return { error: "La modalidad de cortesia o cubierta por otro proceso debe registrarse con valor total 0." }
+    }
+    if (valorTotalCero && !(paqueteCoach && modalidadPermiteValorCero)) {
+      return { error: "El valor 0 solo se permite para paquetes coach en cortesia o cubiertos por otro proceso." }
+    }
     if (abonoInicialValue < 0) return { error: "El abono inicial no puede ser negativo." }
+    if (valorTotalCero && abonoInicialValue > 0) {
+      return { error: "No se puede registrar abono inicial en una cuenta de valor 0." }
+    }
     if (abonoInicialValue > 0 && !metodoPago) return { error: "Debes indicar el mÃ©todo de pago del abono inicial." }
 
     const periodoError = await assertFechaEditable(supabase, fecha_emision, "Crear la cuenta")
@@ -691,16 +742,17 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
     let paqueteCoachId: string | null = null
     let pagoInicialId: string | null = null
     let saldoFavorId: string | null = null
+    const conceptoCuenta = valorTotalCero ? marcarConceptoModalidad(concepto, modalidadCobro) : concepto
 
     const { error: insertCuentaError, data: cuentaInsert } = await supabase
       .from("cuentas_por_cobrar")
       .insert([
         {
           asistente_id,
-          concepto,
+          concepto: conceptoCuenta,
           valor_total,
           fecha_emision,
-          estado: "pendiente",
+          estado: valorTotalCero ? "pagado" : "pendiente",
         },
       ])
       .select("id")
