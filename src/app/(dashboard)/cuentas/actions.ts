@@ -706,6 +706,7 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
     const tipoCuenta = (formData.get("tipo_cuenta") as string) || "general"
     const modalidadCobro = normalizarModalidadCobro(formData.get("modalidad_cobro"))
     const sesionesCoach = Math.max(1, toSafeNumber(formData.get("sesiones_coach")) || 1)
+    const fechaSesionCoach = ((formData.get("fecha_sesion_coach") as string) || "").trim()
     const abonoInicialRaw = ((formData.get("abono_inicial") as string) || "").trim()
     const abonoInicial = abonoInicialRaw === "" ? 0 : parseMoneyInput(abonoInicialRaw)
     const metodoPago = ((formData.get("metodo_pago") as string) || "").trim() || null
@@ -841,6 +842,33 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
         })
         return { error: "La cuenta se creÃ³, pero no se pudo consolidar el abono inicial. Se revirtiÃ³ la operaciÃ³n para evitar inconsistencias." }
       }
+    }
+
+    if (paqueteCoach && paqueteCoachId && fechaSesionCoach) {
+      const { error: sesionCoachError } = await supabase.from("coach_sesiones").insert([
+        {
+          paquete_id: paqueteCoachId,
+          asistente_id,
+          fecha: fechaSesionCoach,
+          notas: "Sesión registrada al crear la cuenta",
+        },
+      ])
+
+      if (sesionCoachError) {
+        await rollbackCuentaCreada(supabase, {
+          cuentaId: cuentaIdCreada,
+          paqueteCoachId,
+          pagoId: pagoInicialId,
+          saldoFavorId,
+        })
+        return { error: sesionCoachError.message || "No se pudo registrar la sesión coach inicial." }
+      }
+
+      await supabase
+        .from("asistentes")
+        .update({ fecha_inicio_proceso: fechaSesionCoach })
+        .eq("id", asistente_id)
+        .is("fecha_inicio_proceso", null)
     }
 
     await supabase

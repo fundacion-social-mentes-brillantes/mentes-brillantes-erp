@@ -42,6 +42,50 @@ const insertSingle = (data: any, error: any = null) =>
     })),
   }))
 
+const buildCoachCuentaSupabase = (sessionError: any = null) => {
+  const cuentaInsert = insertSingle({ id: 'cuenta-1' })
+  const coachInsert = insertSingle({ id: 'pkg-1' })
+  const sesionInsert = vi.fn().mockResolvedValue({ error: sessionError })
+  const cuentaDeleteEq = vi.fn().mockResolvedValue({ error: null })
+  const paqueteDeleteEq = vi.fn().mockResolvedValue({ error: null })
+  const fechaInicioIs = vi.fn().mockResolvedValue({ error: null })
+  const fechaInicioEq = vi.fn(() => ({ is: fechaInicioIs }))
+  const asistentesUpdate = vi.fn(() => ({ eq: fechaInicioEq }))
+
+  const supabase = {
+    from: vi.fn((table: string) => {
+      if (table === 'cuentas_por_cobrar') {
+        return {
+          insert: cuentaInsert,
+          delete: vi.fn(() => ({ eq: cuentaDeleteEq })),
+        }
+      }
+      if (table === 'coach_paquetes') {
+        return {
+          insert: coachInsert,
+          delete: vi.fn(() => ({ eq: paqueteDeleteEq })),
+        }
+      }
+      if (table === 'coach_sesiones') return { insert: sesionInsert }
+      if (table === 'asistentes') return { update: asistentesUpdate }
+      if (table === 'auditoria_financiera') return { insert: vi.fn().mockResolvedValue({ error: null }) }
+      return {}
+    }),
+  }
+
+  return {
+    supabase,
+    cuentaInsert,
+    coachInsert,
+    sesionInsert,
+    asistentesUpdate,
+    fechaInicioEq,
+    fechaInicioIs,
+    cuentaDeleteEq,
+    paqueteDeleteEq,
+  }
+}
+
 describe('cuentas/actions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -126,6 +170,122 @@ describe('cuentas/actions', () => {
       },
     ])
     expect(coachInsert.mock.calls[0][0][0]).not.toHaveProperty('valor_total')
+  })
+
+  it.each([
+    {
+      nombre: 'normal',
+      valor_total: '400000',
+      modalidad_cobro: 'normal',
+      concepto: 'Paquete coach',
+      conceptoEsperado: 'Paquete coach',
+      estadoEsperado: 'pendiente',
+    },
+    {
+      nombre: 'cortesia',
+      valor_total: '0',
+      modalidad_cobro: 'cortesia',
+      concepto: 'Sesion cortesia',
+      conceptoEsperado: '[Cortesia] Sesion cortesia',
+      estadoEsperado: 'pagado',
+    },
+    {
+      nombre: 'cubierto por otro proceso/familiar',
+      valor_total: '0',
+      modalidad_cobro: 'cubierto_por_otro_proceso',
+      concepto: 'Sesion cubierta',
+      conceptoEsperado: '[Cubierto por otro proceso/familiar] Sesion cubierta',
+      estadoEsperado: 'pagado',
+    },
+  ])('saveCuenta crea sesion coach inicial para paquete $nombre con fecha de sesion', async ({
+    valor_total,
+    modalidad_cobro,
+    concepto,
+    conceptoEsperado,
+    estadoEsperado,
+  }) => {
+    const { supabase, cuentaInsert, sesionInsert, asistentesUpdate, fechaInicioEq, fechaInicioIs } = buildCoachCuentaSupabase()
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+
+    const result = await saveCuenta(
+      null,
+      buildFormData({
+        asistente_id: 'asis-1',
+        concepto,
+        valor_total,
+        fecha_emision: '2026-04-02',
+        tipo_cuenta: 'coach',
+        modalidad_cobro,
+        sesiones_coach: '1',
+        fecha_sesion_coach: '2026-04-15',
+      })
+    )
+
+    expect(result?.success).toBe(true)
+    expect(cuentaInsert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        concepto: conceptoEsperado,
+        valor_total: Number(valor_total),
+        estado: estadoEsperado,
+      }),
+    ])
+    expect(sesionInsert).toHaveBeenCalledWith([
+      {
+        paquete_id: 'pkg-1',
+        asistente_id: 'asis-1',
+        fecha: '2026-04-15',
+        notas: 'Sesión registrada al crear la cuenta',
+      },
+    ])
+    expect(asistentesUpdate).toHaveBeenCalledWith({ fecha_inicio_proceso: '2026-04-15' })
+    expect(fechaInicioEq).toHaveBeenCalledWith('id', 'asis-1')
+    expect(fechaInicioIs).toHaveBeenCalledWith('fecha_inicio_proceso', null)
+  })
+
+  it('saveCuenta no crea sesion coach inicial cuando la fecha de sesion viene vacia', async () => {
+    const { supabase, sesionInsert, asistentesUpdate } = buildCoachCuentaSupabase()
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+
+    const result = await saveCuenta(
+      null,
+      buildFormData({
+        asistente_id: 'asis-1',
+        concepto: 'Paquete coach',
+        valor_total: '400000',
+        fecha_emision: '2026-04-02',
+        tipo_cuenta: 'coach',
+        sesiones_coach: '1',
+        fecha_sesion_coach: '',
+      })
+    )
+
+    expect(result?.success).toBe(true)
+    expect(sesionInsert).not.toHaveBeenCalled()
+    expect(asistentesUpdate).not.toHaveBeenCalled()
+  })
+
+  it('saveCuenta revierte cuenta y paquete si falla la sesion coach inicial', async () => {
+    const { supabase, sesionInsert, paqueteDeleteEq, cuentaDeleteEq, asistentesUpdate } = buildCoachCuentaSupabase({ message: 'fallo sesion' })
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+
+    const result = await saveCuenta(
+      null,
+      buildFormData({
+        asistente_id: 'asis-1',
+        concepto: 'Paquete coach',
+        valor_total: '400000',
+        fecha_emision: '2026-04-02',
+        tipo_cuenta: 'coach',
+        sesiones_coach: '1',
+        fecha_sesion_coach: '2026-04-15',
+      })
+    )
+
+    expect(result?.error).toMatch(/fallo sesion/i)
+    expect(sesionInsert).toHaveBeenCalled()
+    expect(paqueteDeleteEq).toHaveBeenCalledWith('id', 'pkg-1')
+    expect(cuentaDeleteEq).toHaveBeenCalledWith('id', 'cuenta-1')
+    expect(asistentesUpdate).not.toHaveBeenCalled()
   })
 
   it('saveCuenta permite paquete coach de cortesia en valor 0 y queda pagado', async () => {
