@@ -23,7 +23,7 @@ vi.mock('@/lib/utils/periodos', () => ({
   assertFechaEditable: (...args: unknown[]) => assertFechaEditableMock(...args),
 }))
 
-const { aplicarSaldoFavor, editMontoAbono, saveAbono, saveCuenta } = await import('./actions')
+const { aplicarSaldoFavor, editMontoAbono, editValorCuenta, saveAbono, saveCuenta } = await import('./actions')
 
 const buildFormData = (values: Record<string, string>) => {
   const form = new FormData()
@@ -126,6 +126,116 @@ describe('cuentas/actions', () => {
       },
     ])
     expect(coachInsert.mock.calls[0][0][0]).not.toHaveProperty('valor_total')
+  })
+
+  it('saveCuenta permite paquete coach de cortesia en valor 0 y queda pagado', async () => {
+    const cuentaInsert = insertSingle({ id: 'cuenta-1' })
+    const coachInsert = insertSingle({ id: 'pkg-1' })
+    const pagoInsert = vi.fn()
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'cuentas_por_cobrar') return { insert: cuentaInsert }
+        if (table === 'coach_paquetes') return { insert: coachInsert }
+        if (table === 'pagos_abonos') return { insert: pagoInsert }
+        if (table === 'auditoria_financiera') return { insert: vi.fn().mockResolvedValue({ error: null }) }
+        return {}
+      }),
+    }
+
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+
+    const result = await saveCuenta(
+      null,
+      buildFormData({
+        asistente_id: 'asis-1',
+        concepto: 'Sesion guia coach - 2 sesiones',
+        valor_total: '0',
+        fecha_emision: '2026-04-02',
+        tipo_cuenta: 'coach',
+        modalidad_cobro: 'cortesia',
+        sesiones_coach: '2',
+      })
+    )
+
+    expect(result?.success).toBe(true)
+    expect(cuentaInsert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        concepto: '[Cortesia] Sesion guia coach - 2 sesiones',
+        valor_total: 0,
+        estado: 'pagado',
+      }),
+    ])
+    expect(coachInsert).toHaveBeenCalledWith([
+      {
+        asistente_id: 'asis-1',
+        cuenta_id: 'cuenta-1',
+        sesiones_compradas: 2,
+      },
+    ])
+    expect(pagoInsert).not.toHaveBeenCalled()
+  })
+
+  it('saveCuenta rechaza valor 0 cuando la modalidad es normal', async () => {
+    const supabase = { from: vi.fn() }
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+
+    const result = await saveCuenta(
+      null,
+      buildFormData({
+        asistente_id: 'asis-1',
+        concepto: 'Paquete coach',
+        valor_total: '0',
+        fecha_emision: '2026-04-02',
+        tipo_cuenta: 'coach',
+        modalidad_cobro: 'normal',
+        sesiones_coach: '4',
+      })
+    )
+
+    expect(result?.error).toMatch(/valor 0 solo se permite/i)
+    expect(supabase.from).not.toHaveBeenCalled()
+  })
+
+  it('saveCuenta rechaza abono inicial en una cuenta coach de valor 0', async () => {
+    const supabase = { from: vi.fn() }
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+
+    const result = await saveCuenta(
+      null,
+      buildFormData({
+        asistente_id: 'asis-1',
+        concepto: 'Sesion cubierta',
+        valor_total: '0',
+        fecha_emision: '2026-04-02',
+        tipo_cuenta: 'coach',
+        modalidad_cobro: 'cubierto_por_otro_proceso',
+        sesiones_coach: '1',
+        abono_inicial: '1000',
+        metodo_pago: 'efectivo',
+      })
+    )
+
+    expect(result?.error).toMatch(/abono inicial/i)
+    expect(supabase.from).not.toHaveBeenCalled()
+  })
+
+  it('saveCuenta rechaza valores negativos', async () => {
+    const supabase = { from: vi.fn() }
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+
+    const result = await saveCuenta(
+      null,
+      buildFormData({
+        asistente_id: 'asis-1',
+        concepto: 'Tratamiento mensual',
+        valor_total: '-1',
+        fecha_emision: '2026-04-02',
+        tipo_cuenta: 'general',
+      })
+    )
+
+    expect(result?.error).toMatch(/negativo/i)
+    expect(supabase.from).not.toHaveBeenCalled()
   })
 
   it('saveCuenta registra abono inicial parcial con el metodo de pago del formulario', async () => {
@@ -414,6 +524,86 @@ describe('cuentas/actions', () => {
         monto: 100,
       }),
     ])
+  })
+
+  it('editValorCuenta permite dejar valor 0 sin abonos activos y recalcula como pagado', async () => {
+    const cuentaUpdate = vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) }))
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'cuentas_por_cobrar') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() =>
+                selectSingle({
+                  fecha_emision: '2026-04-02',
+                  valor_total: 0,
+                  pagos_abonos: [],
+                })
+              ),
+            })),
+            update: cuentaUpdate,
+          }
+        }
+        if (table === 'auditoria_financiera') return { insert: vi.fn().mockResolvedValue({ error: null }) }
+        return {}
+      }),
+    }
+
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
+
+    const result = await editValorCuenta(
+      'cuenta-1',
+      1000,
+      null,
+      buildFormData({
+        valor_nuevo: '0',
+        motivo: 'cortesia',
+      })
+    )
+
+    expect(result?.success).toBe(true)
+    expect(cuentaUpdate).toHaveBeenNthCalledWith(1, { valor_total: 0 })
+    expect(cuentaUpdate).toHaveBeenNthCalledWith(2, { estado: 'pagado' })
+  })
+
+  it('editValorCuenta no permite dejar valor 0 si hay abonos activos', async () => {
+    const cuentaUpdate = vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) }))
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'cuentas_por_cobrar') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() =>
+                selectSingle({
+                  fecha_emision: '2026-04-02',
+                  pagos_abonos: [
+                    { id: 'pago-1', monto: 100, estado: 'activo', notas: '', metodo_pago: 'efectivo', origen_fondos: 'pago_directo' },
+                  ],
+                })
+              ),
+            })),
+            update: cuentaUpdate,
+          }
+        }
+        return {}
+      }),
+    }
+
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
+
+    const result = await editValorCuenta(
+      'cuenta-1',
+      1000,
+      null,
+      buildFormData({
+        valor_nuevo: '0',
+        motivo: 'cortesia',
+      })
+    )
+
+    expect(result?.error).toMatch(/abonos activos/i)
+    expect(cuentaUpdate).not.toHaveBeenCalled()
+    expect(assertFechaEditableMock).not.toHaveBeenCalled()
   })
 
   it('editMontoAbono permite aumentar un pago por encima del pendiente y envia el excedente a saldo a favor', async () => {

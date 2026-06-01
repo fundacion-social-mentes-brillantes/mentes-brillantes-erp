@@ -74,7 +74,7 @@ export function EditValorModal({ cuentaId, valorActual }: { cuentaId: string, va
           {error && <div className="p-3 bg-red-50 text-red-600 text-sm rounded-md">{error}</div>}
           <div>
             <label className="block text-sm font-medium text-[rgb(var(--text-primary))] mb-1">Nuevo Valor Total</label>
-            <input type="number" name="valor_nuevo" defaultValue={valorActual} required min="1" step="1" className="w-full rounded-md border border-[rgb(var(--border))] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[rgb(var(--accent))]" />
+            <input type="number" name="valor_nuevo" defaultValue={valorActual} required min="0" step="1" className="w-full rounded-md border border-[rgb(var(--border))] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[rgb(var(--accent))]" />
           </div>
           <div>
             <label className="block text-sm font-medium text-[rgb(var(--text-primary))] mb-1">Motivo de la corrección</label>
