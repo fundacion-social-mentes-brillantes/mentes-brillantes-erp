@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Plus, Eye, Lock } from 'lucide-react'
 import { requireRoles } from '@/lib/utils/authz'
+import { AjustarFechaPeriodoModal } from './AjustarFechaPeriodoModal'
 
 export default async function LiquidacionesPage() {
   const { supabase } = await requireRoles(['admin'])
@@ -48,9 +49,18 @@ export default async function LiquidacionesPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <Link href={`/liquidaciones/${periodo.id}`} className="inline-flex p-2 text-zinc-400 hover:text-blue-600 transition-colors rounded-md hover:bg-blue-50">
+                    <div className="inline-flex items-center justify-end gap-2">
+                      {periodo.estado === 'abierto' && (
+                        <AjustarFechaPeriodoModal
+                          periodoId={periodo.id}
+                          fechaInicio={periodo.fecha_inicio}
+                          fechaFin={periodo.fecha_fin}
+                        />
+                      )}
+                      <Link href={`/liquidaciones/${periodo.id}`} className="inline-flex p-2 text-zinc-400 hover:text-blue-600 transition-colors rounded-md hover:bg-blue-50">
                       <Eye className="w-4 h-4" />
-                    </Link>
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               ))}

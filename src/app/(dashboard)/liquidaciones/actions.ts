@@ -58,6 +58,76 @@ export async function savePeriodo(prevState: ActionState, formData: FormData): P
   redirect('/liquidaciones')
 }
 
+export async function updatePeriodoFechaFin(periodoId: string, nuevaFechaFin: string): Promise<ActionState> {
+  let supabase
+  try {
+    ;({ supabase } = await requireAdmin())
+  } catch (e: any) {
+    return { error: e?.message || 'Acceso denegado' }
+  }
+
+  if (!periodoId || !nuevaFechaFin) {
+    return { error: 'La nueva fecha final es obligatoria.' }
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(nuevaFechaFin)) {
+    return { error: 'La fecha final no tiene un formato valido.' }
+  }
+
+  const { data: periodo, error: periodoError } = await supabase
+    .from('periodos')
+    .select('id, nombre, fecha_inicio, fecha_fin, estado')
+    .eq('id', periodoId)
+    .single()
+
+  if (periodoError || !periodo) {
+    return { error: 'No se encontro el periodo contable.' }
+  }
+
+  if (periodo.estado !== 'abierto') {
+    return { error: 'No se puede modificar un periodo cerrado.' }
+  }
+
+  if (nuevaFechaFin < periodo.fecha_inicio) {
+    return { error: 'La fecha final no puede ser anterior a la fecha de inicio.' }
+  }
+
+  const { data: solapes, error: solapesError } = await supabase
+    .from('periodos')
+    .select('id, nombre, fecha_inicio, fecha_fin')
+    .neq('id', periodoId)
+    .lte('fecha_inicio', nuevaFechaFin)
+    .gte('fecha_fin', periodo.fecha_inicio)
+    .limit(1)
+
+  if (solapesError) {
+    return { error: 'No se pudo validar el solapamiento de periodos.' }
+  }
+
+  const periodoSolapado = solapes?.[0]
+  if (periodoSolapado) {
+    return {
+      error: `El rango se superpone con ${periodoSolapado.nombre} (${periodoSolapado.fecha_inicio} a ${periodoSolapado.fecha_fin}).`,
+    }
+  }
+
+  const { error } = await supabase
+    .from('periodos')
+    .update({ fecha_fin: nuevaFechaFin })
+    .eq('id', periodoId)
+    .eq('estado', 'abierto')
+    .select('id')
+    .single()
+
+  if (error) {
+    return { error: 'No se pudo actualizar la fecha final del periodo abierto.' }
+  }
+
+  revalidatePath('/liquidaciones')
+  revalidatePath(`/liquidaciones/${periodoId}`)
+  return { success: true }
+}
+
 export async function saveAdelanto(periodo_id: string, prevState: ActionState, formData: FormData): Promise<ActionState> {
   let supabase, user
   try {
