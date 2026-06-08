@@ -1,17 +1,44 @@
-import { filtrarIngresosOperativos, filtrarIngresosRealesSaldoAFavor, esAnuladoCompleto } from "./contable"
+import {
+  filtrarIngresosOperativos,
+  filtrarIngresosRealesSaldoAFavor,
+  esAnuladoCompleto,
+  toSafeNumber,
+} from "./contable"
 
 export type MetodoPago = "efectivo" | "nequi" | "daviplata" | "otro"
+export type CategoriaResumenDetalle = "ingreso" | "egreso" | "adelanto"
+export type TipoResumenDetalle = "abono" | "saldo_favor" | "donacion" | "venta_externa" | "egreso" | "adelanto"
 
 type Movimiento = {
+  id?: string
   monto?: number | string
   metodo_pago?: string | null
   estado?: string | null
   notas?: string | null
   origen_fondos?: string | null
   tipo?: string | null
+  fecha?: string | null
+  fecha_pago?: string | null
+  concepto?: string | null
+  comprador_nombre?: string | null
+  categoria?: string | null
+  cuentas_por_cobrar?: any
+  asistentes?: any
+  socios?: any
 }
 
-type ResumenMetodo = {
+export type MovimientoResumenDetalle = {
+  id: string
+  fecha: string
+  metodo_pago: MetodoPago
+  categoria: CategoriaResumenDetalle
+  tipo: TipoResumenDetalle
+  persona: string
+  concepto: string
+  monto: number
+}
+
+export type ResumenMetodo = {
   metodo_pago: MetodoPago
   total_ingresos: number
   total_salidas: number
@@ -25,9 +52,135 @@ type ResumenMetodo = {
 
 export const METODOS_PAGO_RESUMEN: MetodoPago[] = ["efectivo", "nequi", "daviplata", "otro"]
 
-const normalizarMetodo = (m?: string | null): MetodoPago => {
+export const normalizarMetodo = (m?: string | null): MetodoPago => {
   const v = (m || "").toLowerCase().trim() as MetodoPago
   return METODOS_PAGO_RESUMEN.includes(v) ? v : "otro"
+}
+
+const firstRecord = (value: any) => (Array.isArray(value) ? value[0] : value)
+
+const cleanText = (value: unknown) => (typeof value === "string" ? value.trim() : "")
+
+const fallbackText = (...values: unknown[]) => values.map(cleanText).find(Boolean) || ""
+
+const personaAsistente = (mov: Movimiento) => {
+  const asistenteDirecto = firstRecord(mov.asistentes)
+  const cuenta = firstRecord(mov.cuentas_por_cobrar)
+  const asistenteCuenta = firstRecord(cuenta?.asistentes)
+  return fallbackText(asistenteDirecto?.nombre, asistenteCuenta?.nombre, "Sin persona asociada")
+}
+
+const personaSocio = (mov: Movimiento) => {
+  const socio = firstRecord(mov.socios)
+  return fallbackText(socio?.nombre, "Sin persona asociada")
+}
+
+const detalleId = (prefix: TipoResumenDetalle, index: number, id?: string) => `${prefix}-${id || index}`
+
+export function construirDetallesResumenPorCuenta({
+  abonos = [],
+  donaciones = [],
+  ventasExternas = [],
+  egresos = [],
+  adelantos = [],
+  ingresosSaldoFavor = [],
+}: {
+  abonos?: Movimiento[]
+  donaciones?: Movimiento[]
+  ventasExternas?: Movimiento[]
+  egresos?: Movimiento[]
+  adelantos?: Movimiento[]
+  ingresosSaldoFavor?: Movimiento[]
+}): MovimientoResumenDetalle[] {
+  const detalles: MovimientoResumenDetalle[] = []
+
+  filtrarIngresosOperativos(abonos).forEach((p, index) => {
+    const cuenta = firstRecord(p.cuentas_por_cobrar)
+    detalles.push({
+      id: detalleId("abono", index, p.id),
+      fecha: p.fecha_pago || p.fecha || "",
+      metodo_pago: normalizarMetodo(p.metodo_pago),
+      categoria: "ingreso",
+      tipo: "abono",
+      persona: personaAsistente(p),
+      concepto: fallbackText(cuenta?.concepto, p.notas, "Abono"),
+      monto: toSafeNumber(p.monto),
+    })
+  })
+
+  filtrarIngresosRealesSaldoAFavor(ingresosSaldoFavor).forEach((p, index) => {
+    const cuenta = firstRecord(p.cuentas_por_cobrar)
+    detalles.push({
+      id: detalleId("saldo_favor", index, p.id),
+      fecha: p.fecha || p.fecha_pago || "",
+      metodo_pago: normalizarMetodo(p.metodo_pago),
+      categoria: "ingreso",
+      tipo: "saldo_favor",
+      persona: personaAsistente(p),
+      concepto: fallbackText(p.notas, cuenta?.concepto, "Ingreso real de saldo a favor"),
+      monto: toSafeNumber(p.monto),
+    })
+  })
+
+  donaciones
+    .filter((d) => !esAnuladoCompleto(d))
+    .forEach((d, index) => {
+      detalles.push({
+        id: detalleId("donacion", index, d.id),
+        fecha: d.fecha || "",
+        metodo_pago: normalizarMetodo(d.metodo_pago),
+        categoria: "ingreso",
+        tipo: "donacion",
+        persona: personaAsistente(d),
+        concepto: fallbackText(d.notas, "Donacion"),
+        monto: toSafeNumber(d.monto),
+      })
+    })
+
+  ventasExternas
+    .filter((v) => !esAnuladoCompleto(v))
+    .forEach((v, index) => {
+      detalles.push({
+        id: detalleId("venta_externa", index, v.id),
+        fecha: v.fecha || "",
+        metodo_pago: normalizarMetodo(v.metodo_pago),
+        categoria: "ingreso",
+        tipo: "venta_externa",
+        persona: fallbackText(v.comprador_nombre, "Sin persona asociada"),
+        concepto: fallbackText(v.concepto, v.notas, "Venta externa"),
+        monto: toSafeNumber(v.monto),
+      })
+    })
+
+  egresos
+    .filter((e) => !esAnuladoCompleto(e))
+    .forEach((e, index) => {
+      detalles.push({
+        id: detalleId("egreso", index, e.id),
+        fecha: e.fecha || "",
+        metodo_pago: normalizarMetodo(e.metodo_pago),
+        categoria: "egreso",
+        tipo: "egreso",
+        persona: "Sin persona asociada",
+        concepto: fallbackText(e.concepto, e.notas, e.categoria, "Egreso"),
+        monto: toSafeNumber(e.monto),
+      })
+    })
+
+  adelantos.forEach((a, index) => {
+    detalles.push({
+      id: detalleId("adelanto", index, a.id),
+      fecha: a.fecha || "",
+      metodo_pago: normalizarMetodo(a.metodo_pago),
+      categoria: "adelanto",
+      tipo: "adelanto",
+      persona: personaSocio(a),
+      concepto: fallbackText(a.notas, "Adelanto a socio"),
+      monto: toSafeNumber(a.monto),
+    })
+  })
+
+  return detalles.sort((a, b) => b.fecha.localeCompare(a.fecha))
 }
 
 export function agruparPorMetodo({

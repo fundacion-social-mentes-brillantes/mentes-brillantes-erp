@@ -4,8 +4,9 @@ import Link from 'next/link'
 import { ArrowLeft, Wallet, Lock, Calculator } from 'lucide-react'
 import { AdelantoForm } from './AdelantoForm'
 import { GenerarLiquidacionBtn } from './GenerarLiquidacionBtn'
+import { ResumenPorCuentaInteractivo } from './ResumenPorCuentaInteractivo'
 import { ExportarLiquidacion } from '@/components/liquidaciones/ExportarLiquidacion'
-import { agruparPorMetodo, MetodoPago, METODOS_PAGO_RESUMEN } from '@/lib/utils/liquidaciones'
+import { agruparPorMetodo, construirDetallesResumenPorCuenta, MetodoPago, METODOS_PAGO_RESUMEN } from '@/lib/utils/liquidaciones'
 import { esAnuladoCompleto, filtrarIngresosOperativos, filtrarIngresosRealesSaldoAFavor, sumarMontos } from '@/lib/utils/contable'
 
 export const dynamic = 'force-dynamic'
@@ -36,6 +37,55 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
     .eq('periodo_id', id) || { data: [] }
   const liquidaciones = liquidacionesData || []
 
+  const { data: rawAbonos, error: abonosError } = await supabase
+    .from('pagos_abonos')
+    .select('id, monto, metodo_pago, origen_fondos, estado, notas, fecha_pago, cuentas_por_cobrar(concepto, asistentes(nombre))')
+    .gte('fecha_pago', periodo.fecha_inicio)
+    .lte('fecha_pago', periodo.fecha_fin)
+  if (abonosError) console.error('Error al consultar abonos:', abonosError)
+
+  const { data: rawSaldoFavor, error: saldoFavorError } = await supabase
+    .from('movimientos_saldo_favor')
+    .select('id, monto, metodo_pago, tipo, notas, fecha, asistentes(nombre), cuentas_por_cobrar(concepto)')
+    .gte('fecha', periodo.fecha_inicio)
+    .lte('fecha', periodo.fecha_fin)
+  if (saldoFavorError) console.error('Error al consultar ingresos reales de saldo a favor:', saldoFavorError)
+
+  const { data: rawDonaciones, error: donacionesError } = await supabase
+    .from('donaciones_asistentes')
+    .select('id, monto, estado, notas, metodo_pago, fecha, asistentes(nombre)')
+    .gte('fecha', periodo.fecha_inicio)
+    .lte('fecha', periodo.fecha_fin)
+  if (donacionesError) console.error('Error al consultar donaciones:', donacionesError)
+
+  const { data: rawVentasExternas, error: ventasExternasError } = await supabase
+    .from('ventas_externas')
+    .select('id, comprador_nombre, concepto, monto, estado, notas, metodo_pago, fecha')
+    .gte('fecha', periodo.fecha_inicio)
+    .lte('fecha', periodo.fecha_fin)
+  if (ventasExternasError) console.error('Error al consultar ventas externas:', ventasExternasError)
+
+  const { data: rawEgresosData, error: egresosError } = await supabase
+    .from('egresos')
+    .select('id, concepto, categoria, monto, estado, notas, metodo_pago, fecha')
+    .gte('fecha', periodo.fecha_inicio)
+    .lte('fecha', periodo.fecha_fin)
+  if (egresosError) console.error('Error al consultar egresos:', egresosError)
+
+  const abonosPeriodo = rawAbonos || []
+  const saldoFavorPeriodo = rawSaldoFavor || []
+  const donacionesPeriodo = rawDonaciones || []
+  const ventasExternasPeriodo = rawVentasExternas || []
+  const egresosPeriodoRaw = rawEgresosData || []
+  const detallesResumen = construirDetallesResumenPorCuenta({
+    abonos: abonosPeriodo,
+    ingresosSaldoFavor: saldoFavorPeriodo,
+    donaciones: donacionesPeriodo,
+    ventasExternas: ventasExternasPeriodo,
+    egresos: egresosPeriodoRaw,
+    adelantos,
+  })
+
   // Cálculos en vivo si está abierto
   let ingresos_cobrados = 0
   let donaciones_periodo = 0
@@ -61,15 +111,8 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
   let resumenTotales = { total_ingresos: 0, total_salidas: 0, saldo_neto_periodo: 0 }
 
   if (periodo.estado === 'abierto') {
-    const { data: rawAbonos, error: abonosError } = await supabase
-      .from('pagos_abonos')
-      .select('monto, metodo_pago, origen_fondos, estado, notas, fecha_pago')
-      .gte('fecha_pago', periodo.fecha_inicio)
-      .lte('fecha_pago', periodo.fecha_fin)
-    if (abonosError) console.error('Error al consultar abonos:', abonosError)
-
     ingresosData =
-      filtrarIngresosOperativos(rawAbonos || []).map((a: any) => ({
+      filtrarIngresosOperativos(abonosPeriodo).map((a: any) => ({
         monto: a.monto,
         metodo_pago: a.metodo_pago,
         origen_fondos: a.origen_fondos,
@@ -77,15 +120,8 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
         notas: a.notas,
       })) || []
 
-    const { data: rawSaldoFavor, error: saldoFavorError } = await supabase
-      .from('movimientos_saldo_favor')
-      .select('monto, metodo_pago, tipo, notas, fecha')
-      .gte('fecha', periodo.fecha_inicio)
-      .lte('fecha', periodo.fecha_fin)
-    if (saldoFavorError) console.error('Error al consultar ingresos reales de saldo a favor:', saldoFavorError)
-
     ingresosSaldoFavorData =
-      filtrarIngresosRealesSaldoAFavor(rawSaldoFavor || []).map((m: any) => ({
+      filtrarIngresosRealesSaldoAFavor(saldoFavorPeriodo).map((m: any) => ({
         monto: m.monto,
         metodo_pago: m.metodo_pago,
         tipo: m.tipo,
@@ -94,36 +130,15 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
 
     ingresos_cobrados = Math.round(sumarMontos([...ingresosData, ...ingresosSaldoFavorData]))
 
-    const { data: rawDonaciones, error: donacionesError } = await supabase
-      .from('donaciones_asistentes')
-      .select('monto, estado, notas, metodo_pago, fecha')
-      .gte('fecha', periodo.fecha_inicio)
-      .lte('fecha', periodo.fecha_fin)
-    if (donacionesError) console.error('Error al consultar donaciones:', donacionesError)
-
-    donacionesValidas = (rawDonaciones || []).filter((d) => !esAnuladoCompleto(d))
+    donacionesValidas = donacionesPeriodo.filter((d) => !esAnuladoCompleto(d))
     donaciones_periodo = Math.round(donacionesValidas.reduce((acc: number, curr: any) => acc + Number(curr.monto), 0))
 
-    const { data: rawVentasExternas, error: ventasExternasError } = await supabase
-      .from('ventas_externas')
-      .select('monto, estado, notas, metodo_pago, fecha')
-      .gte('fecha', periodo.fecha_inicio)
-      .lte('fecha', periodo.fecha_fin)
-    if (ventasExternasError) console.error('Error al consultar ventas externas:', ventasExternasError)
-
-    const ventasExternasValidas = (rawVentasExternas || []).filter((v) => !esAnuladoCompleto(v))
+    const ventasExternasValidas = ventasExternasPeriodo.filter((v) => !esAnuladoCompleto(v))
     ventas_externas_periodo = Math.round(
       ventasExternasValidas.reduce((acc: number, curr: any) => acc + Number(curr.monto), 0)
     )
 
-    const { data: rawEgresosData, error: egresosError } = await supabase
-      .from('egresos')
-      .select('monto, estado, notas, metodo_pago, fecha')
-      .gte('fecha', periodo.fecha_inicio)
-      .lte('fecha', periodo.fecha_fin)
-    if (egresosError) console.error('Error al consultar egresos:', egresosError)
-
-    egresosData = rawEgresosData?.filter((item) => !esAnuladoCompleto(item)) || []
+    egresosData = egresosPeriodoRaw.filter((item) => !esAnuladoCompleto(item))
     const egresosValidos = Math.round(egresosData.reduce((acc, curr) => acc + Number(curr.monto), 0))
     adelantos_periodo = Math.round(adelantos.reduce((acc: number, curr: any) => acc + Number(curr.monto), 0))
     egresos_periodo = egresosValidos
@@ -310,54 +325,18 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
         </div>
       </div>
 
-      {/* Resumen por cuenta */}
-      <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-zinc-200 bg-zinc-50 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Wallet className="w-4 h-4 text-zinc-400" />
-            <h3 className="font-semibold text-zinc-900">Resumen por cuenta</h3>
-          </div>
-          <span className="text-xs text-zinc-500">
-            {periodo.estado === 'abierto' ? 'Proyección en vivo' : 'Datos congelados'}
-          </span>
-        </div>
-        <div className="px-5 py-3 border-b border-zinc-100 bg-zinc-50/60 text-xs text-zinc-500">
-          Total salidas y saldo neto del período usan solo egresos operativos. Los adelantos se muestran aparte y no reducen la utilidad.
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="text-zinc-500 font-medium border-b border-zinc-200 bg-zinc-50">
-              <tr>
-                <th className="px-4 py-3">Método</th>
-                <th className="px-4 py-3 text-right">Ingresos</th>
-                <th className="px-4 py-3 text-right">Egresos operativos</th>
-                <th className="px-4 py-3 text-right">Adelantos no operativos</th>
-                <th className="px-4 py-3 text-right">Saldo neto operativo</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100">
-              {resumenPorCuenta.map((row) => (
-                <tr key={row.metodo_pago}>
-                  <td className="px-4 py-3 font-medium text-zinc-900 capitalize">{row.metodo_pago}</td>
-                  <td className="px-4 py-3 text-right text-emerald-700">${row.total_ingresos.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-right text-red-600">-${row.total_salidas.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-right text-amber-600">-${Number(row.salidas_adelantos ?? 0).toLocaleString()}</td>
-                  <td className={`px-4 py-3 text-right font-semibold ${row.saldo_neto_periodo >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
-                    ${row.saldo_neto_periodo.toLocaleString()}
-                  </td>
-                </tr>
-              ))}
-              <tr className="bg-zinc-50 font-semibold">
-                <td className="px-4 py-3">Total</td>
-                <td className="px-4 py-3 text-right text-emerald-700">${resumenTotales.total_ingresos.toLocaleString()}</td>
-                <td className="px-4 py-3 text-right text-red-600">-${resumenTotales.total_salidas.toLocaleString()}</td>
-                <td className="px-4 py-3 text-right text-amber-600">-${adelantos_periodo.toLocaleString()}</td>
-                <td className="px-4 py-3 text-right">${resumenTotales.saldo_neto_periodo.toLocaleString()}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <ResumenPorCuentaInteractivo
+        periodo={{
+          nombre: periodo.nombre,
+          estado: periodo.estado,
+          fecha_inicio: periodo.fecha_inicio,
+          fecha_fin: periodo.fecha_fin,
+        }}
+        resumenPorCuenta={resumenPorCuenta}
+        resumenTotales={resumenTotales}
+        adelantosPeriodo={adelantos_periodo}
+        detalles={detallesResumen}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Columna Izquierda: Adelantos y Formulario */}

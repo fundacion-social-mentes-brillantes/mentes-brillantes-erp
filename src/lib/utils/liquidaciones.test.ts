@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { agruparPorMetodo } from './liquidaciones'
+import { agruparPorMetodo, construirDetallesResumenPorCuenta } from './liquidaciones'
 
 describe('liquidaciones y saldo a favor', () => {
   it('cuenta el excedente real a saldo a favor una sola vez y no vuelve a sumarlo al aplicarlo', () => {
@@ -70,5 +70,77 @@ describe('liquidaciones y saldo a favor', () => {
 
     expect(efectivo?.total_ingresos).toBe(105000)
     expect(totales.total_ingresos).toBe(105000)
+  })
+
+  it('construye detalle de ingresos por metodo que coincide con el resumen', () => {
+    const movimientos = {
+      abonos: [
+        {
+          id: 'abono-1',
+          monto: 200000,
+          metodo_pago: 'nequi',
+          fecha_pago: '2026-06-03',
+          cuentas_por_cobrar: { concepto: 'Mensualidad', asistentes: { nombre: 'Ana Perez' } },
+        },
+        {
+          id: 'abono-anulado',
+          monto: 999999,
+          metodo_pago: 'nequi',
+          fecha_pago: '2026-06-04',
+          estado: 'anulado',
+          cuentas_por_cobrar: { concepto: 'Anulado', asistentes: { nombre: 'Ana Perez' } },
+        },
+      ],
+      ingresosSaldoFavor: [
+        {
+          id: 'saldo-1',
+          monto: 50000,
+          metodo_pago: 'nequi',
+          tipo: 'ingreso',
+          fecha: '2026-06-02',
+          notas: '[ABONO:a1] Saldo a favor generado por sobrepago',
+          asistentes: { nombre: 'Luis Rojas' },
+        },
+      ],
+      donaciones: [
+        { id: 'don-1', monto: 30000, metodo_pago: 'nequi', fecha: '2026-06-01', asistentes: { nombre: 'Marta Gil' } },
+      ],
+      ventasExternas: [
+        { id: 'venta-1', monto: 40000, metodo_pago: 'nequi', fecha: '2026-06-05', comprador_nombre: 'Cliente externo', concepto: 'Libro' },
+        { id: 'venta-anulada', monto: 999999, metodo_pago: 'nequi', fecha: '2026-06-06', estado: 'anulado', concepto: 'Anulada' },
+      ],
+    }
+    const { resumen } = agruparPorMetodo(movimientos)
+    const detalles = construirDetallesResumenPorCuenta(movimientos)
+    const ingresosNequi = detalles.filter((d) => d.metodo_pago === 'nequi' && d.categoria === 'ingreso')
+    const totalDetalle = ingresosNequi.reduce((acc, d) => acc + d.monto, 0)
+
+    expect(totalDetalle).toBe(resumen.find((r) => r.metodo_pago === 'nequi')?.total_ingresos)
+    expect(ingresosNequi.map((d) => d.id)).not.toContain('abono-anulado')
+    expect(ingresosNequi.map((d) => d.id)).not.toContain('venta-anulada')
+    expect(ingresosNequi.map((d) => d.fecha)).toEqual(['2026-06-05', '2026-06-03', '2026-06-02', '2026-06-01'])
+  })
+
+  it('filtra detalle de egresos y adelantos por metodo correcto', () => {
+    const movimientos = {
+      egresos: [
+        { id: 'egreso-nequi', monto: 90000, metodo_pago: 'nequi', fecha: '2026-06-04', concepto: 'Arriendo' },
+        { id: 'egreso-efectivo', monto: 50000, metodo_pago: 'efectivo', fecha: '2026-06-03', concepto: 'Papeleria' },
+        { id: 'egreso-anulado', monto: 999999, metodo_pago: 'nequi', fecha: '2026-06-05', estado: 'anulado', concepto: 'Anulado' },
+      ],
+      adelantos: [
+        { id: 'adelanto-nequi', monto: 120000, metodo_pago: 'nequi', fecha: '2026-06-02', socios: { nombre: 'Socio A' } },
+        { id: 'adelanto-daviplata', monto: 70000, metodo_pago: 'daviplata', fecha: '2026-06-01', socios: { nombre: 'Socio B' } },
+      ],
+    }
+    const { resumen } = agruparPorMetodo(movimientos)
+    const detalles = construirDetallesResumenPorCuenta(movimientos)
+    const egresosNequi = detalles.filter((d) => d.metodo_pago === 'nequi' && d.categoria === 'egreso')
+    const adelantosNequi = detalles.filter((d) => d.metodo_pago === 'nequi' && d.categoria === 'adelanto')
+
+    expect(egresosNequi.reduce((acc, d) => acc + d.monto, 0)).toBe(resumen.find((r) => r.metodo_pago === 'nequi')?.total_salidas)
+    expect(adelantosNequi.reduce((acc, d) => acc + d.monto, 0)).toBe(resumen.find((r) => r.metodo_pago === 'nequi')?.salidas_adelantos)
+    expect(egresosNequi).toHaveLength(1)
+    expect(adelantosNequi).toHaveLength(1)
   })
 })
