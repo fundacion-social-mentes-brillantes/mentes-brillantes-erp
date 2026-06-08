@@ -13,6 +13,14 @@ type ModalidadCobro = 'normal' | 'cortesia' | 'cubierto_por_otro_proceso'
 const selectClassName =
   'flex h-10 w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] px-3 py-2 text-sm text-[rgb(var(--text-primary))] ring-offset-[rgb(var(--surface-1))] file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-[rgb(var(--text-muted))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--accent))] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50'
 
+const parsePositiveMoney = (value: string) => {
+  const cleaned = value.trim().replace(/\s+/g, '').replace(/\$/g, '')
+  if (!cleaned) return 0
+  const normalized = cleaned.replace(/\./g, '').replace(',', '.')
+  const parsed = Number(normalized)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
 export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asistentes: any[], asistenteInicial?: string, returnTo?: string }) {
   const [state, formAction, isPending] = useActionState<ActionState, FormData>(saveCuenta, null)
   const [tipo, setTipo] = useState<'general' | 'coach'>('general')
@@ -22,6 +30,7 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
   const [valorTotal, setValorTotal] = useState('')
   const [abonoInicial, setAbonoInicial] = useState('')
   const modalidadValorCero = tipo === 'coach' && modalidadCobro !== 'normal'
+  const abonoInicialMayorACero = parsePositiveMoney(abonoInicial) > 0
   const prefijoModalidad = tipo === 'coach'
     ? modalidadCobro === 'cortesia'
       ? '[Cortesia]'
@@ -236,6 +245,17 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
             disabled={isPending || modalidadValorCero}
             value={abonoInicial}
             onChange={(e) => setAbonoInicial(e.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-zinc-900">Fecha de pago inicial</label>
+          <Input
+            name="fecha_pago_inicial"
+            type="date"
+            defaultValue={new Date().toISOString().split('T')[0]}
+            required={abonoInicialMayorACero && !modalidadValorCero}
+            disabled={isPending || modalidadValorCero}
           />
         </div>
 

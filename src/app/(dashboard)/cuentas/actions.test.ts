@@ -398,7 +398,7 @@ describe('cuentas/actions', () => {
     expect(supabase.from).not.toHaveBeenCalled()
   })
 
-  it('saveCuenta registra abono inicial parcial con el metodo de pago del formulario', async () => {
+  it('saveCuenta registra abono inicial con fecha de pago independiente de la fecha de emision', async () => {
     const cuentaInsert = insertSingle({ id: 'cuenta-1' })
     const pagoInsert = insertSingle({ id: 'pago-1' })
     const cuentaUpdateEq = vi.fn().mockResolvedValue({ error: null })
@@ -425,9 +425,10 @@ describe('cuentas/actions', () => {
         asistente_id: 'asis-1',
         concepto: 'Tratamiento mensual',
         valor_total: '400000',
-        fecha_emision: '2026-04-02',
+        fecha_emision: '2026-04-01',
         tipo_cuenta: 'general',
         abono_inicial: '150000',
+        fecha_pago_inicial: '2026-04-02',
         metodo_pago: 'daviplata',
       })
     )
@@ -442,6 +443,13 @@ describe('cuentas/actions', () => {
         origen_fondos: 'pago_directo',
       }),
     ])
+    expect(cuentaInsert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        fecha_emision: '2026-04-01',
+      }),
+    ])
+    expect(assertFechaEditableMock).toHaveBeenCalledWith(supabase, '2026-04-01', 'Crear la cuenta')
+    expect(assertFechaEditableMock).toHaveBeenCalledWith(supabase, '2026-04-02', 'Registrar el abono inicial')
     expect(cuentaUpdateEq).toHaveBeenCalledWith('id', 'cuenta-1')
   })
 
@@ -480,6 +488,7 @@ describe('cuentas/actions', () => {
         tipo_cuenta: 'coach',
         sesiones_coach: '4',
         abono_inicial: '60.000',
+        fecha_pago_inicial: '2026-04-04',
         metodo_pago: 'nequi',
       })
     )
@@ -530,6 +539,7 @@ describe('cuentas/actions', () => {
         fecha_emision: '2026-04-02',
         tipo_cuenta: 'general',
         abono_inicial: '450000',
+        fecha_pago_inicial: '2026-04-05',
         metodo_pago: 'efectivo',
       })
     )
@@ -583,6 +593,7 @@ describe('cuentas/actions', () => {
         fecha_emision: '2026-04-02',
         tipo_cuenta: 'general',
         abono_inicial: '400000',
+        fecha_pago_inicial: '2026-04-06',
         metodo_pago: 'nequi',
       })
     )

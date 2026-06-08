@@ -702,6 +702,7 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
     const valorTotalInput = formData.get("valor_total")
     const valor_total = parseMoneyInput(valorTotalInput)
     const fecha_emision = (formData.get("fecha_emision") as string) || new Date().toISOString().slice(0, 10)
+    const fechaPagoInicial = ((formData.get("fecha_pago_inicial") as string) || "").trim()
     const returnTo = (formData.get("return_to") as string) || null
     const tipoCuenta = (formData.get("tipo_cuenta") as string) || "general"
     const modalidadCobro = normalizarModalidadCobro(formData.get("modalidad_cobro"))
@@ -736,9 +737,16 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
       return { error: "No se puede registrar abono inicial en una cuenta de valor 0." }
     }
     if (abonoInicialValue > 0 && !metodoPago) return { error: "Debes indicar el mÃ©todo de pago del abono inicial." }
+    if (abonoInicialValue > 0 && !fechaPagoInicial) {
+      return { error: "Debes indicar la fecha de pago inicial." }
+    }
 
     const periodoError = await assertFechaEditable(supabase, fecha_emision, "Crear la cuenta")
     if (periodoError) return { error: periodoError }
+    if (abonoInicialValue > 0) {
+      const periodoAbonoError = await assertFechaEditable(supabase, fechaPagoInicial, "Registrar el abono inicial")
+      if (periodoAbonoError) return { error: periodoAbonoError }
+    }
 
     let paqueteCoachId: string | null = null
     let pagoInicialId: string | null = null
@@ -792,7 +800,7 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
               cuenta_id: cuentaIdCreada,
               monto: montoAplicado,
               metodo_pago: metodoPago,
-              fecha_pago: fecha_emision,
+              fecha_pago: fechaPagoInicial,
               notas: "Abono inicial al crear la cuenta",
               origen_fondos: "pago_directo",
               usuario_id: user?.id || null,
@@ -815,7 +823,7 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
           tipo: "ingreso",
           monto: excedente,
           metodo_pago: metodoPago,
-          fecha: fecha_emision,
+          fecha: fechaPagoInicial,
           notas: overflowNote(pagoInicialId || cuentaIdCreada, "Saldo a favor generado por excedente del abono inicial"),
           usuario_id: user?.id || null,
         })
