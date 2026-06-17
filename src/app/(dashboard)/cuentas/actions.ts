@@ -378,7 +378,7 @@ export async function aplicarSaldoFavor(
   formData: FormData
 ): Promise<ActionState> {
   try {
-    const { supabase, user } = await requireRoles(["admin", "caja"])
+    const { supabase } = await requireRoles(["admin", "caja"])
     const monto = toSafeNumber(formData.get("monto"))
 
     if (monto <= 0) return { error: "El monto debe ser mayor a 0." }
@@ -407,67 +407,17 @@ export async function aplicarSaldoFavor(
     const periodoError = await assertFechaEditable(supabase, fechaHoy, "Aplicar saldo a favor")
     if (periodoError) return { error: periodoError }
 
-    const { data: pagoInsertado, error: pagoError } = await supabase.from("pagos_abonos").insert([
-      {
-        cuenta_id: cuentaId,
-        monto: montoAplicado,
-        metodo_pago: "saldo_a_favor",
-        origen_fondos: "saldo_a_favor",
-        fecha_pago: fechaHoy,
-        notas: "AplicaciÃ³n de saldo a favor",
-        usuario_id: user?.id || null,
-      },
-    ])
-      .select("id")
-      .single()
-    if (pagoError || !pagoInsertado) return { error: pagoError?.message || "No se pudo registrar el pago con saldo a favor." }
-
-    const { data: msfInsertado, error: msfError } = await supabase.from("movimientos_saldo_favor").insert([
-      {
-        asistente_id: asistenteId,
-        cuenta_id: cuentaId,
-        tipo: "aplicacion",
-        monto: montoAplicado,
-        metodo_pago: "saldo_a_favor",
-        fecha: fechaHoy,
-        notas: `AplicaciÃ³n de saldo a favor a la cuenta ${cuentaId}`,
-        usuario_id: user?.id || null,
-      },
-    ])
-      .select("id")
-      .single()
-    if (msfError) {
-      const { error: rollbackPagoError } = await supabase.from("pagos_abonos").delete().eq("id", pagoInsertado.id)
-      if (rollbackPagoError) {
-        return {
-          error: "Se registrÃ³ el pago desde saldo a favor, pero fallÃ³ su movimiento espejo y no se pudo revertir automÃ¡ticamente. Requiere revisiÃ³n manual.",
-        }
-      }
-      return { error: "No se pudo aplicar el saldo a favor. El pago fue revertido para evitar descuadres." }
-    }
-
-    const pagosActualizados = [...cuenta.pagos_abonos, { monto: montoAplicado, origen_fondos: "saldo_a_favor", metodo_pago: "saldo_a_favor" }]
-    const estado = calcularEstadoCuentaDesdePagos(toSafeNumber(cuenta.valor_total), pagosActualizados)
-    const { error: updateCuentaError } = await supabase.from("cuentas_por_cobrar").update({ estado }).eq("id", cuentaId)
-    if (updateCuentaError) {
-      if (msfInsertado?.id) {
-        await supabase.from("movimientos_saldo_favor").delete().eq("id", msfInsertado.id)
-      }
-      await supabase.from("pagos_abonos").delete().eq("id", pagoInsertado.id)
-      return { error: "No se pudo consolidar la aplicaciÃ³n del saldo a favor. Se revirtiÃ³ para evitar inconsistencias." }
-    }
-
-    await supabase
-      .from("auditoria_financiera")
-      .insert([
-        buildAudit("pagos_abonos", pagoInsertado.id, user?.id || "", "aplicar_saldo_a_favor", null, montoAplicado, "Pago aplicado desde saldo a favor"),
-      ])
-    if (msfInsertado?.id) {
-      await supabase
-        .from("auditoria_financiera")
-        .insert([
-          buildAudit("movimientos_saldo_favor", msfInsertado.id, user?.id || "", "consumir_saldo_a_favor", null, montoAplicado, "AplicaciÃ³n de saldo a favor a una cuenta"),
-        ])
+    // Aplicacion atomica en una sola transaccion (RPC): inserta el pago espejo,
+    // descuenta el saldo a favor y registra la auditoria juntos, con lock por
+    // asistente y revalidacion del disponible. Evita pagos huerfanos y el doble
+    // uso del saldo ante fallas parciales o concurrencia.
+    const { error: rpcError } = await supabase.rpc("aplicar_saldo_favor_directo", {
+      p_cuenta_id: cuentaId,
+      p_asistente_id: asistenteId,
+      p_monto: montoAplicado,
+    })
+    if (rpcError) {
+      return { error: rpcError.message || "No se pudo aplicar el saldo a favor. La operacion se revirtio por completo." }
     }
 
     revalidatePath(`/cuentas/${cuentaId}`)
