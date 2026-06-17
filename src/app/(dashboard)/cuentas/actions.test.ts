@@ -23,7 +23,7 @@ vi.mock('@/lib/utils/periodos', () => ({
   assertFechaEditable: (...args: unknown[]) => assertFechaEditableMock(...args),
 }))
 
-const { aplicarSaldoFavor, editMontoAbono, editValorCuenta, saveAbono, saveCuenta } = await import('./actions')
+const { aplicarSaldoFavor, deleteCuenta, editMontoAbono, editValorCuenta, saveAbono, saveCuenta } = await import('./actions')
 
 const buildFormData = (values: Record<string, string>) => {
   const form = new FormData()
@@ -1069,5 +1069,192 @@ describe('cuentas/actions', () => {
     )
 
     expect(result?.error).toMatch(/cuenta de otro/i)
+  })
+})
+
+type DeleteConfig = {
+  cuentaBase?: any
+  cuentaBaseError?: any
+  pagos?: any[]
+  pagosError?: any
+  aplicaciones?: any[]
+  aplicacionesError?: any
+  paquete?: any
+  paqueteError?: any
+  sesionesCount?: number
+  sesionesError?: any
+  deleteError?: any
+}
+
+const buildDeleteSupabase = (config: DeleteConfig = {}) => {
+  const {
+    cuentaBase = { fecha_emision: '2024-01-10', valor_total: 100 },
+    cuentaBaseError = null,
+    pagos = [],
+    pagosError = null,
+    aplicaciones = [],
+    aplicacionesError = null,
+    paquete = null,
+    // Por defecto no hay paquete coach: Supabase responde PGRST116 en un .single() vacio.
+    paqueteError = { code: 'PGRST116' },
+    sesionesCount = 0,
+    sesionesError = null,
+    deleteError = null,
+  } = config
+
+  const deleteEq = vi.fn().mockResolvedValue({ error: deleteError })
+  const auditInsert = vi.fn().mockResolvedValue({ error: null })
+
+  const supabase = {
+    from: vi.fn((table: string) => {
+      switch (table) {
+        case 'cuentas_por_cobrar':
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => selectSingle(cuentaBase, cuentaBaseError)),
+            })),
+            delete: vi.fn(() => ({ eq: deleteEq })),
+          }
+        case 'pagos_abonos':
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn().mockResolvedValue({ data: pagos, error: pagosError }),
+            })),
+          }
+        case 'movimientos_saldo_favor':
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                eq: vi.fn().mockResolvedValue({ data: aplicaciones, error: aplicacionesError }),
+              })),
+            })),
+          }
+        case 'coach_paquetes':
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => selectSingle(paquete, paqueteError)),
+            })),
+          }
+        case 'coach_sesiones':
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn().mockResolvedValue({ count: sesionesCount, error: sesionesError }),
+            })),
+          }
+        case 'auditoria_financiera':
+          return { insert: auditInsert }
+        default:
+          return {}
+      }
+    }),
+  }
+
+  return { supabase, deleteEq, auditInsert }
+}
+
+const pagoActivo = (over: Record<string, any> = {}) => ({
+  id: 'pago-1',
+  estado: 'activo',
+  notas: '',
+  origen_fondos: 'pago_directo',
+  metodo_pago: 'efectivo',
+  monto: 50,
+  ...over,
+})
+
+describe('cuentas/actions deleteCuenta', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    redirectMock.mockImplementation(() => undefined)
+    assertFechaEditableMock.mockResolvedValue(null)
+  })
+
+  it('bloquea eliminar una cuenta con un pago activo', async () => {
+    const { supabase, deleteEq } = buildDeleteSupabase({ pagos: [pagoActivo()] })
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
+
+    const result = await deleteCuenta('cuenta-1')
+
+    expect(result?.error).toMatch(/pagos activos registrados/i)
+    expect(deleteEq).not.toHaveBeenCalled()
+  })
+
+  it('permite eliminar una cuenta cuyo unico pago esta anulado por estado', async () => {
+    const { supabase, deleteEq, auditInsert } = buildDeleteSupabase({
+      pagos: [pagoActivo({ estado: 'anulado' })],
+    })
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
+
+    const result = await deleteCuenta('cuenta-1')
+
+    expect(result?.success).toBe(true)
+    expect(deleteEq).toHaveBeenCalledWith('id', 'cuenta-1')
+    expect(auditInsert).toHaveBeenCalled()
+    expect(revalidatePathMock).toHaveBeenCalledWith('/cuentas')
+  })
+
+  it('permite eliminar una cuenta cuyo unico pago esta anulado por nota [ANULADO]', async () => {
+    const { supabase, deleteEq } = buildDeleteSupabase({
+      pagos: [pagoActivo({ notas: '[ANULADO] anulado por el administrador' })],
+    })
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
+
+    const result = await deleteCuenta('cuenta-1')
+
+    expect(result?.success).toBe(true)
+    expect(deleteEq).toHaveBeenCalledWith('id', 'cuenta-1')
+  })
+
+  it('bloquea eliminar una cuenta con un pago activo proveniente de saldo a favor', async () => {
+    const { supabase, deleteEq } = buildDeleteSupabase({
+      pagos: [pagoActivo({ origen_fondos: 'saldo_a_favor', metodo_pago: 'saldo_a_favor' })],
+    })
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
+
+    const result = await deleteCuenta('cuenta-1')
+
+    expect(result?.error).toMatch(/saldo a favor/i)
+    expect(deleteEq).not.toHaveBeenCalled()
+  })
+
+  it('bloquea eliminar una cuenta con una aplicacion de saldo a favor activa', async () => {
+    const { supabase, deleteEq } = buildDeleteSupabase({
+      aplicaciones: [{ id: 'msf-1' }],
+    })
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
+
+    const result = await deleteCuenta('cuenta-1')
+
+    expect(result?.error).toMatch(/aplicaciones de saldo a favor sin revertir/i)
+    expect(deleteEq).not.toHaveBeenCalled()
+  })
+
+  it('bloquea eliminar una cuenta cuyo paquete coach tiene sesiones registradas', async () => {
+    const { supabase, deleteEq } = buildDeleteSupabase({
+      paquete: { id: 'paq-1' },
+      paqueteError: null,
+      sesionesCount: 2,
+    })
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
+
+    const result = await deleteCuenta('cuenta-1')
+
+    expect(result?.error).toMatch(/sesiones registradas/i)
+    expect(deleteEq).not.toHaveBeenCalled()
+  })
+
+  it('permite eliminar una cuenta con paquete coach existente pero sin sesiones', async () => {
+    const { supabase, deleteEq } = buildDeleteSupabase({
+      pagos: [pagoActivo({ estado: 'anulado' })],
+      paquete: { id: 'paq-1' },
+      paqueteError: null,
+      sesionesCount: 0,
+    })
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
+
+    const result = await deleteCuenta('cuenta-1')
+
+    expect(result?.success).toBe(true)
+    expect(deleteEq).toHaveBeenCalledWith('id', 'cuenta-1')
   })
 })

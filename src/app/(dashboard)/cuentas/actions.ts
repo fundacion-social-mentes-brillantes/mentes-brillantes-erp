@@ -182,7 +182,7 @@ export async function deleteCuenta(cuentaId: string): Promise<ActionState> {
 
     const { data: pagosData, error: pagosError } = await supabase
       .from("pagos_abonos")
-      .select("origen_fondos, metodo_pago", { count: "exact" })
+      .select("id, estado, notas, origen_fondos, metodo_pago, monto")
       .eq("cuenta_id", cuentaId)
 
     if (pagosError) return { error: "No se pudieron consultar los pagos de la cuenta." }
@@ -199,14 +199,18 @@ export async function deleteCuenta(cuentaId: string): Promise<ActionState> {
       return { error: "No se puede eliminar la cuenta porque tiene aplicaciones de saldo a favor sin revertir." }
     }
 
-    if ((pagosData || []).length > 0) {
-      const tieneSaldoFavor = (pagosData || []).some((p) => esSaldoAFavor(p))
+    // Solo bloquean los pagos vigentes: los pagos anulados (estado 'anulado' o nota
+    // [ANULADO]) se ignoran usando los mismos helpers contables del resto del sistema.
+    const pagosValidos = filtrarPagosValidosCuentas(pagosData || [])
+
+    if (pagosValidos.length > 0) {
+      const tieneSaldoFavor = pagosValidos.some((p) => esSaldoAFavor(p))
       if (tieneSaldoFavor) {
         return {
           error: "No se puede eliminar la cuenta porque tiene pagos provenientes de saldo a favor. ReviÃ©rtalos antes de borrar.",
         }
       }
-      return { error: "No se puede eliminar la cuenta porque tiene pagos registrados. Anula o elimina los pagos primero." }
+      return { error: "No se puede eliminar la cuenta porque tiene pagos activos registrados. Anula o elimina los pagos primero." }
     }
 
     const { data: paqueteCoach, error: paqueteError } = await supabase
