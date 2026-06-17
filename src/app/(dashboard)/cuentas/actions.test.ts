@@ -1070,6 +1070,122 @@ describe('cuentas/actions', () => {
 
     expect(result?.error).toMatch(/cuenta de otro/i)
   })
+
+  it('aplicarSaldoFavor aplica el saldo, registra el pago espejo y audita (caracterizacion)', async () => {
+    const pagoInsert = insertSingle({ id: 'pago-1' })
+    const saldoInsert = insertSingle({ id: 'msf-1' })
+    const cuentaUpdateEq = vi.fn().mockResolvedValue({ error: null })
+    const auditInsert = vi.fn().mockResolvedValue({ error: null })
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'cuentas_por_cobrar') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() =>
+                selectSingle({
+                  asistente_id: 'asis-1',
+                  valor_total: 1000,
+                  pagos_abonos: [],
+                })
+              ),
+            })),
+            update: vi.fn(() => ({ eq: cuentaUpdateEq })),
+          }
+        }
+        if (table === 'movimientos_saldo_favor') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn().mockResolvedValue({ data: [{ tipo: 'ingreso', monto: 500 }], error: null }),
+            })),
+            insert: saldoInsert,
+            delete: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) })),
+          }
+        }
+        if (table === 'pagos_abonos') {
+          return {
+            insert: pagoInsert,
+            delete: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) })),
+          }
+        }
+        if (table === 'auditoria_financiera') return { insert: auditInsert }
+        return {}
+      }),
+    }
+
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+
+    const result = await aplicarSaldoFavor('cuenta-1', 'asis-1', '500', null, buildFormData({ monto: '300' }))
+
+    expect(result?.success).toBe(true)
+    expect(pagoInsert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        cuenta_id: 'cuenta-1',
+        monto: 300,
+        origen_fondos: 'saldo_a_favor',
+        metodo_pago: 'saldo_a_favor',
+      }),
+    ])
+    expect(saldoInsert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        asistente_id: 'asis-1',
+        cuenta_id: 'cuenta-1',
+        tipo: 'aplicacion',
+        monto: 300,
+      }),
+    ])
+    expect(auditInsert).toHaveBeenCalled()
+  })
+
+  it('aplicarSaldoFavor solo aplica lo necesario para cubrir el pendiente (caracterizacion)', async () => {
+    const pagoInsert = insertSingle({ id: 'pago-1' })
+    const saldoInsert = insertSingle({ id: 'msf-1' })
+    const cuentaUpdateEq = vi.fn().mockResolvedValue({ error: null })
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'cuentas_por_cobrar') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() =>
+                selectSingle({
+                  asistente_id: 'asis-1',
+                  valor_total: 200,
+                  pagos_abonos: [],
+                })
+              ),
+            })),
+            update: vi.fn(() => ({ eq: cuentaUpdateEq })),
+          }
+        }
+        if (table === 'movimientos_saldo_favor') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn().mockResolvedValue({ data: [{ tipo: 'ingreso', monto: 1000 }], error: null }),
+            })),
+            insert: saldoInsert,
+            delete: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) })),
+          }
+        }
+        if (table === 'pagos_abonos') {
+          return {
+            insert: pagoInsert,
+            delete: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) })),
+          }
+        }
+        if (table === 'auditoria_financiera') return { insert: vi.fn().mockResolvedValue({ error: null }) }
+        return {}
+      }),
+    }
+
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+
+    const result = await aplicarSaldoFavor('cuenta-1', 'asis-1', '1000', null, buildFormData({ monto: '500' }))
+
+    expect(result?.success).toBe(true)
+    expect(pagoInsert).toHaveBeenCalledWith([expect.objectContaining({ monto: 200 })])
+    expect(saldoInsert).toHaveBeenCalledWith([expect.objectContaining({ tipo: 'aplicacion', monto: 200 })])
+  })
 })
 
 type DeleteConfig = {
