@@ -12,7 +12,7 @@ import {
 import { notFound } from "next/navigation"
 import { AnticipoForm } from "./AnticipoForm"
 import { PagarConSaldoButton } from "./PagarConSaldoButton"
-import { filtrarPagosValidos, normalizarCopUsable, sumarMontos, toSafeNumber } from "@/lib/utils/contable"
+import { calcularSaldoFavorDisponible, esAnuladoCompleto, filtrarPagosValidos, sumarMontos, toSafeNumber } from "@/lib/utils/contable"
 import { DonacionForm } from "./DonacionForm"
 import { DonacionActionsMenu } from "./DonacionActionsMenu"
 import { RevertAnticipoButton } from "./RevertAnticipoButton"
@@ -53,13 +53,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
     ? "No se pudo cargar el historial de saldo a favor. Contacta al administrador."
     : null
 
-  let totalIngresosSaldo = 0
-  let totalAplicadoSaldo = 0
-  movimientos.forEach((m) => {
-    if (m.tipo === "ingreso") totalIngresosSaldo += toSafeNumber(m.monto)
-    if (m.tipo === "aplicacion") totalAplicadoSaldo += toSafeNumber(m.monto)
-  })
-  const saldoAFavor = normalizarCopUsable(totalIngresosSaldo - totalAplicadoSaldo)
+  const saldoAFavor = calcularSaldoFavorDisponible(movimientos)
 
   const { data: donacionesData } = await supabase
     .from("donaciones_asistentes")
@@ -67,7 +61,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
     .eq("asistente_id", id)
     .order("fecha", { ascending: false })
   const donaciones = donacionesData || []
-  const donacionesActivas = donaciones.filter((d) => d.estado !== "anulado")
+  const donacionesActivas = donaciones.filter((d) => !esAnuladoCompleto(d))
   const totalDonado = Math.round(donacionesActivas.reduce((acc, curr) => acc + toSafeNumber(curr.monto), 0))
   const cantidadDonaciones = donaciones.length
 

@@ -6,6 +6,7 @@ import {
   calcularEstadoCuenta,
   calcularEstadoCuentaDesdePagos,
   calcularPendienteCuenta,
+  calcularSaldoFavorDisponibleRaw,
   esSaldoAFavor,
   filtrarPagosValidosCuentas,
   parseMoneyInput,
@@ -83,12 +84,7 @@ async function getOverflowAsociadoAbono(supabase: any, cuentaId: string, abonoId
     throw new Error("No se pudo validar el saldo a favor asociado al abono.")
   }
 
-  return (data || []).reduce((acc: number, mov: any) => {
-    const monto = toSafeNumber(mov.monto)
-    if (mov.tipo === "ingreso") return acc + monto
-    if (mov.tipo === "aplicacion") return acc - monto
-    return acc
-  }, 0)
+  return calcularSaldoFavorDisponibleRaw(data || [])
 }
 
 async function registrarMovimientoSaldoFavor(
@@ -128,12 +124,7 @@ async function getSaldoFavorDisponible(supabase: any, asistenteId: string) {
     throw new Error("No se pudo validar el saldo a favor disponible.")
   }
 
-  return (data || []).reduce((acc: number, mov: any) => {
-    const monto = toSafeNumber(mov.monto)
-    if (mov.tipo === "ingreso") return acc + monto
-    if (mov.tipo === "aplicacion") return acc - monto
-    return acc
-  }, 0)
+  return calcularSaldoFavorDisponibleRaw(data || [])
 }
 
 async function rollbackCuentaCreada(

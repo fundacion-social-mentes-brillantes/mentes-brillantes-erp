@@ -72,7 +72,13 @@ export const normalizarCopUsable = (value: unknown): number => {
   return Math.floor(entero / COP_MULTIPLO_OPERATIVO) * COP_MULTIPLO_OPERATIVO
 }
 
-export const calcularSaldoFavorDisponible = (
+// Saldo a favor disponible = balance de partida doble del asistente:
+// suma de ingresos menos aplicaciones. NO se filtran anulados a proposito: una
+// reversion se registra como una aplicacion compensatoria (asiento de reverso),
+// por lo que el balance neto ya queda correcto. Filtrar aqui los [ANULADO]
+// haria doble conteo contra ese asiento de reverso (saldo negativo). Para
+// "ingreso real" en reportes/ingresos usar esIngresoRealSaldoAFavor, no esto.
+export const calcularSaldoFavorDisponibleRaw = (
   movimientos: Array<{ tipo?: string | null; monto?: number | string | null }> = []
 ) => {
   let totalIngresos = 0
@@ -84,8 +90,14 @@ export const calcularSaldoFavorDisponible = (
     if (mov.tipo === 'aplicacion') totalAplicado += monto
   })
 
-  return normalizarCopUsable(totalIngresos - totalAplicado)
+  return totalIngresos - totalAplicado
 }
+
+// Variante normalizada a COP operativo (entero, multiplos de 50) para montos
+// aplicables o mostrables.
+export const calcularSaldoFavorDisponible = (
+  movimientos: Array<{ tipo?: string | null; monto?: number | string | null }> = []
+) => normalizarCopUsable(calcularSaldoFavorDisponibleRaw(movimientos))
 
 export const parseMoneyInput = (value: unknown): number | null => {
   if (value === null || value === undefined) return null

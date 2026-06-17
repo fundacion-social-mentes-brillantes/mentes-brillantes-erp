@@ -20,6 +20,8 @@ import {
   calcularPendienteDespuesDeAbono,
   normalizarCopEntero,
   normalizarCopUsable,
+  calcularSaldoFavorDisponible,
+  calcularSaldoFavorDisponibleRaw,
   type PagoRecord,
 } from './contable'
 
@@ -163,5 +165,31 @@ describe('calcularPendienteDespuesDeAbono', () => {
   it('marca excedente cuando el nuevo monto supera pendiente', () => {
     const { excede } = calcularPendienteDespuesDeAbono(300, pagos, 'a1', 500)
     expect(excede).toBe(true)
+  })
+})
+
+describe('saldo a favor disponible (balance partida doble)', () => {
+  it('raw = ingresos - aplicaciones, sin normalizar', () => {
+    expect(
+      calcularSaldoFavorDisponibleRaw([
+        { tipo: 'ingreso', monto: 100000 },
+        { tipo: 'aplicacion', monto: 30000 },
+      ])
+    ).toBe(70000)
+    // No normaliza a multiplos de 50.
+    expect(calcularSaldoFavorDisponibleRaw([{ tipo: 'ingreso', monto: 50049.8 }])).toBe(50049.8)
+  })
+
+  it('una reversion (ingreso [ANULADO] + aplicacion compensatoria) deja balance 0 sin filtrar anulados', () => {
+    const movimientos: PagoRecord[] = [
+      { tipo: 'ingreso', monto: 100000, notas: '[ANULADO] Anticipo X' },
+      { tipo: 'aplicacion', monto: 100000, notas: '[REVERSO_ANTICIPO:abc] Reversion contable de anticipo' },
+    ]
+    expect(calcularSaldoFavorDisponibleRaw(movimientos)).toBe(0)
+  })
+
+  it('la variante normalizada baja a COP operativo (multiplos de 50)', () => {
+    expect(calcularSaldoFavorDisponible([{ tipo: 'ingreso', monto: 50049.8 }])).toBe(50000)
+    expect(calcularSaldoFavorDisponible([{ tipo: 'ingreso', monto: 9999.98 }])).toBe(10000)
   })
 })

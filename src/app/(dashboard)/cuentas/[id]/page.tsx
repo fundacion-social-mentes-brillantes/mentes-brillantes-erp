@@ -7,7 +7,7 @@ import { AplicarSaldoForm } from './AplicarSaldoForm'
 import { EditValorModal, EditAbonoModal } from './EditModals'
 import { DeleteCuentaButton } from './DeleteCuentaButton'
 import { RevertAbonoConSaldoButton } from './RevertAbonoConSaldoButton'
-import { filtrarPagosValidos, sumarMontos } from '@/lib/utils/contable'
+import { calcularSaldoFavorDisponibleRaw, filtrarPagosValidos, sumarMontos } from '@/lib/utils/contable'
 import { RegisterCoachSessionForm } from '@/components/coach/RegisterCoachSessionForm'
 import { CoachSessionsPdf } from '@/components/coach/CoachSessionsPdf'
 import { CoachSessionActions } from '@/components/coach/CoachSessionActions'
@@ -57,12 +57,7 @@ export default async function DetalleCuentaPage({
     .select('tipo, monto, notas')
     .eq('asistente_id', cuenta.asistente_id)
 
-  let saldoAFavor = 0
-  if (movimientosSaldo) {
-    const ingresos = movimientosSaldo.filter(m => m.tipo === 'ingreso').reduce((acc, m) => acc + Number(m.monto), 0)
-    const aplicaciones = movimientosSaldo.filter(m => m.tipo === 'aplicacion').reduce((acc, m) => acc + Number(m.monto), 0)
-    saldoAFavor = ingresos - aplicaciones
-  }
+  const saldoAFavor = calcularSaldoFavorDisponibleRaw(movimientosSaldo || [])
 
   // Abonos cuyo sobrepago genero saldo a favor y aun esta vigente (marca [ABONO:<id>], no anulado).
   const abonosConSaldoActivo = new Set<string>()

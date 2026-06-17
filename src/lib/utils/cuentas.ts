@@ -1,5 +1,4 @@
 export {
-  esAnuladoPorNota as esAnulado,
   esSaldoAFavor,
   filtrarPagosValidos,
   sumarMontos,
