@@ -6,6 +6,7 @@ import { AbonoForm } from './AbonoForm'
 import { AplicarSaldoForm } from './AplicarSaldoForm'
 import { EditValorModal, EditAbonoModal } from './EditModals'
 import { DeleteCuentaButton } from './DeleteCuentaButton'
+import { RevertAbonoConSaldoButton } from './RevertAbonoConSaldoButton'
 import { filtrarPagosValidos, sumarMontos } from '@/lib/utils/contable'
 import { RegisterCoachSessionForm } from '@/components/coach/RegisterCoachSessionForm'
 import { CoachSessionsPdf } from '@/components/coach/CoachSessionsPdf'
@@ -53,14 +54,24 @@ export default async function DetalleCuentaPage({
   // Fetch saldo a favor
   const { data: movimientosSaldo } = await supabase
     .from('movimientos_saldo_favor')
-    .select('tipo, monto')
+    .select('tipo, monto, notas')
     .eq('asistente_id', cuenta.asistente_id)
-    
+
   let saldoAFavor = 0
   if (movimientosSaldo) {
     const ingresos = movimientosSaldo.filter(m => m.tipo === 'ingreso').reduce((acc, m) => acc + Number(m.monto), 0)
     const aplicaciones = movimientosSaldo.filter(m => m.tipo === 'aplicacion').reduce((acc, m) => acc + Number(m.monto), 0)
     saldoAFavor = ingresos - aplicaciones
+  }
+
+  // Abonos cuyo sobrepago genero saldo a favor y aun esta vigente (marca [ABONO:<id>], no anulado).
+  const abonosConSaldoActivo = new Set<string>()
+  for (const m of movimientosSaldo || []) {
+    if (m.tipo !== 'ingreso') continue
+    const nota = (m as any).notas || ''
+    if (nota.includes('[ANULADO]')) continue
+    const match = nota.match(/\[ABONO:([0-9a-fA-F-]+)\]/)
+    if (match) abonosConSaldoActivo.add(match[1])
   }
 
   // Check if admin
@@ -229,6 +240,13 @@ export default async function DetalleCuentaPage({
                         <div className="flex items-center justify-end gap-2">
                           ${Number(abono.monto).toLocaleString()}
                           {isAdmin && <EditAbonoModal abonoId={abono.id} cuentaId={cuenta.id} valorActual={Number(abono.monto)} />}
+                          {isAdmin &&
+                            abono.estado !== 'anulado' &&
+                            !(abono.notas || '').includes('[ANULADO]') &&
+                            abono.origen_fondos !== 'saldo_a_favor' &&
+                            abonosConSaldoActivo.has(abono.id) && (
+                              <RevertAbonoConSaldoButton cuentaId={cuenta.id} abonoId={abono.id} />
+                            )}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-[rgb(var(--text-muted))] text-xs truncate max-w-[150px]">{abono.notas || '-'}</td>
