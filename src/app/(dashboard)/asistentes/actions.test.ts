@@ -250,15 +250,9 @@ describe('asistentes/actions', () => {
     )
   })
 
-  it('reversa un anticipo solo si el saldo disponible actual alcanza y deja auditoria', async () => {
+  it('reversa un anticipo de forma atomica via RPC cuando el saldo alcanza', async () => {
     assertFechaEditableMock.mockResolvedValue(null)
-    const updateEq = vi.fn().mockResolvedValue({ error: null })
-    const saldoInsert = vi.fn(() => ({
-      select: vi.fn(() => ({
-        single: vi.fn().mockResolvedValue({ data: { id: 'msf-reverso-1' }, error: null }),
-      })),
-    }))
-    const auditInsert = vi.fn().mockResolvedValue({ error: null })
+    const rpc = vi.fn().mockResolvedValue({ error: null })
 
     const supabase = {
       from: vi.fn((table: string) => {
@@ -293,40 +287,67 @@ describe('asistentes/actions', () => {
                 })
               }),
             })),
-            update: vi.fn(() => ({ eq: updateEq })),
-            insert: saldoInsert,
           }
         }
-        if (table === 'auditoria_financiera') return { insert: auditInsert }
         return {}
       }),
+      rpc,
     }
     requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
 
     const result = await revertirAnticipo('asis-1', 'msf-1')
 
     expect(result).toEqual({ success: true })
-    expect(updateEq).toHaveBeenCalledWith('id', 'msf-1')
-    expect(saldoInsert).toHaveBeenCalledWith([
-      expect.objectContaining({
-        asistente_id: 'asis-1',
-        tipo: 'aplicacion',
-        monto: 90000,
-        fecha: '2026-04-04',
-        usuario_id: 'admin-1',
-        notas: expect.stringContaining('[REVERSO_ANTICIPO:msf-1]'),
+    expect(rpc).toHaveBeenCalledWith('revertir_anticipo_trx', {
+      p_anticipo_id: 'msf-1',
+      p_asistente_id: 'asis-1',
+    })
+  })
+
+  it('revertirAnticipo devuelve error si la RPC falla (sin estado parcial)', async () => {
+    assertFechaEditableMock.mockResolvedValue(null)
+    const rpc = vi.fn().mockResolvedValue({
+      error: { message: 'Este anticipo ya fue revertido anteriormente.' },
+    })
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'movimientos_saldo_favor') {
+          return {
+            select: vi.fn((columns: string) => ({
+              eq: vi.fn((field: string, value: string) => {
+                if (columns.includes('asistente_id, tipo, monto, fecha, metodo_pago, notas')) {
+                  return {
+                    single: vi.fn().mockResolvedValue({
+                      data: {
+                        id: value,
+                        asistente_id: 'asis-1',
+                        tipo: 'ingreso',
+                        monto: 90000,
+                        fecha: '2026-04-04',
+                        metodo_pago: 'efectivo',
+                        notas: 'Anticipo operativo',
+                      },
+                      error: null,
+                    }),
+                  }
+                }
+                return Promise.resolve({ data: [{ tipo: 'ingreso', monto: 90000 }], error: null })
+              }),
+            })),
+          }
+        }
+        return {}
       }),
-    ])
-    expect(auditInsert).toHaveBeenCalledWith([
-      expect.objectContaining({
-        accion: 'revertir_anticipo',
-        registro_id: 'msf-1',
-      }),
-      expect.objectContaining({
-        accion: 'reversion_anticipo_compensatoria',
-        registro_id: 'msf-reverso-1',
-      }),
-    ])
+      rpc,
+    }
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
+
+    const result = await revertirAnticipo('asis-1', 'msf-1')
+
+    expect(rpc).toHaveBeenCalled()
+    expect(result?.error).toMatch(/ya fue revertido/i)
+    expect(result?.success).toBeUndefined()
   })
 
   it('no revierte un anticipo si el saldo disponible ya no alcanza', async () => {

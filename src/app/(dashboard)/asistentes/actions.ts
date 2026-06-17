@@ -18,9 +18,6 @@ export type ActionState = {
   success?: boolean
 } | null
 
-const notaReversionAnticipo = (anticipoId: string) =>
-  `[REVERSO_ANTICIPO:${anticipoId}] Reversion contable de anticipo gestionada desde el perfil del asistente.`
-
 const calcularSaldoDisponible = (
   movimientos: Array<{ tipo?: string | null; monto?: number | string | null }> = []
 ) => calcularSaldoFavorDisponible(movimientos)
@@ -141,9 +138,9 @@ export async function saveAnticipo(asistente_id: string, prevState: ActionState,
 }
 
 export async function revertirAnticipo(asistente_id: string, anticipo_id: string): Promise<ActionState> {
-  let supabase, user
+  let supabase
   try {
-    ;({ supabase, user } = await requireAdmin())
+    ;({ supabase } = await requireAdmin())
   } catch (e: any) {
     return { error: e?.message || 'Acceso denegado' }
   }
@@ -192,70 +189,16 @@ export async function revertirAnticipo(asistente_id: string, anticipo_id: string
     }
   }
 
-  const notasOriginales = anticipo.notas?.trim() || ''
-  const notasAnuladas = `[ANULADO] ${notasOriginales}`.trim()
-
-  const { error: updateError } = await supabase
-    .from('movimientos_saldo_favor')
-    .update({
-      notas: notasAnuladas,
-      usuario_id: user?.id || null,
-    })
-    .eq('id', anticipo_id)
-
-  if (updateError) {
-    return { error: updateError.message }
-  }
-
-  const { data: reverso, error: reversoError } = await supabase
-    .from('movimientos_saldo_favor')
-    .insert([
-      {
-        asistente_id,
-        tipo: 'aplicacion',
-        monto: montoAnticipo,
-        fecha: anticipo.fecha,
-        metodo_pago: anticipo.metodo_pago || 'saldo_a_favor',
-        notas: notaReversionAnticipo(anticipo_id),
-        usuario_id: user?.id || null,
-      },
-    ])
-    .select('id')
-    .single()
-
-  if (reversoError || !reverso) {
-    await supabase
-      .from('movimientos_saldo_favor')
-      .update({ notas: anticipo.notas || null })
-      .eq('id', anticipo_id)
-    return { error: reversoError?.message || 'No se pudo registrar la reversión del anticipo.' }
-  }
-
-  const { error: auditError } = await supabase.from('auditoria_financiera').insert([
-    {
-      tabla_afectada: 'movimientos_saldo_favor',
-      registro_id: anticipo_id,
-      usuario_id: user?.id || '',
-      accion: 'revertir_anticipo',
-      valor_anterior: montoAnticipo,
-      valor_nuevo: 0,
-      motivo: 'Anticipo anulado contablemente desde el perfil del asistente.',
-    },
-    {
-      tabla_afectada: 'movimientos_saldo_favor',
-      registro_id: reverso.id,
-      usuario_id: user?.id || '',
-      accion: 'reversion_anticipo_compensatoria',
-      valor_anterior: null,
-      valor_nuevo: montoAnticipo,
-      motivo: notaReversionAnticipo(anticipo_id),
-    },
-  ])
-
-  if (auditError) {
-    await supabase.from('movimientos_saldo_favor').delete().eq('id', reverso.id)
-    await supabase.from('movimientos_saldo_favor').update({ notas: anticipo.notas || null }).eq('id', anticipo_id)
-    return { error: auditError.message }
+  // Reversion atomica en una sola transaccion (RPC): marca el ingreso como
+  // [ANULADO], inserta la aplicacion compensatoria y la auditoria juntos, con
+  // lock por asistente y revalidacion del disponible. Evita dejar el anticipo
+  // anulado sin compensacion (o viceversa) ante fallas parciales.
+  const { error: rpcError } = await supabase.rpc('revertir_anticipo_trx', {
+    p_anticipo_id: anticipo_id,
+    p_asistente_id: asistente_id,
+  })
+  if (rpcError) {
+    return { error: rpcError.message || 'No se pudo revertir el anticipo. La operacion se revirtio por completo.' }
   }
 
   revalidatePath(`/asistentes/${asistente_id}`)
