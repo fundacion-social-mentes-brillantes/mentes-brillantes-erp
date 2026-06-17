@@ -23,7 +23,8 @@ vi.mock('@/lib/utils/periodos', () => ({
   assertFechaEditable: (...args: unknown[]) => assertFechaEditableMock(...args),
 }))
 
-const { aplicarSaldoFavor, deleteCuenta, editMontoAbono, editValorCuenta, saveAbono, saveCuenta } = await import('./actions')
+const { aplicarSaldoFavor, deleteCuenta, editMontoAbono, editValorCuenta, revertirAbonoConSaldo, saveAbono, saveCuenta } =
+  await import('./actions')
 
 const buildFormData = (values: Record<string, string>) => {
   const form = new FormData()
@@ -1308,5 +1309,95 @@ describe('cuentas/actions deleteCuenta', () => {
 
     expect(result?.success).toBe(true)
     expect(deleteEq).toHaveBeenCalledWith('id', 'cuenta-1')
+  })
+})
+
+describe('cuentas/actions revertirAbonoConSaldo', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    redirectMock.mockImplementation(() => undefined)
+    assertFechaEditableMock.mockResolvedValue(null)
+  })
+
+  const buildSupabase = (abono: any, rpcResult: any = { error: null }) => {
+    const rpc = vi.fn().mockResolvedValue(rpcResult)
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'pagos_abonos') {
+          return {
+            select: vi.fn(() => ({ eq: vi.fn(() => selectSingle(abono, null)) })),
+          }
+        }
+        return {}
+      }),
+      rpc,
+    }
+    return { supabase, rpc }
+  }
+
+  const abonoPagoDirecto = (over: Record<string, any> = {}) => ({
+    id: 'abono-1',
+    cuenta_id: 'cuenta-1',
+    fecha_pago: '2026-04-04',
+    estado: 'activo',
+    origen_fondos: 'pago_directo',
+    notas: '',
+    ...over,
+  })
+
+  it('revierte un abono pago_directo via RPC atomica', async () => {
+    const { supabase, rpc } = buildSupabase(abonoPagoDirecto())
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
+
+    const result = await revertirAbonoConSaldo('cuenta-1', 'abono-1')
+
+    expect(result?.success).toBe(true)
+    expect(rpc).toHaveBeenCalledWith('revertir_abono_con_saldo_trx', {
+      p_abono_id: 'abono-1',
+      p_cuenta_id: 'cuenta-1',
+    })
+  })
+
+  it('bloquea revertir un abono que proviene de saldo a favor', async () => {
+    const { supabase, rpc } = buildSupabase(abonoPagoDirecto({ origen_fondos: 'saldo_a_favor' }))
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
+
+    const result = await revertirAbonoConSaldo('cuenta-1', 'abono-1')
+
+    expect(result?.error).toMatch(/proviene de saldo a favor/i)
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('bloquea revertir un abono ya anulado', async () => {
+    const { supabase, rpc } = buildSupabase(abonoPagoDirecto({ estado: 'anulado', notas: '[ANULADO] previo' }))
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
+
+    const result = await revertirAbonoConSaldo('cuenta-1', 'abono-1')
+
+    expect(result?.error).toMatch(/ya esta anulado/i)
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('bloquea revertir si el abono pertenece a otra cuenta', async () => {
+    const { supabase, rpc } = buildSupabase(abonoPagoDirecto({ cuenta_id: 'cuenta-OTRA' }))
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
+
+    const result = await revertirAbonoConSaldo('cuenta-1', 'abono-1')
+
+    expect(result?.error).toMatch(/no pertenece a la cuenta/i)
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('propaga el error de la RPC si el sobrepago ya fue consumido (sin estado parcial)', async () => {
+    const { supabase, rpc } = buildSupabase(abonoPagoDirecto(), {
+      error: { message: 'No se puede revertir: el saldo a favor generado por este abono ya fue consumido.' },
+    })
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
+
+    const result = await revertirAbonoConSaldo('cuenta-1', 'abono-1')
+
+    expect(rpc).toHaveBeenCalled()
+    expect(result?.error).toMatch(/ya fue consumido/i)
+    expect(result?.success).toBeUndefined()
   })
 })

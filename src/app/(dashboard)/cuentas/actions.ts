@@ -645,6 +645,53 @@ export async function editMontoAbono(
 }
 
 // --------------------------------------------
+// Revertir un abono que genero saldo a favor por sobrepago (flujo seguro y atomico)
+// El Historial General mantiene su bloqueo; esta reversion vive en el detalle de la cuenta.
+// --------------------------------------------
+export async function revertirAbonoConSaldo(cuentaId: string, abonoId: string): Promise<ActionState> {
+  try {
+    const { supabase } = await requireAdmin()
+
+    const { data: abono, error: abonoError } = await supabase
+      .from("pagos_abonos")
+      .select("id, cuenta_id, fecha_pago, estado, origen_fondos, notas")
+      .eq("id", abonoId)
+      .single()
+
+    if (abonoError || !abono) return { error: "No se encontro el abono a revertir." }
+    if (abono.cuenta_id !== cuentaId) return { error: "El abono no pertenece a la cuenta indicada." }
+    if (abono.estado === "anulado" || (abono.notas || "").includes("[ANULADO]")) {
+      return { error: "El abono ya esta anulado." }
+    }
+    if ((abono.origen_fondos || "").toLowerCase() === "saldo_a_favor") {
+      return { error: "Este pago proviene de saldo a favor; no se revierte por este flujo." }
+    }
+
+    const periodoError = await assertFechaEditable(supabase, abono.fecha_pago, "Revertir el abono")
+    if (periodoError) return { error: periodoError }
+
+    // Reversion atomica en una sola transaccion (RPC): anula el abono y neutraliza
+    // el saldo a favor generado ([ABONO:id]) solo si no fue consumido, con lock por
+    // asistente. Evita pagos huerfanos, doble conteo o saldo descuadrado.
+    const { error: rpcError } = await supabase.rpc("revertir_abono_con_saldo_trx", {
+      p_abono_id: abonoId,
+      p_cuenta_id: cuentaId,
+    })
+    if (rpcError) {
+      return { error: rpcError.message || "No se pudo revertir el abono. La operacion se revirtio por completo." }
+    }
+
+    revalidatePath(`/cuentas/${cuentaId}`)
+    revalidatePath("/cuentas")
+    revalidatePath("/movimientos")
+    revalidatePath("/dashboard")
+    return { success: true }
+  } catch (e: any) {
+    return { error: e.message || "Error al revertir el abono." }
+  }
+}
+
+// --------------------------------------------
 // Guardar nueva cuenta (mantiene flujo actual con returnTo opcional)
 // --------------------------------------------
 export async function saveCuenta(prevState: ActionState, formData: FormData): Promise<ActionState> {
