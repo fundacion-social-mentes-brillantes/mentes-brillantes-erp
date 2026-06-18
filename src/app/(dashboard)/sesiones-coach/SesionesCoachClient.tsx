@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Search, CalendarPlus, History, X, HeartHandshake, CheckCircle2 } from 'lucide-react'
 import { registrarSesionCoachAsistente, editarSesion, eliminarSesion } from '@/app/(dashboard)/coach/actions'
 import { estadoCoach } from '@/lib/utils/coach'
+import { coincideBusqueda } from '@/lib/utils/busqueda'
 
 type Sesion = { id: string; fecha: string; notas?: string | null }
 type AsistenteCoach = {
@@ -28,9 +29,6 @@ const fmtFecha = (f?: string | null) => {
   if (!y || !m || !d) return f
   return `${d}/${m}/${y}`
 }
-
-const normalizar = (s: string) =>
-  s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
 const ESTADO_BADGE: Record<string, string> = {
   disponible: 'bg-emerald-100 text-emerald-700 border-emerald-200',
@@ -300,16 +298,10 @@ export function SesionesCoachClient({
   const [historial, setHistorial] = useState<AsistenteCoach | null>(null)
 
   const filtrados = useMemo(() => {
-    const q = normalizar(query.trim())
     return asistentes.filter((a) => {
       if (filtro === 'pendientes' && a.restantes <= 0) return false
       if (filtro === 'sin' && a.restantes > 0) return false
-      if (!q) return true
-      return (
-        normalizar(a.nombre).includes(q) ||
-        (a.codigo ? normalizar(a.codigo).includes(q) : false) ||
-        (a.cedula ? normalizar(a.cedula).includes(q) : false)
-      )
+      return coincideBusqueda([a.nombre, a.codigo, a.cedula], query)
     })
   }, [asistentes, query, filtro])
 

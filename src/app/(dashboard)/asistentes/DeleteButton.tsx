@@ -23,7 +23,7 @@ export function DeleteButton({ id, nombre }: { id: string, nombre: string }) {
       onClick={handleDelete}
       disabled={isPending}
       title="Eliminar asistente"
-      className="inline-flex p-2 transition-colors rounded-md text-zinc-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-50"
+      className="inline-flex p-2 rounded-md transition-colors text-[rgb(var(--text-muted))] hover:text-[rgb(var(--danger))] hover:bg-[rgb(var(--surface-2))] disabled:opacity-50"
     >
       <Trash2 className="w-4 h-4" />
     </button>
