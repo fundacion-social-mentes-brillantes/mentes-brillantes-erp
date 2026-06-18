@@ -58,18 +58,23 @@ describe('isAuthorized', () => {
   const msg = (chatId: number, userId?: number) =>
     ({ chat: { id: chatId }, from: userId ? { id: userId } : undefined }) as any
 
-  it('deniega cuando la allowlist esta vacia (seguro por defecto)', () => {
+  it('deniega si no hay chat permitido configurado', () => {
     expect(isAuthorized(msg(1, 1), cfg(undefined, []))).toBe(false)
-    expect(isAuthorized(msg(1, 1), cfg('1', []))).toBe(false)
   })
 
-  it('deniega si el chat o el usuario no coinciden con la allowlist', () => {
+  it('deniega si el chat no coincide con el permitido', () => {
+    expect(isAuthorized(msg(999, 1), cfg('1', []))).toBe(false)
     expect(isAuthorized(msg(999, 1), cfg('1', ['1']))).toBe(false)
-    expect(isAuthorized(msg(1, 999), cfg('1', ['1']))).toBe(false)
-    expect(isAuthorized(msg(1, undefined), cfg('1', ['1']))).toBe(false)
   })
 
-  it('autoriza solo cuando chat y usuario estan en la allowlist', () => {
+  it('autoriza a cualquier usuario del chat permitido cuando la lista de usuarios esta vacia', () => {
+    expect(isAuthorized(msg(1, 12345), cfg('1', []))).toBe(true)
+    expect(isAuthorized(msg(1, undefined), cfg('1', []))).toBe(true)
+  })
+
+  it('si hay lista de usuarios, restringe a los incluidos', () => {
     expect(isAuthorized(msg(1, 1), cfg('1', ['1', '2']))).toBe(true)
+    expect(isAuthorized(msg(1, 999), cfg('1', ['1', '2']))).toBe(false)
+    expect(isAuthorized(msg(1, undefined), cfg('1', ['1']))).toBe(false)
   })
 })

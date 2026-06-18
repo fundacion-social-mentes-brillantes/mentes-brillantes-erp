@@ -435,11 +435,19 @@ function assertWebhookSecret(request: Request, config: TelegramConfig) {
 }
 
 export function isAuthorized(message: TelegramMessage, config: TelegramConfig) {
-  if (!config.allowedChatId || config.allowedUserIds.size === 0) return false
+  // El chat permitido es OBLIGATORIO: el bot solo opera en ese grupo/chat.
+  // Es la barrera principal — al ser un grupo privado, solo responde a quien el
+  // dueno haya agregado al grupo.
+  if (!config.allowedChatId) return false
   if (String(message.chat.id) !== config.allowedChatId) return false
 
-  const userId = message.from?.id
-  if (!userId || !config.allowedUserIds.has(String(userId))) return false
+  // La lista de usuarios es OPCIONAL: si esta vacia, se autoriza a cualquier
+  // miembro del chat permitido (pertenecer al grupo privado es suficiente). Si
+  // se especifica, se restringe a esos user ids (control mas estricto opcional).
+  if (config.allowedUserIds.size > 0) {
+    const userId = message.from?.id
+    if (!userId || !config.allowedUserIds.has(String(userId))) return false
+  }
 
   return true
 }
@@ -1850,24 +1858,24 @@ export async function POST(request: Request) {
   // webhook ya valido el origen y solo se revelan los IDs del propio remitente
   // (no expone datos del ERP). Funciona tambien en grupos (/id@bot).
   const baseCommand = message.text.trim().toLowerCase().split(/\s+/)[0].split("@")[0]
-  const allowlistConfigurada = Boolean(config.allowedChatId) && config.allowedUserIds.size > 0
+  const chatConfigurado = Boolean(config.allowedChatId)
   if (baseCommand === "/id" || baseCommand === "/whoami" || baseCommand === "/micuenta") {
-    const guia = allowlistConfigurada
+    const guia = chatConfigurado
       ? ""
-      : "\n\nConfigura en Vercel para autorizar este chat:\nTELEGRAM_ALLOWED_CHAT_ID = el chat_id de arriba\nTELEGRAM_ALLOWED_USER_IDS = el user_id de arriba (separa por comas si son varios)."
+      : "\n\nConfigura en Vercel TELEGRAM_ALLOWED_CHAT_ID = el chat_id de arriba para autorizar este chat. (Opcional: TELEGRAM_ALLOWED_USER_IDS para limitar a usuarios concretos; si lo dejas vacio, todos los del chat podran usarlo.)"
     await sendTelegramMessage(config, message.chat.id, buildIdResponse(message) + guia)
     return NextResponse.json({ ok: true })
   }
 
   if (!isAuthorized(message, config)) {
-    // Si la allowlist aun no esta configurada, guia al dueno en vez de quedar
-    // mudo (catch-22 que introdujo el hardening). Si SI esta configurada, se
-    // deniega en silencio (comportamiento seguro previo, sin filtrar nada).
-    if (!allowlistConfigurada) {
+    // Si aun no se configuro el chat permitido, guia al dueno en vez de quedar
+    // mudo. Si ya esta configurado, se deniega en silencio (otro chat, o un
+    // usuario fuera de la lista opcional): no se filtra nada.
+    if (!chatConfigurado) {
       await sendTelegramMessage(
         config,
         message.chat.id,
-        "Aun no estoy autorizado en este chat. Envia /id para ver tu chat_id y user_id, y configuralos en TELEGRAM_ALLOWED_CHAT_ID y TELEGRAM_ALLOWED_USER_IDS (en Vercel)."
+        "Aun no estoy autorizado. Envia /id para ver el chat_id de este grupo y configuralo en TELEGRAM_ALLOWED_CHAT_ID (en Vercel)."
       )
       return NextResponse.json({ ok: true })
     }
