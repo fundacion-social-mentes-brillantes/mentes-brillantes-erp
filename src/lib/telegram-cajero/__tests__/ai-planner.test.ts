@@ -72,6 +72,11 @@ describe("telegram cajero ai planner", () => {
     expect(fallbackPlan("que periodo esta abierto?", {}).tools[0].name).toBe("getPeriods")
   })
 
+  it("rutea socios/liquidaciones a getPartnerSettlement", () => {
+    expect(fallbackPlan("cuanto le toca al socio juan?", {}).tools[0].name).toBe("getPartnerSettlement")
+    expect(fallbackPlan("muestrame las liquidaciones de socios", {}).tools[0].name).toBe("getPartnerSettlement")
+  })
+
   it("planifica resumen del mes y alertas de hoy", () => {
     const summary = fallbackPlan("háblame de cómo vamos este mes", {})
     const alerts = fallbackPlan("qué está raro hoy?", {})

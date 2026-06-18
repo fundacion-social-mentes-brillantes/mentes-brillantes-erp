@@ -165,6 +165,18 @@ function describeCounts(item: ToolExecutionItem) {
   return parts.length ? parts.join("\n") : "No pude calcular los conteos."
 }
 
+function describePartners(item: ToolExecutionItem) {
+  const data: any = item.result?.data || {}
+  const socios = Array.isArray(data.socios) ? data.socios : []
+  if (!socios.length) return "No veo socios registrados."
+  return socios.slice(0, 6).map((socio: any) => {
+    const liq = socio.ultima_liquidacion
+    const base = `${socio.nombre} — ${socio.porcentaje}%`
+    if (!liq) return `${base}: sin liquidacion registrada todavia.`
+    return `${base}: ultima liquidacion${liq.periodo ? ` (${liq.periodo})` : ""} neto a pagar ${formatCop(liq.valor_neto_pagar)} (correspondiente ${formatCop(liq.valor_correspondiente)}, adelantos descontados ${formatCop(liq.adelantos_descontados)}).`
+  }).join("\n")
+}
+
 function describePeriods(item: ToolExecutionItem) {
   const data: any = item.result?.data || {}
   const periodos = Array.isArray(data.periodos) ? data.periodos : []
@@ -212,6 +224,7 @@ export function buildDeterministicResponse(plan: AiPlannerPlan, bundle: ToolExec
     if (item.requestedTool === "getDonationsSummary") return describeDonationsSummary(item)
     if (item.requestedTool === "getCounts") return describeCounts(item)
     if (item.requestedTool === "getPeriods") return describePeriods(item)
+    if (item.requestedTool === "getPartnerSettlement") return describePartners(item)
     if (item.requestedTool === "getSummary") return describeSummary(item)
     if (item.requestedTool === "getBusinessAlerts") return describeAlerts(item)
     if (item.requestedTool === "getOpenReceivablesSummary") {

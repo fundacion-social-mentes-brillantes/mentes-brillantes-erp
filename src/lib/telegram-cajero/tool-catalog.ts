@@ -120,6 +120,13 @@ export const TELEGRAM_CAJERO_TOOL_CATALOG = [
     returns: "Lista de periodos con su estado y fechas.",
     safety: "read_only",
   },
+  {
+    name: "getPartnerSettlement",
+    description: "Consulta los socios, su porcentaje y su liquidacion/reparto mas reciente (cuanto le toca).",
+    allowedArgs: ["socioQuery"],
+    returns: "Socios con porcentaje y ultima liquidacion (valor neto a pagar, adelantos).",
+    safety: "read_only",
+  },
 ] as const
 
 export type AllowedToolName = (typeof TELEGRAM_CAJERO_TOOL_CATALOG)[number]["name"]

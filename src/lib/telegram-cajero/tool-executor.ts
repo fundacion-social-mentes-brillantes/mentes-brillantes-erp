@@ -8,6 +8,7 @@ import {
   getCounts,
   getDonationsSummary,
   getOpenReceivablesSummary,
+  getPartnerSettlement,
   getPeriods,
   getPersonDonations,
   getPersonFinancialStatus,
@@ -203,6 +204,10 @@ async function executeTool(supabase: SupabaseReader, tool: AiPlannerTool): Promi
   }
   if (tool.name === "getPeriods") {
     const result = await getPeriods(supabase, stringArg(args, "estado"))
+    return { requestedTool: tool.name, status: result.status, result }
+  }
+  if (tool.name === "getPartnerSettlement") {
+    const result = await getPartnerSettlement(supabase, stringArg(args, "socioQuery") || stringArg(args, "personQuery"))
     return { requestedTool: tool.name, status: result.status, result }
   }
 

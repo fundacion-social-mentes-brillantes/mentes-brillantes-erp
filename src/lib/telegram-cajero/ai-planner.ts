@@ -538,6 +538,19 @@ export function fallbackPlan(text: string, state: TelegramSessionState = {}): Ai
     }
   }
 
+  if (/\b(socio|socios|liquidacion|liquidaciones|reparto)\b/.test(normalized)) {
+    const match = normalized.match(/(?:socio|liquidacion de|reparto de|le toca a|cuanto le toca a|cuanto gana)\s+(.+)/)
+    const explicit = match ? cleanPersonQuery(match[1]) : null
+    return {
+      ...EMPTY_PLAN,
+      mode: "tool_plan",
+      confidence: "high",
+      intent: "liquidacion_socio",
+      tools: [{ name: "getPartnerSettlement", args: explicit && explicit.length >= 3 ? { socioQuery: explicit } : {} }],
+      responseInstruction: "Responder socios y su liquidacion/reparto mas reciente.",
+    }
+  }
+
   const generalPersonLookup = extractGeneralPersonLookup(normalized)
   if (generalPersonLookup) {
     return {
@@ -665,7 +678,7 @@ function buildDeepSeekPlannerBody(text: string, state: TelegramSessionState, fal
         content: [
           "Eres el planner conversacional del bot Cajero del ERP de Mentes Brillantes. Piensa y razona el intent REAL detras del lenguaje natural; el usuario escribe como le sale. Devuelves SOLO JSON estricto.",
           "El bot es 100% solo lectura. No puede crear, editar, borrar, registrar pagos, anular, aplicar saldo ni ejecutar SQL. Pero SI puede consultar y razonar sobre todo el ERP.",
-          "Puedes resolver cualquier consulta del ERP combinando tools: estado/deuda/pagos/saldo a favor de una persona, sesiones coach, compras y conceptos, donaciones de una persona (getPersonDonations), ficha completa, cartera pendiente global y mayores deudores, resumen de periodo (ingresos/egresos/utilidad), donaciones totales por rango (getDonationsSummary), egresos, ventas externas, alertas, conteos como asistentes activos o cuentas pendientes (getCounts), periodos abiertos/cerrados (getPeriods) y busqueda global. Elige solo tools del catalogo entregado. No inventes tools. Maximo 5 tools.",
+          "Puedes resolver cualquier consulta del ERP combinando tools: estado/deuda/pagos/saldo a favor de una persona, sesiones coach, compras y conceptos, donaciones de una persona (getPersonDonations), ficha completa, cartera pendiente global y mayores deudores, resumen de periodo (ingresos/egresos/utilidad), donaciones totales por rango (getDonationsSummary), egresos, ventas externas, alertas, conteos como asistentes activos o cuentas pendientes (getCounts), periodos abiertos/cerrados (getPeriods), socios y su reparto/liquidacion mas reciente (getPartnerSettlement) y busqueda global. Elige solo tools del catalogo entregado. No inventes tools. Maximo 5 tools.",
           "USA SIEMPRE EL CONTEXTO (memory.lastAsistente, lastStructuredResult, workspace): si el usuario no nombra a nadie pero hay una persona activa y la frase es un seguimiento (p. ej. 'muestrame sus sesiones', 'y cuanto debe', 'las fechas', 'sus pagos', 'que mas sabes'), REUTILIZA esa persona activa (entities con role contextual y tools con su asistenteId) en vez de pedir el nombre.",
           "Nunca tomes verbos ni muletillas como nombre de persona (muestrame, dame, lista, ver, busca, ultimas, fechas, numeros, su, eso, esa). Si no hay nombre real ni persona activa, usa clarify pidiendo el nombre o codigo.",
           "Si hay una persona y el usuario dice busca, consulta, revisa, ver, todo o ficha, usa getPersonFullProfile y NO preguntes que quiere ver.",
