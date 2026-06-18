@@ -73,3 +73,24 @@ Se audita como minimo:
 - crear, editar, anular y eliminar venta externa
 - crear adelanto
 - cerrar liquidacion
+- editar la fecha fin de un periodo abierto
+
+## Definicion operativa de ingresos (implementacion vigente)
+El dashboard, el preview de liquidacion (TS) y `fn_cerrar_liquidacion` (SQL) calculan los ingresos del periodo de forma consistente como:
+
+`ingresos_operativos = abonos validos (pago_directo) + ingresos reales de saldo a favor + donaciones validas + ventas externas validas`
+
+- Abonos validos: pagos no anulados cuyo `origen_fondos`/`metodo_pago` no es `saldo_a_favor`.
+- Ingresos reales de saldo a favor: movimientos `tipo='ingreso'` no anulados, excluyendo los ajustes internos del sistema (ver `PATRONES_NOTAS_AJUSTE_NO_INGRESO_SALDO_A_FAVOR` en `src/lib/utils/contable.ts`). Representan dinero realmente recibido (anticipos o sobrepagos).
+- La APLICACION de saldo a favor a una cuenta NO es ingreso (regla 2): el pago espejo `origen_fondos='saldo_a_favor'` se excluye de los abonos.
+
+## Saldo a favor: disponible vs ingreso real
+Son dos conceptos distintos y no deben mezclarse:
+- Saldo disponible (lo que el asistente puede aplicar) = balance de partida doble `SUM(ingresos) - SUM(aplicaciones)`, SIN filtrar anulados. Una reversion se registra como una aplicacion compensatoria (asiento de reverso), por lo que el balance neto ya queda correcto; filtrar `[ANULADO]` aqui haria doble conteo. Helpers: `calcularSaldoFavorDisponible` / `calcularSaldoFavorDisponibleRaw`.
+- Ingreso real (lo que cuenta como ingreso del periodo) = `esIngresoRealSaldoAFavor` (excluye anulados y ajustes internos).
+
+## Estado de cuenta: fuente de verdad
+El estado (`pendiente`/`parcial`/`pagado`) de `cuentas_por_cobrar` lo recalcula el trigger DB `trg_estado_cuenta` (`actualizar_estado_cuenta`) en cada cambio de `pagos_abonos`: suma los pagos NO anulados (incluido saldo a favor) y aplica pagado/parcial/pendiente. El recalculo en codigo (`calcularEstadoCuentaDesdePagos`) espeja exactamente esa regla; ante cualquier diferencia, prevalece el trigger.
+
+## Zona horaria de fechas
+Los valores por defecto de fecha que el servidor escribe directamente (abono, cuenta, donacion, venta externa) usan la zona local de Colombia (`America/Bogota`, ver `src/lib/utils/fechas.ts`), para no registrar movimientos nocturnos con la fecha del dia siguiente (el servidor corre en UTC). La capa SQL (RPC con `CURRENT_DATE` y los rangos de `fn_cerrar_liquidacion`) usa UTC de forma uniforme; alinear toda la base de datos a la zona local es un cambio mayor pendiente.

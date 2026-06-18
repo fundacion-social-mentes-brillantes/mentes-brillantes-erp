@@ -193,3 +193,32 @@ describe('saldo a favor disponible (balance partida doble)', () => {
     expect(calcularSaldoFavorDisponible([{ tipo: 'ingreso', monto: 9999.98 }])).toBe(10000)
   })
 })
+
+// El estado de cuenta tiene una sola fuente de verdad: el trigger DB
+// trg_estado_cuenta (actualizar_estado_cuenta), que recalcula el estado en cada
+// cambio de pagos_abonos sumando los pagos NO anulados (incluido saldo a favor)
+// y aplica pagado/parcial/pendiente. calcularEstadoCuentaDesdePagos debe espejar
+// exactamente esa regla; este bloque fija esa alineacion.
+describe('estado de cuenta espeja el trigger trg_estado_cuenta', () => {
+  const pagos: PagoRecord[] = [
+    { monto: 400, metodo_pago: 'efectivo' },
+    { monto: 200, metodo_pago: 'saldo_a_favor', origen_fondos: 'saldo_a_favor' },
+    { monto: 1000, estado: 'anulado' },
+    { monto: 1000, notas: '[ANULADO]' },
+  ]
+
+  it('suma pagos no anulados (incluido saldo a favor) y excluye anulados', () => {
+    // abonado valido = 400 + 200 = 600
+    expect(calcularEstadoCuentaDesdePagos(1000, pagos)).toBe('parcial')
+    expect(calcularEstadoCuentaDesdePagos(600, pagos)).toBe('pagado')
+  })
+
+  it('queda pendiente cuando todos los pagos estan anulados', () => {
+    expect(
+      calcularEstadoCuentaDesdePagos(1000, [
+        { monto: 500, estado: 'anulado' },
+        { monto: 500, notas: '[ANULADO]' },
+      ])
+    ).toBe('pendiente')
+  })
+})
