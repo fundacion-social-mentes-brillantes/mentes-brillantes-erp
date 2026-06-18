@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import {
   Bot,
   Calculator,
+  HeartHandshake,
   History,
   LayoutDashboard,
   LogOut,
@@ -32,6 +33,7 @@ const adminNav = [
   { icon: History, label: "Movimientos", href: "/movimientos" },
   { icon: Users, label: "Asistentes", href: "/asistentes" },
   { icon: Receipt, label: "Cuentas por Cobrar", href: "/cuentas" },
+  { icon: HeartHandshake, label: "Sesiones Coach", href: "/sesiones-coach" },
   { icon: ShoppingBag, label: "Ventas Externas", href: "/ventas-externas" },
   { icon: TrendingDown, label: "Egresos", href: "/egresos" },
   { icon: Wallet, label: "Socios & Adelantos", href: "/socios" },
@@ -48,6 +50,7 @@ const cajaNav = [
   { icon: History, label: "Movimientos", href: "/movimientos" },
   { icon: Users, label: "Asistentes", href: "/asistentes" },
   { icon: Receipt, label: "Cuentas por Cobrar", href: "/cuentas" },
+  { icon: HeartHandshake, label: "Sesiones Coach", href: "/sesiones-coach" },
   { icon: ShoppingBag, label: "Ventas Externas", href: "/ventas-externas" },
   { icon: TrendingDown, label: "Egresos", href: "/egresos" },
 ];

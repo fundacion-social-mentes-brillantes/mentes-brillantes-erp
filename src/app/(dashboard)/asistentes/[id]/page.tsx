@@ -21,6 +21,7 @@ import { CoachSessionsPdf } from "@/components/coach/CoachSessionsPdf"
 import { CoachSessionActions } from "@/components/coach/CoachSessionActions"
 import { requireRoles } from "@/lib/utils/authz"
 import { estadoPorActividad } from "@/lib/utils/asistentes"
+import { resumenCoach } from "@/lib/utils/coach"
 
 const cardContainer =
   "rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] shadow-sm overflow-hidden"
@@ -76,10 +77,9 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
     .eq("asistente_id", id)
     .order("fecha", { ascending: false })
 
-  const sesionesCompradas =
-    paquetesCoach?.reduce((acc: number, p: any) => acc + (toSafeNumber(p.sesiones_compradas) || 0), 0) || 0
-  const sesionesRealizadas = (sesionesCoach || []).length
-  const sesionesRestantes = Math.max(0, sesionesCompradas - sesionesRealizadas)
+  // Misma regla de conteo que /sesiones-coach (helper compartido resumenCoach).
+  const { compradas: sesionesCompradas, realizadas: sesionesRealizadas, restantes: sesionesRestantes } =
+    resumenCoach(paquetesCoach || [])
   const sesionesLista = (sesionesCoach || []).map((s: any) => ({
     id: s.id,
     fecha: s.fecha,

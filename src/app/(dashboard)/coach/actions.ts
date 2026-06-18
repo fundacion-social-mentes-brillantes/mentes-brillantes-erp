@@ -2,6 +2,8 @@
 
 import { revalidatePath } from 'next/cache'
 import { requireAdmin, requireRoles } from '@/lib/utils/authz'
+import { fechaHoyBogota } from '@/lib/utils/fechas'
+import { paqueteDestino, resumenCoach } from '@/lib/utils/coach'
 
 export type CoachActionState = { error?: string; success?: boolean } | null
 
@@ -14,7 +16,7 @@ export async function registrarSesion(prev: CoachActionState, formData: FormData
   }
 
   const paquete_id = formData.get('paquete_id') as string
-  const fecha = (formData.get('fecha') as string) || new Date().toISOString().split('T')[0]
+  const fecha = (formData.get('fecha') as string) || fechaHoyBogota()
   const notas = (formData.get('notas') as string) || null
 
   if (!paquete_id) return { error: 'Paquete requerido' }
@@ -52,6 +54,7 @@ export async function registrarSesion(prev: CoachActionState, formData: FormData
 
   revalidatePath(`/cuentas/${paquete.cuenta_id}`)
   revalidatePath(`/asistentes/${paquete.asistente_id}`)
+  revalidatePath('/sesiones-coach')
   return { success: true }
 }
 
@@ -64,7 +67,7 @@ export async function editarSesion(prev: CoachActionState, formData: FormData): 
   }
 
   const sesion_id = formData.get('sesion_id') as string
-  const fecha = (formData.get('fecha') as string) || new Date().toISOString().split('T')[0]
+  const fecha = (formData.get('fecha') as string) || fechaHoyBogota()
   const notas = (formData.get('notas') as string) || null
 
   if (!sesion_id) return { error: 'Sesión requerida' }
@@ -88,6 +91,7 @@ export async function editarSesion(prev: CoachActionState, formData: FormData): 
   const asistente_id = sesion.asistente_id
   if (cuenta_id) revalidatePath(`/cuentas/${cuenta_id}`)
   if (asistente_id) revalidatePath(`/asistentes/${asistente_id}`)
+  revalidatePath('/sesiones-coach')
   return { success: true }
 }
 
@@ -117,6 +121,7 @@ export async function eliminarSesion(prev: CoachActionState, formData: FormData)
   const asistente_id = sesion.asistente_id
   if (cuenta_id) revalidatePath(`/cuentas/${cuenta_id}`)
   if (asistente_id) revalidatePath(`/asistentes/${asistente_id}`)
+  revalidatePath('/sesiones-coach')
   return { success: true }
 }
 
@@ -131,14 +136,71 @@ export async function getCoachSummary(asistente_id: string) {
 
   if (!paquetes) return null
 
-  const compradas = paquetes.reduce((acc, p) => acc + (p.sesiones_compradas || 0), 0)
-  const realizadas = paquetes.reduce((acc, p) => acc + (p.coach_sesiones?.length || 0), 0)
+  const { compradas, realizadas, restantes } = resumenCoach(paquetes as any)
 
   return {
     paquetes,
     compradas,
     realizadas,
-    restantes: Math.max(0, compradas - realizadas),
+    restantes,
     totalHistorico: realizadas,
   }
+}
+
+// Registra una sesion coach a nivel de asistente: elige automaticamente el
+// paquete mas antiguo con cupo disponible (sin sobre-llenar ni usar agotados) y
+// usa fecha local de Colombia por defecto. Reutilizada por la pagina
+// /sesiones-coach; refleja el cambio en el perfil del asistente y la cuenta.
+export async function registrarSesionCoachAsistente(
+  asistenteId: string,
+  fecha?: string | null,
+  notas?: string | null
+): Promise<CoachActionState> {
+  let supabase
+  try {
+    ({ supabase } = await requireRoles(['admin', 'caja']))
+  } catch (e: any) {
+    return { error: e?.message || 'Acceso denegado' }
+  }
+
+  if (!asistenteId) return { error: 'Asistente requerido' }
+
+  const fechaSesion = typeof fecha === 'string' && fecha.trim() ? fecha.trim() : fechaHoyBogota()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaSesion)) {
+    return { error: 'La fecha no tiene un formato valido.' }
+  }
+
+  const { data: paquetes, error: paquetesError } = await supabase
+    .from('coach_paquetes')
+    .select('id, cuenta_id, asistente_id, sesiones_compradas, creado_en, coach_sesiones (id)')
+    .eq('asistente_id', asistenteId)
+
+  if (paquetesError) return { error: 'No se pudieron consultar los paquetes coach del asistente.' }
+  if (!paquetes || paquetes.length === 0) return { error: 'El asistente no tiene un paquete coach.' }
+
+  const destino = paqueteDestino(paquetes as any)
+  if (!destino) return { error: 'No quedan sesiones disponibles para este asistente.' }
+
+  const { error } = await supabase.from('coach_sesiones').insert([
+    {
+      paquete_id: destino.id,
+      asistente_id: asistenteId,
+      fecha: fechaSesion,
+      notas: typeof notas === 'string' && notas.trim() ? notas.trim() : null,
+    },
+  ])
+
+  if (error) return { error: error.message }
+
+  // Autocompleta el inicio de proceso solo si aun no estaba definido (primera sesion).
+  await supabase
+    .from('asistentes')
+    .update({ fecha_inicio_proceso: fechaSesion })
+    .eq('id', asistenteId)
+    .is('fecha_inicio_proceso', null)
+
+  revalidatePath('/sesiones-coach')
+  revalidatePath(`/asistentes/${asistenteId}`)
+  if (destino.cuenta_id) revalidatePath(`/cuentas/${destino.cuenta_id}`)
+  return { success: true }
 }
