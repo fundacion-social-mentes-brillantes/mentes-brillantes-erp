@@ -11,6 +11,37 @@ export const dynamic = "force-dynamic"
 
 const present = (v?: string | null) => Boolean(v && v.trim())
 
+// Prueba en vivo el endpoint de DeepSeek (opcional, con ?ping=1). Reporta el
+// estado HTTP y el mensaje de error del proveedor (p. ej. "Model Not Exist",
+// "Insufficient Balance", "Authentication Fails") SIN exponer la clave.
+async function pingDeepSeek(apiKey?: string, baseUrl?: string, model?: string) {
+  if (!present(apiKey) || !present(baseUrl) || !present(model)) {
+    return { configurado: false as const }
+  }
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 12000)
+    const res = await fetch(`${baseUrl!.replace(/\/+$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model, messages: [{ role: "user", content: "ping" }], max_tokens: 1 }),
+      signal: controller.signal,
+    })
+    clearTimeout(timer)
+    if (res.ok) return { configurado: true as const, ok: true as const, status: res.status, modelo: model }
+    const texto = await res.text().catch(() => "")
+    return {
+      configurado: true as const,
+      ok: false as const,
+      status: res.status,
+      modelo: model,
+      error: texto.slice(0, 300),
+    }
+  } catch (error: any) {
+    return { configurado: true as const, ok: false as const, error: error?.name === "AbortError" ? "timeout" : "fallo de red" }
+  }
+}
+
 async function telegramWebhookInfo(token?: string) {
   if (!present(token)) return { token_configurado: false as const }
   try {
@@ -36,7 +67,7 @@ async function telegramWebhookInfo(token?: string) {
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     await requireRoles(["admin"])
   } catch (error) {
@@ -45,6 +76,7 @@ export async function GET() {
   }
 
   const env = process.env
+  const hacerPing = new URL(request.url).searchParams.get("ping") === "1"
 
   const botWeb = {
     DEEPSEEK_API_KEY: present(env.DEEPSEEK_API_KEY),
@@ -89,6 +121,14 @@ export async function GET() {
 
   const telegram_webhook = await telegramWebhookInfo(env.TELEGRAM_BOT_TOKEN)
 
+  const sinPing = { nota: "Agrega ?ping=1 a la URL para probar DeepSeek en vivo." }
+  const deepseek_test = {
+    web: hacerPing ? await pingDeepSeek(env.DEEPSEEK_API_KEY, env.DEEPSEEK_BASE_URL, env.DEEPSEEK_MODEL) : sinPing,
+    telegram: hacerPing
+      ? await pingDeepSeek(env.DEEPSEEK_TELEGRAM_API_KEY, env.DEEPSEEK_TELEGRAM_BASE_URL, env.DEEPSEEK_TELEGRAM_MODEL)
+      : sinPing,
+  }
+
   const variables_faltantes = Object.entries({
     ...botWeb,
     ...botTelegram,
@@ -116,6 +156,7 @@ export async function GET() {
     },
     infraestructura,
     telegram_bot_sessions,
+    deepseek_test,
     variables_faltantes,
   })
 }
