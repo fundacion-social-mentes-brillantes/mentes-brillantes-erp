@@ -6,6 +6,7 @@ import { MonthSelector } from "./MonthSelector";
 import { BalanceChart } from "./BalanceChart";
 import { PdfReportButton } from "./PdfReportButton";
 import { filtrarIngresosOperativos, filtrarIngresosRealesSaldoAFavor, esAnuladoCompleto, filtrarPagosValidosCuentas, sumarMontos } from "@/lib/utils/contable";
+import { construirSerieDiaria } from "@/lib/utils/dashboard";
 
 export async function Dashboard({ month }: { month?: string }) {
   const supabase = await createClient();
@@ -59,10 +60,11 @@ export async function Dashboard({ month }: { month?: string }) {
   // Donaciones del Mes
   const { data: rawDonaciones } = await supabase
     .from('donaciones_asistentes')
-    .select('monto, estado, notas')
+    .select('monto, estado, notas, fecha')
     .gte('fecha', firstDayOfMonth)
     .lte('fecha', lastDayOfMonth);
-  const donacionesMes = Math.round((rawDonaciones ?? []).filter((item) => !esAnuladoCompleto(item)).reduce((acc, d) => acc + Number(d.monto), 0));
+  const donacionesData = (rawDonaciones ?? []).filter((item) => !esAnuladoCompleto(item));
+  const donacionesMes = Math.round(donacionesData.reduce((acc, d) => acc + Number(d.monto), 0));
 
   const { data: rawVentasExternas } = await supabase
     .from('ventas_externas')
@@ -86,56 +88,26 @@ export async function Dashboard({ month }: { month?: string }) {
   const ingresosTotales = Math.round(ingresosMes + donacionesMes + ventasExternasMes);
   const utilidadMes = Math.round(ingresosTotales - egresosMes);
 
-  // Preparar datos para la grÃ¡fica de balance acumulado
-  const dailyData: Record<string, { ingresos: number, egresos: number }> = {};
+  // Preparar datos para la grÃ¡fica de balance acumulado (incluye donaciones,
+  // para que el grafico cuadre con el KPI de ingresos totales).
   const daysInMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
   const isCurrentMonth = now.getFullYear() === targetYear && now.getMonth() === targetMonth;
   const lastDayToProcess = isCurrentMonth ? now.getDate() : daysInMonth;
-  
+
+  const diasGrafica: string[] = [];
   for (let i = 1; i <= lastDayToProcess; i++) {
-    const dateStr = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-    dailyData[dateStr] = { ingresos: 0, egresos: 0 };
+    diasGrafica.push(`${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`);
   }
 
-  ingresosData?.forEach(item => {
-    const date = item.fecha_pago;
-    if (dailyData[date]) {
-      dailyData[date].ingresos += Number(item.monto);
-    }
-  });
+  const ingresosDiarios = [
+    ...(ingresosData ?? []).map((item: any) => ({ fecha: item.fecha_pago, monto: item.monto })),
+    ...saldoFavorIngresosMes.map((item: any) => ({ fecha: item.fecha, monto: item.monto })),
+    ...ventasExternasData.map((item: any) => ({ fecha: item.fecha, monto: item.monto })),
+    ...donacionesData.map((item: any) => ({ fecha: item.fecha, monto: item.monto })),
+  ];
+  const egresosDiarios = egresosData.map((item: any) => ({ fecha: item.fecha, monto: item.monto }));
 
-  saldoFavorIngresosMes?.forEach((item: any) => {
-    const date = item.fecha;
-    if (dailyData[date]) {
-      dailyData[date].ingresos += Number(item.monto);
-    }
-  });
-
-  ventasExternasData?.forEach((item) => {
-    const date = item.fecha;
-    if (dailyData[date]) {
-      dailyData[date].ingresos += Number(item.monto);
-    }
-  });
-
-  egresosData?.forEach(item => {
-    const date = item.fecha;
-    if (dailyData[date]) {
-      dailyData[date].egresos += Number(item.monto);
-    }
-  });
-
-  let acumulado = 0;
-  const chartData = Object.keys(dailyData).sort().map(date => {
-    const dayData = dailyData[date];
-    acumulado += (dayData.ingresos - dayData.egresos);
-    return {
-      date: date.split('-')[2], // Just the day
-      ingresos: dayData.ingresos,
-      egresos: dayData.egresos,
-      balance: acumulado
-    };
-  });
+  const chartData = construirSerieDiaria(diasGrafica, ingresosDiarios, egresosDiarios);
 
   // Facturado y Pendiente del Mes
   const { data: cuentasPeriodoData } = await supabase
