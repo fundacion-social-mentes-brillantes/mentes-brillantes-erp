@@ -5,7 +5,11 @@ import type { AiPlannerPlan, AiPlannerTool } from "./ai-planner"
 import { isAllowedToolName, TOOL_LIMIT, type AllowedToolName } from "./tool-catalog"
 import {
   getBusinessAlerts,
+  getCounts,
+  getDonationsSummary,
   getOpenReceivablesSummary,
+  getPeriods,
+  getPersonDonations,
   getPersonFinancialStatus,
   getPersonLastPayment,
   getPersonPayments,
@@ -122,6 +126,7 @@ async function executeTool(supabase: SupabaseReader, tool: AiPlannerTool): Promi
     "getPersonPurchasesOrConcepts",
     "getPersonFullProfile",
     "getCoachSessions",
+    "getPersonDonations",
   ].includes(tool.name)
 
   if (personTool) {
@@ -150,6 +155,7 @@ async function executeTool(supabase: SupabaseReader, tool: AiPlannerTool): Promi
     if (tool.name === "getPersonLastPayment") return { requestedTool: tool.name, status: "ok", person, result: await getPersonLastPayment(supabase, person.id) }
     if (tool.name === "getPersonPurchasesOrConcepts") return { requestedTool: tool.name, status: "ok", person, result: await getPersonPurchasesOrConcepts(supabase, person.id, numberArg(args, "limit", 12)) }
     if (tool.name === "getPersonFullProfile") return { requestedTool: tool.name, status: "ok", person, result: await getPersonFullProfile(supabase, person) }
+    if (tool.name === "getPersonDonations") return { requestedTool: tool.name, status: "ok", person, result: await getPersonDonations(supabase, person.id) }
     return { requestedTool: tool.name, status: "ok", person, result: await getCoachSessions(supabase, person.id) }
   }
 
@@ -184,6 +190,19 @@ async function executeTool(supabase: SupabaseReader, tool: AiPlannerTool): Promi
   if (tool.name === "getExternalSales") {
     const range = dateRangeFromArgs(args, "este mes")
     const result = await getExternalSales(supabase, range.from, range.to)
+    return { requestedTool: tool.name, status: result.status, result }
+  }
+  if (tool.name === "getDonationsSummary") {
+    const range = dateRangeFromArgs(args, "este mes")
+    const result = await getDonationsSummary(supabase, range.from, range.to)
+    return { requestedTool: tool.name, status: result.status, result }
+  }
+  if (tool.name === "getCounts") {
+    const result = await getCounts(supabase)
+    return { requestedTool: tool.name, status: result.status, result }
+  }
+  if (tool.name === "getPeriods") {
+    const result = await getPeriods(supabase, stringArg(args, "estado"))
     return { requestedTool: tool.name, status: result.status, result }
   }
 

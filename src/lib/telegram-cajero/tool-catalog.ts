@@ -92,6 +92,34 @@ export const TELEGRAM_CAJERO_TOOL_CATALOG = [
     returns: "Total y lista de ventas externas.",
     safety: "read_only",
   },
+  {
+    name: "getPersonDonations",
+    description: "Consulta las donaciones registradas por una persona (total y detalle).",
+    allowedArgs: ["asistenteId", "personQuery"],
+    returns: "Total donado y lista de donaciones de la persona.",
+    safety: "read_only",
+  },
+  {
+    name: "getDonationsSummary",
+    description: "Consulta el total de donaciones del centro por rango de fechas.",
+    allowedArgs: ["fechaInicio", "fechaFin", "range"],
+    returns: "Total y detalle de donaciones del periodo.",
+    safety: "read_only",
+  },
+  {
+    name: "getCounts",
+    description: "Consulta conteos: asistentes activos, asistentes totales y cuentas por cobrar pendientes.",
+    allowedArgs: [],
+    returns: "Numeros de asistentes activos/total y cuentas pendientes.",
+    safety: "read_only",
+  },
+  {
+    name: "getPeriods",
+    description: "Consulta los periodos contables y cual esta abierto o cerrado.",
+    allowedArgs: ["estado"],
+    returns: "Lista de periodos con su estado y fechas.",
+    safety: "read_only",
+  },
 ] as const
 
 export type AllowedToolName = (typeof TELEGRAM_CAJERO_TOOL_CATALOG)[number]["name"]

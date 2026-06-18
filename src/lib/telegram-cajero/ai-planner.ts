@@ -489,6 +489,55 @@ export function fallbackPlan(text: string, state: TelegramSessionState = {}): Ai
     }
   }
 
+  if (/\b(donacion|donaciones|donado|dono)\b/.test(normalized)) {
+    const match = normalized.match(/(?:donaciones de|donacion de|ha donado|cuanto dono|dono|donado)\s+(.+)/)
+    const explicit = match ? cleanPersonQuery(match[1]) : null
+    if (explicit && explicit.length >= 3) {
+      return {
+        ...EMPTY_PLAN,
+        mode: "tool_plan",
+        confidence: "high",
+        intent: "donaciones_persona",
+        entities: [{ type: "person", query: explicit, role: "primary" }],
+        tools: [{ name: "getPersonDonations", args: { personQuery: explicit } }],
+        responseInstruction: "Responder las donaciones de la persona con datos reales.",
+      }
+    }
+    if (lastAsistente && /\b(su|sus)\b/.test(normalized)) {
+      return planForLastAssistant("getPersonDonations", lastAsistente, "donaciones_persona")
+    }
+    return {
+      ...EMPTY_PLAN,
+      mode: "tool_plan",
+      confidence: "high",
+      intent: "donaciones_resumen",
+      tools: [planForRangeTool("getDonationsSummary", normalized, "este mes")],
+      responseInstruction: "Resume el total de donaciones del rango.",
+    }
+  }
+
+  if (/\b(cuantos|cuantas|numero de|cantidad de)\b/.test(normalized) && /\b(asistentes|personas|activos|inscritos|alumnos|cuentas)\b/.test(normalized)) {
+    return {
+      ...EMPTY_PLAN,
+      mode: "tool_plan",
+      confidence: "high",
+      intent: "conteos",
+      tools: [{ name: "getCounts", args: {} }],
+      responseInstruction: "Responder conteos del ERP (asistentes activos/total, cuentas pendientes).",
+    }
+  }
+
+  if (/\b(que periodo|cual periodo|periodo abierto|periodo cerrado|periodo actual|periodo vigente|los periodos|cuales periodos|periodos)\b/.test(normalized) && !/\bresumen\b/.test(normalized)) {
+    return {
+      ...EMPTY_PLAN,
+      mode: "tool_plan",
+      confidence: "high",
+      intent: "periodos",
+      tools: [{ name: "getPeriods", args: {} }],
+      responseInstruction: "Responder los periodos contables y cual esta abierto.",
+    }
+  }
+
   const generalPersonLookup = extractGeneralPersonLookup(normalized)
   if (generalPersonLookup) {
     return {
@@ -616,7 +665,7 @@ function buildDeepSeekPlannerBody(text: string, state: TelegramSessionState, fal
         content: [
           "Eres el planner conversacional del bot Cajero del ERP de Mentes Brillantes. Piensa y razona el intent REAL detras del lenguaje natural; el usuario escribe como le sale. Devuelves SOLO JSON estricto.",
           "El bot es 100% solo lectura. No puede crear, editar, borrar, registrar pagos, anular, aplicar saldo ni ejecutar SQL. Pero SI puede consultar y razonar sobre todo el ERP.",
-          "Puedes resolver cualquier consulta del ERP combinando tools: estado/deuda/pagos/saldo a favor de una persona, sesiones coach, compras y conceptos, ficha completa, cartera pendiente global y mayores deudores, resumen de periodo (ingresos/egresos/utilidad), egresos, ventas externas, alertas y busqueda global. Elige solo tools del catalogo entregado. No inventes tools. Maximo 5 tools.",
+          "Puedes resolver cualquier consulta del ERP combinando tools: estado/deuda/pagos/saldo a favor de una persona, sesiones coach, compras y conceptos, donaciones de una persona (getPersonDonations), ficha completa, cartera pendiente global y mayores deudores, resumen de periodo (ingresos/egresos/utilidad), donaciones totales por rango (getDonationsSummary), egresos, ventas externas, alertas, conteos como asistentes activos o cuentas pendientes (getCounts), periodos abiertos/cerrados (getPeriods) y busqueda global. Elige solo tools del catalogo entregado. No inventes tools. Maximo 5 tools.",
           "USA SIEMPRE EL CONTEXTO (memory.lastAsistente, lastStructuredResult, workspace): si el usuario no nombra a nadie pero hay una persona activa y la frase es un seguimiento (p. ej. 'muestrame sus sesiones', 'y cuanto debe', 'las fechas', 'sus pagos', 'que mas sabes'), REUTILIZA esa persona activa (entities con role contextual y tools con su asistenteId) en vez de pedir el nombre.",
           "Nunca tomes verbos ni muletillas como nombre de persona (muestrame, dame, lista, ver, busca, ultimas, fechas, numeros, su, eso, esa). Si no hay nombre real ni persona activa, usa clarify pidiendo el nombre o codigo.",
           "Si hay una persona y el usuario dice busca, consulta, revisa, ver, todo o ficha, usa getPersonFullProfile y NO preguntes que quiere ver.",

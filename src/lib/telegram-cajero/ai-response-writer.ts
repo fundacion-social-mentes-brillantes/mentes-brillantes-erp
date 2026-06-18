@@ -140,6 +140,41 @@ function describeAlerts(item: ToolExecutionItem) {
   return ["Esto conviene revisar:", ...alerts.slice(0, 5).map((alert) => `- ${alert.type}: ${alert.evidence?.[0] || "sin evidencia"}`)].join("\n")
 }
 
+function describeDonations(item: ToolExecutionItem) {
+  const data: any = item.result?.data || {}
+  const name = item.person?.nombre || "la persona"
+  const donaciones = Array.isArray(data.donaciones) ? data.donaciones : []
+  if (!donaciones.length) return `No veo donaciones registradas de ${name}.`
+  return [
+    `Donaciones de ${name}: ${formatCop(data.total)} en ${data.cantidad || donaciones.length} registro(s).`,
+    ...donaciones.slice(0, 8).map((d: any) => `- ${d.fecha}: ${formatCop(d.monto)} ${d.metodo_pago || ""}`.trim()),
+  ].join("\n")
+}
+
+function describeDonationsSummary(item: ToolExecutionItem) {
+  const data: any = item.result?.data || {}
+  return `Donaciones del periodo: ${formatCop(data.total)} en ${data.cantidad || 0} donacion(es).`
+}
+
+function describeCounts(item: ToolExecutionItem) {
+  const data: any = item.result?.data || {}
+  const parts: string[] = []
+  if (data.asistentes_activos != null) parts.push(`Asistentes activos: ${data.asistentes_activos}`)
+  if (data.asistentes_total != null) parts.push(`Asistentes en total: ${data.asistentes_total}`)
+  if (data.cuentas_pendientes != null) parts.push(`Cuentas por cobrar pendientes: ${data.cuentas_pendientes}`)
+  return parts.length ? parts.join("\n") : "No pude calcular los conteos."
+}
+
+function describePeriods(item: ToolExecutionItem) {
+  const data: any = item.result?.data || {}
+  const periodos = Array.isArray(data.periodos) ? data.periodos : []
+  if (!periodos.length) return "No veo periodos registrados."
+  return [
+    "Periodos:",
+    ...periodos.slice(0, 8).map((p: any) => `- ${p.nombre} (${p.estado}) ${p.fecha_inicio || ""}${p.fecha_fin ? ` a ${p.fecha_fin}` : ""}`.trim()),
+  ].join("\n")
+}
+
 function describeFullProfile(item: ToolExecutionItem) {
   const data: any = item.result?.data || {}
   return [
@@ -173,6 +208,10 @@ export function buildDeterministicResponse(plan: AiPlannerPlan, bundle: ToolExec
     if (item.requestedTool === "getCoachSessions") return describeCoach(item)
     if (item.requestedTool === "getPersonPurchasesOrConcepts") return describePurchases(item)
     if (item.requestedTool === "getPersonFullProfile") return describeFullProfile(item)
+    if (item.requestedTool === "getPersonDonations") return describeDonations(item)
+    if (item.requestedTool === "getDonationsSummary") return describeDonationsSummary(item)
+    if (item.requestedTool === "getCounts") return describeCounts(item)
+    if (item.requestedTool === "getPeriods") return describePeriods(item)
     if (item.requestedTool === "getSummary") return describeSummary(item)
     if (item.requestedTool === "getBusinessAlerts") return describeAlerts(item)
     if (item.requestedTool === "getOpenReceivablesSummary") {

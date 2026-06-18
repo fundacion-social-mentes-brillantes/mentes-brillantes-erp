@@ -1,8 +1,29 @@
 import { describe, expect, it } from "vitest"
 import { mapPersonPurchases } from "../tools/purchases"
 import { summarizeOpenReceivables } from "../tools/open-receivables"
+import { getPersonDonations } from "../tools/donations"
+
+function donationsSupabase(rows: any[]) {
+  const q: any = {
+    select: () => q,
+    eq: () => q,
+    order: () => Promise.resolve({ data: rows, error: null }),
+  }
+  return { from: () => q }
+}
 
 describe("telegram cajero business tools", () => {
+  it("getPersonDonations suma donaciones validas y excluye anuladas", async () => {
+    const supabase = donationsSupabase([
+      { id: "d1", monto: 50000, fecha: "2026-05-01", estado: "activo", notas: null },
+      { id: "d2", monto: 30000, fecha: "2026-05-02", estado: "anulado", notas: null },
+      { id: "d3", monto: 20000, fecha: "2026-05-03", estado: "activo", notas: "[ANULADO] reverso" },
+    ])
+    const result = await getPersonDonations(supabase as any, "a1")
+    expect((result.data as any).total).toBe(50000)
+    expect((result.data as any).cantidad).toBe(1)
+  })
+
   it("mapPersonPurchases excluye pagos anulados", () => {
     const [purchase] = mapPersonPurchases([
       {

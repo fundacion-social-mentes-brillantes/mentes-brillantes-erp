@@ -221,11 +221,16 @@ export async function searchPerson(supabase: SupabaseReader, term: string, limit
     })
   }
 
-  if (/^\d+$/.test(normalized)) {
+  // Termino que es solo digitos y separadores (codigo o cedula, p. ej. "249" o
+  // "1.234.567" que tras normalize queda "1 234 567"): busca por codigo/cedula.
+  const digitsOnly = normalized.replace(/\D/g, "")
+  if (digitsOnly.length >= 3 && /^[\d\s]+$/.test(normalized)) {
+    const filters = [`codigo.eq.${digitsOnly}`, `cedula.eq.${digitsOnly}`]
+    if (digitsOnly.length >= 6) filters.push(`cedula.ilike.%${digitsOnly}%`)
     const { data, error } = await supabase
       .from("asistentes")
       .select("id, nombre, codigo, cedula")
-      .or(`codigo.eq.${normalized},cedula.eq.${normalized}`)
+      .or(filters.join(","))
       .limit(limit)
 
     if (error) return toolError("searchPerson", queryScope, "asistentes", error)
@@ -234,7 +239,7 @@ export async function searchPerson(supabase: SupabaseReader, term: string, limit
     return toolResult({
       toolName: "searchPerson",
       status: rows.length === 0 ? "empty" : rows.length > 1 ? "ambiguous" : "ok",
-      queryScope: { ...queryScope, normalized, strategy: "codigo_cedula" },
+      queryScope: { ...queryScope, normalized, digits: digitsOnly, strategy: "codigo_cedula" },
       sources: ["asistentes"],
       resultCount: rows.length,
       data: rows,

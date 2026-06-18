@@ -58,6 +58,20 @@ describe("telegram cajero ai planner", () => {
     expect(priority.calculation).toBe("analyze")
   })
 
+  it("rutea donaciones de una persona vs donaciones generales", () => {
+    const persona = fallbackPlan("cuanto ha donado Maria Lopez?", {})
+    expect(persona.tools[0].name).toBe("getPersonDonations")
+    expect(String(persona.tools[0].args.personQuery)).toContain("maria")
+
+    const general = fallbackPlan("cuanto hemos recibido en donaciones este mes?", {})
+    expect(general.tools[0].name).toBe("getDonationsSummary")
+  })
+
+  it("rutea conteos a getCounts y periodos a getPeriods", () => {
+    expect(fallbackPlan("cuantos asistentes activos hay?", {}).tools[0].name).toBe("getCounts")
+    expect(fallbackPlan("que periodo esta abierto?", {}).tools[0].name).toBe("getPeriods")
+  })
+
   it("planifica resumen del mes y alertas de hoy", () => {
     const summary = fallbackPlan("háblame de cómo vamos este mes", {})
     const alerts = fallbackPlan("qué está raro hoy?", {})
