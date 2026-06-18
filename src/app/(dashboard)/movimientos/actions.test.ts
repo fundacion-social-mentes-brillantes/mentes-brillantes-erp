@@ -134,7 +134,7 @@ describe('movimientos/actions', () => {
     const supabase = buildSupabase({
       donaciones_asistentes: {
         select: vi.fn(() => ({
-          eq: vi.fn(() => singleWrapper({ fecha: '2024-01-10', notas: 'ok' })),
+          eq: vi.fn(() => singleWrapper({ fecha: '2024-01-10', notas: 'ok', monto: 30000 })),
         })),
         update: vi.fn(() => ({ eq: updateEq })),
       },
@@ -152,7 +152,13 @@ describe('movimientos/actions', () => {
     expect(result?.success).toBe(true)
     expect(assertFechaEditableMock).toHaveBeenCalledTimes(2)
     expect(updateEq).toHaveBeenCalledWith('id', 'don-1')
-    expect(auditInsert).toHaveBeenCalled()
+    expect(auditInsert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        accion: 'edicion_movimiento',
+        valor_anterior: 30000,
+        valor_nuevo: 50000,
+      }),
+    ])
   })
 
   it('bloquea editar el monto de un abono desde historial general', async () => {

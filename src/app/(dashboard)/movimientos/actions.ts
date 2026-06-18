@@ -46,13 +46,13 @@ async function getMovimientoEditableMeta(supabase: any, tipoMovimiento: string, 
       return { data, error, fecha: data?.fecha_pago, tabla: 'pagos_abonos' }
     }
     case 'egreso': {
-      const { data, error } = await supabase.from('egresos').select('fecha, notas').eq('id', movimientoId).single()
+      const { data, error } = await supabase.from('egresos').select('fecha, notas, monto').eq('id', movimientoId).single()
       return { data, error, fecha: data?.fecha, tabla: 'egresos' }
     }
     case 'anticipo': {
       const { data, error } = await supabase
         .from('movimientos_saldo_favor')
-        .select('fecha, notas')
+        .select('fecha, notas, monto')
         .eq('id', movimientoId)
         .single()
       return { data, error, fecha: data?.fecha, tabla: 'movimientos_saldo_favor' }
@@ -60,7 +60,7 @@ async function getMovimientoEditableMeta(supabase: any, tipoMovimiento: string, 
     case 'donacion': {
       const { data, error } = await supabase
         .from('donaciones_asistentes')
-        .select('fecha, notas')
+        .select('fecha, notas, monto')
         .eq('id', movimientoId)
         .single()
       return { data, error, fecha: data?.fecha, tabla: 'donaciones_asistentes' }
@@ -68,7 +68,7 @@ async function getMovimientoEditableMeta(supabase: any, tipoMovimiento: string, 
     case 'venta_externa': {
       const { data, error } = await supabase
         .from('ventas_externas')
-        .select('fecha, notas')
+        .select('fecha, notas, monto')
         .eq('id', movimientoId)
         .single()
       return { data, error, fecha: data?.fecha, tabla: 'ventas_externas' }
@@ -307,7 +307,7 @@ export async function editarMovimiento(
       registro_id: movimiento_id,
       usuario_id: user.id,
       accion: 'edicion_movimiento',
-      valor_anterior: null,
+      valor_anterior: recordData?.monto != null ? toSafeNumber(recordData.monto) : null,
       valor_nuevo: toSafeNumber(updatePayload.monto),
       motivo: 'Edicion solicitada por el administrador via historial general.',
     },
