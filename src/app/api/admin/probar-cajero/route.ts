@@ -6,21 +6,11 @@ export const dynamic = "force-dynamic"
 
 // QA solo-lectura del bot cajero SIN tocar Telegram: corre el cerebro real
 // (planner V4 Pro -> tools -> redactor) y devuelve la respuesta que daria.
-// Acceso: admin autenticado (uso desde el navegador) o header
-// x-cajero-test-secret == CAJERO_TEST_SECRET / TELEGRAM_WEBHOOK_SECRET.
-
-async function authorize(request: Request) {
-  const secret = request.headers.get("x-cajero-test-secret")?.trim()
-  const expected = [process.env.CAJERO_TEST_SECRET, process.env.TELEGRAM_WEBHOOK_SECRET]
-    .map((value) => value?.trim())
-    .filter((value): value is string => Boolean(value))
-  if (secret && expected.includes(secret)) return
-  await requireRoles(["admin"])
-}
+// Solo-admin (sesion). Util para validar respuestas desde el navegador.
 
 export async function GET(request: Request) {
   try {
-    await authorize(request)
+    await requireRoles(["admin"])
   } catch (error) {
     return NextResponse.json({ error: error instanceof AuthzError ? error.message : "No autorizado" }, { status: 403 })
   }
@@ -31,7 +21,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    await authorize(request)
+    await requireRoles(["admin"])
   } catch (error) {
     return NextResponse.json({ error: error instanceof AuthzError ? error.message : "No autorizado" }, { status: 403 })
   }
