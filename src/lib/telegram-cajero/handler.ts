@@ -365,9 +365,13 @@ export function getConfig(): TelegramConfig | null {
     allowedChatId,
     allowedUserIds,
     deepseek: {
-      apiKey: process.env.DEEPSEEK_TELEGRAM_API_KEY,
-      baseUrl: process.env.DEEPSEEK_TELEGRAM_BASE_URL,
-      model: process.env.DEEPSEEK_TELEGRAM_MODEL,
+      // Usa las variables especificas del bot de Telegram si existen; si no,
+      // reutiliza la config del bot web (DEEPSEEK_*) que ya funciona. Asi hay una
+      // sola clave de IA que mantener y el bot no queda "bruto" por una clave
+      // separada invalida o ausente.
+      apiKey: process.env.DEEPSEEK_TELEGRAM_API_KEY || process.env.DEEPSEEK_API_KEY,
+      baseUrl: process.env.DEEPSEEK_TELEGRAM_BASE_URL || process.env.DEEPSEEK_BASE_URL,
+      model: process.env.DEEPSEEK_TELEGRAM_MODEL || process.env.DEEPSEEK_MODEL,
     },
   }
 }

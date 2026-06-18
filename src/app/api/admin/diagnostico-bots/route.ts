@@ -125,7 +125,11 @@ export async function GET(request: Request) {
   const deepseek_test = {
     web: hacerPing ? await pingDeepSeek(env.DEEPSEEK_API_KEY, env.DEEPSEEK_BASE_URL, env.DEEPSEEK_MODEL) : sinPing,
     telegram: hacerPing
-      ? await pingDeepSeek(env.DEEPSEEK_TELEGRAM_API_KEY, env.DEEPSEEK_TELEGRAM_BASE_URL, env.DEEPSEEK_TELEGRAM_MODEL)
+      ? await pingDeepSeek(
+          env.DEEPSEEK_TELEGRAM_API_KEY || env.DEEPSEEK_API_KEY,
+          env.DEEPSEEK_TELEGRAM_BASE_URL || env.DEEPSEEK_BASE_URL,
+          env.DEEPSEEK_TELEGRAM_MODEL || env.DEEPSEEK_MODEL
+        )
       : sinPing,
   }
 

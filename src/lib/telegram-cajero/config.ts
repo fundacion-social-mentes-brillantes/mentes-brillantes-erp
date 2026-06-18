@@ -19,9 +19,11 @@ export function getTelegramCajeroConfig(): TelegramConfig | null {
         .filter(Boolean)
     ),
     deepseek: {
-      apiKey: process.env.DEEPSEEK_TELEGRAM_API_KEY,
-      baseUrl: process.env.DEEPSEEK_TELEGRAM_BASE_URL,
-      model: process.env.DEEPSEEK_TELEGRAM_MODEL,
+      // Fallback a la config del bot web (DEEPSEEK_*) si no hay variables
+      // especificas del bot de Telegram. Mantiene una sola clave de IA.
+      apiKey: process.env.DEEPSEEK_TELEGRAM_API_KEY || process.env.DEEPSEEK_API_KEY,
+      baseUrl: process.env.DEEPSEEK_TELEGRAM_BASE_URL || process.env.DEEPSEEK_BASE_URL,
+      model: process.env.DEEPSEEK_TELEGRAM_MODEL || process.env.DEEPSEEK_MODEL,
     },
   }
 }
