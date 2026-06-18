@@ -15,8 +15,10 @@ export const dynamic = "force-dynamic"
 
 async function authorize(request: Request) {
   const secret = request.headers.get("x-cajero-test-secret")?.trim()
-  const expected = process.env.TELEGRAM_WEBHOOK_SECRET
-  if (secret && expected && secret === expected) return
+  const expected = [process.env.CAJERO_TEST_SECRET, process.env.TELEGRAM_WEBHOOK_SECRET]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value))
+  if (secret && expected.includes(secret)) return
   await requireRoles(["admin"])
 }
 
