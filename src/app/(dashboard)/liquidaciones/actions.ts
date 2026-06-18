@@ -59,9 +59,9 @@ export async function savePeriodo(prevState: ActionState, formData: FormData): P
 }
 
 export async function updatePeriodoFechaFin(periodoId: string, nuevaFechaFin: string): Promise<ActionState> {
-  let supabase
+  let supabase, user
   try {
-    ;({ supabase } = await requireAdmin())
+    ;({ supabase, user } = await requireAdmin())
   } catch (e: any) {
     return { error: e?.message || 'Acceso denegado' }
   }
@@ -111,6 +111,27 @@ export async function updatePeriodoFechaFin(periodoId: string, nuevaFechaFin: st
     }
   }
 
+  // Si se acorta el periodo, bloquear si quedarian adelantos de este periodo
+  // fuera del nuevo rango: saveAdelanto valida fecha-dentro-del-periodo al
+  // insertar, asi que dejarlos fuera desincronizaria el cierre (los adelantos
+  // se descuentan por periodo_id pero el resumen los agrega por fecha).
+  if (nuevaFechaFin < periodo.fecha_fin) {
+    const { count: adelantosFuera, error: adelantosError } = await supabase
+      .from('adelantos_socios')
+      .select('*', { count: 'exact', head: true })
+      .eq('periodo_id', periodoId)
+      .gt('fecha', nuevaFechaFin)
+
+    if (adelantosError) {
+      return { error: 'No se pudo validar los adelantos del periodo.' }
+    }
+    if ((adelantosFuera || 0) > 0) {
+      return {
+        error: `No se puede acortar el periodo a ${nuevaFechaFin}: hay ${adelantosFuera} adelanto(s) registrado(s) con fecha posterior. Mueve o elimina esos adelantos antes de reducir el periodo.`,
+      }
+    }
+  }
+
   const { error } = await supabase
     .from('periodos')
     .update({ fecha_fin: nuevaFechaFin })
@@ -122,6 +143,18 @@ export async function updatePeriodoFechaFin(periodoId: string, nuevaFechaFin: st
   if (error) {
     return { error: 'No se pudo actualizar la fecha final del periodo abierto.' }
   }
+
+  await supabase.from('auditoria_financiera').insert([
+    {
+      tabla_afectada: 'periodos',
+      registro_id: periodoId,
+      usuario_id: user?.id || '',
+      accion: 'editar_fecha_fin_periodo',
+      valor_anterior: null,
+      valor_nuevo: null,
+      motivo: `Fecha fin del periodo ${periodo.nombre}: ${periodo.fecha_fin} -> ${nuevaFechaFin}`,
+    },
+  ])
 
   revalidatePath('/liquidaciones')
   revalidatePath(`/liquidaciones/${periodoId}`)

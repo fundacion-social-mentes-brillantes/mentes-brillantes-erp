@@ -43,12 +43,16 @@ const buildPeriodoFechaFinSupabase = ({
   solapes = [],
   solapesError = null,
   updateError = null,
+  adelantosFuera = 0,
+  adelantosError = null,
 }: {
   periodo?: any
   periodoError?: any
   solapes?: any[]
   solapesError?: any
   updateError?: any
+  adelantosFuera?: number
+  adelantosError?: any
 } = {}) => {
   const periodoSingle = vi.fn().mockResolvedValue({ data: periodo, error: periodoError })
   const periodoEq = vi.fn(() => ({ single: periodoSingle }))
@@ -69,9 +73,17 @@ const buildPeriodoFechaFinSupabase = ({
     return { neq: solapesNeq }
   })
 
+  const adelantosGt = vi.fn().mockResolvedValue({ count: adelantosFuera, error: adelantosError })
+  const adelantosEq = vi.fn(() => ({ gt: adelantosGt }))
+  const adelantosSelect = vi.fn(() => ({ eq: adelantosEq }))
+
+  const auditInsert = vi.fn().mockResolvedValue({ error: null })
+
   const supabase = {
     from: vi.fn((table: string) => {
       if (table === 'periodos') return { select, update }
+      if (table === 'adelantos_socios') return { select: adelantosSelect }
+      if (table === 'auditoria_financiera') return { insert: auditInsert }
       return {}
     }),
   }
@@ -85,6 +97,9 @@ const buildPeriodoFechaFinSupabase = ({
     solapesNeq,
     solapesLte,
     solapesGte,
+    adelantosEq,
+    adelantosGt,
+    auditInsert,
   }
 }
 
@@ -265,5 +280,40 @@ describe('liquidaciones/actions', () => {
 
     expect(result).toEqual({ error: 'El rango se superpone con Julio (2026-06-25 a 2026-07-31).' })
     expect(update).not.toHaveBeenCalled()
+  })
+
+  it('updatePeriodoFechaFin bloquea acortar el periodo si hay adelantos con fecha posterior', async () => {
+    const { supabase, update, auditInsert } = buildPeriodoFechaFinSupabase({
+      periodo: { id: 'periodo-1', nombre: 'Junio', fecha_inicio: '2026-06-01', fecha_fin: '2026-06-30', estado: 'abierto' },
+      adelantosFuera: 2,
+    })
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
+
+    const result = await updatePeriodoFechaFin('periodo-1', '2026-06-15')
+
+    expect(result?.error).toMatch(/adelanto/i)
+    expect(update).not.toHaveBeenCalled()
+    expect(auditInsert).not.toHaveBeenCalled()
+  })
+
+  it('updatePeriodoFechaFin acorta y audita el cambio cuando no hay adelantos posteriores', async () => {
+    const { supabase, update, auditInsert } = buildPeriodoFechaFinSupabase({
+      periodo: { id: 'periodo-1', nombre: 'Junio', fecha_inicio: '2026-06-01', fecha_fin: '2026-06-30', estado: 'abierto' },
+      adelantosFuera: 0,
+    })
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
+
+    const result = await updatePeriodoFechaFin('periodo-1', '2026-06-15')
+
+    expect(result).toEqual({ success: true })
+    expect(update).toHaveBeenCalledWith({ fecha_fin: '2026-06-15' })
+    expect(auditInsert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        tabla_afectada: 'periodos',
+        registro_id: 'periodo-1',
+        accion: 'editar_fecha_fin_periodo',
+        motivo: expect.stringContaining('2026-06-30 -> 2026-06-15'),
+      }),
+    ])
   })
 })
