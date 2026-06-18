@@ -179,32 +179,64 @@ export async function POST(request: Request) {
           : await buildAsistenteIaContext(supabase, question)
     const nextSelectionOptions = extractSelectionOptions(safeContext)
 
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.2,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          {
-            role: "system",
-            content: `Datos internos seguros de solo lectura. Responde solo con esta informacion y no propongas acciones de escritura:\n${JSON.stringify(
-              safeContext,
-              null,
-              2
-            )}`,
-          },
-          ...messages,
-        ],
-      }),
+    const requestBody = JSON.stringify({
+      model,
+      temperature: 0.2,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        {
+          role: "system",
+          content: `Datos internos seguros de solo lectura. Responde solo con esta informacion y no propongas acciones de escritura:\n${JSON.stringify(
+            safeContext,
+            null,
+            2
+          )}`,
+        },
+        ...messages,
+      ],
     })
 
-    if (!response.ok) {
-      return NextResponse.json({ error: "No se pudo obtener respuesta del asistente IA." }, { status: 502 })
+    // Resiliencia: timeout de 30s y un reintento ante fallo de red, con mensaje
+    // de degradacion claro en vez de un error seco, para que no se perciba "roto".
+    const callDeepSeek = async () => {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 30000)
+      try {
+        return await fetch(`${baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: requestBody,
+          signal: controller.signal,
+        })
+      } finally {
+        clearTimeout(timer)
+      }
+    }
+
+    let response: Response | null = null
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        response = await callDeepSeek()
+        break
+      } catch {
+        if (attempt === 1) {
+          console.error("[asistente-ia] DeepSeek no respondio")
+          return NextResponse.json(
+            { error: "El asistente IA no está disponible en este momento. Intenta de nuevo en unos segundos." },
+            { status: 503 }
+          )
+        }
+      }
+    }
+
+    if (!response || !response.ok) {
+      return NextResponse.json(
+        { error: "No se pudo obtener respuesta del asistente IA. Intenta de nuevo en unos segundos." },
+        { status: 502 }
+      )
     }
 
     const data = await response.json()

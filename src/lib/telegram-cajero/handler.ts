@@ -340,7 +340,7 @@ const AYUDA = [
   "Esta fase no registra pagos, no crea cuentas y no modifica datos financieros.",
 ].join("\n")
 
-function getConfig(): TelegramConfig | null {
+export function getConfig(): TelegramConfig | null {
   const botToken = process.env.TELEGRAM_BOT_TOKEN
   const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET
   const allowedChatId = process.env.TELEGRAM_ALLOWED_CHAT_ID?.trim() || undefined
@@ -351,7 +351,13 @@ function getConfig(): TelegramConfig | null {
       .filter(Boolean)
   )
 
-  if (!botToken || !webhookSecret || !allowedChatId || allowedUserIds.size === 0) return null
+  // Token y secreto son imprescindibles para OPERAR el webhook (validar el
+  // secreto y poder responder, p. ej. /id para autoconfiguracion). La allowlist
+  // (chat/usuarios) es la barrera de autorizacion REAL y se aplica en
+  // isAuthorized(): si esta vacia no se responde a comandos de datos (deny
+  // seguro), pero el bot sigue "vivo" para que el dueno descubra y configure sus
+  // IDs. Exigir aqui la allowlist dejaba el bot mudo e irrecuperable.
+  if (!botToken || !webhookSecret) return null
 
   return {
     botToken,
@@ -428,7 +434,7 @@ function assertWebhookSecret(request: Request, config: TelegramConfig) {
   return secret === config.webhookSecret
 }
 
-function isAuthorized(message: TelegramMessage, config: TelegramConfig) {
+export function isAuthorized(message: TelegramMessage, config: TelegramConfig) {
   if (!config.allowedChatId || config.allowedUserIds.size === 0) return false
   if (String(message.chat.id) !== config.allowedChatId) return false
 
@@ -1839,7 +1845,32 @@ export async function POST(request: Request) {
     multilineWarning = `\n\n(Nota: Veo que enviaste varios pasos en un solo mensaje. Para no mezclar datos, solo procesé la primera línea: "${lines[0]}". Por favor envía lo demás paso a paso.)`
   }
 
+  // Autoconfiguracion: /id debe responder ANTES del gate de allowlist para que
+  // el dueno pueda descubrir su chat_id/user_id y configurarlos. El secreto del
+  // webhook ya valido el origen y solo se revelan los IDs del propio remitente
+  // (no expone datos del ERP). Funciona tambien en grupos (/id@bot).
+  const baseCommand = message.text.trim().toLowerCase().split(/\s+/)[0].split("@")[0]
+  const allowlistConfigurada = Boolean(config.allowedChatId) && config.allowedUserIds.size > 0
+  if (baseCommand === "/id" || baseCommand === "/whoami" || baseCommand === "/micuenta") {
+    const guia = allowlistConfigurada
+      ? ""
+      : "\n\nConfigura en Vercel para autorizar este chat:\nTELEGRAM_ALLOWED_CHAT_ID = el chat_id de arriba\nTELEGRAM_ALLOWED_USER_IDS = el user_id de arriba (separa por comas si son varios)."
+    await sendTelegramMessage(config, message.chat.id, buildIdResponse(message) + guia)
+    return NextResponse.json({ ok: true })
+  }
+
   if (!isAuthorized(message, config)) {
+    // Si la allowlist aun no esta configurada, guia al dueno en vez de quedar
+    // mudo (catch-22 que introdujo el hardening). Si SI esta configurada, se
+    // deniega en silencio (comportamiento seguro previo, sin filtrar nada).
+    if (!allowlistConfigurada) {
+      await sendTelegramMessage(
+        config,
+        message.chat.id,
+        "Aun no estoy autorizado en este chat. Envia /id para ver tu chat_id y user_id, y configuralos en TELEGRAM_ALLOWED_CHAT_ID y TELEGRAM_ALLOWED_USER_IDS (en Vercel)."
+      )
+      return NextResponse.json({ ok: true })
+    }
     console.warn("[telegram-cajero] mensaje rechazado por permisos")
     return NextResponse.json({ ok: true })
   }
