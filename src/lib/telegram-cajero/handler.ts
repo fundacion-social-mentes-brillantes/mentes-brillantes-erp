@@ -47,7 +47,7 @@ import {
 } from "@/lib/telegram-cajero/context-resolver"
 import { buildTelegramInternalContext } from "@/lib/telegram-cajero/internal-context-adapter"
 import { analyzeErpQuestion, mergeWorkspaceEntity } from "@/lib/telegram-cajero/erp-analyst"
-import { shouldProcessDedicatedGroupText } from "@/lib/telegram-cajero/activation"
+import { isClearlySocialText, shouldProcessDedicatedGroupText } from "@/lib/telegram-cajero/activation"
 import { planWithAi } from "@/lib/telegram-cajero/ai-planner"
 import { executeAiToolPlan } from "@/lib/telegram-cajero/tool-executor"
 import { writeAiResponse } from "@/lib/telegram-cajero/ai-response-writer"
@@ -1623,38 +1623,23 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig, m
 
   const naturalText = extractNaturalText(message)
   const ctx = contextFromMemory(memory)
-  const analyst = analyzeErpQuestion(naturalText || text, memory?.session.state || {})
-  if (analyst.kind === "answer" || analyst.kind === "clarify" || analyst.kind === "compare_periods") {
-    return analyst.text
-  }
-  if (analyst.kind === "tool") {
-    const supabase = createAdminClient()
-    if (!supabase) return "No pude consultar el ERP en este momento."
-    if (analyst.tool === "open_receivables") return buildCarteraPendienteGlobalResponse(supabase)
-    if (analyst.tool === "business_alerts") {
-      const range = resolveNaturalDateRange("hoy")
-      const result = await getBusinessAlerts(supabase, range!.from, range!.to)
-      const alerts: any[] = Array.isArray(result.data) ? result.data : []
-      if (!alerts.length) return "No veo alertas claras para hoy. Si quieres, puedo revisar el mes completo."
-      return ["Esto conviene revisar:", ...alerts.map((a) => `- ${a.type}: ${a.evidence?.[0] || "sin evidencia"}`)].join("\n")
-    }
-    if (analyst.tool === "summary_month") {
-      const range = resolveNaturalDateRange("este mes")
-      return buildResumenPeriodoResponse(supabase, {
-        intent: "resumen_periodo",
-        persona_busqueda: null,
-        socio_busqueda: null,
-        termino_busqueda: null,
-        fecha_desde: range?.from || null,
-        fecha_hasta: range?.to || null,
-        metodo_pago: null,
-        concepto: null,
-        necesita_aclaracion: false,
-        pregunta_aclaracion: null,
-      })
-    }
+  // Saludos/agradecimientos puros: respuesta rapida, sin gastar el planner de IA.
+  if (isClearlySocialText(text) || /^(hola+|buenas|buenos dias|buen dia|holi|hey|que tal)[\s!.,?]*$/.test(normalizedText)) {
+    if (/\b(gracias|agradecido|agradezco)\b/.test(normalizedText)) return "Con gusto, aqui estoy pendiente."
+    if (ctx) return null
+    return "Hola, soy el cajero. Puedo revisar personas (deuda, pagos, saldo, coach, donaciones, compras), cartera, resumen, egresos, ventas, socios o conteos. ¿Que miramos?"
   }
 
+  // El analista por reglas solo gobierna lo que la IA aun no hace con tool
+  // dedicada (comparar periodos); sus demas respuestas quedan como respaldo
+  // despues de la IA.
+  const analyst = analyzeErpQuestion(naturalText || text, memory?.session.state || {})
+  if (analyst.kind === "compare_periods") return analyst.text
+
+  // El planner de IA (DeepSeek V4 Pro) es el CEREBRO PRINCIPAL: razona el intent,
+  // usa el contexto y elige tools. Las rutas deterministas (analista por reglas y
+  // clasificador legacy) quedan como respaldo abajo, solo si la IA no produjo un
+  // plan accionable (mode ignore) o no esta disponible.
   const aiPlan = await planWithAi(naturalText || text, config, memory?.session.state || {})
   if (aiPlan.mode === "clarify" && aiPlan.clarification) {
     return aiPlan.clarification
@@ -1685,6 +1670,38 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig, m
       state: memory?.session.state || {},
       config,
     })
+  }
+
+  // Respaldo determinista (solo si la IA no resolvio): analista por reglas.
+  if (analyst.kind === "answer" || analyst.kind === "clarify") {
+    return analyst.text
+  }
+  if (analyst.kind === "tool") {
+    const supabase = createAdminClient()
+    if (!supabase) return "No pude consultar el ERP en este momento."
+    if (analyst.tool === "open_receivables") return buildCarteraPendienteGlobalResponse(supabase)
+    if (analyst.tool === "business_alerts") {
+      const range = resolveNaturalDateRange("hoy")
+      const result = await getBusinessAlerts(supabase, range!.from, range!.to)
+      const alerts: any[] = Array.isArray(result.data) ? result.data : []
+      if (!alerts.length) return "No veo alertas claras para hoy. Si quieres, puedo revisar el mes completo."
+      return ["Esto conviene revisar:", ...alerts.map((a) => `- ${a.type}: ${a.evidence?.[0] || "sin evidencia"}`)].join("\n")
+    }
+    if (analyst.tool === "summary_month") {
+      const range = resolveNaturalDateRange("este mes")
+      return buildResumenPeriodoResponse(supabase, {
+        intent: "resumen_periodo",
+        persona_busqueda: null,
+        socio_busqueda: null,
+        termino_busqueda: null,
+        fecha_desde: range?.from || null,
+        fecha_hasta: range?.to || null,
+        metodo_pago: null,
+        concepto: null,
+        necesita_aclaracion: false,
+        pregunta_aclaracion: null,
+      })
+    }
   }
 
   const multiPersonTerms = extractMultiplePersonTerms(naturalText || text)
