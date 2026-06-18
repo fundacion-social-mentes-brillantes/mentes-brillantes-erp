@@ -675,6 +675,19 @@ export async function revertirAbonoConSaldo(cuentaId: string, abonoId: string): 
       return { error: rpcError.message || "No se pudo revertir el abono. La operacion se revirtio por completo." }
     }
 
+    // Recalcula y guarda el estado de la cuenta tras la reversion, sin depender
+    // del trigger DB: con el abono anulado, el estado debe reflejar solo los
+    // pagos vigentes (p.ej. vuelve a 'pendiente' si ya no hay abonos activos).
+    const { data: cuentaActual } = await supabase
+      .from("cuentas_por_cobrar")
+      .select("valor_total, pagos_abonos(id, monto, estado, notas, metodo_pago, origen_fondos)")
+      .eq("id", cuentaId)
+      .single()
+    if (cuentaActual) {
+      const nuevoEstado = calcularEstadoCuentaDesdePagos(toSafeNumber(cuentaActual.valor_total), cuentaActual.pagos_abonos || [])
+      await supabase.from("cuentas_por_cobrar").update({ estado: nuevoEstado }).eq("id", cuentaId)
+    }
+
     revalidatePath(`/cuentas/${cuentaId}`)
     revalidatePath("/cuentas")
     revalidatePath("/movimientos")

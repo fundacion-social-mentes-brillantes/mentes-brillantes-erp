@@ -1319,8 +1319,10 @@ describe('cuentas/actions revertirAbonoConSaldo', () => {
     assertFechaEditableMock.mockResolvedValue(null)
   })
 
-  const buildSupabase = (abono: any, rpcResult: any = { error: null }) => {
+  const buildSupabase = (abono: any, rpcResult: any = { error: null }, cuentaActual: any = null) => {
     const rpc = vi.fn().mockResolvedValue(rpcResult)
+    const cuentaUpdateEq = vi.fn().mockResolvedValue({ error: null })
+    const cuentaUpdate = vi.fn(() => ({ eq: cuentaUpdateEq }))
     const supabase = {
       from: vi.fn((table: string) => {
         if (table === 'pagos_abonos') {
@@ -1328,11 +1330,17 @@ describe('cuentas/actions revertirAbonoConSaldo', () => {
             select: vi.fn(() => ({ eq: vi.fn(() => selectSingle(abono, null)) })),
           }
         }
+        if (table === 'cuentas_por_cobrar') {
+          return {
+            select: vi.fn(() => ({ eq: vi.fn(() => selectSingle(cuentaActual, null)) })),
+            update: cuentaUpdate,
+          }
+        }
         return {}
       }),
       rpc,
     }
-    return { supabase, rpc }
+    return { supabase, rpc, cuentaUpdate, cuentaUpdateEq }
   }
 
   const abonoPagoDirecto = (over: Record<string, any> = {}) => ({
@@ -1345,8 +1353,15 @@ describe('cuentas/actions revertirAbonoConSaldo', () => {
     ...over,
   })
 
-  it('revierte un abono pago_directo via RPC atomica', async () => {
-    const { supabase, rpc } = buildSupabase(abonoPagoDirecto())
+  it('revierte un abono pago_directo via RPC y recalcula el estado de la cuenta a pendiente', async () => {
+    // Caso del bug: cuenta $50.000 con sobrepago; al revertir, el abono queda
+    // anulado y la cuenta debe volver a 'pendiente' (no quedar 'pagado').
+    const { supabase, rpc, cuentaUpdate } = buildSupabase(abonoPagoDirecto(), { error: null }, {
+      valor_total: 50000,
+      pagos_abonos: [
+        { id: 'abono-1', monto: 50000, estado: 'anulado', notas: '[ANULADO] PRUEBA', metodo_pago: 'efectivo', origen_fondos: 'pago_directo' },
+      ],
+    })
     requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
 
     const result = await revertirAbonoConSaldo('cuenta-1', 'abono-1')
@@ -1356,6 +1371,23 @@ describe('cuentas/actions revertirAbonoConSaldo', () => {
       p_abono_id: 'abono-1',
       p_cuenta_id: 'cuenta-1',
     })
+    expect(cuentaUpdate).toHaveBeenCalledWith({ estado: 'pendiente' })
+  })
+
+  it('tras revertir, si queda un abono activo que no cubre el total, la cuenta queda parcial', async () => {
+    const { supabase, cuentaUpdate } = buildSupabase(abonoPagoDirecto(), { error: null }, {
+      valor_total: 50000,
+      pagos_abonos: [
+        { id: 'abono-1', monto: 50000, estado: 'anulado', notas: '[ANULADO]', metodo_pago: 'efectivo', origen_fondos: 'pago_directo' },
+        { id: 'abono-2', monto: 20000, estado: 'activo', notas: '', metodo_pago: 'efectivo', origen_fondos: 'pago_directo' },
+      ],
+    })
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
+
+    const result = await revertirAbonoConSaldo('cuenta-1', 'abono-1')
+
+    expect(result?.success).toBe(true)
+    expect(cuentaUpdate).toHaveBeenCalledWith({ estado: 'parcial' })
   })
 
   it('bloquea revertir un abono que proviene de saldo a favor', async () => {
