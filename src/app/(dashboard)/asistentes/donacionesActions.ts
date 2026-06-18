@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { requireAdmin, requireRoles } from '@/lib/utils/authz'
 import { parseMoneyInput } from '@/lib/utils/contable'
 import { assertFechaEditable } from '@/lib/utils/periodos'
+import { fechaHoyBogota } from '@/lib/utils/fechas'
 
 export type DonacionState = { error?: string; success?: boolean } | null
 
@@ -45,7 +46,7 @@ export async function crearDonacion(asistente_id: string, formData: FormData): P
 
   const monto = parseMoneyInput(formData.get('monto'))
   const metodo_pago = (formData.get('metodo_pago') as string) || ''
-  const fecha = (formData.get('fecha') as string) || new Date().toISOString().split('T')[0]
+  const fecha = (formData.get('fecha') as string) || fechaHoyBogota()
   const notas = (formData.get('notas') as string) || null
 
   if (!asistente_id || monto === null || monto <= 0 || !metodo_pago) {

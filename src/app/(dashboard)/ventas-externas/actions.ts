@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { requireAdmin, requireRoles } from '@/lib/utils/authz'
 import { parseMoneyInput } from '@/lib/utils/contable'
 import { assertFechaEditable } from '@/lib/utils/periodos'
+import { fechaHoyBogota } from '@/lib/utils/fechas'
 
 export type VentaExternaState = { error?: string; success?: boolean } | null
 
@@ -42,7 +43,7 @@ function leerPayload(formData: FormData) {
   const comprador_nombre = ((formData.get('comprador_nombre') as string) || '').trim() || null
   const monto = parseMoneyInput(formData.get('monto'))
   const metodo_pago = ((formData.get('metodo_pago') as string) || '').trim()
-  const fecha = ((formData.get('fecha') as string) || '').trim() || new Date().toISOString().split('T')[0]
+  const fecha = ((formData.get('fecha') as string) || '').trim() || fechaHoyBogota()
   const notas = ((formData.get('notas') as string) || '').trim() || null
 
   return { concepto, comprador_nombre, monto, metodo_pago, fecha, notas }

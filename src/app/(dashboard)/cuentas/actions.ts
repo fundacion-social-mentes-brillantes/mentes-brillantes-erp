@@ -14,6 +14,7 @@ import {
 } from "@/lib/utils/contable"
 import { requireAdmin, requireRoles } from "@/lib/utils/authz"
 import { assertFechaEditable } from "@/lib/utils/periodos"
+import { fechaHoyBogota } from "@/lib/utils/fechas"
 
 export type ActionState = { error?: string; success?: boolean } | null
 
@@ -258,7 +259,7 @@ export async function saveAbono(
 
     const monto = toSafeNumber(formData.get("monto"))
     const metodo_pago = (formData.get("metodo_pago") as string) || null
-    const fecha_pago = (formData.get("fecha_pago") as string) || new Date().toISOString().slice(0, 10)
+    const fecha_pago = (formData.get("fecha_pago") as string) || fechaHoyBogota()
     const notas = ((formData.get("notas") as string) || "").trim() || null
 
     if (monto <= 0) return { error: "El monto debe ser mayor a 0." }
@@ -394,6 +395,8 @@ export async function aplicarSaldoFavor(
     const montoAplicado = Math.min(monto, pendiente)
     if (montoAplicado <= 0) return { error: "La cuenta no tiene saldo pendiente para aplicar." }
 
+    // En UTC a proposito: el INSERT lo hace la RPC con CURRENT_DATE (UTC); asi el
+    // chequeo de periodo queda consistente con la fecha que realmente se escribira.
     const fechaHoy = new Date().toISOString().slice(0, 10)
     const periodoError = await assertFechaEditable(supabase, fechaHoy, "Aplicar saldo a favor")
     if (periodoError) return { error: periodoError }
@@ -534,7 +537,7 @@ export async function editMontoAbono(
     let movimientoAjusteId: string | null = null
     let movimientoAjusteTipo: "ingreso" | "aplicacion" | null = null
     let movimientoAjusteMonto = 0
-    const fechaMovimiento = abono.fecha_pago || new Date().toISOString().slice(0, 10)
+    const fechaMovimiento = abono.fecha_pago || fechaHoyBogota()
 
     if (cuenta.asistente_id) {
       if (esSaldo) {
@@ -693,7 +696,7 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
     const concepto = ((formData.get("concepto") as string) || "").trim()
     const valorTotalInput = formData.get("valor_total")
     const valor_total = parseMoneyInput(valorTotalInput)
-    const fecha_emision = (formData.get("fecha_emision") as string) || new Date().toISOString().slice(0, 10)
+    const fecha_emision = (formData.get("fecha_emision") as string) || fechaHoyBogota()
     const fechaPagoInicial = ((formData.get("fecha_pago_inicial") as string) || "").trim()
     const returnTo = (formData.get("return_to") as string) || null
     const tipoCuenta = (formData.get("tipo_cuenta") as string) || "general"
