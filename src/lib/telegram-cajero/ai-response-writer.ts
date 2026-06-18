@@ -191,11 +191,12 @@ export function buildDeterministicResponse(plan: AiPlannerPlan, bundle: ToolExec
 }
 
 function shouldUseDeepSeekForWriting(plan: AiPlannerPlan, bundle: ToolExecutionBundle) {
+  // La desambiguacion (elige 1/2/3) se responde con plantilla determinista, clara.
   if (bundle.status === "ambiguous") return false
-  if (plan.needsCalculation || plan.calculation === "analyze" || plan.calculation === "compare" || plan.calculation === "explain") return true
-  if (bundle.results.length > 1) return true
-  if (plan.intent === "estado_completo_persona" || plan.intent === "cartera_pendiente_global" || plan.intent === "resumen_periodo" || plan.intent === "sesiones_coach_persona") return true
-  return false
+  // En cualquier otro caso con resultados (ok, vacios o con error parcial),
+  // redacta con IA para que suene natural y resuelva con criterio. Las plantillas
+  // deterministas quedan como respaldo seguro si la IA falla.
+  return bundle.results.length > 0
 }
 
 function advancedWritingNeeded(plan: AiPlannerPlan, text: string) {
@@ -230,7 +231,7 @@ async function callDeepSeekWriter({
       {
         role: "system",
         content:
-          "Eres Cajero, especialista en sesiones coach y analista interno del ERP. Redacta corto, claro y natural para Telegram. Para sesiones coach, siempre explica compradas, tomadas/registradas, restantes, fechas tomadas, ultima sesion y si puede haber sesiones antiguas no cargadas. Usa solo los datos JSON entregados. No inventes cifras, nombres, fechas ni pagos. Si falta informacion, dilo claramente. No sugieras escrituras automaticas.",
+          "Eres Cajero, el asistente interno del ERP de Mentes Brillantes: conoces todo el negocio (personas, deudas, pagos, saldo a favor, sesiones coach, compras, cartera, ingresos/egresos, ventas) y respondes como un asesor experto, claro, natural y con criterio, en espanol de Colombia para Telegram. Razona los datos antes de responder: di primero lo importante y, cuando aplique, agrega una observacion o recomendacion prudente. Para sesiones coach explica compradas, tomadas/registradas, restantes, fechas y ultima sesion, y aclara si puede haber sesiones antiguas no cargadas. Usa EXCLUSIVAMENTE los datos JSON entregados (resultados_reales): no inventes cifras, nombres, fechas ni pagos. Si un dato no esta o no se encontro a la persona, no respondas un 'no' seco: dilo con naturalidad y propone el siguiente paso (confirmar el nombre o codigo, o revisar la persona activa). Eres SOLO LECTURA: nunca ofrezcas registrar, editar ni modificar nada; solo informar y analizar. Se conciso pero completo y facil de entender.",
       },
       {
         role: "user",
@@ -263,14 +264,22 @@ async function callDeepSeekWriter({
     body.thinking = { type: "disabled" }
   }
 
-  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(body),
-  })
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), advanced ? 38000 : 20000)
+  let response: Response
+  try {
+    response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+  } finally {
+    clearTimeout(timer)
+  }
   if (!response.ok) {
     console.error("[telegram-cajero] ai-response-writer DeepSeek no-ok", { status: response.status, model, advanced })
     return null

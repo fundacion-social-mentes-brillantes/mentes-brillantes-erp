@@ -20,6 +20,22 @@ describe("telegram cajero ai planner", () => {
     expect(String(plan.tools[0].args.personQuery)).not.toContain("su pareja tuvieron")
   })
 
+  it("usa la persona activa en seguimientos sin nombre (muestrame las ultimas N sesiones)", () => {
+    const plan = fallbackPlan("muestrame las fechas de las ultimas 9 sesiones que tomo", {
+      lastAsistente: { id: "a9", nombre: "Juan David", codigo: "249" },
+    })
+
+    expect(plan.mode).toBe("tool_plan")
+    expect(plan.tools[0]).toMatchObject({ name: "getCoachSessions", args: { asistenteId: "a9" } })
+  })
+
+  it("no toma verbos de comando ni numeros como nombre de persona", () => {
+    const plan = fallbackPlan("muestrame las sesiones", {})
+
+    expect(plan.mode).toBe("clarify")
+    expect(plan.tools).toHaveLength(0)
+  })
+
   it("separa varias personas en una pregunta de deuda", () => {
     const plan = fallbackPlan("cuánto debe Sandra y Michael?", {})
 

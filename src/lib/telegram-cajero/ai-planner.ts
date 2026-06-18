@@ -134,12 +134,45 @@ const NON_NAME_WORDS = new Set([
   "toda",
   "tomar",
   "tomo",
+  "tomadas",
+  "tomados",
   "ultima",
   "ultimo",
+  "ultimas",
+  "ultimos",
   "ver",
   "verifica",
   "verificar",
   "y",
+  // Verbos de comando y muletillas: nunca son nombres de persona.
+  "muestrame",
+  "muestra",
+  "muestrales",
+  "dame",
+  "damelo",
+  "mostrar",
+  "ensename",
+  "lista",
+  "listame",
+  "listar",
+  "necesito",
+  "quiero",
+  "saber",
+  "dijiste",
+  "cuantos",
+  "numero",
+  "numeros",
+  "del",
+  "como",
+  "cual",
+  "cuales",
+  "ese",
+  "eso",
+  "esos",
+  "esas",
+  "este",
+  "registro",
+  "registros",
 ])
 
 function compactState(state: TelegramSessionState = {}) {
@@ -259,7 +292,7 @@ function cleanPersonQuery(value: string) {
   const words = compactWords(value)
     .split(" ")
     .map((word) => word.trim())
-    .filter((word) => word.length >= 2 && !NON_NAME_WORDS.has(word))
+    .filter((word) => word.length >= 2 && !/^\d+$/.test(word) && !NON_NAME_WORDS.has(word))
 
   if (!words.length) return null
   if (words.length > 6) return null
@@ -542,11 +575,13 @@ export function fallbackPlan(text: string, state: TelegramSessionState = {}): Ai
   return EMPTY_PLAN
 }
 
-function shouldUseFastDeterministicPlan(plan: AiPlannerPlan, text: string) {
-  const normalized = normalizeText(text)
-  if (plan.mode === "answer_from_memory" && plan.confidence === "high") return true
-  if (plan.mode !== "tool_plan" || plan.confidence !== "high") return false
-  return /\b(cuanto debe|que debe|deuda|pagos de|ultimo pago|busca|consulta|revisa|ficha|todo|sesiones|coach|cartera|resumen|egresos|ventas)\b/.test(normalized)
+function shouldUseFastDeterministicPlan(plan: AiPlannerPlan) {
+  // Atajo sin IA SOLO para calculos puros sobre lo ya consultado (no requieren
+  // datos nuevos ni razonamiento de intencion). Todo lo demas pasa por el planner
+  // de IA para que razone, entienda lenguaje natural y use el contexto. El plan
+  // determinista viaja como sugerencia (suggestedFastPlan) y como respaldo si la
+  // IA no esta disponible.
+  return plan.mode === "answer_from_memory" && plan.confidence === "high"
 }
 
 function reasoningEffortFor(text: string, fallback: AiPlannerPlan): "high" | "max" {
@@ -555,6 +590,19 @@ function reasoningEffortFor(text: string, fallback: AiPlannerPlan): "high" | "ma
     return "max"
   }
   return "high"
+}
+
+// Razona "pensando" (mas lento) solo cuando la consulta lo amerita; las consultas
+// simples usan el modelo sin thinking para responder rapido pero igual inteligente.
+function wantsDeepReasoning(text: string, fallback: AiPlannerPlan): boolean {
+  const normalized = normalizeText(text)
+  return Boolean(
+    fallback.needsCalculation ||
+      fallback.calculation ||
+      /\b(analiza|analizalo|compara|comparar|explica|explicame|que observas|que ves|por que|por qué|revisar primero|que reviso primero|esta raro|recomienda|recomiendas|prioriza|cual conviene|por que|que conviene)\b/.test(
+        normalized
+      )
+  )
 }
 
 function buildDeepSeekPlannerBody(text: string, state: TelegramSessionState, fallback: AiPlannerPlan, advanced: boolean) {
@@ -566,15 +614,15 @@ function buildDeepSeekPlannerBody(text: string, state: TelegramSessionState, fal
       {
         role: "system",
         content: [
-          "Eres el planner conversacional del bot Cajero del ERP. Devuelves SOLO JSON estricto.",
-          "El bot es 100% solo lectura. No puede crear, editar, borrar, registrar pagos, anular, aplicar saldo ni ejecutar SQL.",
-          "Elige solo tools del catalogo entregado. No inventes tools. Maximo 5 tools.",
+          "Eres el planner conversacional del bot Cajero del ERP de Mentes Brillantes. Piensa y razona el intent REAL detras del lenguaje natural; el usuario escribe como le sale. Devuelves SOLO JSON estricto.",
+          "El bot es 100% solo lectura. No puede crear, editar, borrar, registrar pagos, anular, aplicar saldo ni ejecutar SQL. Pero SI puede consultar y razonar sobre todo el ERP.",
+          "Puedes resolver cualquier consulta del ERP combinando tools: estado/deuda/pagos/saldo a favor de una persona, sesiones coach, compras y conceptos, ficha completa, cartera pendiente global y mayores deudores, resumen de periodo (ingresos/egresos/utilidad), egresos, ventas externas, alertas y busqueda global. Elige solo tools del catalogo entregado. No inventes tools. Maximo 5 tools.",
+          "USA SIEMPRE EL CONTEXTO (memory.lastAsistente, lastStructuredResult, workspace): si el usuario no nombra a nadie pero hay una persona activa y la frase es un seguimiento (p. ej. 'muestrame sus sesiones', 'y cuanto debe', 'las fechas', 'sus pagos', 'que mas sabes'), REUTILIZA esa persona activa (entities con role contextual y tools con su asistenteId) en vez de pedir el nombre.",
+          "Nunca tomes verbos ni muletillas como nombre de persona (muestrame, dame, lista, ver, busca, ultimas, fechas, numeros, su, eso, esa). Si no hay nombre real ni persona activa, usa clarify pidiendo el nombre o codigo.",
           "Si hay una persona y el usuario dice busca, consulta, revisa, ver, todo o ficha, usa getPersonFullProfile y NO preguntes que quiere ver.",
-          "Si la pregunta es simple y ya hay una tool clara, conserva el plan sugerido.",
-          "Si la pregunta puede resolverse con memoria/workspace, usa mode answer_from_memory.",
-          "Si necesita datos reales, usa mode tool_plan.",
-          "Si falta entidad o hay ambiguedad real, usa clarify con una pregunta util.",
-          "Nunca conviertas frases como 'su', 'eso', 'su pareja tuvieron' en nombre de persona.",
+          "Si la pregunta puede resolverse con memoria/workspace, usa mode answer_from_memory. Si necesita datos reales, usa tool_plan. Solo usa clarify ante ambiguedad real (varias personas posibles o falta el sujeto).",
+          "Cuando una consulta amerite analisis (comparar, priorizar, explicar, '¿que reviso primero?'), marca needsCalculation y la calculation adecuada para que la respuesta razone.",
+          "Tu meta: que el bot se sienta como un asistente experto que conoce todo el negocio, resuelve con iniciativa y nunca responde un 'no' seco; si algo no aparece, plantea el siguiente paso (confirmar nombre/codigo o revisar la persona activa).",
         ].join(" "),
       },
       {
@@ -604,14 +652,22 @@ async function callDeepSeekPlanner(text: string, config: TelegramConfig, state: 
   const body = buildDeepSeekPlannerBody(text, state, fallback, advanced)
   body.model = model
 
-  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(body),
-  })
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), advanced ? 38000 : 20000)
+  let response: Response
+  try {
+    response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+  } finally {
+    clearTimeout(timer)
+  }
 
   if (!response.ok) {
     console.error("[telegram-cajero] ai-planner DeepSeek no-ok", { status: response.status, model, advanced })
@@ -628,7 +684,7 @@ export async function planWithAi(text: string, config: TelegramConfig, state: Te
   const fallback = fallbackPlan(text, state)
   const { apiKey, baseUrl, model } = config.deepseek || {}
 
-  if (shouldUseFastDeterministicPlan(fallback, text)) {
+  if (shouldUseFastDeterministicPlan(fallback)) {
     console.log("[telegram-cajero] planner fast deterministic", { mode: fallback.mode, intent: fallback.intent, tools: fallback.tools.map((tool) => tool.name) })
     return fallback
   }
@@ -636,14 +692,15 @@ export async function planWithAi(text: string, config: TelegramConfig, state: Te
   if (!apiKey || !baseUrl || !model) return fallback
 
   try {
-    const advanced = await callDeepSeekPlanner(text, config, state, fallback, true)
-    if (advanced) {
-      console.log("[telegram-cajero] planner deepseek", { model, mode: advanced.mode, intent: advanced.intent, tools: advanced.tools.map((tool) => tool.name) })
-      return advanced
+    const deep = wantsDeepReasoning(text, fallback)
+    const primary = await callDeepSeekPlanner(text, config, state, fallback, deep)
+    if (primary) {
+      console.log("[telegram-cajero] planner deepseek", { model, deep, mode: primary.mode, intent: primary.intent, tools: primary.tools.map((tool) => tool.name) })
+      return primary
     }
 
-    const basic = await callDeepSeekPlanner(text, config, state, fallback, false)
-    if (basic) return basic
+    const secondary = await callDeepSeekPlanner(text, config, state, fallback, !deep)
+    if (secondary) return secondary
 
     return fallback
   } catch (error: any) {
