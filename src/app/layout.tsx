@@ -38,7 +38,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f5f7f2" },
+    { media: "(prefers-color-scheme: light)", color: "#fce8ef" },
     { media: "(prefers-color-scheme: dark)", color: "#0a1016" },
   ],
 };
@@ -49,7 +49,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" data-theme="light">
+    <html lang="es" data-theme="pink">
       <body className={inter.className}>
         <ThemeProvider>
           {!hasEnvVars() ? <SetupSupabase /> : children}

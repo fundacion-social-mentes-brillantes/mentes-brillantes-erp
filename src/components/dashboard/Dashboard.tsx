@@ -506,7 +506,7 @@ export async function Dashboard({ month }: { month?: string }) {
                   <p className="text-sm font-medium text-[rgb(var(--text-muted))]">{stat.name}</p>
                   <div className="group relative flex items-center">
                     <Info className="w-4 h-4 text-[rgb(var(--text-muted))] cursor-help outline-none" tabIndex={0} />
-                    <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 bg-[rgba(var(--surface-3),0.9)] backdrop-blur text-white text-xs rounded-lg p-3 shadow-xl z-20 text-center">
+                    <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 bg-[rgba(var(--surface-3),0.9)] backdrop-blur text-[rgb(var(--text-primary))] text-xs rounded-lg p-3 shadow-xl z-20 text-center">
                       {stat.tooltip}
                       <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[rgba(var(--surface-3),0.9)]"></div>
                     </div>

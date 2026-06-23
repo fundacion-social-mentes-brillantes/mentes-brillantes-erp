@@ -93,6 +93,99 @@
   --color-emerald-500: 50 211 150;
 }
 
+/* ============================================================
+   Tema ROSA CREMA PASTEL (femenino) — reemplaza al blanco.
+   Mantiene verde=ingresos, rojo=egresos y el dorado de marca.
+   ============================================================ */
+[data-theme="pink"] {
+  color-scheme: light;
+  --bg: 252 235 242;
+  --surface-1: 255 248 251;
+  --surface-2: 250 230 239;
+  --surface-3: 245 214 227;
+  --muted-surface: 251 232 240;
+  --border: 236 198 214;
+  --text-primary: 60 26 44;
+  --text-muted: 146 100 120;
+  --accent: 216 76 124;
+  --accent-strong: 190 50 100;
+  --accent-foreground: 255 255 255;
+  --ring-color: 216 76 124;
+  --success: 19 138 104;
+  --danger: 200 56 70;
+  --danger-strong: 176 38 56;
+  --warning: 188 142 60;
+  --info: 156 72 138;
+  --gold: 191 149 63;
+  --gold-soft: 247 220 186;
+  --emerald-soft: 215 240 230;
+  --shadow-soft: 0 16px 40px rgba(120, 40, 75, 0.10);
+  --shadow-strong: 0 24px 70px rgba(120, 40, 75, 0.20);
+  --input-bg: 255 248 251;
+  --sidebar-backdrop: 247 220 232;
+  --glass-highlight: 255 255 255;
+
+  --color-white: 255 255 255;
+  --color-black: 0 0 0;
+  --color-zinc-50: 252 240 245;
+  --color-zinc-100: 250 233 240;
+  --color-zinc-200: 240 214 225;
+  --color-zinc-300: 224 194 208;
+  --color-zinc-400: 168 130 148;
+  --color-zinc-500: 146 100 120;
+  --color-zinc-600: 110 72 92;
+  --color-zinc-700: 84 50 66;
+  --color-zinc-800: 60 34 48;
+  --color-zinc-900: 50 24 40;
+  --color-zinc-950: 30 14 24;
+  --color-emerald-500: 21 148 112;
+}
+
+/* En el tema rosa, las tarjetas blancas y grises se tiñen de rosa para coherencia */
+[data-theme="pink"] .bg-white {
+  background-color: rgb(var(--surface-1)) !important;
+}
+[data-theme="pink"] .bg-zinc-50,
+[data-theme="pink"] .hover\:bg-zinc-50:hover,
+[data-theme="pink"] .hover\:bg-zinc-50\/50:hover {
+  background-color: rgba(var(--surface-2), 0.7) !important;
+}
+[data-theme="pink"] .bg-zinc-100 {
+  background-color: rgba(var(--surface-3), 0.7) !important;
+}
+[data-theme="pink"] .border-zinc-100,
+[data-theme="pink"] .border-zinc-200,
+[data-theme="pink"] .border-zinc-300 {
+  border-color: rgba(var(--border), 0.75) !important;
+}
+[data-theme="pink"] .text-zinc-900,
+[data-theme="pink"] .text-zinc-800,
+[data-theme="pink"] .text-zinc-700 {
+  color: rgb(var(--text-primary)) !important;
+}
+[data-theme="pink"] .text-zinc-600,
+[data-theme="pink"] .text-zinc-500,
+[data-theme="pink"] .text-zinc-400 {
+  color: rgb(var(--text-muted)) !important;
+}
+/* Botones oscuros (bg-zinc-900 text-zinc-50) → rosa primario en el tema rosa */
+[data-theme="pink"] .bg-zinc-900 {
+  background-color: rgb(var(--accent)) !important;
+}
+[data-theme="pink"] .bg-zinc-900.text-zinc-50,
+[data-theme="pink"] .bg-zinc-900 .text-zinc-50 {
+  color: #fff !important;
+}
+/* Texto secundario y chips de codigo sobre header oscuro (bg-zinc-900 -> rosa) en el tema rosa */
+[data-theme="pink"] .bg-zinc-900.text-zinc-400,
+[data-theme="pink"] .bg-zinc-900 .text-zinc-400 {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+[data-theme="pink"] .bg-zinc-900.text-emerald-400,
+[data-theme="pink"] .bg-zinc-900 .text-emerald-400 {
+  color: #fff !important;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -377,3 +470,54 @@ body {
     padding-bottom: 0;
   }
 }
+
+/* ============================================================
+   Modo oscuro: chips, textos y bordes de color legibles.
+   (las utilidades de Tailwind con tonos claros no se adaptaban)
+   ============================================================ */
+[data-theme="dark"] .bg-emerald-50,
+[data-theme="dark"] .bg-emerald-100 { background-color: rgba(50, 211, 150, 0.15) !important; }
+[data-theme="dark"] .bg-red-50,
+[data-theme="dark"] .bg-red-100 { background-color: rgba(251, 113, 133, 0.15) !important; }
+[data-theme="dark"] .bg-amber-50,
+[data-theme="dark"] .bg-amber-100 { background-color: rgba(221, 178, 87, 0.16) !important; }
+[data-theme="dark"] .bg-blue-50,
+[data-theme="dark"] .bg-blue-100 { background-color: rgba(116, 192, 220, 0.16) !important; }
+[data-theme="dark"] .bg-teal-50 { background-color: rgba(94, 234, 212, 0.14) !important; }
+[data-theme="dark"] .bg-yellow-50 { background-color: rgba(234, 179, 8, 0.16) !important; }
+[data-theme="dark"] .bg-rose-100 { background-color: rgba(251, 113, 133, 0.16) !important; }
+
+[data-theme="dark"] .hover\:bg-red-50:hover { background-color: rgba(251, 113, 133, 0.2) !important; }
+[data-theme="dark"] .hover\:bg-emerald-50:hover { background-color: rgba(50, 211, 150, 0.2) !important; }
+[data-theme="dark"] .hover\:bg-blue-50:hover { background-color: rgba(116, 192, 220, 0.2) !important; }
+[data-theme="dark"] .hover\:bg-amber-50:hover { background-color: rgba(221, 178, 87, 0.2) !important; }
+
+[data-theme="dark"] .text-emerald-600,
+[data-theme="dark"] .text-emerald-700,
+[data-theme="dark"] .text-emerald-800 { color: rgb(110 231 183) !important; }
+[data-theme="dark"] .text-red-600,
+[data-theme="dark"] .text-red-700 { color: rgb(252 165 165) !important; }
+[data-theme="dark"] .text-amber-600,
+[data-theme="dark"] .text-amber-700,
+[data-theme="dark"] .text-amber-800,
+[data-theme="dark"] .text-amber-900 { color: rgb(252 211 77) !important; }
+[data-theme="dark"] .text-blue-600,
+[data-theme="dark"] .text-blue-700,
+[data-theme="dark"] .text-blue-800 { color: rgb(147 197 253) !important; }
+[data-theme="dark"] .text-teal-600,
+[data-theme="dark"] .text-teal-700 { color: rgb(94 234 212) !important; }
+[data-theme="dark"] .text-yellow-800,
+[data-theme="dark"] .text-yellow-900 { color: rgb(253 224 71) !important; }
+
+[data-theme="dark"] .hover\:text-red-600:hover { color: rgb(252 165 165) !important; }
+[data-theme="dark"] .hover\:text-blue-600:hover { color: rgb(147 197 253) !important; }
+[data-theme="dark"] .hover\:text-emerald-600:hover { color: rgb(110 231 183) !important; }
+
+[data-theme="dark"] .border-emerald-200,
+[data-theme="dark"] .border-emerald-500 { border-color: rgba(50, 211, 150, 0.35) !important; }
+[data-theme="dark"] .border-red-200 { border-color: rgba(251, 113, 133, 0.35) !important; }
+[data-theme="dark"] .border-amber-200,
+[data-theme="dark"] .border-amber-300 { border-color: rgba(221, 178, 87, 0.35) !important; }
+[data-theme="dark"] .border-blue-200 { border-color: rgba(116, 192, 220, 0.35) !important; }
+[data-theme="dark"] .border-teal-200 { border-color: rgba(94, 234, 212, 0.35) !important; }
+[data-theme="dark"] .border-yellow-200 { border-color: rgba(234, 179, 8, 0.35) !important; }

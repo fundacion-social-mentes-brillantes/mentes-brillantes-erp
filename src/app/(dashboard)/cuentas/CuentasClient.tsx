@@ -47,9 +47,9 @@ const estadoBadge = (estado: string) => {
     case 'pagado':
       return 'bg-[rgba(var(--success),0.12)] text-[rgb(var(--success))] border-[rgba(var(--success),0.35)]'
     case 'parcial':
-      return 'bg-[rgba(234,179,8,0.15)] text-[rgb(202,138,4)] border-[rgba(234,179,8,0.35)]'
+      return 'bg-[rgba(var(--warning),0.15)] text-[rgb(var(--warning))] border-[rgba(var(--warning),0.4)]'
     default:
-      return 'bg-[rgba(239,68,68,0.14)] text-[rgb(185,28,28)] border-[rgba(239,68,68,0.38)]'
+      return 'bg-[rgba(var(--danger),0.14)] text-[rgb(var(--danger))] border-[rgba(var(--danger),0.4)]'
   }
 }
 
@@ -271,7 +271,7 @@ export function CuentasClient({ cuentas, isAdmin = false }: { cuentas: Cuenta[];
                   <p className="text-xs text-[rgb(var(--text-muted))] font-medium">Pendiente</p>
                   <p
                     className={`font-bold text-lg ${
-                      selectedCuenta.saldos.monto_pendiente > 0 ? 'text-[rgb(185,28,28)]' : 'text-[rgb(var(--success))]'
+                      selectedCuenta.saldos.monto_pendiente > 0 ? 'text-[rgb(var(--danger-strong))]' : 'text-[rgb(var(--success))]'
                     }`}
                   >
                     {formatCurrency(selectedCuenta.saldos.monto_pendiente)}

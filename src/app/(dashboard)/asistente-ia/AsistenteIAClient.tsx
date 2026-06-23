@@ -185,7 +185,7 @@ export function AsistenteIAClient() {
             <div
               className={
                 message.role === "user"
-                  ? "max-w-[80%] rounded-lg bg-[rgb(var(--accent))] px-4 py-3 text-sm text-white"
+                  ? "max-w-[80%] rounded-lg bg-[rgb(var(--accent))] px-4 py-3 text-sm text-[rgb(var(--accent-foreground))]"
                   : "max-w-[80%] whitespace-pre-wrap rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] px-4 py-3 text-sm text-[rgb(var(--text-primary))]"
               }
             >
@@ -211,7 +211,7 @@ export function AsistenteIAClient() {
           <button
             type="submit"
             disabled={isLoading || !input.trim()}
-            className="inline-flex h-[52px] items-center justify-center gap-2 rounded-md bg-[rgb(var(--accent))] px-4 text-sm font-semibold text-white transition-colors hover:bg-[rgb(var(--accent-strong))] disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-[52px] items-center justify-center gap-2 rounded-md bg-[rgb(var(--accent))] px-4 text-sm font-semibold text-[rgb(var(--accent-foreground))] transition-colors hover:bg-[rgb(var(--accent-strong))] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Send className="h-4 w-4" />
             Enviar
