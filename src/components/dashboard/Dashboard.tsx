@@ -1,217 +1,242 @@
-﻿import { ArrowUpRight, ArrowDownRight, Users, Wallet, AlertCircle, Receipt, History, Info, Banknote, ShoppingCart, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, Users, Wallet, AlertCircle, Receipt, History, Info, Banknote, ShoppingCart, TrendingUp, TrendingDown, Minus, Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import Image from "next/image";
-import { MonthSelector } from "./MonthSelector";
+import { PeriodSelector } from "./PeriodSelector";
 import { BalanceChart } from "./BalanceChart";
 import { PdfReportButton } from "./PdfReportButton";
 import { filtrarIngresosOperativos, filtrarIngresosRealesSaldoAFavor, esAnuladoCompleto, filtrarPagosValidosCuentas, sumarMontos } from "@/lib/utils/contable";
 import { construirSerieDiaria } from "@/lib/utils/dashboard";
 
-export async function Dashboard({ month }: { month?: string }) {
+type Periodo = {
+  id: string;
+  nombre: string;
+  fecha_inicio: string;
+  fecha_fin: string;
+  estado: string;
+};
+
+type Totales = {
+  ingresosCartera: number;
+  donaciones: number;
+  ventasExternas: number;
+  ingresosTotales: number;
+  egresos: number;
+  utilidad: number;
+  facturado: number;
+  pendiente: number;
+  chartData: { date: string; ingresos: number; egresos: number; balance: number }[];
+  congelado: boolean;
+};
+
+export async function Dashboard({ periodo: periodoId }: { periodo?: string }) {
   const supabase = await createClient();
   if (!supabase) return null;
 
   const now = new Date();
-  
-  // Parse selected month or use current month
-  let targetYear = now.getFullYear();
-  let targetMonth = now.getMonth();
-  
-  if (month) {
-    const [yearStr, monthStr] = month.split('-');
-    targetYear = parseInt(yearStr, 10);
-    targetMonth = parseInt(monthStr, 10) - 1;
+
+  // --- Períodos (liquidaciones) para el selector y para elegir el actual ---
+  const { data: periodosData } = await supabase
+    .from("periodos")
+    .select("id, nombre, fecha_inicio, fecha_fin, estado, creado_en")
+    .order("creado_en", { ascending: false });
+  const periodos: Periodo[] = (periodosData ?? []).map((p: any) => ({
+    id: p.id,
+    nombre: p.nombre,
+    fecha_inicio: p.fecha_inicio,
+    fecha_fin: p.fecha_fin,
+    estado: p.estado,
+  }));
+
+  // Período seleccionado: el pedido por id, o el último creado (primero de la lista)
+  const selIdx = periodoId ? periodos.findIndex((p) => p.id === periodoId) : 0;
+  const selectedPeriodo: Periodo | undefined = periodos[selIdx >= 0 ? selIdx : 0];
+  const prevPeriodo: Periodo | undefined = selectedPeriodo
+    ? periodos[periodos.indexOf(selectedPeriodo) + 1]
+    : undefined;
+
+  // Rango activo: el del período, o (si no hay períodos) el mes calendario actual como respaldo
+  let rangeInicio: string;
+  let rangeFin: string;
+  let periodoLabel: string;
+  let periodoEstado: string | null;
+  if (selectedPeriodo) {
+    rangeInicio = selectedPeriodo.fecha_inicio;
+    rangeFin = selectedPeriodo.fecha_fin;
+    periodoLabel = selectedPeriodo.nombre;
+    periodoEstado = selectedPeriodo.estado;
+  } else {
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    rangeInicio = new Date(y, m, 1).toISOString().split("T")[0];
+    rangeFin = new Date(y, m + 1, 0).toISOString().split("T")[0];
+    periodoLabel = now.toLocaleString("es", { month: "long", year: "numeric" });
+    periodoEstado = null;
   }
-  
-  const currentMonthValue = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}`;
-  
-  const firstDayOfMonth = new Date(targetYear, targetMonth, 1).toISOString().split('T')[0];
-  const lastDayOfMonth = new Date(targetYear, targetMonth + 1, 0).toISOString().split('T')[0];
+  const fmtFecha = (d: string) => new Date(d + "T12:00:00").toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" });
+  const periodoFechasLabel = `${fmtFecha(rangeInicio)} – ${fmtFecha(rangeFin)}`;
 
-  // Variables para mes anterior (para cÃ¡lculos de tendencia)
-  const prevMonthDate = new Date(targetYear, targetMonth - 1, 1);
-  const prevMonthYear = prevMonthDate.getFullYear();
-  const prevMonthMonth = prevMonthDate.getMonth();
-  const firstDayOfPrevMonth = new Date(prevMonthYear, prevMonthMonth, 1).toISOString().split('T')[0];
-  const lastDayOfPrevMonth = new Date(prevMonthYear, prevMonthMonth + 1, 0).toISOString().split('T')[0];
+  // Construye la lista de días del rango (tope: hoy, para no graficar futuro)
+  const buildDays = (inicio: string, fin: string) => {
+    const fmt = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+    const [iy, im, idd] = inicio.split("-").map(Number);
+    const [fy, fm, fdd] = fin.split("-").map(Number);
+    const cursor = new Date(iy, im - 1, idd, 12);
+    const endD = new Date(fy, fm - 1, fdd, 12);
+    const todayD = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12);
+    const realEnd = endD > todayD ? todayD : endD;
+    const days: string[] = [];
+    let guard = 0;
+    while (cursor <= realEnd && guard < 400) {
+      days.push(fmt(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+      guard++;
+    }
+    return days;
+  };
 
-  // 1. INDICADORES DEL PERÃODO SELECCIONADO
-  
-  // Ingresos del Mes
-  const { data: rawIngresosData } = await supabase
-    .from('pagos_abonos')
-    .select('monto, fecha_pago, metodo_pago, origen_fondos, estado, notas')
-    .gte('fecha_pago', firstDayOfMonth)
-    .lte('fecha_pago', lastDayOfMonth);
-    
-  const ingresosData = filtrarIngresosOperativos(rawIngresosData ?? [], {
-    excluirSaldoAFavor: true,
-    excluirAplicacionSaldo: true
-  });
-  const { data: rawSaldoFavorMes } = await supabase
-    .from('movimientos_saldo_favor')
-    .select('monto, fecha, metodo_pago, tipo, notas')
-    .gte('fecha', firstDayOfMonth)
-    .lte('fecha', lastDayOfMonth);
-  const saldoFavorIngresosMes = filtrarIngresosRealesSaldoAFavor(rawSaldoFavorMes ?? []);
-  const ingresosMes = Math.round(sumarMontos([...ingresosData, ...saldoFavorIngresosMes]));
+  // Calcula los totales de un período. Si está CERRADO usa los valores
+  // CONGELADOS de la liquidación (para cuadrar exactamente con el documento);
+  // si está abierto (o es el respaldo del mes) calcula en vivo.
+  const getTotales = async (inicio: string, fin: string, estado: string | null, id?: string): Promise<Totales> => {
+    const [
+      { data: rawIngresos },
+      { data: rawSaldo },
+      { data: rawDonaciones },
+      { data: rawVentas },
+      { data: rawEgresos },
+      { data: cuentasRango },
+    ] = await Promise.all([
+      supabase.from("pagos_abonos").select("monto, fecha_pago, metodo_pago, origen_fondos, estado, notas").gte("fecha_pago", inicio).lte("fecha_pago", fin),
+      supabase.from("movimientos_saldo_favor").select("monto, fecha, metodo_pago, tipo, notas").gte("fecha", inicio).lte("fecha", fin),
+      supabase.from("donaciones_asistentes").select("monto, estado, notas, fecha").gte("fecha", inicio).lte("fecha", fin),
+      supabase.from("ventas_externas").select("monto, estado, notas, fecha").gte("fecha", inicio).lte("fecha", fin),
+      supabase.from("egresos").select("monto, fecha, estado, notas").gte("fecha", inicio).lte("fecha", fin),
+      supabase.from("cuentas_por_cobrar").select("valor_total, pagos_abonos(monto, estado, notas)").gte("fecha_emision", inicio).lte("fecha_emision", fin),
+    ]);
 
-  // Donaciones del Mes
-  const { data: rawDonaciones } = await supabase
-    .from('donaciones_asistentes')
-    .select('monto, estado, notas, fecha')
-    .gte('fecha', firstDayOfMonth)
-    .lte('fecha', lastDayOfMonth);
-  const donacionesData = (rawDonaciones ?? []).filter((item) => !esAnuladoCompleto(item));
-  const donacionesMes = Math.round(donacionesData.reduce((acc, d) => acc + Number(d.monto), 0));
+    // --- Cálculo en vivo (igual que la liquidación de un período abierto) ---
+    const ingresosData = filtrarIngresosOperativos(rawIngresos ?? [], { excluirSaldoAFavor: true, excluirAplicacionSaldo: true });
+    const saldoFavorIngresos = filtrarIngresosRealesSaldoAFavor(rawSaldo ?? []);
+    const donacionesValidas = (rawDonaciones ?? []).filter((d: any) => !esAnuladoCompleto(d));
+    const ventasValidas = (rawVentas ?? []).filter((v: any) => !esAnuladoCompleto(v));
+    const egresosValidos = (rawEgresos ?? []).filter((e: any) => !esAnuladoCompleto(e));
 
-  const { data: rawVentasExternas } = await supabase
-    .from('ventas_externas')
-    .select('monto, estado, notas, fecha')
-    .gte('fecha', firstDayOfMonth)
-    .lte('fecha', lastDayOfMonth);
-  const ventasExternasData = (rawVentasExternas ?? []).filter((item) => !esAnuladoCompleto(item));
-  const ventasExternasMes = Math.round(sumarMontos(ventasExternasData));
+    let ingresosCartera = Math.round(sumarMontos([...ingresosData, ...saldoFavorIngresos]));
+    let donaciones = Math.round(donacionesValidas.reduce((a: number, d: any) => a + Number(d.monto), 0));
+    let ventasExternas = Math.round(sumarMontos(ventasValidas));
+    let ingresosTotales = Math.round(ingresosCartera + donaciones + ventasExternas);
+    let egresos = Math.round(sumarMontos(egresosValidos));
+    let utilidad = Math.round(ingresosTotales - egresos);
+    let congelado = false;
 
-  // Egresos del Mes
-  const { data: rawEgresosData } = await supabase
-    .from('egresos')
-    .select('monto, fecha, estado, notas')
-    .gte('fecha', firstDayOfMonth)
-    .lte('fecha', lastDayOfMonth);
-    
-  const egresosData = (rawEgresosData ?? []).filter((item) => !esAnuladoCompleto(item));
-  const egresosMes = Math.round(sumarMontos(egresosData));
-  
-  // Utilidad del Mes
-  const ingresosTotales = Math.round(ingresosMes + donacionesMes + ventasExternasMes);
-  const utilidadMes = Math.round(ingresosTotales - egresosMes);
+    // --- Si está cerrado: usar los valores congelados de la liquidación ---
+    if (estado === "cerrado" && id) {
+      const [{ data: liqRows }, { data: resumenRows }] = await Promise.all([
+        supabase.from("liquidaciones_socios").select("ingresos_cobrados, donaciones_periodo, ingresos_operativos").eq("periodo_id", id).limit(1),
+        supabase.from("liquidaciones_resumen_cuentas").select("ingresos_ventas_externas, salidas_egresos").eq("periodo_id", id),
+      ]);
+      if (liqRows && liqRows.length > 0) {
+        const liq: any = liqRows[0];
+        ingresosCartera = Math.round(Number(liq.ingresos_cobrados) || 0);
+        donaciones = Math.round(Number(liq.donaciones_periodo) || 0);
+        ingresosTotales = Math.round(Number(liq.ingresos_operativos ?? ingresosCartera + donaciones) || 0);
+        egresos = Math.round((resumenRows ?? []).reduce((a: number, r: any) => a + Number(r.salidas_egresos || 0), 0));
+        ventasExternas = Math.round((resumenRows ?? []).reduce((a: number, r: any) => a + Number(r.ingresos_ventas_externas || 0), 0));
+        utilidad = Math.round(ingresosTotales - egresos);
+        congelado = true;
+      }
+    }
 
-  // Preparar datos para la grÃ¡fica de balance acumulado (incluye donaciones,
-  // para que el grafico cuadre con el KPI de ingresos totales).
-  const daysInMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
-  const isCurrentMonth = now.getFullYear() === targetYear && now.getMonth() === targetMonth;
-  const lastDayToProcess = isCurrentMonth ? now.getDate() : daysInMonth;
+    // Facturado / Pendiente del período (cuentas emitidas en el rango) — siempre en vivo
+    const facturado = Math.round((cuentasRango ?? []).reduce((acc: number, c: any) => acc + Number(c.valor_total), 0));
+    const pendiente = Math.round((cuentasRango ?? []).reduce((acc: number, c: any) => {
+      const abonado = filtrarPagosValidosCuentas(c.pagos_abonos || []).reduce((s: number, p: any) => s + Number(p.monto), 0);
+      return acc + (Number(c.valor_total) - abonado);
+    }, 0));
 
-  const diasGrafica: string[] = [];
-  for (let i = 1; i <= lastDayToProcess; i++) {
-    diasGrafica.push(`${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`);
-  }
+    // Datos para la gráfica de balance diario (siempre en vivo sobre el rango)
+    const dias = buildDays(inicio, fin);
+    const ingresosDiarios = [
+      ...ingresosData.map((it: any) => ({ fecha: it.fecha_pago, monto: it.monto })),
+      ...saldoFavorIngresos.map((it: any) => ({ fecha: it.fecha, monto: it.monto })),
+      ...ventasValidas.map((it: any) => ({ fecha: it.fecha, monto: it.monto })),
+      ...donacionesValidas.map((it: any) => ({ fecha: it.fecha, monto: it.monto })),
+    ];
+    const egresosDiarios = egresosValidos.map((it: any) => ({ fecha: it.fecha, monto: it.monto }));
+    const chartData = construirSerieDiaria(dias, ingresosDiarios, egresosDiarios);
 
-  const ingresosDiarios = [
-    ...(ingresosData ?? []).map((item: any) => ({ fecha: item.fecha_pago, monto: item.monto })),
-    ...saldoFavorIngresosMes.map((item: any) => ({ fecha: item.fecha, monto: item.monto })),
-    ...ventasExternasData.map((item: any) => ({ fecha: item.fecha, monto: item.monto })),
-    ...donacionesData.map((item: any) => ({ fecha: item.fecha, monto: item.monto })),
-  ];
-  const egresosDiarios = egresosData.map((item: any) => ({ fecha: item.fecha, monto: item.monto }));
+    return { ingresosCartera, donaciones, ventasExternas, ingresosTotales, egresos, utilidad, facturado, pendiente, chartData, congelado };
+  };
 
-  const chartData = construirSerieDiaria(diasGrafica, ingresosDiarios, egresosDiarios);
+  const cur = await getTotales(rangeInicio, rangeFin, periodoEstado, selectedPeriodo?.id);
+  const prev: Totales | null = prevPeriodo
+    ? await getTotales(prevPeriodo.fecha_inicio, prevPeriodo.fecha_fin, prevPeriodo.estado, prevPeriodo.id)
+    : null;
 
-  // Facturado y Pendiente del Mes
-  const { data: cuentasPeriodoData } = await supabase
-    .from('cuentas_por_cobrar')
-    .select('valor_total, pagos_abonos(monto, estado, notas)')
-    .gte('fecha_emision', firstDayOfMonth)
-    .lte('fecha_emision', lastDayOfMonth);
-    
-  const facturadoMes = Math.round(cuentasPeriodoData?.reduce((acc, curr) => acc + Number(curr.valor_total), 0) || 0);
-  const pendienteMes = Math.round(cuentasPeriodoData?.reduce((acc, curr) => {
-    const pagosValidos = filtrarPagosValidosCuentas(curr.pagos_abonos || []);
-    const abonado = pagosValidos.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0);
-    return acc + (Number(curr.valor_total) - abonado);
-  }, 0) || 0);
+  // Variables que usa el resto del componente
+  const ingresosMes = cur.ingresosCartera;
+  const donacionesMes = cur.donaciones;
+  const egresosMes = cur.egresos;
+  const ingresosTotales = cur.ingresosTotales;
+  const utilidadMes = cur.utilidad;
+  const facturadoMes = cur.facturado;
+  const pendienteMes = cur.pendiente;
+  const chartData = cur.chartData;
+  const congelado = cur.congelado;
 
-  // --- DATOS DEL MES ANTERIOR (TENDENCIAS) ---
-  const { data: rawIngresosPrev } = await supabase.from('pagos_abonos').select('monto, metodo_pago, origen_fondos, estado, notas').gte('fecha_pago', firstDayOfPrevMonth).lte('fecha_pago', lastDayOfPrevMonth);
-  const ingresosPrevData = filtrarIngresosOperativos(rawIngresosPrev ?? [], {
-    excluirSaldoAFavor: true,
-    excluirAplicacionSaldo: true
-  });
-  const { data: rawSaldoFavorPrev } = await supabase
-    .from('movimientos_saldo_favor')
-    .select('monto, fecha, metodo_pago, tipo, notas')
-    .gte('fecha', firstDayOfPrevMonth)
-    .lte('fecha', lastDayOfPrevMonth);
-  const saldoFavorIngresosPrev = filtrarIngresosRealesSaldoAFavor(rawSaldoFavorPrev ?? []);
-  const ingresosPrev = Math.round(sumarMontos([...ingresosPrevData, ...saldoFavorIngresosPrev]));
-  const { data: rawDonacionesPrev } = await supabase.from('donaciones_asistentes').select('monto, estado, notas').gte('fecha', firstDayOfPrevMonth).lte('fecha', lastDayOfPrevMonth);
-  const donacionesPrev = Math.round((rawDonacionesPrev ?? []).filter((item) => !esAnuladoCompleto(item)).reduce((acc, d) => acc + Number(d.monto), 0));
-  const { data: rawVentasExternasPrev } = await supabase.from('ventas_externas').select('monto, estado, notas').gte('fecha', firstDayOfPrevMonth).lte('fecha', lastDayOfPrevMonth);
-  const ventasExternasPrev = Math.round((rawVentasExternasPrev ?? []).filter((item) => !esAnuladoCompleto(item)).reduce((acc, v) => acc + Number(v.monto), 0));
-  const ingresosTotalesPrev = ingresosPrev + donacionesPrev + ventasExternasPrev;
-
-  const { data: rawEgresosPrevData } = await supabase.from('egresos').select('monto, estado, notas').gte('fecha', firstDayOfPrevMonth).lte('fecha', lastDayOfPrevMonth);
-  const egresosPrevData = (rawEgresosPrevData ?? []).filter((item) => !esAnuladoCompleto(item));
-  const egresosPrev = Math.round(sumarMontos(egresosPrevData));
-  const utilidadPrev = ingresosTotalesPrev - egresosPrev;
-
-  const { data: cuentasPrevData } = await supabase.from('cuentas_por_cobrar').select('valor_total, pagos_abonos(monto, estado, notas)').gte('fecha_emision', firstDayOfPrevMonth).lte('fecha_emision', lastDayOfPrevMonth);
-  const facturadoPrev = Math.round(cuentasPrevData?.reduce((acc, curr) => acc + Number(curr.valor_total), 0) || 0);
-  const pendientePrev = Math.round(cuentasPrevData?.reduce((acc, curr) => {
-    const abonado = filtrarPagosValidosCuentas(curr.pagos_abonos || []).reduce((sum: number, pago: any) => sum + Number(pago.monto), 0);
-    return acc + (Number(curr.valor_total) - abonado);
-  }, 0) || 0);
-
-  // Funciones de cÃ¡lculo de tendencia (%)
+  // --- Tendencias vs período anterior ---
   const getTrend = (current: number, previous: number) => {
     if (previous === 0) return current > 0 ? 100 : 0;
     return Math.round(((current - previous) / Math.abs(previous)) * 100);
   };
+  const ingresosTrend = getTrend(ingresosMes, prev?.ingresosCartera ?? 0);
+  const donacionesTrend = getTrend(donacionesMes, prev?.donaciones ?? 0);
+  const ingresosTotalesTrend = getTrend(ingresosTotales, prev?.ingresosTotales ?? 0);
+  const egresosTrend = getTrend(egresosMes, prev?.egresos ?? 0);
+  const utilidadTrend = getTrend(utilidadMes, prev?.utilidad ?? 0);
+  const facturadoTrend = getTrend(facturadoMes, prev?.facturado ?? 0);
+  const pendienteTrend = getTrend(pendienteMes, prev?.pendiente ?? 0);
 
-  const ingresosTrend = getTrend(ingresosMes, ingresosPrev);
-  const donacionesTrend = getTrend(donacionesMes, donacionesPrev);
-  const ingresosTotalesTrend = getTrend(ingresosTotales, ingresosTotalesPrev);
-  const egresosTrend = getTrend(egresosMes, egresosPrev);
-  const utilidadTrend = getTrend(utilidadMes, utilidadPrev);
-  const facturadoTrend = getTrend(facturadoMes, facturadoPrev);
-  const pendienteTrend = getTrend(pendienteMes, pendientePrev);
+  // 2. INDICADORES HISTÓRICOS APARTE (acumulado general, no dependen del período)
 
-  // 2. INDICADORES HISTÃ“RICOS APARTE
-  
-  // Cartera Total (Todas las cuentas pendientes)
+  // Cartera Total (todas las cuentas pendientes)
   const { data: carteraTotalData } = await supabase
-    .from('cuentas_por_cobrar')
-    .select('valor_total, pagos_abonos(monto, estado, notas)')
-    .in('estado', ['pendiente', 'parcial']);
-    
+    .from("cuentas_por_cobrar")
+    .select("valor_total, pagos_abonos(monto, estado, notas)")
+    .in("estado", ["pendiente", "parcial"]);
   const carteraTotal = Math.round(carteraTotalData?.reduce((acc, curr) => {
     const abonado = filtrarPagosValidosCuentas(curr.pagos_abonos || []).reduce((sum: number, pago: any) => sum + Number(pago.monto), 0);
     return acc + (Number(curr.valor_total) - abonado);
   }, 0) || 0);
-  
-  // Cartera Antigua (+30 dÃ­as)
+
+  // Cartera Antigua (+30 días)
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
-  
+  const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
+
   const { data: carteraAntiguaData } = await supabase
-    .from('cuentas_por_cobrar')
-    .select('asistente_id, valor_total, pagos_abonos(monto, estado, notas)')
-    .in('estado', ['pendiente', 'parcial'])
-    .lt('fecha_emision', thirtyDaysAgoStr);
-    
+    .from("cuentas_por_cobrar")
+    .select("asistente_id, valor_total, pagos_abonos(monto, estado, notas)")
+    .in("estado", ["pendiente", "parcial"])
+    .lt("fecha_emision", thirtyDaysAgoStr);
+
   let carteraAntigua = 0;
   const personasAntiguasSet = new Set<string>();
-  
-  carteraAntiguaData?.forEach(curr => {
+  carteraAntiguaData?.forEach((curr) => {
     const abonado = filtrarPagosValidosCuentas(curr.pagos_abonos || []).reduce((sum: number, p: any) => sum + Number(p.monto), 0);
     const pendiente = Number(curr.valor_total) - abonado;
     if (pendiente > 0) {
       carteraAntigua += pendiente;
-      if (curr.asistente_id) {
-        personasAntiguasSet.add(curr.asistente_id);
-      }
+      if (curr.asistente_id) personasAntiguasSet.add(curr.asistente_id);
     }
   });
-  
   carteraAntigua = Math.round(carteraAntigua);
   const personasConCarteraAntigua = personasAntiguasSet.size;
 
-  // Cuentas Pendientes (Top 5 mÃ¡s recientes para la lista)
+  // Cuentas Pendientes (Top 5 más recientes para la lista)
   const { data: cuentasPendientesData } = await supabase
-    .from('cuentas_por_cobrar')
+    .from("cuentas_por_cobrar")
     .select(`
       id,
       concepto,
@@ -220,17 +245,14 @@ export async function Dashboard({ month }: { month?: string }) {
       asistentes ( nombre ),
       pagos_abonos ( monto, estado, notas )
     `)
-    .in('estado', ['pendiente', 'parcial'])
-    .order('fecha_emision', { ascending: false })
+    .in("estado", ["pendiente", "parcial"])
+    .order("fecha_emision", { ascending: false })
     .limit(5);
 
   const cuentasPendientes = cuentasPendientesData?.map((cuenta: any) => {
-    const pagosValidos = filtrarPagosValidosCuentas(cuenta.pagos_abonos || [])
+    const pagosValidos = filtrarPagosValidosCuentas(cuenta.pagos_abonos || []);
     const total_abonado = pagosValidos.reduce((sum: number, pago: any) => sum + Number(pago.monto), 0);
-    return {
-      ...cuenta,
-      monto_pendiente: Math.round(Number(cuenta.valor_total) - total_abonado)
-    };
+    return { ...cuenta, monto_pendiente: Math.round(Number(cuenta.valor_total) - total_abonado) };
   }) || [];
 
   const mainStats = [
@@ -242,7 +264,7 @@ export async function Dashboard({ month }: { month?: string }) {
       icon: Banknote,
       color: "text-[rgb(var(--success))]",
       bg: "bg-[rgba(var(--success),0.1)]",
-      help: "Ingresos recibidos en el mes seleccionado."
+      help: "Ingresos totales recibidos dentro del período de la liquidación seleccionada.",
     },
     {
       name: "Egresos del Período",
@@ -252,7 +274,7 @@ export async function Dashboard({ month }: { month?: string }) {
       icon: ShoppingCart,
       color: "text-[rgb(var(--danger))]",
       bg: "bg-[rgba(var(--danger),0.1)]",
-      help: "Gastos registrados dentro del mes seleccionado."
+      help: "Gastos registrados dentro del período de la liquidación.",
     },
     {
       name: "Utilidad del Período",
@@ -262,7 +284,7 @@ export async function Dashboard({ month }: { month?: string }) {
       icon: Wallet,
       color: utilidadMes >= 0 ? "text-[rgb(var(--info))]" : "text-[rgb(var(--danger))]",
       bg: utilidadMes >= 0 ? "bg-[rgba(var(--info),0.1)]" : "bg-[rgba(var(--danger),0.1)]",
-      help: "Ingresos totales menos egresos del período."
+      help: "Ingresos totales menos egresos del período (igual que la utilidad neta de la liquidación).",
     },
     {
       name: "Pendiente del Período",
@@ -272,7 +294,7 @@ export async function Dashboard({ month }: { month?: string }) {
       icon: AlertCircle,
       color: "text-[rgb(var(--warning))]",
       bg: "bg-[rgba(var(--warning),0.12)]",
-      help: "Saldo por cobrar de las cuentas creadas en el mes."
+      help: "Saldo por cobrar de las cuentas emitidas dentro del período.",
     },
   ];
 
@@ -285,7 +307,7 @@ export async function Dashboard({ month }: { month?: string }) {
       icon: Banknote,
       color: "text-[rgb(var(--success))]",
       bg: "bg-[rgba(var(--success),0.08)]",
-      help: "Pagos y abonos recibidos (sin saldo a favor) en el mes."
+      help: "Pagos y abonos cobrados (sin saldo a favor) dentro del período.",
     },
     {
       name: "Donaciones",
@@ -295,7 +317,7 @@ export async function Dashboard({ month }: { month?: string }) {
       icon: Wallet,
       color: "text-[rgb(var(--info))]",
       bg: "bg-[rgba(var(--info),0.08)]",
-      help: "Donaciones voluntarias registradas en el mes."
+      help: "Donaciones voluntarias registradas dentro del período.",
     },
     {
       name: "Facturado del Período",
@@ -305,10 +327,10 @@ export async function Dashboard({ month }: { month?: string }) {
       icon: Receipt,
       color: "text-[rgb(var(--info))]",
       bg: "bg-[rgba(var(--info),0.08)]",
-      help: "Valor total de cuentas por cobrar creadas en el mes (pagadas o no)."
+      help: "Valor total de cuentas por cobrar emitidas dentro del período (pagadas o no).",
     },
   ];
-  
+
   const historicalStats = [
     {
       name: "Cartera Total",
@@ -316,15 +338,15 @@ export async function Dashboard({ month }: { month?: string }) {
       icon: Wallet,
       color: "text-[rgb(var(--text-primary))]",
       bg: "bg-[rgb(var(--muted-surface))]",
-      tooltip: "Toda la deuda pendiente del sistema, sin importar el mes."
+      tooltip: "Toda la deuda pendiente del sistema, sin importar el período.",
     },
     {
-      name: "Cartera Antigua (+30 dÃ­as)",
+      name: "Cartera Antigua (+30 días)",
       value: `$${carteraAntigua.toLocaleString()}`,
       icon: History,
       color: "text-[rgb(var(--danger-strong))]",
       bg: "bg-[rgba(var(--danger),0.12)]",
-      tooltip: "Deuda pendiente de cuentas con mÃ¡s de 30 dÃ­as desde su fecha de emisiÃ³n."
+      tooltip: "Deuda pendiente de cuentas con más de 30 días desde su fecha de emisión.",
     },
     {
       name: "Personas con Deuda Antigua",
@@ -332,11 +354,9 @@ export async function Dashboard({ month }: { month?: string }) {
       icon: Users,
       color: "text-[rgb(var(--warning))]",
       bg: "bg-[rgba(var(--warning),0.18)]",
-      tooltip: "Cantidad de asistentes que tienen al menos una cuenta antigua pendiente."
+      tooltip: "Cantidad de asistentes que tienen al menos una cuenta antigua pendiente.",
     },
   ];
-
-  const displayMonthName = new Date(targetYear, targetMonth, 1).toLocaleString('es', { month: 'long', year: 'numeric' });
 
   return (
     <div id="dashboard-content" className="space-y-8 pb-8">
@@ -360,8 +380,8 @@ export async function Dashboard({ month }: { month?: string }) {
             </div>
           </div>
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-            <PdfReportButton displayMonthName={displayMonthName} />
-            <MonthSelector currentMonth={currentMonthValue} />
+            <PdfReportButton displayMonthName={periodoLabel} />
+            <PeriodSelector periodos={periodos} currentId={selectedPeriodo?.id} />
           </div>
         </div>
         <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -380,15 +400,26 @@ export async function Dashboard({ month }: { month?: string }) {
         </div>
       </div>
 
-      {/* Resumen del mes */}
+      {/* Resumen del período */}
       <section className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="flex flex-col gap-1">
-          <h2 className="text-lg font-semibold text-[rgb(var(--text-primary))]">
-            Resumen del mes <span className="text-[rgb(var(--text-muted))] font-normal text-sm ml-2 capitalize">({displayMonthName})</span>
-          </h2>
-          <p className="text-sm text-[rgb(var(--text-muted))]">Cuatro KPIs clave y, debajo, el detalle financiero del período.</p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h2 className="text-lg font-semibold text-[rgb(var(--text-primary))]">
+              Resumen del período <span className="text-[rgb(var(--text-muted))] font-normal text-sm ml-1">({periodoLabel})</span>
+            </h2>
+            {periodoEstado && (
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${periodoEstado === 'abierto' ? 'bg-[rgba(var(--success),0.14)] text-[rgb(var(--success))]' : 'bg-[rgba(var(--warning),0.16)] text-[rgb(var(--warning))]'}`}>
+                {periodoEstado === 'cerrado' && <Lock className="w-3 h-3" />}
+                {periodoEstado === 'abierto' ? 'Abierto' : 'Cerrado'}
+              </span>
+            )}
+            <span className="text-xs text-[rgb(var(--text-muted))]">{periodoFechasLabel}</span>
+          </div>
+          <p className="text-sm text-[rgb(var(--text-muted))]">
+            Datos de la última liquidación{congelado ? ' (valores congelados al cerrar)' : ''}. Comparativo vs período anterior.
+          </p>
           <p className="text-sm font-medium text-[rgb(var(--text-primary))]">
-            En {displayMonthName} ingresaron <span className="text-[rgb(var(--success))]">${ingresosTotales.toLocaleString()}</span>, se gastaron <span className="text-[rgb(var(--danger))]">${egresosMes.toLocaleString()}</span>, la utilidad fue <span className="text-[rgb(var(--info))]">${utilidadMes.toLocaleString()}</span> y quedan <span className="text-[rgb(var(--warning))]">${pendienteMes.toLocaleString()}</span> por cobrar.
+            En este período ingresaron <span className="text-[rgb(var(--success))]">${ingresosTotales.toLocaleString()}</span>, se gastaron <span className="text-[rgb(var(--danger))]">${egresosMes.toLocaleString()}</span>, la utilidad fue <span className="text-[rgb(var(--info))]">${utilidadMes.toLocaleString()}</span> y quedan <span className="text-[rgb(var(--warning))]">${pendienteMes.toLocaleString()}</span> por cobrar.
           </p>
         </div>
 
@@ -526,9 +557,9 @@ export async function Dashboard({ month }: { month?: string }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-1000">
         <div className="lg:col-span-2 premium-panel rounded-3xl p-6 flex flex-col">
-          <BalanceChart data={chartData} utilidadMes={utilidadMes} displayMonthName={displayMonthName} />
+          <BalanceChart data={chartData} utilidadMes={utilidadMes} displayMonthName={periodoLabel} />
         </div>
-        
+
         <div className="premium-panel rounded-3xl p-6 flex flex-col">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base font-semibold text-[rgb(var(--text-primary))]">Cuentas Recientes Pendientes</h3>
@@ -537,7 +568,7 @@ export async function Dashboard({ month }: { month?: string }) {
           <div className="space-y-4 flex-1 overflow-y-auto">
             {cuentasPendientes?.map((cuenta: any) => {
               const saldo = cuenta.monto_pendiente || 0;
-              const isOverdue = new Date(cuenta.fecha_emision) < new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // MÃ¡s de 30 dÃ­as
+              const isOverdue = new Date(cuenta.fecha_emision) < new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
               return (
                 <Link key={cuenta.id} href={`/cuentas/${cuenta.id}`} className="flex items-center justify-between border-b border-[rgba(var(--border),0.42)] pb-4 last:border-0 last:pb-0 hover:bg-[rgba(var(--gold),0.07)] p-2 -mx-2 rounded-xl transition-colors">
                   <div className="flex-1 min-w-0 pr-4">
@@ -566,5 +597,3 @@ export async function Dashboard({ month }: { month?: string }) {
     </div>
   );
 }
-
-
