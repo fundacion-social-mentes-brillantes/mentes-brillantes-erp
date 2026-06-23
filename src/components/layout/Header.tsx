@@ -158,8 +158,8 @@ export function Header({ userEmail, userRole = 'user' }: { userEmail?: string, u
           </div>
         )}
         <div className="flex items-center gap-3 border-l border-[rgba(var(--border),0.58)] pl-4 ml-2">
-          <div className="flex flex-col items-end">
-            <span className="text-sm font-medium text-[rgb(var(--text-primary))]">{userEmail}</span>
+          <div className="flex flex-col items-end min-w-0">
+            <span className="text-sm font-medium text-[rgb(var(--text-primary))] truncate max-w-[42vw] sm:max-w-[16rem]">{userEmail}</span>
             {userRole === 'admin' ? (
               <span className="text-[10px] sm:text-xs font-semibold premium-badge px-2 py-0.5 rounded-full mt-0.5">
                 Administrador

@@ -23,7 +23,7 @@ export default async function LiquidacionesPage() {
         </Link>
       </div>
 
-      <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
+      <div className="hidden md:block rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left whitespace-nowrap">
             <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 font-medium">
@@ -74,6 +74,48 @@ export default async function LiquidacionesPage() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Tarjetas móvil */}
+      <div className="md:hidden space-y-3">
+        {!periodos?.length ? (
+          <div className="bg-white p-6 rounded-xl border border-zinc-200 text-center text-zinc-500">
+            No hay períodos registrados.
+          </div>
+        ) : (
+          periodos.map((periodo) => (
+            <div key={periodo.id} className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 space-y-1">
+                  <p className="font-semibold text-zinc-900 leading-snug">{periodo.nombre}</p>
+                  <p className="text-xs text-zinc-500">
+                    {new Date(periodo.fecha_inicio).toLocaleDateString()} — {new Date(periodo.fecha_fin).toLocaleDateString()}
+                  </p>
+                </div>
+                <span className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${periodo.estado === 'abierto' ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-700'}`}>
+                  {periodo.estado === 'cerrado' && <Lock className="w-3 h-3" />}
+                  {periodo.estado.charAt(0).toUpperCase() + periodo.estado.slice(1)}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                {periodo.estado === 'abierto' && (
+                  <AjustarFechaPeriodoModal
+                    periodoId={periodo.id}
+                    fechaInicio={periodo.fecha_inicio}
+                    fechaFin={periodo.fecha_fin}
+                  />
+                )}
+                <Link
+                  href={`/liquidaciones/${periodo.id}`}
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-md border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+                >
+                  <Eye className="w-4 h-4" />
+                  Ver detalle
+                </Link>
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
   )

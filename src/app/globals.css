@@ -305,3 +305,75 @@ textarea:hover {
 [data-theme="dark"] .text-zinc-50 {
   color: rgb(255 255 255) !important;
 }
+
+/* ============================================================
+   Optimizaciones móviles (no afectan la vista de escritorio)
+   ============================================================ */
+
+/* Áreas seguras del dispositivo (notch superior, barra inferior) */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Evita el desplazamiento horizontal accidental en móvil.
+   Usamos "clip" (no "hidden") para no romper los encabezados sticky. */
+html,
+body {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+/* Sensación de app: sin "rebote" del documento solo cuando está instalada */
+@media (display-mode: standalone) {
+  html,
+  body {
+    overscroll-behavior-y: none;
+  }
+}
+
+/* Evita el zoom automático de iOS al enfocar un campo (necesita >= 16px) */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* Desplazamiento horizontal suave en tablas y contenedores desbordables */
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 768px) {
+  .overflow-x-auto::-webkit-scrollbar {
+    height: 6px;
+  }
+}
+
+/* Mejor respuesta táctil: sin destello azul al tocar */
+@media (pointer: coarse) {
+  a,
+  button,
+  [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Espacio inferior para que la barra de navegación móvil no tape el contenido */
+.has-mobile-nav {
+  padding-bottom: calc(4.5rem + var(--safe-bottom));
+}
+@media (min-width: 768px) {
+  .has-mobile-nav {
+    padding-bottom: 0;
+  }
+}

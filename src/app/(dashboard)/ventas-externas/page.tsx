@@ -25,7 +25,7 @@ export default async function VentasExternasPage() {
         </Link>
       </div>
 
-      <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
+      <div className="hidden md:block rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left whitespace-nowrap">
             <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 font-medium">
@@ -74,6 +74,56 @@ export default async function VentasExternasPage() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Tarjetas móvil */}
+      <div className="md:hidden space-y-3">
+        {!ventas?.length ? (
+          <div className="bg-white p-6 rounded-xl border border-zinc-200 text-center text-zinc-500">
+            No hay ventas externas registradas.
+          </div>
+        ) : (
+          ventas.map((venta) => (
+            <div
+              key={venta.id}
+              className={`bg-white p-4 rounded-xl border border-zinc-200 shadow-sm space-y-3 ${venta.estado === 'anulado' ? 'opacity-60' : ''}`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 space-y-1">
+                  <p className="font-semibold text-zinc-900 leading-snug">{venta.concepto}</p>
+                  <p className="text-xs text-zinc-500">
+                    {new Date(venta.fecha).toLocaleDateString('es-CO', { timeZone: 'UTC' })} · {venta.comprador_nombre || 'Sin comprador'}
+                  </p>
+                </div>
+                <p className="shrink-0 text-base font-bold text-emerald-600">
+                  ${Number(venta.monto).toLocaleString()}
+                </p>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="inline-flex items-center px-2 py-1 rounded-md font-medium bg-zinc-100 text-zinc-700 capitalize">
+                    {venta.metodo_pago}
+                  </span>
+                  <span className="inline-flex items-center px-2 py-1 rounded-md font-medium bg-zinc-100 text-zinc-700 capitalize">
+                    {venta.estado}
+                  </span>
+                </div>
+                {isAdmin && (
+                  <div className="flex items-center gap-1">
+                    <Link
+                      href={`/ventas-externas/${venta.id}/editar`}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-md border border-zinc-200 px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                      Editar
+                    </Link>
+                    <VentaExternaActions id={venta.id} estado={venta.estado} />
+                  </div>
+                )}
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
   )

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Sin conexión · Mentes Brillantes ERP</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        background:
+          radial-gradient(circle at 76% 20%, rgba(211, 182, 87, 0.20), transparent 60%),
+          linear-gradient(135deg, #0f1c25, #060c11);
+        color: #f1f6f0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom);
+      }
+      .card { max-width: 420px; }
+      img { width: 132px; height: 132px; border-radius: 28px; box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5); }
+      h1 { font-size: 1.4rem; margin: 24px 0 8px; letter-spacing: -0.01em; }
+      p { color: #a3b0a6; line-height: 1.55; margin: 0 0 24px; }
+      button {
+        appearance: none; border: 1px solid rgba(221, 178, 87, 0.4); cursor: pointer;
+        background: linear-gradient(135deg, #d3b657, #bf953f); color: #1a1402;
+        font-weight: 700; font-size: 1rem; padding: 12px 28px; border-radius: 14px;
+        min-height: 48px;
+      }
+      button:active { transform: scale(0.98); }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <img src="/icons/icon-192.png" alt="Mentes Brillantes" />
+      <h1>Sin conexión a internet</h1>
+      <p>
+        Necesitas conexión para ver la información financiera más reciente.
+        Revisa tu señal o tus datos móviles y vuelve a intentarlo.
+      </p>
+      <button onclick="location.reload()">Reintentar</button>
+    </div>
+  </body>
+</html>

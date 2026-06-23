@@ -71,7 +71,11 @@ export function Sidebar({ role = "consulta" }: SidebarProps) {
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="md:hidden fixed top-3 left-4 z-50 p-2 bg-[rgb(var(--surface-1))] text-[rgb(var(--text-primary))] border border-[rgba(var(--border),0.75)] rounded-xl shadow-soft"
+        className="md:hidden fixed z-50 p-2.5 bg-[rgb(var(--surface-1))] text-[rgb(var(--text-primary))] border border-[rgba(var(--border),0.75)] rounded-xl shadow-soft active:scale-95 transition-transform"
+        style={{
+          top: "calc(0.65rem + var(--safe-top))",
+          left: "calc(1rem + var(--safe-left))",
+        }}
         aria-label="Abrir navegación"
       >
         <Menu className="w-5 h-5" />
@@ -92,7 +96,7 @@ export function Sidebar({ role = "consulta" }: SidebarProps) {
       >
         <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_top,rgba(var(--gold),0.18),transparent_18rem),linear-gradient(180deg,rgba(var(--sidebar-backdrop),0.96),rgba(var(--surface-1),0.94))]" />
 
-        <div className="relative min-h-24 flex items-center justify-between px-5 border-b border-[rgba(var(--border),0.55)]">
+        <div className="relative min-h-24 flex items-center justify-between px-5 border-b border-[rgba(var(--border),0.55)]" style={{ paddingTop: "var(--safe-top)" }}>
           <div className="flex items-center gap-3 min-w-0">
             <div className="relative h-14 w-14 shrink-0 rounded-2xl border border-[rgba(var(--gold),0.38)] bg-[rgba(var(--surface-1),0.62)] shadow-soft overflow-hidden">
               <Image
