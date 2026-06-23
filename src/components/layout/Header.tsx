@@ -201,7 +201,10 @@ export function Header({ userEmail, userRole = 'user' }: { userEmail?: string, u
             </form>
 
             {searchOpen && (
-              <div className="absolute left-0 right-0 top-full mt-2 z-30 rounded-2xl border border-[rgba(var(--border),0.72)] bg-[rgba(var(--surface-1),0.98)] shadow-strong overflow-hidden backdrop-blur-xl">
+              <div
+                className="absolute left-0 right-0 top-full mt-2 z-30 rounded-2xl border border-[rgb(var(--border))] shadow-strong overflow-hidden"
+                style={{ backgroundColor: "rgb(var(--surface-1))" }}
+              >
                 <div className="max-h-[70vh] overflow-y-auto">
                   {searching && totalResults === 0 && (
                     <div className="flex items-center gap-2 px-4 py-4 text-sm text-[rgb(var(--text-muted))]">
@@ -328,7 +331,10 @@ export function Header({ userEmail, userRole = 'user' }: { userEmail?: string, u
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[rgb(var(--danger))] rounded-full border-2 border-[rgb(var(--surface-1))] shadow-[0_0_0_3px_rgba(var(--danger),0.12)]"></span>
             </button>
             {alertsOpen && (
-              <div className="absolute right-0 mt-2 w-80 rounded-2xl border border-[rgba(var(--border),0.72)] bg-[rgba(var(--surface-1),0.96)] shadow-strong z-20 overflow-hidden backdrop-blur-xl">
+              <div
+                className="absolute right-0 mt-2 w-80 rounded-2xl border border-[rgb(var(--border))] shadow-strong z-20 overflow-hidden"
+                style={{ backgroundColor: "rgb(var(--surface-1))" }}
+              >
                 <div className="px-4 py-3 border-b border-[rgba(var(--border),0.58)] flex items-center justify-between bg-[rgba(var(--surface-2),0.46)]">
                   <span className="text-sm font-semibold text-[rgb(var(--text-primary))]">Alertas operativas</span>
                   <Link href="/cuentas?estado=pendiente" className="text-xs text-[rgb(var(--info))] hover:underline">Ver cuentas</Link>
