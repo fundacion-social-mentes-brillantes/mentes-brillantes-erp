@@ -178,10 +178,19 @@ export async function Dashboard({ periodo: periodoId }: { periodo?: string }) {
     return { ingresosCartera, donaciones, ventasExternas, ingresosTotales, egresos, utilidad, facturado, pendiente, chartData, congelado };
   };
 
-  const cur = await getTotales(rangeInicio, rangeFin, periodoEstado, selectedPeriodo?.id);
-  const prev: Totales | null = prevPeriodo
-    ? await getTotales(prevPeriodo.fecha_inicio, prevPeriodo.fecha_fin, prevPeriodo.estado, prevPeriodo.id)
-    : null;
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
+
+  // Todo en paralelo: período actual, período anterior y la cartera general
+  const [cur, prev, carteraTotalRes, carteraAntiguaRes] = await Promise.all([
+    getTotales(rangeInicio, rangeFin, periodoEstado, selectedPeriodo?.id),
+    prevPeriodo
+      ? getTotales(prevPeriodo.fecha_inicio, prevPeriodo.fecha_fin, prevPeriodo.estado, prevPeriodo.id)
+      : Promise.resolve(null as Totales | null),
+    supabase.from("cuentas_por_cobrar").select("valor_total, pagos_abonos(monto, estado, notas)").in("estado", ["pendiente", "parcial"]),
+    supabase.from("cuentas_por_cobrar").select("valor_total, pagos_abonos(monto, estado, notas)").in("estado", ["pendiente", "parcial"]).lt("fecha_emision", thirtyDaysAgoStr),
+  ]);
 
   const ingresosMes = cur.ingresosCartera;
   const donacionesMes = cur.donaciones;
@@ -205,24 +214,13 @@ export async function Dashboard({ periodo: periodoId }: { periodo?: string }) {
   const facturadoTrend = getTrend(facturadoMes, prev?.facturado ?? 0);
   const pendienteTrend = getTrend(pendienteMes, prev?.pendiente ?? 0);
 
-  // --- Cartera (acumulado general, no depende del período) ---
-  const { data: carteraTotalData } = await supabase
-    .from("cuentas_por_cobrar")
-    .select("valor_total, pagos_abonos(monto, estado, notas)")
-    .in("estado", ["pendiente", "parcial"]);
+  // --- Cartera (acumulado general) — datos ya traídos en paralelo arriba ---
+  const carteraTotalData = carteraTotalRes.data;
+  const carteraAntiguaData = carteraAntiguaRes.data;
   const carteraTotal = Math.round(carteraTotalData?.reduce((acc, curr) => {
     const abonado = filtrarPagosValidosCuentas(curr.pagos_abonos || []).reduce((sum: number, pago: any) => sum + Number(pago.monto), 0);
     return acc + (Number(curr.valor_total) - abonado);
   }, 0) || 0);
-
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
-  const { data: carteraAntiguaData } = await supabase
-    .from("cuentas_por_cobrar")
-    .select("valor_total, pagos_abonos(monto, estado, notas)")
-    .in("estado", ["pendiente", "parcial"])
-    .lt("fecha_emision", thirtyDaysAgoStr);
   let carteraAntigua = 0;
   carteraAntiguaData?.forEach((curr) => {
     const abonado = filtrarPagosValidosCuentas(curr.pagos_abonos || []).reduce((sum: number, p: any) => sum + Number(p.monto), 0);
