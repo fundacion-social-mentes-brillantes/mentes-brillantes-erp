@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { createClient } from '../supabase/server'
 
 export type Role = 'admin' | 'caja' | 'consulta'
@@ -11,7 +12,9 @@ type Profile = {
   asistente_id: string | null
 }
 
-export async function getCurrentProfile() {
+// Memorizado por request: el layout y la página comparten una sola validación
+// de sesión + lectura de perfil en cada navegación (en vez de hacerla 2 veces).
+export const getCurrentProfile = cache(async () => {
   const supabase = await createClient()
   if (!supabase) throw new AuthzError('Supabase no configurado')
 
@@ -33,7 +36,7 @@ export async function getCurrentProfile() {
   if (!perfil) throw new AuthzError('Perfil no encontrado')
 
   return { supabase, user, perfil: perfil as Profile }
-}
+})
 
 export async function requireRoles(roles: Role[]) {
   const { supabase, user, perfil } = await getCurrentProfile()
