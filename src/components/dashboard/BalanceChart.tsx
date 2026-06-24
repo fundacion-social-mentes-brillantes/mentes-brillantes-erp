@@ -68,7 +68,7 @@ export function BalanceChart({ data, displayMonthName }: BalanceChartProps) {
   };
 
   return (
-    <div className="flex-1 flex flex-col min-h-[340px]">
+    <div className="flex flex-col">
       <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
         <div>
           <h3 className="text-base font-semibold text-[rgb(var(--text-primary))]">Balance diario</h3>
@@ -81,7 +81,7 @@ export function BalanceChart({ data, displayMonthName }: BalanceChartProps) {
         </div>
       </div>
 
-      <div className="flex-1 w-full h-full min-h-[280px] -ml-2">
+      <div className="w-full h-[300px] md:h-[360px] -ml-2">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={data} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
             <defs>
