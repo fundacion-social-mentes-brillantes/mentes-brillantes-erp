@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 
-// Número que "cuenta" hasta su valor al aparecer. Respeta prefers-reduced-motion
-// (si el usuario pide menos movimiento, muestra el valor final directo).
+// Número que "cuenta" hasta su valor al aparecer.
+// SEGURO para cifras financieras: el HTML del servidor ya trae el valor final
+// (sin JS, con pestaña oculta o con reduced-motion se ve el número correcto);
+// el conteo es solo un adorno cuando la pestaña está visible.
 export function AnimatedNumber({
   value,
   prefix = '$',
@@ -17,14 +19,20 @@ export function AnimatedNumber({
   className?: string
   style?: CSSProperties
 }) {
-  const [display, setDisplay] = useState(0)
+  const [display, setDisplay] = useState(value)
   const raf = useRef<number | null>(null)
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+    const reduced =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    // Pestaña oculta: el navegador pausa requestAnimationFrame y el conteo se
+    // quedaría a medias. En ese caso mostramos el valor final directo.
+    if (reduced || document.visibilityState === 'hidden') {
       setDisplay(value)
       return
     }
+    setDisplay(0)
     const start = performance.now()
     const tick = (now: number) => {
       const t = Math.min(1, (now - start) / duration)
@@ -41,8 +49,7 @@ export function AnimatedNumber({
   return (
     <span className={className} style={style}>
       {prefix}
-      {/* en-US fijo para que coincida con el formato del resto del dashboard
-          (el servidor formatea con coma; sin esto el navegador usaría es-CO) */}
+      {/* en-US fijo para que coincida con el formato del resto del dashboard */}
       {display.toLocaleString('en-US')}
     </span>
   )
