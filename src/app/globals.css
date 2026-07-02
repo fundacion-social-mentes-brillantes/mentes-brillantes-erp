@@ -521,3 +521,22 @@ body {
 [data-theme="dark"] .border-blue-200 { border-color: rgba(116, 192, 220, 0.35) !important; }
 [data-theme="dark"] .border-teal-200 { border-color: rgba(94, 234, 212, 0.35) !important; }
 [data-theme="dark"] .border-yellow-200 { border-color: rgba(234, 179, 8, 0.35) !important; }
+
+/* ============================================================
+   Dashboard premium: animaciones y brillos
+   ============================================================ */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rise-in {
+  animation: rise-in 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rise-in { animation: none; }
+}
+
+/* Brillo dorado de la línea de utilidad en la gráfica del dashboard */
+#dashboard-content .recharts-line-curve {
+  filter: drop-shadow(0 0 6px rgba(var(--warning), 0.45));
+}

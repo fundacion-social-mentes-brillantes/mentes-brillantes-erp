@@ -47,7 +47,7 @@ export function BalanceChart({ data, displayMonthName }: BalanceChartProps) {
         <div className="bg-[rgb(var(--surface-1))] backdrop-blur-md border border-[rgba(var(--border),0.7)] p-4 rounded-2xl shadow-strong flex flex-col gap-2 min-w-[210px]">
           <p className="text-[rgb(var(--text-muted))] font-medium text-xs mb-1 uppercase tracking-wider">Día {label}</p>
           {payload
-            .filter((e: any) => e.dataKey !== 'balanceArea')
+            .filter((e: any) => e.name !== 'balanceArea')
             .map((entry: any, index: number) => (
               <div key={index} className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-2">
@@ -118,8 +118,8 @@ export function BalanceChart({ data, displayMonthName }: BalanceChartProps) {
             <Tooltip content={<CustomTooltip />} cursor={{ fill: colors.cursor }} />
             <Legend verticalAlign="top" height={0} content={() => null} />
 
-            {/* Área suave bajo la utilidad acumulada */}
-            <Area type="monotone" dataKey="balance" name="balanceArea" stroke="none" fill="url(#gradUtilidad)" isAnimationActive />
+            {/* Área suave bajo la utilidad acumulada (oculta en tooltip y leyenda) */}
+            <Area type="monotone" dataKey="balance" name="balanceArea" stroke="none" fill="url(#gradUtilidad)" isAnimationActive tooltipType="none" legendType="none" />
 
             <Bar dataKey="ingresos" name="Ingresos" fill="url(#gradIngresos)" radius={[5, 5, 0, 0]} maxBarSize={26} />
             <Bar dataKey="egresos" name="Egresos" fill="url(#gradEgresos)" radius={[5, 5, 0, 0]} maxBarSize={26} />

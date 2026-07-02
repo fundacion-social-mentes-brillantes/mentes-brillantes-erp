@@ -4,6 +4,7 @@ import Image from "next/image";
 import { PeriodSelector } from "./PeriodSelector";
 import { BalanceChart } from "./BalanceChart";
 import { PdfReportButton } from "./PdfReportButton";
+import { AnimatedNumber } from "./AnimatedNumber";
 import { filtrarIngresosOperativos, filtrarIngresosRealesSaldoAFavor, esAnuladoCompleto, filtrarPagosValidosCuentas, sumarMontos } from "@/lib/utils/contable";
 import { construirSerieDiaria } from "@/lib/utils/dashboard";
 
@@ -250,8 +251,20 @@ export async function Dashboard({ periodo: periodoId }: { periodo?: string }) {
   return (
     <div id="dashboard-content" className="space-y-6 pb-8">
       {/* HERO: controles + utilidad protagonista */}
-      <section className="premium-panel rounded-3xl p-5 md:p-7 overflow-hidden relative animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <div className="absolute -top-24 -right-16 w-72 h-72 rounded-full pointer-events-none" style={{ background: `radial-gradient(circle, rgba(${utilColor},0.18), transparent 70%)` }} />
+      <section className="premium-panel rounded-3xl p-5 md:p-7 overflow-hidden relative rise-in">
+        {/* Orbes de luz decorativos */}
+        <div className="absolute -top-28 -right-20 w-80 h-80 rounded-full pointer-events-none" style={{ background: `radial-gradient(circle, rgba(${utilColor},0.22), transparent 70%)` }} />
+        <div className="absolute -bottom-32 -left-24 w-80 h-80 rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, rgba(var(--accent),0.12), transparent 70%)" }} />
+        {/* Patrón de puntos sutil */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            backgroundImage: "radial-gradient(rgba(var(--text-muted),0.16) 1px, transparent 1.4px)",
+            backgroundSize: "24px 24px",
+            maskImage: "radial-gradient(ellipse 80% 70% at 50% 40%, black 20%, transparent 78%)",
+            WebkitMaskImage: "radial-gradient(ellipse 80% 70% at 50% 40%, black 20%, transparent 78%)",
+          }}
+        />
         <div className="relative flex flex-col gap-6">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div className="flex items-center gap-3 min-w-0">
@@ -277,11 +290,25 @@ export async function Dashboard({ periodo: periodoId }: { periodo?: string }) {
             </div>
           </div>
 
-          <div className="relative rounded-2xl border border-[rgba(var(--border),0.5)] bg-[rgba(var(--surface-1),0.45)] px-6 py-7 text-center">
+          <div className="relative rounded-2xl border border-[rgba(var(--border),0.5)] bg-[rgba(var(--surface-1),0.45)] px-6 py-8 text-center overflow-hidden">
+            <span className="absolute inset-x-10 top-0 h-[2px] rounded-full" style={{ background: `linear-gradient(90deg, transparent, rgba(${utilColor},0.75), transparent)` }} />
             <p className="text-[10px] md:text-xs uppercase tracking-[0.28em] text-[rgb(var(--text-muted))] font-semibold">Utilidad neta del período</p>
-            <p className="mt-2 text-4xl md:text-6xl font-black tracking-tight" style={{ color: `rgb(${utilColor})` }}>
-              ${utilidadMes.toLocaleString()}
-            </p>
+            <AnimatedNumber
+              value={utilidadMes}
+              className="mt-2 block text-5xl md:text-7xl font-black tracking-tight tabular-nums"
+              style={{ color: `rgb(${utilColor})`, textShadow: `0 10px 44px rgba(${utilColor},0.38)` }}
+            />
+            <div className="mt-3 flex items-center justify-center gap-3 flex-wrap text-xs text-[rgb(var(--text-muted))]">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[rgb(var(--success))]" />
+                Ingresos <b className="text-[rgb(var(--success))] tabular-nums">${ingresosTotales.toLocaleString()}</b>
+              </span>
+              <span className="opacity-60">−</span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[rgb(var(--danger))]" />
+                Egresos <b className="text-[rgb(var(--danger))] tabular-nums">${egresosMes.toLocaleString()}</b>
+              </span>
+            </div>
             <div className="mt-3 flex items-center justify-center gap-2">
               {trendPill(utilidadTrend, true, "text-xs")}
               <span className="text-[11px] text-[rgb(var(--text-muted))]">vs período anterior</span>
@@ -294,40 +321,51 @@ export async function Dashboard({ periodo: periodoId }: { periodo?: string }) {
       </section>
 
       {/* 4 CÁPSULAS KPI */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        {capsulas.map((c) => (
-          <div key={c.name} className="premium-card rounded-2xl p-4 md:p-5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-strong">
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+        {capsulas.map((c, i) => (
+          <div
+            key={c.name}
+            className="premium-card relative overflow-hidden rounded-2xl p-4 md:p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-strong rise-in"
+            style={{ animationDelay: `${120 + i * 90}ms` }}
+          >
+            <span className="absolute inset-x-4 top-0 h-[2px] rounded-full" style={{ background: `linear-gradient(90deg, transparent, rgba(${c.color},0.85), transparent)` }} />
             <div className="flex items-start justify-between gap-2">
               <p className="text-[10px] md:text-xs font-semibold uppercase tracking-wide text-[rgb(var(--text-muted))]">{c.name}</p>
-              <span className="grid place-items-center h-7 w-7 rounded-full" style={{ backgroundColor: `rgba(${c.color},0.14)`, color: `rgb(${c.color})` }}>
-                <c.icon className="h-3.5 w-3.5" />
+              <span className="grid place-items-center h-8 w-8 rounded-xl" style={{ backgroundColor: `rgba(${c.color},0.13)`, color: `rgb(${c.color})`, boxShadow: `inset 0 0 0 1px rgba(${c.color},0.28)` }}>
+                <c.icon className="h-4 w-4" />
               </span>
             </div>
-            <p className="mt-2 text-xl md:text-2xl font-bold tracking-tight" style={{ color: `rgb(${c.color})` }}>${c.value.toLocaleString()}</p>
+            <p className="mt-2 text-xl md:text-2xl font-extrabold tracking-tight tabular-nums" style={{ color: `rgb(${c.color})` }}>${c.value.toLocaleString()}</p>
             <div className="mt-2">{trendPill(c.trend, c.goodIsUp)}</div>
           </div>
         ))}
       </section>
 
       {/* GRÁFICA PROTAGONISTA */}
-      <section className="premium-panel rounded-3xl p-5 md:p-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <section className="premium-panel rounded-3xl p-5 md:p-6 relative overflow-hidden rise-in" style={{ animationDelay: "220ms" }}>
+        <div className="absolute -top-24 -left-20 w-72 h-72 rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, rgba(var(--gold),0.10), transparent 70%)" }} />
         <BalanceChart data={chartData} utilidadMes={utilidadMes} displayMonthName={periodoLabel} />
       </section>
 
       {/* BENTO: desglose del período + cartera general */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 animate-in fade-in slide-in-from-bottom-4 duration-1000">
-        {bento.map((b) => (
-          <div key={b.name} className="premium-card rounded-2xl p-4 md:p-5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-strong">
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+        {bento.map((b, i) => (
+          <div
+            key={b.name}
+            className="premium-card relative overflow-hidden rounded-2xl p-4 md:p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-strong rise-in"
+            style={{ animationDelay: `${300 + i * 90}ms` }}
+          >
+            <span className="absolute inset-x-4 top-0 h-[2px] rounded-full" style={{ background: `linear-gradient(90deg, transparent, rgba(${b.color},0.85), transparent)` }} />
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-[10px] md:text-xs font-semibold uppercase tracking-wide text-[rgb(var(--text-muted))] truncate">{b.name}</p>
                 <p className="text-[10px] text-[rgb(var(--text-muted))]">{b.caption}</p>
               </div>
-              <span className="grid place-items-center h-7 w-7 rounded-full shrink-0" style={{ backgroundColor: `rgba(${b.color},0.14)`, color: `rgb(${b.color})` }}>
-                <b.icon className="h-3.5 w-3.5" />
+              <span className="grid place-items-center h-8 w-8 rounded-xl shrink-0" style={{ backgroundColor: `rgba(${b.color},0.13)`, color: `rgb(${b.color})`, boxShadow: `inset 0 0 0 1px rgba(${b.color},0.28)` }}>
+                <b.icon className="h-4 w-4" />
               </span>
             </div>
-            <p className="mt-2 text-lg md:text-2xl font-bold tracking-tight" style={{ color: `rgb(${b.color})` }}>${b.value.toLocaleString()}</p>
+            <p className="mt-2 text-lg md:text-2xl font-extrabold tracking-tight tabular-nums" style={{ color: `rgb(${b.color})` }}>${b.value.toLocaleString()}</p>
             {typeof b.trend === "number" && <div className="mt-2">{trendPill(b.trend, b.goodIsUp ?? true)}</div>}
           </div>
         ))}
