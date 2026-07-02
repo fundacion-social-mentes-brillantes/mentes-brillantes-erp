@@ -41,7 +41,9 @@ export function AnimatedNumber({
   return (
     <span className={className} style={style}>
       {prefix}
-      {display.toLocaleString()}
+      {/* en-US fijo para que coincida con el formato del resto del dashboard
+          (el servidor formatea con coma; sin esto el navegador usaría es-CO) */}
+      {display.toLocaleString('en-US')}
     </span>
   )
 }
