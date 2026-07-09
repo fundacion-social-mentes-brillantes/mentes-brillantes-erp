@@ -30,7 +30,7 @@ function cleanConceptTerm(value: string) {
 export function detectConceptBuyers(question: string): string | null {
   const normalized = normalizeText(question)
   const listSignal = /\b(quien|quienes|personas|gente|lista|listado|cuales|todos|todas)\b/.test(normalized)
-  const buyVerb = /\b(compr|inici|adquir|pidieron|pidio|pagaron|tienen|tiene)\b/.test(normalized)
+  const buyVerb = /\b(compr|inici|adquir|pidi|pagar|tien)/.test(normalized)
   const debtWords = /\b(debe|deben|deuda|deudas|pendiente|pendientes|deudores|dinero|cartera|saldo)\b/.test(normalized)
   if (!listSignal || !buyVerb || debtWords) return null
   const match = normalized.match(

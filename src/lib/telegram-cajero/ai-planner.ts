@@ -313,7 +313,7 @@ function cleanConceptTerm(value: string) {
 
 function conceptBuyersEntity(normalized: string): string | null {
   const listSignal = /\b(quien|quienes|personas|gente|lista|listado|listame|cuales|todos|todas)\b/.test(normalized)
-  const buyVerb = /\b(compr|inici|adquir|pidieron|pidio|pagaron|tienen|tiene)\b/.test(normalized)
+  const buyVerb = /\b(compr|inici|adquir|pidi|pagar|tien)/.test(normalized)
   const debtWords = /\b(debe|deben|deuda|deudas|pendiente|pendientes|deudores|dinero|cartera|saldo)\b/.test(normalized)
   if (!listSignal || !buyVerb || debtWords) return null
   const match = normalized.match(
