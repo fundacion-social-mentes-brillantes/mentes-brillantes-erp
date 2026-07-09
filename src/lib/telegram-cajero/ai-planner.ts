@@ -299,6 +299,29 @@ function cleanPersonQuery(value: string) {
   return words.join(" ")
 }
 
+// Extrae el concepto/producto de una pregunta tipo "quienes compraron X".
+function cleanConceptTerm(value: string) {
+  const cleaned = compactWords(value)
+    .replace(/\b(en el sistema|por favor|en total|del centro|de la empresa|ahora|hoy|completa|completo|entera|todos|todas|registrados|registradas|actualmente|hasta ahora|alguna vez|en algun momento)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+  if (!cleaned) return null
+  const words = cleaned.split(" ").filter((word) => word.length >= 2).slice(0, 4)
+  const term = words.join(" ").trim()
+  return term.length >= 3 ? term : null
+}
+
+function conceptBuyersEntity(normalized: string): string | null {
+  const listSignal = /\b(quien|quienes|personas|gente|lista|listado|listame|cuales|todos|todas)\b/.test(normalized)
+  const buyVerb = /\b(compr|inici|adquir|pidieron|pidio|pagaron|tienen|tiene)\b/.test(normalized)
+  const debtWords = /\b(debe|deben|deuda|deudas|pendiente|pendientes|deudores|dinero|cartera|saldo)\b/.test(normalized)
+  if (!listSignal || !buyVerb || debtWords) return null
+  const match = normalized.match(
+    /\b(?:compr(?:aron|o|ado|aran)|inici(?:aron|o|ado|aran)|adquir(?:ieron|io)|pidieron|pidio|pagaron|tienen|tiene)\s+(?:el |la |los |las |su |sus |de |del |un |una )*(.+)$/
+  )
+  return match?.[1] ? cleanConceptTerm(match[1]) : null
+}
+
 function personEntitiesFromDebtQuestion(normalized: string): AiPlannerEntity[] {
   const match = normalized.match(/(?:cuanto debe|cuanta deuda tiene|deuda de|que debe|debe)\s+(.+)/)
   if (!match) return []
@@ -402,6 +425,20 @@ export function fallbackPlan(text: string, state: TelegramSessionState = {}): Ai
 
   if (lastAsistente && /^(deuda|deudas|cuanto debe|cuentas pendientes|pendientes)$/.test(normalized)) {
     return planForLastAssistant("getPersonFinancialStatus", lastAsistente, "cuentas_pendientes_persona")
+  }
+
+  const conceptBuyers = conceptBuyersEntity(normalized)
+  if (conceptBuyers) {
+    return {
+      ...EMPTY_PLAN,
+      mode: "tool_plan",
+      confidence: "high",
+      intent: "compradores_concepto",
+      entities: [{ type: "concept", query: conceptBuyers, role: "primary" }],
+      tools: [{ name: "getConceptBuyers", args: { term: conceptBuyers } }],
+      responseInstruction:
+        "Lista TODAS las personas que compraron/iniciaron ese concepto (nombre y codigo). Es la lista completa del concepto, no de una sola persona.",
+    }
   }
 
   const debtEntities = personEntitiesFromDebtQuestion(normalized)
@@ -678,7 +715,7 @@ function buildDeepSeekPlannerBody(text: string, state: TelegramSessionState, fal
         content: [
           "Eres el planner conversacional del bot Cajero del ERP de Mentes Brillantes. Piensa y razona el intent REAL detras del lenguaje natural; el usuario escribe como le sale. Devuelves SOLO JSON estricto.",
           "El bot es 100% solo lectura. No puede crear, editar, borrar, registrar pagos, anular, aplicar saldo ni ejecutar SQL. Pero SI puede consultar y razonar sobre todo el ERP.",
-          "Puedes resolver cualquier consulta del ERP combinando tools: estado/deuda/pagos/saldo a favor de una persona, sesiones coach, compras y conceptos, donaciones de una persona (getPersonDonations), ficha completa, cartera pendiente global y mayores deudores, resumen de periodo (ingresos/egresos/utilidad), donaciones totales por rango (getDonationsSummary), egresos, ventas externas, alertas, conteos como asistentes activos o cuentas pendientes (getCounts), periodos abiertos/cerrados (getPeriods), socios y su reparto/liquidacion mas reciente (getPartnerSettlement) y busqueda global. Elige solo tools del catalogo entregado. No inventes tools. Maximo 5 tools.",
+          "Puedes resolver cualquier consulta del ERP combinando tools: estado/deuda/pagos/saldo a favor de una persona, sesiones coach, compras y conceptos de una persona, LISTA de TODAS las personas que compraron/iniciaron/tienen un concepto o producto (getConceptBuyers, p. ej. 'quienes compraron pasos', 'pasame el listado de los que iniciaron pasos', 'quien tiene curso de milagros'; usa el argumento term con el concepto), donaciones de una persona (getPersonDonations), ficha completa, cartera pendiente global y mayores deudores, resumen de periodo (ingresos/egresos/utilidad), donaciones totales por rango (getDonationsSummary), egresos, ventas externas, alertas, conteos como asistentes activos o cuentas pendientes (getCounts), periodos abiertos/cerrados (getPeriods), socios y su reparto/liquidacion mas reciente (getPartnerSettlement) y busqueda global. Distingue: si piden datos de UNA persona nombrada usa las tools por persona; si piden QUIENES o un LISTADO por un concepto/producto usa getConceptBuyers. Elige solo tools del catalogo entregado. No inventes tools. Maximo 5 tools.",
           "USA SIEMPRE EL CONTEXTO (memory.lastAsistente, lastStructuredResult, workspace): si el usuario no nombra a nadie pero hay una persona activa y la frase es un seguimiento (p. ej. 'muestrame sus sesiones', 'y cuanto debe', 'las fechas', 'sus pagos', 'que mas sabes'), REUTILIZA esa persona activa (entities con role contextual y tools con su asistenteId) en vez de pedir el nombre.",
           "Nunca tomes verbos ni muletillas como nombre de persona (muestrame, dame, lista, ver, busca, ultimas, fechas, numeros, su, eso, esa). Si no hay nombre real ni persona activa, usa clarify pidiendo el nombre o codigo.",
           "Si hay una persona y el usuario dice busca, consulta, revisa, ver, todo o ficha, usa getPersonFullProfile y NO preguntes que quiere ver.",

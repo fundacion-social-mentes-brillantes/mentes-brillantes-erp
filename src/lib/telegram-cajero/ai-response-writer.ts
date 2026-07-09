@@ -124,6 +124,15 @@ function describePurchases(item: ToolExecutionItem) {
   return [`Esto tiene registrado ${name}:`, ...rows.slice(0, 7).map((row) => `- ${row.concepto}: ${formatCop(row.valor_total)} | abonado ${formatCop(row.abonado)} | pendiente ${formatCop(row.pendiente)}`)].join("\n")
 }
 
+function describeConceptBuyers(item: ToolExecutionItem) {
+  const data: any = item.result?.data || {}
+  const personas: any[] = Array.isArray(data.personas) ? data.personas : []
+  const termino = data.term || "ese concepto"
+  if (!personas.length) return `No encontre personas con "${termino}" en las cuentas.`
+  const lineas = personas.map((persona: any, index: number) => `${index + 1}. ${persona.nombre}${persona.codigo ? ` (Cod: ${persona.codigo})` : ""}`)
+  return [`Personas que compraron/iniciaron "${termino}": ${data.total_personas}.`, ...lineas].join("\n")
+}
+
 function describeSummary(item: ToolExecutionItem) {
   const data: any = item.result?.data || {}
   return [
@@ -219,6 +228,7 @@ export function buildDeterministicResponse(plan: AiPlannerPlan, bundle: ToolExec
     if (item.requestedTool === "getPersonPayments" || item.requestedTool === "getPersonLastPayment") return describePayments(item)
     if (item.requestedTool === "getCoachSessions") return describeCoach(item)
     if (item.requestedTool === "getPersonPurchasesOrConcepts") return describePurchases(item)
+    if (item.requestedTool === "getConceptBuyers") return describeConceptBuyers(item)
     if (item.requestedTool === "getPersonFullProfile") return describeFullProfile(item)
     if (item.requestedTool === "getPersonDonations") return describeDonations(item)
     if (item.requestedTool === "getDonationsSummary") return describeDonationsSummary(item)

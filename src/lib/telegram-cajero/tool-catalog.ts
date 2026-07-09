@@ -72,6 +72,14 @@ export const TELEGRAM_CAJERO_TOOL_CATALOG = [
     safety: "read_only",
   },
   {
+    name: "getConceptBuyers",
+    description:
+      "Lista TODAS las personas que compraron/iniciaron/tienen un concepto o producto (p. ej. 'pasos', 'primer paso', 'curso de milagros', 'sesion coach'). Busca en el texto de las cuentas por cobrar sin importar mayusculas ni variantes (paso/pasos). Usar cuando piden un LISTADO de personas por un concepto, no los datos de una sola persona.",
+    allowedArgs: ["term", "concepto", "limit"],
+    returns: "Total de personas y lista (nombre, codigo, veces) que tienen ese concepto.",
+    safety: "read_only",
+  },
+  {
     name: "getCoachSessions",
     description: "Consulta sesiones coach compradas, realizadas y restantes de una persona.",
     allowedArgs: ["asistenteId", "personQuery"],

@@ -15,6 +15,7 @@ import {
   getPersonLastPayment,
   getPersonPayments,
   getPersonPurchasesOrConcepts,
+  getConceptBuyers,
   getSummary,
   searchGlobal,
   searchPerson,
@@ -181,6 +182,11 @@ async function executeTool(supabase: SupabaseReader, tool: AiPlannerTool): Promi
   }
   if (tool.name === "searchGlobal") {
     const result = await searchGlobal(supabase, stringArg(args, "term") || "")
+    return { requestedTool: tool.name, status: result.status, result }
+  }
+  if (tool.name === "getConceptBuyers") {
+    const term = stringArg(args, "term") || stringArg(args, "concepto") || ""
+    const result = await getConceptBuyers(supabase, term, numberArg(args, "limit", 500))
     return { requestedTool: tool.name, status: result.status, result }
   }
   if (tool.name === "getExpenses") {

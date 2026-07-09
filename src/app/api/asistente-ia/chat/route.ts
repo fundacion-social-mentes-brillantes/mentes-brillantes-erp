@@ -6,6 +6,7 @@ import {
   buildAsistenteIaContextById,
 } from "@/lib/asistente-ia/context"
 import { buildContabilidadContext, shouldUseContabilidadContext } from "@/lib/asistente-ia/contabilidad"
+import { buildConceptBuyersContext, detectConceptBuyers } from "@/lib/asistente-ia/concept-buyers"
 import { AuthzError, requireRoles } from "@/lib/utils/authz"
 
 const SYSTEM_PROMPT =
@@ -168,15 +169,19 @@ export async function POST(request: Request) {
       ? selectionOptions.find((option) => normalizeText(String(option.codigo || "")) === codigo)
       : null
 
+    const conceptBuyersTerm = !selectedByNumber && !selectedByCodigo && !codigo ? detectConceptBuyers(question) : null
+
     const safeContext = selectedByNumber
       ? await buildAsistenteIaContextById(supabase, selectedByNumber.id, question)
       : selectedByCodigo
         ? await buildAsistenteIaContextById(supabase, selectedByCodigo.id, question)
         : codigo
           ? await buildAsistenteIaContextByCodigo(supabase, codigo, question)
-          : shouldUseContabilidadContext(question)
-            ? await buildContabilidadContext(supabase, question)
-          : await buildAsistenteIaContext(supabase, question)
+          : conceptBuyersTerm
+            ? await buildConceptBuyersContext(supabase, question, conceptBuyersTerm)
+            : shouldUseContabilidadContext(question)
+              ? await buildContabilidadContext(supabase, question)
+              : await buildAsistenteIaContext(supabase, question)
     const nextSelectionOptions = extractSelectionOptions(safeContext)
 
     const requestBody = JSON.stringify({
