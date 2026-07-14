@@ -103,17 +103,32 @@ function describeCoach(item: ToolExecutionItem) {
   const sesiones = Array.isArray(data.sesiones) ? data.sesiones : []
   const fechasTomadas = Array.isArray(data.fechas_tomadas) ? data.fechas_tomadas : sesiones.map((sesion: any) => sesion.fecha).filter(Boolean).reverse()
   const paquetes = Array.isArray(data.paquetes) ? data.paquetes : []
+  const migradas = Array.isArray(data.detalle_migradas) ? data.detalle_migradas : []
+  const totalTomadas = Number(data.sesiones_tomadas_total ?? data.sesiones_realizadas ?? 0)
   const estado = data.interpretacion?.estado || null
+
+  // Caso migracion: no hay paquete/modulo, pero si cuentas de sesion coach.
+  if (estado === "solo_migracion" && migradas.length) {
+    return [
+      `Sesiones coach de ${name}: ${migradas.length} (segun los registros que vienen de la migracion).`,
+      "Fechas:",
+      ...migradas.map((cuenta: any, index: number) => `${index + 1}. ${cuenta.fecha}${cuenta.concepto ? ` — ${cuenta.concepto}` : ""}`),
+      "Nota: estas sesiones estan como cuentas antiguas de 'sesion coach' (no en el modulo nuevo), por eso no tiene contador de compradas/restantes.",
+    ].join("\n")
+  }
+
   return [
     `Sesiones coach de ${name}:`,
-    `Compradas: ${data.sesiones_compradas || 0}. Tomadas/registradas: ${data.sesiones_realizadas || 0}. Restantes: ${data.sesiones_restantes || 0}.`,
+    `Compradas: ${data.sesiones_compradas || 0}. Tomadas/registradas: ${totalTomadas}. Restantes: ${data.sesiones_restantes || 0}.`,
     estado === "con_sesiones_restantes" ? "Estado: aun tiene sesiones disponibles." : estado === "sin_sesiones_restantes" ? "Estado: no quedan sesiones disponibles registradas." : "Estado: no veo paquete coach registrado.",
     fechasTomadas.length
-      ? ["Fechas tomadas:", ...fechasTomadas.slice(0, 20).map((fecha: string, index: number) => `${index + 1}. ${fecha}`)].join("\n")
-      : "No veo fechas de sesiones tomadas en el contador actual.",
-    sesiones[0] ? `Ultima registrada: ${sesiones[0].fecha}${sesiones[0].notas ? ` | ${sesiones[0].notas}` : ""}.` : "",
+      ? ["Fechas tomadas (modulo):", ...fechasTomadas.slice(0, 20).map((fecha: string, index: number) => `${index + 1}. ${fecha}`)].join("\n")
+      : "No veo fechas de sesiones tomadas en el contador del modulo.",
+    migradas.length
+      ? [`Ademas, ${migradas.length} sesion(es) coach de registros migrados:`, ...migradas.map((cuenta: any, index: number) => `${index + 1}. ${cuenta.fecha}${cuenta.concepto ? ` — ${cuenta.concepto}` : ""}`)].join("\n")
+      : "",
+    sesiones[0] ? `Ultima registrada (modulo): ${sesiones[0].fecha}${sesiones[0].notas ? ` | ${sesiones[0].notas}` : ""}.` : "",
     paquetes.length ? `Paquetes registrados: ${paquetes.length}.` : "",
-    "Puede haber sesiones antiguas no cargadas en el contador si no fueron migradas al modulo coach.",
   ].filter(Boolean).join("\n")
 }
 

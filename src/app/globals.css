@@ -207,8 +207,13 @@ a {
 }
 
 ::selection {
-  background: rgba(var(--accent), 0.18);
+  background: rgba(var(--accent), 0.38);
   color: rgb(var(--text-primary));
+}
+/* En oscuro el resaltado era casi invisible; usamos dorado bien visible con texto oscuro */
+[data-theme="dark"] ::selection {
+  background: rgba(var(--gold), 0.55);
+  color: rgb(10 14 20);
 }
 
 button:focus-visible,

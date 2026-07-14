@@ -236,10 +236,16 @@ async function loadAsistenteContext(supabase: SupabaseClient, asistente: any, co
     .map((cuenta: any) => ({
       id: cuenta.id,
       concepto: cuenta.concepto,
+      fecha: cuenta.fecha_emision,
       valor_total_cop: cuenta.valor_total_cop,
       abonado_cop: cuenta.abonado_cop,
       pendiente_cop: cuenta.pendiente_cop,
     }))
+  const sesionesMigradas = cuentasSesionesNoConectadas.length
+  const fechasMigradas = cuentasSesionesNoConectadas
+    .map((cuenta: any) => cuenta.fecha)
+    .filter(Boolean)
+    .sort()
 
   return {
     consulta,
@@ -274,8 +280,16 @@ async function loadAsistenteContext(supabase: SupabaseClient, asistente: any, co
       compradas: sesionesCompradas,
       realizadas: sesionesRealizadas,
       restantes: Math.max(0, sesionesCompradas - sesionesRealizadas),
+      // Sesiones que vienen de la MIGRACION (cuentas de "sesion coach" no ligadas al modulo).
+      sesiones_migradas: sesionesMigradas,
+      fechas_migradas: fechasMigradas,
+      total_tomadas_incluyendo_migracion: sesionesRealizadas + sesionesMigradas,
+      instruccion_migracion:
+        sesionesMigradas > 0 && sesionesCompradas === 0
+          ? "Esta persona no tiene paquete en el modulo nuevo, pero SI tiene sesiones coach que vienen de la migracion (las cuentas listadas abajo). Esas cuentas SON sus sesiones coach tomadas: repórtalas como tal, di cuantas son y sus fechas (la fecha de cada cuenta), sin decir que no tiene sesiones."
+          : "Cuenta las sesiones tomadas del modulo (coach_sesiones); si hay cuentas de sesion coach no conectadas, menciónalas como sesiones adicionales de migracion con sus fechas.",
       nota:
-        "En el contador actual aparecen las sesiones registradas en coach_sesiones. Puede haber sesiones antiguas no cargadas en el contador.",
+        "En el contador del modulo aparecen las sesiones registradas en coach_sesiones. Las sesiones migradas estan como cuentas de 'sesion coach'.",
       cuentas_relacionadas_no_conectadas_al_contador: cuentasSesionesNoConectadas,
       historial: sesionesCoach.map((sesion: any) => ({
         id: sesion.id,
