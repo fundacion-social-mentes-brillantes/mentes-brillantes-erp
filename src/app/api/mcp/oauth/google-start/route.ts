@@ -3,10 +3,18 @@ import { createClient } from "@/lib/supabase/server"
 import { OAUTH_CTX_COOKIE, issueOAuthContext } from "@/lib/mcp/oauth"
 import { readOauthParams, validateAuthorizationRequest } from "@/lib/mcp/authorize-request"
 import { oauthNoStoreHeaders } from "@/lib/mcp/constants"
+import { isMcpGoogleAuthEnabled } from "@/lib/mcp/google-auth"
 
 export const dynamic = "force-dynamic"
 
 export async function GET(req: Request) {
+  if (!isMcpGoogleAuthEnabled()) {
+    return new Response("Inicio con Google no disponible.", {
+      status: 404,
+      headers: oauthNoStoreHeaders(),
+    })
+  }
+
   const url = new URL(req.url)
   const params = readOauthParams((key) => url.searchParams.get(key))
   const validation = await validateAuthorizationRequest(req, params)
