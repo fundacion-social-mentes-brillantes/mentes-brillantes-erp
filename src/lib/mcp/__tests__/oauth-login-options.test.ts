@@ -75,18 +75,26 @@ function authorizationGetRequest(params: URLSearchParams): Request {
 function authorizationPostRequest(
   params: URLSearchParams,
   authMethod: "session" | "password",
-  origin = PUBLIC_ORIGIN
+  sessionConsent = ""
 ): Request {
   const form = new URLSearchParams(params)
   form.set("auth_method", authMethod)
+  if (sessionConsent) form.set("session_consent", sessionConsent)
   return new Request(`${PUBLIC_ORIGIN}/api/mcp/oauth/authorize`, {
     method: "POST",
     headers: {
       "content-type": "application/x-www-form-urlencoded",
-      origin,
     },
     body: form,
   })
+}
+
+async function readSessionConsent(params: URLSearchParams): Promise<string> {
+  const response = await authorizeGet(authorizationGetRequest(params))
+  const html = await response.text()
+  const match = html.match(/name="session_consent" value="([^"]+)"/)
+  expect(match?.[1]).toBeTruthy()
+  return match![1]
 }
 
 beforeEach(() => {
@@ -112,6 +120,7 @@ describe("opciones de acceso OAuth del MCP", () => {
 
     expect(response.status).toBe(200)
     expect(html).toContain('name="auth_method" value="session"')
+    expect(html).toContain('name="session_consent" value="')
     expect(html).toContain('name="auth_method" value="password"')
     expect(html).not.toContain("/api/mcp/oauth/google-start?")
     expect(html).not.toContain("Continuar con Google")
@@ -146,6 +155,7 @@ describe("opciones de acceso OAuth del MCP", () => {
 describe("continuar con la sesión activa del ERP", () => {
   it("reutiliza la sesión SSR, valida identidad y emite el mismo código OAuth", async () => {
     const params = await authorizationParams()
+    const sessionConsent = await readSessionConsent(params)
     const sessionUser = { id: "usuario-seguro" }
     const admin = { kind: "admin-client" }
     getUserMock.mockResolvedValue({ data: { user: sessionUser }, error: null })
@@ -159,7 +169,7 @@ describe("continuar con la sesión activa del ERP", () => {
     issueAuthCodeMock.mockResolvedValue("codigo-emitido")
 
     const response = await authorizePost(
-      authorizationPostRequest(params, "session")
+      authorizationPostRequest(params, "session", sessionConsent)
     )
     const redirect = new URL(response.headers.get("location")!)
 
@@ -180,23 +190,26 @@ describe("continuar con la sesión activa del ERP", () => {
     )
   })
 
-  it("rechaza la reutilización de cookies cuando falta Origin o es de otro sitio", async () => {
+  it("rechaza la sesión sin consentimiento firmado o si cambian los parámetros OAuth", async () => {
     const params = await authorizationParams()
-    const missingOriginForm = new URLSearchParams(params)
-    missingOriginForm.set("auth_method", "session")
-    const missingOrigin = await authorizePost(
+    const sessionConsent = await readSessionConsent(params)
+    const missingConsentForm = new URLSearchParams(params)
+    missingConsentForm.set("auth_method", "session")
+    const missingConsent = await authorizePost(
       new Request(`${PUBLIC_ORIGIN}/api/mcp/oauth/authorize`, {
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded" },
-        body: missingOriginForm,
+        body: missingConsentForm,
       })
     )
-    const foreignOrigin = await authorizePost(
-      authorizationPostRequest(params, "session", "https://attacker.example")
+    const changedParams = new URLSearchParams(params)
+    changedParams.set("state", "estado-alterado")
+    const changedRequest = await authorizePost(
+      authorizationPostRequest(changedParams, "session", sessionConsent)
     )
 
-    expect(missingOrigin.status).toBe(403)
-    expect(foreignOrigin.status).toBe(403)
+    expect(missingConsent.status).toBe(403)
+    expect(changedRequest.status).toBe(403)
     expect(createServerClientMock).not.toHaveBeenCalled()
     expect(issueAuthCodeMock).not.toHaveBeenCalled()
   })

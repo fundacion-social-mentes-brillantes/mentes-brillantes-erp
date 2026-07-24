@@ -1,7 +1,7 @@
 import { createClient as createPasswordClient } from "@supabase/supabase-js"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient as createServerClient } from "@/lib/supabase/server"
-import { issueAuthCode } from "@/lib/mcp/oauth"
+import { issueAuthCode, issueOAuthContext, readOAuthContext } from "@/lib/mcp/oauth"
 import {
   readOauthParams,
   validateAuthorizationRequest,
@@ -44,11 +44,22 @@ button{width:100%;margin-top:20px;padding:13px;border:0;border-radius:12px;font-
   return new Response(html, { status, headers: PAGE_HEADERS })
 }
 
-function loginForm(valid: ValidAuthorizationRequest, error?: string): Response {
+async function loginForm(valid: ValidAuthorizationRequest, error?: string): Promise<Response> {
   const { params, client, scopes, resource } = valid
   const keys = ["client_id", "redirect_uri", "response_type", "code_challenge", "code_challenge_method", "state", "scope", "resource"] as const
   const normalized: OauthParams = { ...params, scope: scopes.join(" "), resource }
   const hidden = keys.map((key) => `<input type="hidden" name="${key}" value="${esc(normalized[key])}"/>`).join("")
+  const sessionConsent = await issueOAuthContext({
+    clientId: params.client_id,
+    clientName: client.name,
+    clientKind: client.kind,
+    redirectUri: params.redirect_uri,
+    codeChallenge: params.code_challenge,
+    state: params.state,
+    resource,
+    scopes,
+    issuer: valid.issuer,
+  })
   const googleQuery = new URLSearchParams(Object.fromEntries(keys.map((key) => [key, normalized[key]]))).toString()
   const googleLogin = isMcpGoogleAuthEnabled()
     ? `
@@ -75,6 +86,7 @@ function loginForm(valid: ValidAuthorizationRequest, error?: string): Response {
     <form method="post">
       ${hidden}
       <input type="hidden" name="auth_method" value="session"/>
+      <input type="hidden" name="session_consent" value="${esc(sessionConsent)}"/>
       <button class="session-btn" type="submit">Continuar con mi sesión activa del ERP</button>
     </form>
     ${googleLogin}
@@ -100,11 +112,25 @@ export async function GET(req: Request) {
   return loginForm(validation.value)
 }
 
-function isSameOriginRequest(req: Request, issuer: string): boolean {
-  const origin = req.headers.get("origin")
-  if (!origin) return false
+async function hasValidSessionConsent(
+  token: string,
+  validation: ValidAuthorizationRequest,
+  params: OauthParams
+): Promise<boolean> {
   try {
-    return new URL(origin).origin === new URL(issuer).origin
+    const consent = await readOAuthContext(token)
+    return (
+      consent.clientId === params.client_id &&
+      consent.clientName === validation.client.name &&
+      consent.clientKind === validation.client.kind &&
+      consent.redirectUri === params.redirect_uri &&
+      consent.codeChallenge === params.code_challenge &&
+      consent.state === params.state &&
+      consent.resource === validation.resource &&
+      consent.issuer === validation.issuer &&
+      consent.scopes.length === validation.scopes.length &&
+      consent.scopes.every((scope, index) => scope === validation.scopes[index])
+    )
   } catch {
     return false
   }
@@ -153,8 +179,9 @@ export async function POST(req: Request) {
 
   const authMethod = String(form.get("auth_method") || "password")
   if (authMethod === "session") {
-    if (!isSameOriginRequest(req, validation.value.issuer)) {
-      return page("<h1>Solicitud rechazada</h1><p class=\"sub\">El origen de la autorización no es válido.</p>", 403)
+    const sessionConsent = String(form.get("session_consent") || "")
+    if (!(await hasValidSessionConsent(sessionConsent, validation.value, params))) {
+      return page("<h1>Solicitud rechazada</h1><p class=\"sub\">El consentimiento de la autorización no es válido o expiró.</p>", 403)
     }
     const sessionClient = await createServerClient()
     if (!sessionClient) return page("<h1>Servidor no configurado</h1>", 500)
