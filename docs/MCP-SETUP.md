@@ -50,10 +50,18 @@ conexión de forma independiente.
 
 La pantalla de autorización del ERP ofrece estas opciones:
 
-- **Correo y contraseña del ERP.** La contraseña se escribe únicamente en la
-  página del ERP durante el flujo OAuth; Claude y ChatGPT no la reciben.
-- **Google.** Disponible cuando el proveedor Google está habilitado en
-  Supabase. El correo de Google debe corresponder al perfil autorizado del ERP.
+- **Continuar con mi sesión activa del ERP.** Si la persona ya inició sesión en
+  el ERP en ese mismo navegador, puede reutilizarla mediante este botón. La
+  acción requiere consentimiento explícito: la sesión nunca se usa para
+  autorizar el conector hasta que la persona presiona el botón. Claude y
+  ChatGPT no reciben las cookies ni las credenciales de esa sesión.
+- **Correo y contraseña del ERP.** Es la alternativa disponible cuando no hay
+  una sesión activa. La contraseña se escribe únicamente en la página del ERP
+  durante el flujo OAuth; Claude y ChatGPT no la reciben.
+- **Google.** Está oculto y deshabilitado por defecto. Solo aparece cuando el
+  proveedor Google ya está activo en Supabase **y** la variable de servidor
+  `MCP_GOOGLE_AUTH_ENABLED` tiene exactamente el valor `true`. El correo de
+  Google debe corresponder al perfil autorizado del ERP.
 
 No compartas contraseñas, códigos, tokens, cookies ni secretos de Google o
 Supabase por chat. Configura credenciales solamente en los paneles oficiales.
@@ -218,7 +226,9 @@ la plataforma correspondiente.
 ## Activar Google una sola vez
 
 Esta sección es para quien administra Google Cloud y Supabase. No es necesaria
-si todos usarán correo y contraseña del ERP.
+si todos usarán la sesión activa o correo y contraseña del ERP. Mantén
+`MCP_GOOGLE_AUTH_ENABLED=false` —o no definas la variable— hasta completar y
+verificar toda la configuración del proveedor.
 
 1. En Google Cloud, configura la pantalla de consentimiento y crea un cliente
    OAuth de tipo **Web application**.
@@ -237,6 +247,16 @@ si todos usarán correo y contraseña del ERP.
 
 5. Confirma que cada correo de Google tenga un perfil del ERP con rol `admin`
    o `caja`.
+6. Solo después de verificar los pasos anteriores, configura en el entorno de
+   servidor del despliegue:
+
+   ```text
+   MCP_GOOGLE_AUTH_ENABLED=true
+   ```
+
+7. Vuelve a desplegar y confirma que el botón **Continuar con Google** aparezca
+   y complete el flujo. Si la variable no es exactamente `true`, el botón sigue
+   oculto y la ruta de inicio de Google permanece deshabilitada.
 
 ## Solución de problemas
 
@@ -279,9 +299,18 @@ problema persiste, desconecta la integración y créala de nuevo.
 
 ### Google no permite entrar
 
-Verifica que Google esté habilitado en Supabase, que las redirect URLs
-coincidan y que el correo tenga un perfil autorizado. Prueba el acceso con
-correo y contraseña para distinguir un problema de Google de uno de permisos.
+Si el botón no aparece, confirma primero que el proveedor Google esté habilitado
+en Supabase y que `MCP_GOOGLE_AUTH_ENABLED=true` esté configurado en el entorno
+de servidor del despliegue. Si aparece pero el acceso falla, revisa que las
+redirect URLs coincidan y que el correo tenga un perfil autorizado. Usa correo
+y contraseña para distinguir un problema de Google de uno de permisos.
+
+### No se reconoce la sesión activa del ERP
+
+Comprueba que el ERP esté abierto y con la sesión iniciada en el mismo navegador
+en el que se muestra la autorización. Regresa al flujo y presiona explícitamente
+**Continuar con mi sesión activa del ERP**. Si la sesión expiró o pertenece a
+otro perfil del navegador, inicia sesión de nuevo o usa correo y contraseña.
 
 ### Una fecha se interpreta mal o la respuesta es parcial
 
@@ -304,7 +333,11 @@ códigos de recuperación ni secretos.
 - Cada persona tiene su propio usuario activo y rol `admin` o `caja`.
 - El administrador revisó que las 19 herramientas sean de lectura.
 - `search` y `fetch` aparecen durante el escaneo de ChatGPT.
-- El login por correo funciona; Google también, si se habilitó.
+- El botón **Continuar con mi sesión activa del ERP** solo reutiliza la sesión
+  después del consentimiento explícito y rechaza sesiones vencidas o sin rol.
+- El login por correo y contraseña funciona como alternativa.
+- Google permanece oculto con la configuración predeterminada; si se habilitó,
+  el proveedor de Supabase está activo y `MCP_GOOGLE_AUTH_ENABLED=true`.
 - Una cuenta sin rol permitido recibe acceso denegado.
 - Las respuestas no muestran cédulas ni notas privadas del coach.
 - Desconectar y volver a conectar solicita una autorización válida.
