@@ -1,5 +1,4 @@
 import type { User } from "@supabase/supabase-js"
-import { getAdminUserById } from "@/lib/supabase/admin"
 import type { ErpRole } from "./oauth"
 
 type AdminClient = ReturnType<typeof import("@/lib/supabase/admin").createAdminClient>
@@ -10,16 +9,6 @@ export type McpIdentity = {
   role: Exclude<ErpRole, "consulta">
 }
 
-function activeUser(user: User, expectedUserId: string): boolean {
-  if (user.id !== expectedUserId || user.deleted_at) return false
-
-  const bannedUntil = String(user.banned_until || "").trim()
-  if (!bannedUntil) return true
-
-  const bannedUntilMs = Date.parse(bannedUntil)
-  return Number.isFinite(bannedUntilMs) && bannedUntilMs <= Date.now()
-}
-
 export async function resolveCurrentMcpIdentity(
   admin: NonNullable<AdminClient>,
   authenticatedUserId: string
@@ -27,20 +16,22 @@ export async function resolveCurrentMcpIdentity(
   if (!authenticatedUserId) return null
 
   try {
-    const { user, error: authError } = await getAdminUserById(authenticatedUserId)
-    if (authError || !user || !activeUser(user, authenticatedUserId)) return null
-
-    const { data: profile, error: profileError } = await admin
-      .from("perfiles")
-      .select("rol")
-      .eq("id", authenticatedUserId)
+    const { data, error } = await admin
+      .rpc("mcp_resolve_identity", { p_user_id: authenticatedUserId })
       .maybeSingle()
-    if (profileError || (profile?.rol !== "admin" && profile?.rol !== "caja")) return null
+    const identity = data as { user_id?: string; email?: string; role?: string } | null
+    if (
+      error ||
+      identity?.user_id !== authenticatedUserId ||
+      (identity.role !== "admin" && identity.role !== "caja")
+    ) {
+      return null
+    }
 
     return {
       userId: authenticatedUserId,
-      email: user.email || "",
-      role: profile.rol,
+      email: identity.email || "",
+      role: identity.role,
     }
   } catch {
     return null
