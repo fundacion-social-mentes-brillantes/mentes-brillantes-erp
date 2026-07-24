@@ -119,6 +119,9 @@ describe("opciones de acceso OAuth del MCP", () => {
     const html = await response.text()
 
     expect(response.status).toBe(200)
+    expect(response.headers.get("content-security-policy")).toContain(
+      "form-action 'self' https://claude.ai"
+    )
     expect(html).toContain('name="auth_method" value="session"')
     expect(html).toContain('name="session_consent" value="')
     expect(html).toContain('name="auth_method" value="password"')

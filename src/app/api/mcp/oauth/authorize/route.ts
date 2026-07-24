@@ -21,16 +21,19 @@ function esc(value: unknown): string {
   )
 }
 
-const PAGE_HEADERS = oauthNoStoreHeaders({
-  "Content-Type": "text/html; charset=utf-8",
-  "Content-Security-Policy":
-    "default-src 'none'; style-src 'unsafe-inline'; img-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
-  "Referrer-Policy": "no-referrer",
-  "X-Content-Type-Options": "nosniff",
-  "X-Frame-Options": "DENY",
-})
+function pageHeaders(formActionOrigin?: string) {
+  const formAction = formActionOrigin ? `'self' ${formActionOrigin}` : "'self'"
+  return oauthNoStoreHeaders({
+    "Content-Type": "text/html; charset=utf-8",
+    "Content-Security-Policy":
+      `default-src 'none'; style-src 'unsafe-inline'; img-src 'none'; form-action ${formAction}; base-uri 'none'; frame-ancestors 'none'`,
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+  })
+}
 
-function page(bodyInner: string, status = 200): Response {
+function page(bodyInner: string, status = 200, formActionOrigin?: string): Response {
   const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Autorizar MCP — Mentes Brillantes</title>
 <style>
 :root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:radial-gradient(circle at 76% 20%,rgba(211,182,87,.18),transparent 60%),linear-gradient(135deg,#0f1c25,#060c11);color:#f1f6f0;padding:24px}
@@ -41,7 +44,7 @@ label{display:block;font-size:.8rem;color:#a3b0a6;margin:14px 0 6px}input{width:
 button{width:100%;margin-top:20px;padding:13px;border:0;border-radius:12px;font-weight:700;font-size:.96rem;cursor:pointer;background:linear-gradient(135deg,#32d396,#1cb280);color:#031a12}
 .session-btn{background:linear-gradient(135deg,#dbb257,#b78b2f);color:#171006}.err{background:rgba(251,113,133,.15);border:1px solid rgba(251,113,133,.4);color:#fda4af;padding:10px 12px;border-radius:10px;font-size:.85rem;margin-bottom:10px}.gbtn{display:block;text-align:center;width:100%;padding:12px;border-radius:12px;border:1px solid rgba(120,140,150,.5);background:#0a1016;color:#f1f6f0;font-weight:600;text-decoration:none;margin-top:8px}.cancel{display:block;text-align:center;color:#a3b0a6;font-size:.85rem;margin-top:15px}.divider{display:flex;align-items:center;gap:10px;color:#7d8c92;font-size:.8rem;margin:16px 0}.divider span{height:1px;flex:1;background:rgba(120,140,150,.35)}
 </style></head><body><main class="card">${bodyInner}</main></body></html>`
-  return new Response(html, { status, headers: PAGE_HEADERS })
+  return new Response(html, { status, headers: pageHeaders(formActionOrigin) })
 }
 
 async function loginForm(valid: ValidAuthorizationRequest, error?: string): Promise<Response> {
@@ -101,7 +104,7 @@ async function loginForm(valid: ValidAuthorizationRequest, error?: string): Prom
       <button type="submit">Ingresar y autorizar</button>
     </form>
     <a class="cancel" href="${esc(denial.toString())}">Cancelar</a>
-  `)
+  `, 200, new URL(params.redirect_uri).origin)
 }
 
 export async function GET(req: Request) {
