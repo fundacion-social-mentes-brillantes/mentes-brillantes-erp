@@ -1,6 +1,8 @@
 import { filtrarPagosValidos, sumarMontos, toSafeNumber } from "@/lib/utils/contable"
 import type { SupabaseReader } from "./types"
 import { toolError, toolResult } from "./types"
+import { fetchPaginatedRows, partialPaginationMessage, safePageSize } from "./pagination"
+import { fetchAccountPayments } from "./account-payments"
 
 export function summarizeOpenReceivables(cuentas: any[]) {
   const rows = (cuentas || [])
@@ -43,24 +45,76 @@ export function summarizeOpenReceivables(cuentas: any[]) {
 }
 
 export async function getOpenReceivablesSummary(supabase: SupabaseReader, limit = 300) {
-  const queryScope = { limit }
-  const { data, error } = await supabase
-    .from("cuentas_por_cobrar")
-    .select("id, asistente_id, concepto, valor_total, estado, fecha_emision, asistentes(nombre, codigo), pagos_abonos(id, monto, estado, origen_fondos)")
-    .in("estado", ["pendiente", "parcial"])
-    .order("fecha_emision", { ascending: true })
-    .limit(limit)
+  // "limit" se conserva por compatibilidad con los callers existentes, pero
+  // ya no limita el universo usado para calcular una cifra global.
+  const pageSize = safePageSize()
+  const queryScope = { limit, pageSize }
+  const result = await fetchPaginatedRows<any>(
+    (withExactCount) =>
+      supabase
+        .from("cuentas_por_cobrar")
+        .select(
+          "id, asistente_id, concepto, valor_total, estado, fecha_emision, asistentes(nombre, codigo)",
+          withExactCount ? { count: "exact" } : undefined
+        )
+        .in("estado", ["pendiente", "parcial"]),
+    { rowKey: "id", pageSize }
+  )
 
-  if (error) return toolError("getOpenReceivablesSummary", queryScope, "cuentas_por_cobrar", error)
+  if (result.error && result.rows.length === 0) {
+    return toolError("getOpenReceivablesSummary", queryScope, "cuentas_por_cobrar", result.error)
+  }
 
-  const summary = summarizeOpenReceivables(data || [])
+  const payments = await fetchAccountPayments(supabase, result.rows.map((account: any) => account.id))
+  const accountsWithPayments = result.rows.map((account: any) => ({
+    ...account,
+    pagos_abonos: payments.byAccountId.get(String(account.id)) || [],
+  }))
+  const summary = summarizeOpenReceivables(accountsWithPayments)
+  const complete = result.pagination.complete && payments.pagination.complete
+  const warnings = [
+    !result.pagination.complete
+      ? partialPaginationMessage("cuentas de cartera pendiente", result.pagination)
+      : null,
+    !payments.pagination.complete
+      ? partialPaginationMessage("pagos de la cartera pendiente", payments.pagination)
+      : null,
+  ].filter((message): message is string => Boolean(message))
+  const pagination = {
+    ...result.pagination,
+    complete,
+    truncated: !complete,
+    stopReason: complete
+      ? "complete"
+      : !result.pagination.complete
+        ? result.pagination.stopReason
+        : payments.pagination.stopReason,
+    pagos_abonos: payments.pagination,
+  }
   return toolResult({
     toolName: "getOpenReceivablesSummary",
-    status: summary.cuentas_pendientes ? "ok" : "empty",
-    queryScope,
+    status: complete ? (summary.cuentas_pendientes ? "ok" : "empty") : "partial",
+    queryScope: {
+      ...queryScope,
+      maxRows: result.pagination.maxRows,
+      maxPaymentRowsPerBatch: payments.pagination.maxRows,
+    },
     sources: ["cuentas_por_cobrar", "pagos_abonos", "asistentes"],
     resultCount: summary.cuentas_pendientes,
-    data: summary,
-    explanationHints: ["Pendiente = valor_total menos pagos validos. Pagos anulados no cuentan."],
+    data: {
+      ...summary,
+      total_cartera: complete ? summary.total_cartera : null,
+      personas_con_deuda: complete ? summary.personas_con_deuda : null,
+      cuentas_pendientes: complete ? summary.cuentas_pendientes : null,
+      subtotal_cartera_consultada: summary.total_cartera,
+      personas_con_deuda_consultadas: summary.personas_con_deuda,
+      cuentas_pendientes_consultadas: summary.cuentas_pendientes,
+      pagination,
+    },
+    explanationHints: [
+      "Pendiente = valor_total menos pagos validos. Pagos anulados no cuentan.",
+      ...warnings,
+    ],
+    userSafeErrors: warnings,
   })
 }

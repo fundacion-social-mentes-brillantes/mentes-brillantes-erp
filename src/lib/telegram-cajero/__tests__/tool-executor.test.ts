@@ -2,23 +2,31 @@ import { describe, expect, it } from "vitest"
 import { executeAiToolPlan } from "../tool-executor"
 import type { AiPlannerPlan } from "../ai-planner"
 
-function makeQuery(data: any, calls: string[]) {
+function makeQuery(data: any, calls: string[], response: { count?: number | null; error?: any } = {}) {
   const query: any = {
     select() { return query },
     ilike() { return query },
     or() { return query },
-    limit() { return query },
     eq() { return query },
     in() { return query },
     order() { return query },
     gte() { return query },
     lte() { return query },
-    then(resolve: any) { return Promise.resolve({ data, error: null }).then(resolve) },
+    gt() { return query },
+    limit() { return query },
+    range() { return query },
+    then(resolve: any) {
+      return Promise.resolve({
+        data,
+        error: response.error || null,
+        count: Object.prototype.hasOwnProperty.call(response, "count") ? response.count : Array.isArray(data) ? data.length : null,
+      }).then(resolve)
+    },
   }
   return query
 }
 
-function fakeSupabase(options: { ambiguous?: boolean; people?: string[] } = {}) {
+function fakeSupabase(options: { ambiguous?: boolean; people?: string[]; partialFinancial?: boolean } = {}) {
   const calls: string[] = []
   const supabase = {
     calls,
@@ -49,7 +57,15 @@ function fakeSupabase(options: { ambiguous?: boolean; people?: string[] } = {}) 
           calls
         )
       }
-      if (table === "movimientos_saldo_favor") return makeQuery([], calls)
+      if (table === "movimientos_saldo_favor") {
+        return makeQuery([], calls, options.partialFinancial ? { count: 1 } : {})
+      }
+      if (table === "pagos_abonos") {
+        return makeQuery(
+          [{ id: "p1", cuenta_id: "c1", monto: 25000, estado: "activo", origen_fondos: "pago" }],
+          calls
+        )
+      }
       return makeQuery([], calls)
     },
   }
@@ -110,5 +126,16 @@ describe("telegram cajero tool executor", () => {
     expect(bundle.results).toHaveLength(2)
     expect(bundle.structuredResults).toHaveLength(2)
     expect(bundle.structuredResults[0].totals?.pendiente).toBe(75000)
+  })
+
+  it("no persiste resultados estructurados cuando la tool queda parcial", async () => {
+    const bundle = await executeAiToolPlan(
+      fakeSupabase({ partialFinancial: true, people: ["Sandra"] }) as any,
+      plan([{ name: "getPersonFinancialStatus", args: { personQuery: "Sandra" } }])
+    )
+
+    expect(bundle.status).toBe("partial")
+    expect(bundle.results[0].result?.status).toBe("partial")
+    expect(bundle.structuredResults).toEqual([])
   })
 })

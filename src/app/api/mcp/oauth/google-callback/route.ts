@@ -2,50 +2,63 @@ import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { OAUTH_CTX_COOKIE, issueAuthCode, readOAuthContext, type ErpRole } from "@/lib/mcp/oauth"
+import {
+  OAUTH_CTX_COOKIE,
+  issueAuthCode,
+  readClientId,
+  readOAuthContext,
+  redirectUriAllowed,
+} from "@/lib/mcp/oauth"
+import { resolveMcpIdentity } from "@/lib/mcp/identity"
+import { getMcpIssuer, getMcpResource, normalizeRequestedScopes, oauthNoStoreHeaders } from "@/lib/mcp/constants"
 
-// Vuelta del login con Google: intercambia el código de Supabase por sesión,
-// verifica el rol (admin/caja) y emite el código OAuth del MCP para Claude.
 export const dynamic = "force-dynamic"
+
+const ERROR_HEADERS = oauthNoStoreHeaders({
+  "Content-Type": "text/html; charset=utf-8",
+  "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'",
+  "Referrer-Policy": "no-referrer",
+  "X-Frame-Options": "DENY",
+})
 
 function errorPage(message: string, status = 400) {
   const html = `<!doctype html><meta charset="utf-8"><body style="font-family:system-ui;background:#0a1016;color:#f1f6f0;display:flex;min-height:100vh;align-items:center;justify-content:center;text-align:center;padding:24px"><div><h1 style="font-size:1.1rem">No se pudo conectar</h1><p style="color:#a3b0a6">${message}</p></div></body>`
-  return new Response(html, { status, headers: { "content-type": "text/html; charset=utf-8" } })
-}
-
-async function resolveRole(admin: any, userId: string, email: string): Promise<ErpRole | null> {
-  const byId = await admin.from("perfiles").select("rol").eq("id", userId).maybeSingle()
-  if (byId.data?.rol) return byId.data.rol as ErpRole
-  // Por si Google creó una identidad distinta a la de correo/contraseña.
-  const list = await admin.auth.admin.listUsers().catch(() => null)
-  const match = list?.data?.users?.find((u: any) => String(u.email || "").toLowerCase() === email.toLowerCase())
-  if (match) {
-    const byEmail = await admin.from("perfiles").select("rol").eq("id", match.id).maybeSingle()
-    return (byEmail.data?.rol as ErpRole) || null
-  }
-  return null
+  return new Response(html, { status, headers: ERROR_HEADERS })
 }
 
 export async function GET(req: Request) {
   const url = new URL(req.url)
-  const code = url.searchParams.get("code")
-  if (!code) return errorPage("Falta el código de Google.")
+  const providerCode = url.searchParams.get("code")
+  if (!providerCode) return errorPage("Falta el código de Google.")
 
   const jar = await cookies()
-  const ctxToken = jar.get(OAUTH_CTX_COOKIE)?.value
-  if (!ctxToken) return errorPage("La sesión de autorización expiró. Vuelve a intentar desde Claude.")
+  const contextToken = jar.get(OAUTH_CTX_COOKIE)?.value
+  if (!contextToken) return errorPage("La autorización expiró. Vuelve a intentarlo desde Claude o ChatGPT.")
 
-  let ctx
+  let context
   try {
-    ctx = await readOAuthContext(ctxToken)
+    context = await readOAuthContext(contextToken)
   } catch {
     return errorPage("Contexto de autorización inválido.")
   }
 
+  const client = await readClientId(context.clientId)
+  const currentIssuer = getMcpIssuer(req)
+  const currentResource = getMcpResource(req)
+  const scopes = normalizeRequestedScopes(context.scopes.join(" "))
+  if (
+    !client ||
+    !redirectUriAllowed(context.redirectUri, client.redirect_uris) ||
+    context.issuer !== currentIssuer ||
+    context.resource !== currentResource ||
+    !scopes
+  ) {
+    return errorPage("La solicitud de autorización ya no es válida.")
+  }
+
   const supabase = await createClient()
   if (!supabase) return errorPage("Servidor no configurado.", 500)
-
-  const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+  const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(providerCode)
   if (exchangeError) return errorPage("No se pudo validar el inicio con Google.")
 
   const { data: userData } = await supabase.auth.getUser()
@@ -54,27 +67,36 @@ export async function GET(req: Request) {
 
   const admin = createAdminClient()
   if (!admin) return errorPage("Servidor no configurado.", 500)
+  const identity = await resolveMcpIdentity(admin, user)
+  if (!identity) return errorPage("Tu cuenta no tiene permiso para el MCP financiero (requiere rol admin o caja).", 403)
 
-  const email = user.email || ""
-  const role = await resolveRole(admin, user.id, email)
-  if (role !== "admin" && role !== "caja") {
-    return errorPage("Tu cuenta de Google no tiene permiso para el MCP financiero (requiere admin o caja).", 403)
+  try {
+    const mcpCode = await issueAuthCode({
+      sub: identity.userId,
+      email: identity.email,
+      role: identity.role,
+      clientId: context.clientId,
+      clientName: client.name,
+      clientKind: client.kind,
+      redirectUri: context.redirectUri,
+      codeChallenge: context.codeChallenge,
+      resource: currentResource,
+      scopes,
+      issuer: currentIssuer,
+    })
+    const redirect = new URL(context.redirectUri)
+    redirect.searchParams.set("code", mcpCode)
+    if (context.state) redirect.searchParams.set("state", context.state)
+
+    const response = NextResponse.redirect(redirect.toString(), 302)
+    response.headers.set("Cache-Control", "no-store")
+    response.headers.set("Pragma", "no-cache")
+    response.cookies.delete(OAUTH_CTX_COOKIE)
+    return response
+  } catch (error) {
+    console.error("[mcp] no se pudo completar OAuth con Google", {
+      message: error instanceof Error ? error.message : "unknown",
+    })
+    return errorPage("No se pudo completar la autorización. Inténtalo de nuevo.", 500)
   }
-
-  const mcpCode = await issueAuthCode({
-    sub: user.id,
-    email,
-    role,
-    clientId: ctx.clientId,
-    redirectUri: ctx.redirectUri,
-    codeChallenge: ctx.codeChallenge,
-  })
-
-  const redirect = new URL(ctx.redirectUri)
-  redirect.searchParams.set("code", mcpCode)
-  if (ctx.state) redirect.searchParams.set("state", ctx.state)
-
-  const res = NextResponse.redirect(redirect.toString(), 302)
-  res.cookies.delete(OAUTH_CTX_COOKIE)
-  return res
 }

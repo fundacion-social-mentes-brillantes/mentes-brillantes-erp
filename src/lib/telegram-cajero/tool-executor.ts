@@ -236,6 +236,7 @@ async function executeTool(supabase: SupabaseReader, tool: AiPlannerTool): Promi
 function structuredFromItem(item: ToolExecutionItem): NonNullable<TelegramSessionState["lastStructuredResult"]> | null {
   const result = item.result
   if (!result) return null
+  if (result.status === "partial" || result.status === "error") return null
   const data: any = result.data || {}
   const person = item.person || data.asistente || null
 

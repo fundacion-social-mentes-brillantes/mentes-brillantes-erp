@@ -1,35 +1,70 @@
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js"
-import { getPublicOrigin } from "mcp-handler"
-import { verifyAccessToken, isConfigured, type ErpRole } from "./oauth"
+import { createAdminClient } from "@/lib/supabase/admin"
+import { getMcpIssuer, getMcpResource, MCP_PRIMARY_SCOPE } from "./constants"
+import { isConfigured, verifyAccessToken, type ErpRole, type McpClientKind } from "./oauth"
+import { isTokenFamilyRevoked } from "./oauth-store"
+import { resolveCurrentMcpIdentity } from "./identity"
 
-// El MCP valida SUS PROPIOS tokens (emitidos por el login del ERP, ver oauth.ts).
-// No hay proveedores externos ni variables nuevas: la clave se deriva del
-// SUPABASE_SERVICE_ROLE_KEY que ya existe en Vercel.
+export type ErpMcpAuth = {
+  email: string
+  role: Exclude<ErpRole, "consulta">
+  sub: string
+  clientName: string
+  clientKind: McpClientKind
+  sessionId: string
+}
 
-export type ErpMcpAuth = { email: string; role: ErpRole; sub: string }
+function validClientKind(value: unknown): value is McpClientKind {
+  return value === "chatgpt" || value === "claude" || value === "claude-code" || value === "other"
+}
 
 export async function verifyErpMcpToken(req: Request, bearer?: string): Promise<AuthInfo | undefined> {
-  if (!bearer) return undefined
-  if (!isConfigured()) {
-    console.error("[mcp] falta SUPABASE_SERVICE_ROLE_KEY; no se puede validar el token")
-    return undefined
-  }
+  if (!bearer || !isConfigured()) return undefined
   try {
-    const origin = getPublicOrigin(req)
-    const payload = await verifyAccessToken(bearer, { audience: origin, issuer: origin })
+    const issuer = getMcpIssuer(req)
+    const resource = getMcpResource(req)
+    const payload = await verifyAccessToken(bearer, { audience: resource, issuer })
+    const scopes = Array.isArray(payload.scope) ? payload.scope.map(String) : []
+    const subject = String(payload.sub || "")
+    const familyId = String(payload.sid || "")
+    const clientId = String(payload.cid || "")
+    const clientName = String(payload.cname || "")
+    const clientKind = payload.ckind
+    if (
+      !subject ||
+      !familyId ||
+      !clientId ||
+      !clientName ||
+      !validClientKind(clientKind) ||
+      !scopes.includes(MCP_PRIMARY_SCOPE)
+    ) {
+      return undefined
+    }
+    if (await isTokenFamilyRevoked(familyId)) return undefined
+
+    const admin = createAdminClient()
+    if (!admin) return undefined
+    const identity = await resolveCurrentMcpIdentity(admin, subject)
+    if (!identity) return undefined
     return {
       token: bearer,
-      clientId: "mcp-erp",
-      scopes: ["erp.read"],
+      clientId,
+      scopes,
       expiresAt: typeof payload.exp === "number" ? payload.exp : undefined,
+      resource: new URL(resource),
       extra: {
-        email: String(payload.email || ""),
-        role: (payload.role as ErpRole) || "consulta",
-        sub: String(payload.sub || ""),
-      } as ErpMcpAuth,
+        email: identity.email,
+        role: identity.role,
+        sub: identity.userId,
+        clientName,
+        clientKind,
+        sessionId: familyId,
+      } satisfies ErpMcpAuth,
     }
-  } catch (error: any) {
-    console.error("[mcp] token invalido", { message: error?.message })
+  } catch (error) {
+    console.error("[mcp] token inválido", {
+      message: error instanceof Error ? error.message : "unknown",
+    })
     return undefined
   }
 }

@@ -1,25 +1,43 @@
 import { esAnuladoCompleto, sumarMontos } from "@/lib/utils/contable"
 import type { SupabaseReader } from "./types"
 import { toolError, toolResult } from "./types"
+import { fetchPaginatedRows, partialPaginationMessage } from "./pagination"
 
 export async function getExpenses(supabase: SupabaseReader, fechaInicio: string, fechaFin: string) {
   const queryScope = { fechaInicio, fechaFin }
-  const { data, error } = await supabase
-    .from("egresos")
-    .select("id, concepto, monto, metodo_pago, fecha, estado, notas")
-    .gte("fecha", fechaInicio)
-    .lte("fecha", fechaFin)
-    .order("fecha", { ascending: false })
-    .limit(100)
+  const result = await fetchPaginatedRows<any>((withExactCount) =>
+    supabase
+      .from("egresos")
+      .select(
+        "id, concepto, monto, metodo_pago, fecha, estado, notas",
+        withExactCount ? { count: "exact" } : undefined
+      )
+      .gte("fecha", fechaInicio)
+      .lte("fecha", fechaFin),
+    { rowKey: "id" }
+  )
 
-  if (error) return toolError("getExpenses", queryScope, "egresos", error)
-  const validos = (data || []).filter((item: any) => !esAnuladoCompleto(item))
+  if (result.error && result.rows.length === 0) return toolError("getExpenses", queryScope, "egresos", result.error)
+
+  const validos = result.rows.filter((item: any) => !esAnuladoCompleto(item))
+  const subtotal = Math.round(sumarMontos(validos))
+  const complete = result.pagination.complete
+  const warning = complete ? null : partialPaginationMessage("egresos", result.pagination)
   return toolResult({
     toolName: "getExpenses",
-    status: validos.length ? "ok" : "empty",
-    queryScope,
+    status: complete ? (validos.length ? "ok" : "empty") : "partial",
+    queryScope: { ...queryScope, maxRows: result.pagination.maxRows },
     sources: ["egresos"],
     resultCount: validos.length,
-    data: { total: Math.round(sumarMontos(validos)), egresos: validos },
+    data: {
+      total: complete ? subtotal : null,
+      subtotal_consultado: subtotal,
+      cantidad_total: complete ? validos.length : null,
+      cantidad_consultada: validos.length,
+      egresos: validos,
+      pagination: result.pagination,
+    },
+    explanationHints: warning ? [warning] : [],
+    userSafeErrors: warning ? [warning] : [],
   })
 }

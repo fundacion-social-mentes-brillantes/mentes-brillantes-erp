@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start -p 3000",
     "lint": "next lint",
-    "test": "set NODE_OPTIONS=--require=./patch-netuse.cjs&&set ESBUILD_BINARY_PATH=C:\\mentes-brillantes-erp\\node_modules\\@esbuild\\win32-x64\\esbuild.exe&&set TMP=.tmp&&set TEMP=.tmp&&vitest run"
+    "test": "vitest run"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
