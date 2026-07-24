@@ -2,12 +2,14 @@ import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-const { createAdminClientMock } = vi.hoisted(() => ({
+const { createAdminClientMock, getAdminUserByIdMock } = vi.hoisted(() => ({
   createAdminClientMock: vi.fn(),
+  getAdminUserByIdMock: vi.fn(),
 }))
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: createAdminClientMock,
+  getAdminUserById: getAdminUserByIdMock,
 }))
 
 import { McpAuditError, auditMcpToolCall } from "../audit"
@@ -22,9 +24,9 @@ function identityAdmin(params: {
   profile?: Record<string, unknown>
   profileError?: unknown
 }) {
-  const getUserById = vi.fn().mockResolvedValue({
-    data: { user: params.user ?? null },
-    error: params.authError ?? null,
+  getAdminUserByIdMock.mockResolvedValue({
+    user: params.user ?? null,
+    error: params.authError ? "auth_error" : null,
   })
   const listUsers = vi.fn()
   const maybeSingle = vi.fn().mockResolvedValue({
@@ -35,8 +37,8 @@ function identityAdmin(params: {
   const select = vi.fn().mockReturnValue({ eq })
   const from = vi.fn().mockReturnValue({ select })
   return {
-    admin: { auth: { admin: { getUserById, listUsers } }, from },
-    getUserById,
+    admin: { auth: { admin: { listUsers } }, from },
+    getUserById: getAdminUserByIdMock,
     listUsers,
     from,
     eq,
