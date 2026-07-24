@@ -3,7 +3,9 @@ import { toolResult } from "./types"
 
 export async function searchGlobal(supabase: SupabaseReader, term: string) {
   const queryScope = { term }
-  const normalized = term.trim()
+  // Sanitiza caracteres que rompen el filtro .or() de PostgREST (comas,
+  // paréntesis, comodines) para evitar inyección en el filtro.
+  const normalized = (term || "").trim().replace(/[,()*\\]/g, " ").replace(/\s+/g, " ").trim()
   if (!/^\d+$/.test(normalized) && normalized.length < 3) {
     return toolResult({
       toolName: "searchGlobal",

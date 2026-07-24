@@ -1,15 +1,20 @@
 # MCP Financiero — Mentes Brillantes
 
 Servidor **MCP remoto, solo lectura**, que vive dentro del mismo ERP. Deja que
-Claude (y otros clientes MCP) consulten TODO el sistema financiero con lenguaje
-natural, respetando la misma lógica del programa (reusa las funciones del bot).
+Claude consulte TODO el sistema financiero en lenguaje natural, respetando la
+misma lógica del programa (reusa las funciones del bot cajero).
 
 - **URL del conector (Streamable HTTP):** `https://mentes-brillantes-erp.vercel.app/api/mcp/mcp`
-- **Metadata OAuth:** `https://mentes-brillantes-erp.vercel.app/.well-known/oauth-protected-resource`
-- **Estado sin configurar:** responde `401` (bloqueado). Se activa al poner las 3
-  variables de entorno en Vercel y redesplegar.
-- **Solo lectura:** no puede crear, editar ni borrar nada. Los datos se leen con
-  `service_role`; la seguridad real es OAuth + lista blanca de correos.
+- **Login:** con la **misma cuenta del ERP** (correo y contraseña) **o con Google**.
+- **Quién puede entrar:** solo usuarios con rol `admin` o `caja` en la tabla
+  `perfiles`. Cualquier otro (o sin cuenta) → bloqueado.
+- **Solo lectura:** no puede crear, editar ni borrar nada.
+
+> **No necesita variables de entorno nuevas.** El ERP es su propio servidor
+> OAuth: firma los tokens con una clave derivada del `SUPABASE_SERVICE_ROLE_KEY`
+> que ya existe en Vercel. El login por **correo/contraseña funciona desde el
+> primer momento**. Google es opcional y solo requiere una configuración única
+> en la consola de Supabase (Paso 2).
 
 ## Herramientas que expone (≈18, todas de solo lectura)
 Por persona: `estado_persona`, `pagos_persona`, `ultimo_pago_persona`,
@@ -21,51 +26,68 @@ sesiones migradas). Global: `compradores_de_concepto` (ej. quiénes compraron
 
 ---
 
-## Paso 1 — Elegir el proveedor OAuth
+## Cómo funciona la seguridad (resumen)
 
-El MCP no guarda contraseñas: confía en un proveedor de identidad (Authorization
-Server). Dos caminos válidos:
+1. Claude descubre el servidor OAuth del propio ERP vía
+   `/.well-known/oauth-authorization-server` y se registra solo (DCR).
+2. Claude abre la página de login del ERP (`/api/mcp/oauth/authorize`) con PKCE.
+3. El usuario entra con su **correo/contraseña del ERP** o con **Google**.
+4. El ERP verifica el rol en `perfiles`: solo `admin`/`caja` obtienen un código.
+5. Claude canjea el código (validando PKCE) por un token de acceso (1 h) y uno
+   de refresco (30 días). **En cada refresco se vuelve a comprobar el rol en la
+   base**, así que si a alguien se le quita el permiso, deja de tener acceso.
 
-### Opción A — WorkOS AuthKit (recomendada, más fácil y confiable)
-Está hecha para MCP: soporta el registro dinámico que Claude necesita y login
-con Microsoft/Google. Tiene plan gratuito.
-1. Crea cuenta en workos.com → AuthKit.
-2. Activa los proveedores de login que usan (Microsoft y/o Google).
-3. Copia:
-   - **Issuer** (algo como `https://<tuapp>.authkit.app` o el dominio AuthKit).
-   - **Client ID** (será el `audience`).
-
-### Opción B — Microsoft Entra ID (sin proveedor nuevo; ya tienen Azure)
-1. Azure Portal → **Microsoft Entra ID → App registrations → New registration**.
-   - Redirect URI (Web): `https://claude.ai/api/mcp/auth_callback` (y, si usan
-     Claude Desktop, agrega también el que indique Claude al conectar).
-2. **Expose an API** → agrega un scope (ej. `erp.read`); anota el
-   *Application ID URI* (`api://<client-id>`).
-3. Anota:
-   - **Issuer:** `https://login.microsoftonline.com/<TENANT_ID>/v2.0`
-   - **Audience:** el **Client ID** (o el `api://<client-id>` del scope).
-   - Crea un **client secret** (lo usarás al añadir el conector en Claude).
-
-> Nota: Google "a secas" no sirve con esta validación (sus access tokens no son
-> JWT verificables). Si quieren login con Google, úsenlo **a través de AuthKit**.
+Todos los tokens son JWT firmados y de vida corta; el `redirect_uri` se valida
+de forma estricta (anti open-redirect) y la página de login escapa todo el HTML.
 
 ---
 
-## Paso 2 — Variables de entorno en Vercel
+## Paso 1 — (Solo correo/contraseña) Nada que configurar
 
-Proyecto `mentes-brillantes-erp` → Settings → Environment Variables (Production):
+El MCP ya está activo con login por correo/contraseña. Salta al **Paso 3** si de
+momento no quieres el botón de Google.
 
-| Variable | Valor |
-|---|---|
-| `MCP_OAUTH_ISSUER` | El *issuer* del Paso 1 |
-| `MCP_OAUTH_AUDIENCE` | El *client id* / audience del Paso 1 |
-| `MCP_ALLOWED_EMAILS` | Los 4 correos, separados por coma. Opcional rol: `ana@x.com:admin, juan@x.com:caja` |
+Verifica que está vivo abriendo en el navegador:
+`https://mentes-brillantes-erp.vercel.app/.well-known/oauth-authorization-server`
+Debe devolver un JSON con `authorization_endpoint`, `token_endpoint`, etc.
 
-Luego **Redeploy** (o push a `main`) para que tomen efecto.
+---
 
-Verifica que quedó activo: al abrir
-`https://mentes-brillantes-erp.vercel.app/.well-known/oauth-protected-resource`
-el campo `authorization_servers` debe mostrar tu issuer.
+## Paso 2 — (Opcional) Activar login con Google
+
+Esto habilita el botón **"Continuar con Google"** tanto en el ERP como en el MCP.
+Es una configuración **de una sola vez** en Google Cloud + Supabase.
+
+### 2.1 Crear la credencial en Google Cloud
+1. [console.cloud.google.com](https://console.cloud.google.com) → crea/elige un proyecto.
+2. **APIs & Services → OAuth consent screen** → tipo **External** → completa
+   nombre de la app y correo de soporte → guarda. (Con "Testing" basta; agrega
+   los 4 correos como *Test users* si no publicas la app.)
+3. **APIs & Services → Credentials → Create credentials → OAuth client ID** →
+   tipo **Web application**.
+4. En **Authorized redirect URIs** agrega la URL que te da Supabase (paso 2.2):
+   `https://<TU-REF>.supabase.co/auth/v1/callback`
+5. Copia el **Client ID** y **Client secret**.
+
+### 2.2 Pegar la credencial en Supabase
+1. [supabase.com/dashboard](https://supabase.com/dashboard) → tu proyecto →
+   **Authentication → Providers → Google** → actívalo.
+2. Pega el **Client ID** y **Client secret** de Google → guarda.
+3. Copia el **Callback URL** que muestra ahí y verifica que sea el mismo que
+   pusiste en el paso 2.1 (item 4).
+
+### 2.3 Autorizar las URLs de retorno del ERP
+En Supabase → **Authentication → URL Configuration → Redirect URLs**, agrega:
+```
+https://mentes-brillantes-erp.vercel.app/auth/callback
+https://mentes-brillantes-erp.vercel.app/api/mcp/oauth/google-callback
+```
+(La primera es para el login con Google del ERP; la segunda para el del MCP.)
+
+> Importante: la cuenta de Google de cada persona debe corresponder a un usuario
+> con rol `admin`/`caja` en `perfiles`. Si alguien ya tenía cuenta con
+> correo/contraseña y entra con el mismo correo por Google, el sistema lo
+> reconoce por correo y respeta su rol.
 
 ---
 
@@ -73,10 +95,9 @@ el campo `authorization_servers` debe mostrar tu issuer.
 
 En **claude.ai → Settings → Connectors → Add custom connector**:
 1. **URL:** `https://mentes-brillantes-erp.vercel.app/api/mcp/mcp`
-2. Si pide credenciales OAuth (opción Entra): pega el **Client ID** y **Client
-   secret**. Con AuthKit normalmente se registra solo.
-3. Claude abrirá el login del proveedor → inicia sesión con tu correo (debe estar
-   en `MCP_ALLOWED_EMAILS`).
+2. Claude abrirá la página de login del ERP.
+3. Inicia sesión con tu **correo/contraseña del ERP** o con **Google** (tu cuenta
+   debe tener rol `admin` o `caja`).
 4. Listo: aparecerán las herramientas del ERP. Pregunta en lenguaje natural, ej.:
    *"¿cuánto debe Sirley Urbano?"*, *"quiénes compraron pasos"*,
    *"resumen del último período"*, *"sesiones coach de Daniel Alarcón con fechas"*.
@@ -85,9 +106,12 @@ Cada uno de los 4 repite el Paso 3 en su propia cuenta de Claude.
 
 ---
 
-## Seguridad
-- Solo los correos en `MCP_ALLOWED_EMAILS` pueden entrar (todo lo demás → 401).
-- Token validado criptográficamente (JWKS) contra el proveedor, con issuer y
-  audience esperados.
-- Solo lectura: cero riesgo de alterar finanzas.
-- Endpoints del MCP excluidos del middleware de sesión (no redirigen a /login).
+## Seguridad (detalle)
+- **Solo `admin`/`caja`** obtienen token; cualquier otro correo/rol → rechazado.
+- **PKCE (S256) obligatorio** y `redirect_uri` validado estrictamente.
+- **Tokens JWT firmados y cortos** (acceso 1 h, refresco 30 días); el refresco
+  **revalida el rol en la base** en cada uso (revocación efectiva al dar de baja).
+- **Solo lectura:** cero riesgo de alterar finanzas.
+- La clave de firma se deriva del `SUPABASE_SERVICE_ROLE_KEY` (nunca se expone al
+  cliente) — no hay secretos nuevos que gestionar.
+- Endpoints del MCP y `/.well-known` excluidos del middleware de sesión.

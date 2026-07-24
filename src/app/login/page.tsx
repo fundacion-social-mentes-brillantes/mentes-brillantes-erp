@@ -1,4 +1,5 @@
 import { LoginForm } from './LoginForm'
+import { GoogleButton } from './GoogleButton'
 import Link from 'next/link'
 import Image from 'next/image'
 
@@ -27,6 +28,14 @@ export default function LoginPage() {
         </div>
 
         <LoginForm />
+
+        <div className="my-5 flex items-center gap-3">
+          <span className="h-px flex-1 bg-[rgba(var(--border),0.7)]" />
+          <span className="text-xs text-[rgb(var(--text-muted))]">o</span>
+          <span className="h-px flex-1 bg-[rgba(var(--border),0.7)]" />
+        </div>
+
+        <GoogleButton />
 
         <div className="text-center mt-6">
           <Link href="/registro" className="text-sm font-semibold text-[rgb(var(--accent-strong))] hover:text-[rgb(var(--accent))]">
