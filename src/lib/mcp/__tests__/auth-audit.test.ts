@@ -2,14 +2,12 @@ import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-const { createAdminClientMock, getAdminUserByIdMock } = vi.hoisted(() => ({
+const { createAdminClientMock } = vi.hoisted(() => ({
   createAdminClientMock: vi.fn(),
-  getAdminUserByIdMock: vi.fn(),
 }))
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: createAdminClientMock,
-  getAdminUserById: getAdminUserByIdMock,
 }))
 
 import { McpAuditError, auditMcpToolCall } from "../audit"
@@ -19,29 +17,17 @@ import { resolveCurrentMcpIdentity } from "../identity"
 const AUTHENTICATED_UUID = "11111111-1111-4111-8111-111111111111"
 
 function identityAdmin(params: {
-  user?: Record<string, unknown>
-  authError?: unknown
-  profile?: Record<string, unknown>
-  profileError?: unknown
+  identity?: Record<string, unknown>
+  error?: unknown
 }) {
-  getAdminUserByIdMock.mockResolvedValue({
-    user: params.user ?? null,
-    error: params.authError ? "auth_error" : null,
-  })
-  const listUsers = vi.fn()
   const maybeSingle = vi.fn().mockResolvedValue({
-    data: params.profile ?? null,
-    error: params.profileError ?? null,
+    data: params.identity ?? null,
+    error: params.error ?? null,
   })
-  const eq = vi.fn().mockReturnValue({ maybeSingle })
-  const select = vi.fn().mockReturnValue({ eq })
-  const from = vi.fn().mockReturnValue({ select })
+  const rpc = vi.fn().mockReturnValue({ maybeSingle })
   return {
-    admin: { auth: { admin: { listUsers } }, from },
-    getUserById: getAdminUserByIdMock,
-    listUsers,
-    from,
-    eq,
+    admin: { rpc },
+    rpc,
   }
 }
 
@@ -68,13 +54,11 @@ afterEach(() => {
 describe("identidad MCP actual", () => {
   it("autoriza únicamente el UUID autenticado exacto y nunca busca por email", async () => {
     const fixture = identityAdmin({
-      user: {
-        id: AUTHENTICATED_UUID,
+      identity: {
+        user_id: AUTHENTICATED_UUID,
         email: "same-email@example.com",
-        banned_until: null,
-        deleted_at: null,
+        role: "admin",
       },
-      profile: { rol: "admin" },
     })
 
     const identity = await resolveCurrentMcpIdentity(fixture.admin as never, AUTHENTICATED_UUID)
@@ -84,27 +68,16 @@ describe("identidad MCP actual", () => {
       email: "same-email@example.com",
       role: "admin",
     })
-    expect(fixture.getUserById).toHaveBeenCalledWith(AUTHENTICATED_UUID)
-    expect(fixture.eq).toHaveBeenCalledWith("id", AUTHENTICATED_UUID)
-    expect(fixture.listUsers).not.toHaveBeenCalled()
+    expect(fixture.rpc).toHaveBeenCalledWith("mcp_resolve_identity", {
+      p_user_id: AUTHENTICATED_UUID,
+    })
   })
 
-  it.each([
-    ["baneo futuro", new Date(Date.now() + 60_000).toISOString()],
-    ["baneo inválido", "not-a-valid-date"],
-  ])("rechaza un usuario con %s", async (_label, bannedUntil) => {
-    const fixture = identityAdmin({
-      user: {
-        id: AUTHENTICATED_UUID,
-        email: "admin@example.com",
-        banned_until: bannedUntil,
-        deleted_at: null,
-      },
-      profile: { rol: "admin" },
-    })
+  it("rechaza cuando la función protegida no devuelve una identidad activa y autorizada", async () => {
+    const fixture = identityAdmin({})
 
     await expect(resolveCurrentMcpIdentity(fixture.admin as never, AUTHENTICATED_UUID)).resolves.toBeNull()
-    expect(fixture.from).not.toHaveBeenCalled()
+    expect(fixture.rpc).toHaveBeenCalledOnce()
   })
 })
 
