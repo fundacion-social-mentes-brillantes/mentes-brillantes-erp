@@ -1,4 +1,5 @@
 import type { User } from "@supabase/supabase-js"
+import { getAdminUserById } from "@/lib/supabase/admin"
 import type { ErpRole } from "./oauth"
 
 type AdminClient = ReturnType<typeof import("@/lib/supabase/admin").createAdminClient>
@@ -26,8 +27,7 @@ export async function resolveCurrentMcpIdentity(
   if (!authenticatedUserId) return null
 
   try {
-    const { data: authData, error: authError } = await admin.auth.admin.getUserById(authenticatedUserId)
-    const user = authData?.user
+    const { user, error: authError } = await getAdminUserById(authenticatedUserId)
     if (authError || !user || !activeUser(user, authenticatedUserId)) return null
 
     const { data: profile, error: profileError } = await admin
