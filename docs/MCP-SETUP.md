@@ -53,8 +53,10 @@ La pantalla de autorización del ERP ofrece estas opciones:
 - **Continuar con mi sesión activa del ERP.** Si la persona ya inició sesión en
   el ERP en ese mismo navegador, puede reutilizarla mediante este botón. La
   acción requiere consentimiento explícito: la sesión nunca se usa para
-  autorizar el conector hasta que la persona presiona el botón. Claude y
-  ChatGPT no reciben las cookies ni las credenciales de esa sesión.
+  autorizar el conector hasta que la persona presiona el botón. El formulario
+  usa un consentimiento firmado de 10 minutos, ligado al cliente, callback,
+  PKCE y permisos solicitados. Claude y ChatGPT no reciben las cookies ni las
+  credenciales de esa sesión.
 - **Correo y contraseña del ERP.** Es la alternativa disponible cuando no hay
   una sesión activa. La contraseña se escribe únicamente en la página del ERP
   durante el flujo OAuth; Claude y ChatGPT no la reciben.
