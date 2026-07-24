@@ -428,6 +428,17 @@ function summarizeToolError(prefix: string, result: any) {
   return `${prefix}${detail ? ` ${detail}` : ""}`
 }
 
+export function buildPartialResultNotice(scope: string, warnings: unknown[] = []) {
+  const safeWarnings = Array.from(new Set(
+    warnings.filter((warning): warning is string => typeof warning === "string" && Boolean(warning.trim()))
+  ))
+  return [
+    `Ojo: la consulta de ${scope} quedo parcial.`,
+    "Los totales son desconocidos; por seguridad no los presento como cero ni afirmo que no exista deuda.",
+    safeWarnings.length ? `Advertencias: ${safeWarnings.join(" ")}` : "Advertencia: faltan datos por consultar.",
+  ].join("\n")
+}
+
 function visibleName(user?: TelegramUser) {
   if (!user) return "No disponible"
   return [user.first_name, user.last_name].filter(Boolean).join(" ") || user.username || String(user.id)
@@ -828,7 +839,7 @@ async function searchAsistenteForAction(
   return matchedAsistente
 }
 
-async function buildEstadoResponse(supabase: any, asistente: any) {
+export async function buildEstadoResponse(supabase: any, asistente: any) {
   {
   const [statusResult, paymentsResult, paquetesCoachRes, sesionesCoachRes] = await Promise.all([
     getPersonFinancialStatus(supabase, asistente.id),
@@ -853,6 +864,16 @@ async function buildEstadoResponse(supabase: any, asistente: any) {
     paquetesCoachRes.error ? "No pude consultar paquetes coach." : null,
     sesionesCoachRes.error ? "No pude consultar sesiones coach." : null,
   ].filter(Boolean)
+
+  if (
+    statusResult.status === "partial" ||
+    statusResult.status === "error" ||
+    paymentsResult.status === "partial" ||
+    paymentsResult.status === "error" ||
+    partialErrors.length
+  ) {
+    return buildPartialResultNotice(`estado financiero de ${asistente.nombre}`, partialErrors)
+  }
 
   const lectura: string[] = ["\nMi lectura:"]
   if (pendientes.length > 0) {
@@ -1080,7 +1101,7 @@ async function buildComprasPersonaResponse(supabase: any, asistente: any) {
     .join("\n")
 }
 
-async function buildEstadoCompletoPersonaResponse(supabase: any, asistente: any, question = "") {
+export async function buildEstadoCompletoPersonaResponse(supabase: any, asistente: any, question = "") {
   const [internalContext, estado, compras, pagos, ultimoPago] = await Promise.all([
     buildTelegramInternalContext(supabase, question || `ficha completa de ${asistente.nombre}`, { asistenteId: asistente.id }),
     getPersonFinancialStatus(supabase, asistente.id),
@@ -1102,6 +1123,13 @@ async function buildEstadoCompletoPersonaResponse(supabase: any, asistente: any,
     ...ultimoPago.userSafeErrors,
     ...internalContext.userSafeErrors,
   ].filter(Boolean)
+
+  if (
+    [estado, compras, pagos, ultimoPago].some((result) => result.status === "partial" || result.status === "error") ||
+    errors.length
+  ) {
+    return buildPartialResultNotice(`ficha completa de ${asistente.nombre}`, errors)
+  }
 
   return [
     `Listo, revisé a ${asistente.nombre}.`,
@@ -1134,9 +1162,10 @@ async function buildEstadoCompletoPersonaResponse(supabase: any, asistente: any,
     .join("\n")
 }
 
-async function buildCarteraPendienteGlobalResponse(supabase: any) {
+export async function buildCarteraPendienteGlobalResponse(supabase: any) {
   const result = await getOpenReceivablesSummary(supabase)
   if (result.status === "error") return summarizeToolError("No pude consultar cartera pendiente.", result)
+  if (result.status === "partial") return buildPartialResultNotice("cartera pendiente", result.userSafeErrors)
 
   const data: any = result.data || {}
   if (!data.cuentas_pendientes) return "No veo cartera pendiente en este momento. Si hay un error de consulta, te lo diria aparte."
@@ -1198,13 +1227,14 @@ function extractBareFollowUpPerson(text: string) {
   return cleaned.length >= 3 ? cleaned : null
 }
 
-async function buildStructuredResultForAsistente(
+export async function buildStructuredResultForAsistente(
   supabase: any,
   asistente: any,
   action: PendingAction
 ): Promise<NonNullable<TelegramSessionState["lastStructuredResult"]> | null> {
   if (["cuentas_pendientes_persona", "estado_persona", "estado_completo_persona"].includes(action)) {
     const result = await getPersonFinancialStatus(supabase, asistente.id)
+    if (result.status === "partial" || result.status === "error") return null
     const financial: any = result.data || {}
     const cuentas = Array.isArray(financial.cuentas) ? financial.cuentas : []
     const pendientes = cuentas.filter((cuenta: any) => Number(cuenta.pendiente || 0) > 0)
@@ -1230,6 +1260,7 @@ async function buildStructuredResultForAsistente(
 
   if (action === "compras_persona") {
     const result = await getPersonPurchasesOrConcepts(supabase, asistente.id, 12)
+    if (result.status === "partial" || result.status === "error") return null
     const items = Array.isArray(result.data) ? result.data : []
     return {
       type: action,
@@ -1314,11 +1345,12 @@ async function buildUltimoPagoPersonaResponse(supabase: any, asistente: any) {
   return `Listo. El último pago que veo de ${asistente.nombre} fue el ${ultimo.fecha_pago} por ${formatCop(ultimo.monto)} vía ${ultimo.metodo_pago || "desconocido"}, concepto: ${ultimo.concepto}.`
 }
 
-async function buildCuentasPendientesPersonaResponse(supabase: any, asistente: any) {
+export async function buildCuentasPendientesPersonaResponse(supabase: any, asistente: any) {
   {
   const result = await getPersonFinancialStatus(supabase, asistente.id)
   const financial: any = result.data || {}
   if (result.status === "error") return `No pude consultar cuentas de ${asistente.nombre}. ${result.userSafeErrors.join(" ")}`
+  if (result.status === "partial") return buildPartialResultNotice(`cuentas pendientes de ${asistente.nombre}`, result.userSafeErrors)
   const pendientes = (financial.cuentas || []).filter((cuenta: any) => cuenta.pendiente > 0)
   if (pendientes.length === 0) return `Listo. ${asistente.nombre} no tiene cuentas pendientes en este momento.`
   return [
@@ -1358,11 +1390,12 @@ async function buildCuentasPendientesPersonaResponse(supabase: any, asistente: a
   return response.join("\n")
 }
 
-async function buildSaldoFavorPersonaResponse(supabase: any, asistente: any) {
+export async function buildSaldoFavorPersonaResponse(supabase: any, asistente: any) {
   {
   const result = await getPersonFinancialStatus(supabase, asistente.id)
   const financial: any = result.data || {}
   if (result.status === "error") return `No pude consultar saldo a favor de ${asistente.nombre}. ${result.userSafeErrors.join(" ")}`
+  if (result.status === "partial") return buildPartialResultNotice(`saldo a favor de ${asistente.nombre}`, result.userSafeErrors)
   return `Listo. El saldo a favor disponible de ${asistente.nombre} es de ${formatCop(financial.saldo_a_favor || 0)}.`
   }
 
@@ -1420,13 +1453,15 @@ async function buildEgresosResponse(supabase: any, intent: Intent) {
   return response.join("\n")
 }
 
-async function buildResumenPeriodoResponse(supabase: any, intent: Intent) {
+export async function buildResumenPeriodoResponse(supabase: any, intent: Intent) {
   const fallback = resolveNaturalDateRange("este mes")
   const from = intent.fecha_desde || fallback?.from
   const to = intent.fecha_hasta || fallback?.to
   if (!from || !to) return "Necesito una fecha o periodo para hacer el resumen."
 
   const result = await getSummary(supabase, from, to)
+  if (result.status === "error") return summarizeToolError("No pude consultar el resumen del periodo.", result)
+  if (result.status === "partial") return buildPartialResultNotice(`resumen de ${from} a ${to}`, result.userSafeErrors)
   const data: any = result.data || {}
   const alerts = getAlerts([result])
 
@@ -1438,7 +1473,6 @@ async function buildResumenPeriodoResponse(supabase: any, intent: Intent) {
     `Cartera/abonos: ${formatCop(data.ingresos_cartera || 0)}`,
     `Donaciones: ${formatCop(data.donaciones || 0)}`,
     `Ventas externas: ${formatCop(data.ventas_externas || 0)}`,
-    result.status === "partial" ? `\nOjo: resumen parcial. ${result.userSafeErrors.join(" ")}` : "",
     alerts.alerts.length ? `\nAlertas: ${alerts.alerts.map((a) => a.recommendation).join(" ")}` : "",
   ]
     .filter(Boolean)

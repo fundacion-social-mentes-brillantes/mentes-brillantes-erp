@@ -2,8 +2,6 @@ import { metadataCorsOptionsRequestHandler } from "mcp-handler"
 import { protectedResourceMetadata } from "@/lib/mcp/metadata"
 import { oauthNoStoreHeaders } from "@/lib/mcp/constants"
 
-// Metadata OAuth 2.0 (RFC 9728): apunta a NUESTRO propio Authorization Server
-// (el mismo ERP), que autentica con la cuenta de Supabase del usuario.
 export const dynamic = "force-dynamic"
 
 export function GET(req: Request) {

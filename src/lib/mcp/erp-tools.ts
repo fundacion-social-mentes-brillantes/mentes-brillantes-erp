@@ -1,5 +1,6 @@
 import { z } from "zod"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
+import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { resolveNaturalDateRange } from "@/lib/telegram-cajero/dates"
 import {
@@ -21,40 +22,224 @@ import {
   searchGlobal,
   searchPerson,
   type SupabaseReader,
+  type ToolResult,
 } from "@/lib/telegram-cajero/tools"
 import { getCoachSessions } from "@/lib/telegram-cajero/tools/coach"
+import { auditMcpToolCall } from "./audit"
+import { sanitizeMcpData } from "./privacy"
+import { MCP_PRIMARY_SCOPE } from "./constants"
 
-// Todo el MCP es SOLO LECTURA sobre las finanzas. Reusa las mismas funciones
-// que el bot de Telegram, así el MCP y el ERP nunca divergen en su lógica.
-
-type ToolText = { content: { type: "text"; text: string }[]; isError?: boolean }
-
-function ok(data: unknown): ToolText {
-  const text = typeof data === "string" ? data : JSON.stringify(data, null, 2)
-  return { content: [{ type: "text", text }] }
+type ToolOutput = {
+  content: Array<{ type: "text"; text: string }>
+  structuredContent?: Record<string, unknown>
+  isError?: boolean
+  _meta?: Record<string, unknown>
 }
-function fail(message: string): ToolText {
-  return { content: [{ type: "text", text: message }], isError: true }
+
+const READ_ONLY_ANNOTATIONS = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+} as const
+
+const SECURITY_SCHEMES = [{ type: "oauth2", scopes: [MCP_PRIMARY_SCOPE] }] as const
+const SECURITY_META = { securitySchemes: SECURITY_SCHEMES }
+const DEFAULT_MCP_PUBLIC_ORIGIN = "https://mentes-brillantes-erp.vercel.app"
+const TOOL_LIST_COMPAT_INSTALLED = new WeakSet<object>()
+
+const COMPANY_SEARCH_RESULT_SCHEMA = z.object({
+  id: z.string(),
+  title: z.string(),
+  text: z.string(),
+  url: z.string().url(),
+}).strict()
+
+const COMPANY_SEARCH_OUTPUT_SCHEMA = z.object({
+  results: z.array(COMPANY_SEARCH_RESULT_SCHEMA).max(40),
+}).strict()
+
+const COMPANY_FETCH_OUTPUT_SCHEMA = z.object({
+  id: z.string(),
+  title: z.string(),
+  text: z.string(),
+  url: z.string().url(),
+  metadata: z.object({
+    category: z.string(),
+    source: z.string(),
+    readOnly: z.literal(true),
+  }).strict(),
+}).strict()
+
+function mcpPublicOrigin() {
+  const configured = process.env.MCP_PUBLIC_ORIGIN?.trim()
+  if (configured) {
+    try {
+      const parsed = new URL(configured)
+      if (parsed.protocol === "https:" || parsed.protocol === "http:") return parsed.origin
+    } catch {
+      // Usa el origen de producción si la configuración no es una URL absoluta.
+    }
+  }
+  return DEFAULT_MCP_PUBLIC_ORIGIN
+}
+
+function protectedResourceMetadataUrl() {
+  return new URL("/.well-known/oauth-protected-resource/api/mcp/mcp", mcpPublicOrigin()).toString()
 }
 
 function reader(): SupabaseReader | null {
   return createAdminClient() as unknown as SupabaseReader | null
 }
 
-function rango(args: { desde?: string; hasta?: string; rango?: string }) {
-  if (args.desde && args.hasta) return { from: args.desde, to: args.hasta, label: `${args.desde} a ${args.hasta}` }
-  const natural = args.rango ? resolveNaturalDateRange(args.rango) : null
-  return natural || resolveNaturalDateRange("este mes")!
+function isToolResult(value: unknown): value is ToolResult {
+  return Boolean(value && typeof value === "object" && "status" in value && "provenance" in value && "data" in value)
 }
 
-type Resolved =
+function output(value: unknown, isError = false): ToolOutput {
+  const sanitized = sanitizeMcpData(value)
+  const structured =
+    sanitized && typeof sanitized === "object" && !Array.isArray(sanitized)
+      ? (sanitized as Record<string, unknown>)
+      : { value: sanitized }
+  return {
+    content: [{ type: "text", text: JSON.stringify(structured, null, 2) }],
+    structuredContent: structured,
+    ...(isError ? { isError: true } : {}),
+  }
+}
+
+function authenticationRequiredOutput(): ToolOutput {
+  const challenge = [
+    "Bearer",
+    `resource_metadata="${protectedResourceMetadataUrl()}"`,
+    'error="invalid_token"',
+    'error_description="OAuth access token required"',
+  ].join(" ")
+  return {
+    ...output({ status: "error", message: "Autenticación OAuth requerida." }, true),
+    _meta: {
+      "mcp/www_authenticate": [challenge],
+    },
+  }
+}
+
+function failure(message: string): ToolOutput {
+  return output({ status: "error", message }, true)
+}
+
+export async function executeTool(
+  name: string,
+  args: unknown,
+  extra: any,
+  run: () => Promise<unknown>
+): Promise<ToolOutput> {
+  if (!extra?.authInfo) return authenticationRequiredOutput()
+
+  const startedAt = Date.now()
+  let status = "error"
+  let resultCount: number | undefined
+  let response: ToolOutput
+  try {
+    const result = await run()
+    if (isToolResult(result)) {
+      status = result.status
+      resultCount = result.resultCount
+    } else {
+      status = "ok"
+    }
+    response = output(result, status === "error" || status === "forbidden")
+  } catch (error) {
+    console.error("[mcp] herramienta falló", {
+      tool: name,
+      message: error instanceof Error ? error.message : "unknown",
+    })
+    status = "error"
+    response = failure("No se pudo completar la consulta. No asumas cifras en cero; vuelve a intentarlo.")
+  }
+
+  await auditMcpToolCall({
+    authInfo: extra?.authInfo,
+    toolName: name,
+    args,
+    status,
+    durationMs: Date.now() - startedAt,
+    resultCount,
+  })
+  return response
+}
+
+function register(
+  server: McpServer,
+  name: string,
+  title: string,
+  description: string,
+  inputSchema: Record<string, z.ZodTypeAny>,
+  run: (supabase: SupabaseReader, args: any) => Promise<unknown>,
+  outputSchema?: z.ZodTypeAny
+) {
+  const descriptor = {
+    title,
+    description,
+    inputSchema,
+    ...(outputSchema ? { outputSchema } : {}),
+    annotations: READ_ONLY_ANNOTATIONS,
+    securitySchemes: SECURITY_SCHEMES,
+    _meta: SECURITY_META,
+  }
+  server.registerTool(
+    name,
+    descriptor,
+    async (args: any, extra: any) =>
+      executeTool(name, args, extra, async () => {
+        const supabase = reader()
+        if (!supabase) throw new Error("Supabase service role no configurado")
+        return run(supabase, args)
+      })
+  )
+}
+
+function installToolListSecurityCompatibility(server: McpServer) {
+  const lowLevelServer = (server as any)?.server
+  if (!lowLevelServer?.setRequestHandler) return
+  if (TOOL_LIST_COMPAT_INSTALLED.has(lowLevelServer)) return
+
+  const handlers = lowLevelServer._requestHandlers
+  const sdkListHandler = handlers instanceof Map ? handlers.get("tools/list") : null
+  if (typeof sdkListHandler !== "function") {
+    throw new Error("El SDK MCP no expuso el handler tools/list esperado.")
+  }
+
+  lowLevelServer.setRequestHandler(ListToolsRequestSchema, async (request: any, extra: any) => {
+    const result = await sdkListHandler(request, extra)
+    const tools = Array.isArray(result?.tools)
+      ? result.tools.map((tool: any) => {
+        const schemes = Array.isArray(tool?._meta?.securitySchemes)
+          ? tool._meta.securitySchemes
+          : SECURITY_SCHEMES
+        return {
+          ...tool,
+          securitySchemes: schemes,
+          _meta: {
+            ...(tool?._meta || {}),
+            securitySchemes: schemes,
+          },
+        }
+      })
+      : []
+    return { ...result, tools }
+  })
+  TOOL_LIST_COMPAT_INSTALLED.add(lowLevelServer)
+}
+
+type ResolvedPerson =
   | { kind: "error"; message: string }
   | { kind: "none" }
   | { kind: "ambiguous"; matches: any[] }
   | { kind: "person"; person: any }
 
-async function resolvePersona(supabase: SupabaseReader, persona: string): Promise<Resolved> {
-  const result = await searchPerson(supabase, persona, 6)
+async function resolvePerson(supabase: SupabaseReader, person: string): Promise<ResolvedPerson> {
+  const result = await searchPerson(supabase, person, 6)
   if (result.status === "error") return { kind: "error", message: "No se pudo buscar la persona." }
   const matches = Array.isArray(result.data) ? (result.data as any[]) : []
   if (!matches.length) return { kind: "none" }
@@ -62,142 +247,289 @@ async function resolvePersona(supabase: SupabaseReader, persona: string): Promis
   return { kind: "person", person: matches[0] }
 }
 
-export function registerErpTools(server: McpServer) {
-  const withPerson = (
-    name: string,
-    description: string,
-    run: (supabase: SupabaseReader, personId: string, args: any) => Promise<any>
-  ) => {
-    server.tool(
-      name,
-      description,
-      { persona: z.string().describe("Nombre, código o cédula de la persona"), limite: z.number().int().positive().optional() },
-      async (args: any) => {
-        const supabase = reader()
-        if (!supabase) return fail("El servidor no está configurado (falta service role).")
-        const resolved = await resolvePersona(supabase, String(args.persona || ""))
-        if (resolved.kind === "error") return fail(resolved.message)
-        if (resolved.kind === "none") return ok(`No encontré a "${args.persona}" en asistentes. Da nombre completo, código o cédula.`)
-        if (resolved.kind === "ambiguous") {
-          return ok({
-            aviso: "Hay varias coincidencias; especifica el código para no mezclar datos.",
-            coincidencias: resolved.matches.map((m: any) => ({ nombre: m.nombre, codigo: m.codigo, cedula: m.cedula })),
-          })
+function registerPersonTool(
+  server: McpServer,
+  name: string,
+  title: string,
+  description: string,
+  run: (supabase: SupabaseReader, personId: string, args: any) => Promise<unknown>
+) {
+  register(
+    server,
+    name,
+    title,
+    description,
+    {
+      persona: z.string().trim().min(2).max(160).describe("Nombre o código de la persona"),
+      limite: z.number().int().positive().max(100).optional(),
+    },
+    async (supabase, args) => {
+      const resolved = await resolvePerson(supabase, String(args.persona || ""))
+      if (resolved.kind === "error") throw new Error(resolved.message)
+      if (resolved.kind === "none") {
+        return {
+          status: "empty",
+          message: `No encontré a "${String(args.persona || "")}". Usa el nombre completo o el código.`,
         }
-        const data = await run(supabase, resolved.person.id, args)
-        return ok({ persona: { nombre: resolved.person.nombre, codigo: resolved.person.codigo }, resultado: data?.data ?? data })
       }
-    )
-  }
-
-  const withRange = (
-    name: string,
-    description: string,
-    run: (supabase: SupabaseReader, from: string, to: string) => Promise<any>
-  ) => {
-    server.tool(
-      name,
-      description,
-      {
-        desde: z.string().optional().describe("Fecha inicio YYYY-MM-DD"),
-        hasta: z.string().optional().describe("Fecha fin YYYY-MM-DD"),
-        rango: z.string().optional().describe("Rango natural, ej 'este mes', 'mayo 2026'"),
-      },
-      async (args: any) => {
-        const supabase = reader()
-        if (!supabase) return fail("El servidor no está configurado (falta service role).")
-        const r = rango(args)
-        const result = await run(supabase, r.from, r.to)
-        return ok({ rango: r.label, resultado: result?.data ?? result })
+      if (resolved.kind === "ambiguous") {
+        return {
+          status: "ambiguous",
+          message: "Hay varias coincidencias; especifica el código para no mezclar datos.",
+          coincidencias: resolved.matches.map((match: any) => ({ nombre: match.nombre, codigo: match.codigo })),
+        }
       }
-    )
+      const result = await run(supabase, resolved.person.id, args)
+      return {
+        persona: { nombre: resolved.person.nombre, codigo: resolved.person.codigo },
+        resultado: result,
+      }
+    }
+  )
+}
+
+function resolveRange(args: { desde?: string; hasta?: string; rango?: string }) {
+  if (args.desde || args.hasta) {
+    if (!args.desde || !args.hasta) return { error: "Debes indicar desde y hasta juntos." } as const
+    const parsed = resolveNaturalDateRange(`desde ${args.desde} hasta ${args.hasta}`)
+    if (!parsed) return { error: "El rango desde/hasta es inválido o está invertido." } as const
+    return { range: parsed } as const
   }
+  if (args.rango) {
+    const parsed = resolveNaturalDateRange(args.rango)
+    if (!parsed) return { error: `No pude interpretar el rango "${args.rango}".` } as const
+    return { range: parsed } as const
+  }
+  return { range: resolveNaturalDateRange("este mes")! } as const
+}
 
-  // ---- Por persona ----
-  withPerson("estado_persona", "Estado financiero de una persona: total facturado, abonado, pendiente y saldo a favor.", (s, id) => getPersonFinancialStatus(s, id))
-  withPerson("pagos_persona", "Pagos/abonos recientes válidos de una persona.", (s, id, a) => getPersonPayments(s, id, a.limite || 12))
-  withPerson("ultimo_pago_persona", "Último pago válido de una persona.", (s, id) => getPersonLastPayment(s, id))
-  withPerson("compras_persona", "Cuentas/conceptos que ha comprado una persona, con abonado y pendiente.", (s, id, a) => getPersonPurchasesOrConcepts(s, id, a.limite || 15))
-  withPerson("donaciones_persona", "Donaciones registradas de una persona.", (s, id) => getPersonDonations(s, id))
-  withPerson("sesiones_coach_persona", "Sesiones coach de una persona (módulo nuevo + registros de migración) con fechas.", (s, id) => getCoachSessions(s, id))
+function registerRangeTool(
+  server: McpServer,
+  name: string,
+  title: string,
+  description: string,
+  run: (supabase: SupabaseReader, from: string, to: string) => Promise<unknown>
+) {
+  register(
+    server,
+    name,
+    title,
+    description,
+    {
+      desde: z.string().max(10).optional().describe("Fecha inicial YYYY-MM-DD"),
+      hasta: z.string().max(10).optional().describe("Fecha final YYYY-MM-DD"),
+      rango: z.string().trim().max(100).optional().describe("Rango natural; por ejemplo, este mes o mayo 2026"),
+    },
+    async (supabase, args) => {
+      const resolved = resolveRange(args)
+      if ("error" in resolved) return { status: "error", message: resolved.error }
+      const result = await run(supabase, resolved.range.from, resolved.range.to)
+      return { rango: resolved.range.label, resultado: result }
+    }
+  )
+}
 
-  // ---- Global / por concepto ----
-  server.tool(
+function nestedName(row: any): string {
+  const assistant =
+    row?.asistentes ||
+    row?.cuentas_por_cobrar?.asistentes ||
+    row?.cuentas_por_cobrar?.[0]?.asistentes
+  return assistant?.nombre ? String(assistant.nombre) : ""
+}
+
+function searchTitle(category: string, row: any): string {
+  const person = nestedName(row)
+  const main =
+    row?.nombre ||
+    row?.concepto ||
+    row?.comprador_nombre ||
+    row?.metodo_pago ||
+    row?.tipo ||
+    row?.fecha ||
+    row?.id
+  return [category.replaceAll("_", " "), main, person].filter(Boolean).join(" · ").slice(0, 240)
+}
+
+const CATEGORY_ROUTES: Record<string, string> = {
+  asistentes: "/asistentes",
+  cuentas: "/cuentas",
+  pagos_abonos: "/movimientos",
+  movimientos_saldo_favor: "/movimientos",
+  donaciones_asistentes: "/movimientos",
+  egresos: "/egresos",
+  ventas_externas: "/ventas-externas",
+  coach_sesiones: "/sesiones-coach",
+  coach_paquetes: "/sesiones-coach",
+  socios: "/socios",
+  periodos: "/liquidaciones",
+}
+
+function canonicalRecordUrl(category: string, rowId: string) {
+  const encodedId = encodeURIComponent(rowId)
+  const directPath =
+    category === "asistentes"
+      ? `/asistentes/${encodedId}`
+      : category === "cuentas"
+        ? `/cuentas/${encodedId}`
+        : null
+  const url = new URL(directPath || CATEGORY_ROUTES[category] || "/buscar", mcpPublicOrigin())
+  if (!directPath) {
+    url.searchParams.set("mcp_category", category)
+    url.searchParams.set("mcp_id", rowId)
+  }
+  return url.toString()
+}
+
+async function companySearch(supabase: SupabaseReader, query: string) {
+  const result = await searchGlobal(supabase, query)
+  const groups = result.data && typeof result.data === "object" ? (result.data as Record<string, unknown>) : {}
+  const results: Array<{ id: string; title: string; text: string; url: string }> = []
+  for (const [category, value] of Object.entries(groups)) {
+    if (!Array.isArray(value)) continue
+    for (const row of value) {
+      if (!row || typeof row !== "object" || !("id" in row)) continue
+      const safeRow = sanitizeMcpData(row)
+      results.push({
+        id: `${category}:${String((row as any).id)}`,
+        title: searchTitle(category, safeRow),
+        text: JSON.stringify(safeRow),
+        url: canonicalRecordUrl(category, String((row as any).id)),
+      })
+      if (results.length >= 40) break
+    }
+    if (results.length >= 40) break
+  }
+  return { results }
+}
+
+const FETCH_SOURCES: Record<string, { table: string; select: string }> = {
+  asistentes: { table: "asistentes", select: "id,nombre,codigo,activo" },
+  cuentas: {
+    table: "cuentas_por_cobrar",
+    select: "id,concepto,valor_total,total_abonado,saldo_pendiente,estado,fecha_emision,asistentes(nombre,codigo)",
+  },
+  pagos_abonos: {
+    table: "pagos_abonos",
+    select: "id,monto,metodo_pago,fecha_pago,estado,cuentas_por_cobrar(concepto,asistentes(nombre,codigo))",
+  },
+  movimientos_saldo_favor: {
+    table: "movimientos_saldo_favor",
+    select: "id,tipo,monto,fecha,metodo_pago,asistentes(nombre,codigo)",
+  },
+  donaciones_asistentes: {
+    table: "donaciones_asistentes",
+    select: "id,monto,metodo_pago,fecha,estado,asistentes(nombre,codigo)",
+  },
+  egresos: { table: "egresos", select: "id,concepto,monto,fecha,estado" },
+  ventas_externas: { table: "ventas_externas", select: "id,comprador_nombre,concepto,monto,fecha,estado" },
+  coach_sesiones: { table: "coach_sesiones", select: "id,fecha,paquete_id,asistentes(nombre,codigo)" },
+  coach_paquetes: {
+    table: "coach_paquetes",
+    select: "id,sesiones_compradas,creado_en,cuentas_por_cobrar(concepto,asistentes(nombre,codigo))",
+  },
+  socios: { table: "socios", select: "id,nombre,activo" },
+  periodos: { table: "periodos", select: "id,nombre,estado,fecha_inicio,fecha_fin" },
+}
+
+async function companyFetch(supabase: SupabaseReader, id: string) {
+  const separator = id.indexOf(":")
+  if (separator <= 0) throw new Error("Identificador inválido.")
+  const category = id.slice(0, separator)
+  const rowId = id.slice(separator + 1)
+  const source = FETCH_SOURCES[category]
+  if (!source || !/^[A-Za-z0-9-]{1,80}$/.test(rowId)) {
+    throw new Error("Identificador no permitido.")
+  }
+  const { data, error } = await supabase.from(source.table).select(source.select).eq("id", rowId).maybeSingle()
+  if (error) throw new Error(`No se pudo consultar ${source.table}`)
+  if (!data) throw new Error("Registro no encontrado.")
+  const safe = sanitizeMcpData(data)
+  return {
+    id,
+    title: searchTitle(category, safe),
+    text: JSON.stringify(safe, null, 2),
+    url: canonicalRecordUrl(category, rowId),
+    metadata: { category, source: source.table, readOnly: true },
+  }
+}
+
+export function registerErpTools(server: McpServer) {
+  registerPersonTool(server, "estado_persona", "Estado financiero de una persona", "Totales facturado, abonado, pendiente y saldo a favor.", (s, id) => getPersonFinancialStatus(s, id))
+  registerPersonTool(server, "pagos_persona", "Pagos de una persona", "Pagos o abonos válidos recientes.", (s, id, args) => getPersonPayments(s, id, args.limite || 12))
+  registerPersonTool(server, "ultimo_pago_persona", "Último pago de una persona", "Último pago válido registrado.", (s, id) => getPersonLastPayment(s, id))
+  registerPersonTool(server, "compras_persona", "Compras de una persona", "Cuentas y conceptos comprados, con abonado y pendiente.", (s, id, args) => getPersonPurchasesOrConcepts(s, id, args.limite || 15))
+  registerPersonTool(server, "donaciones_persona", "Donaciones de una persona", "Donaciones válidas registradas.", (s, id) => getPersonDonations(s, id))
+  registerPersonTool(server, "sesiones_coach_persona", "Sesiones coach de una persona", "Conteos y fechas de sesiones; nunca devuelve notas privadas.", (s, id) => getCoachSessions(s, id))
+
+  register(
+    server,
     "compradores_de_concepto",
-    "Lista TODAS las personas que compraron/iniciaron un concepto o producto (ej: 'pasos', 'curso de milagros', 'sesión coach').",
-    { concepto: z.string().describe("Concepto o producto a buscar"), limite: z.number().int().positive().optional() },
-    async (args: any) => {
-      const supabase = reader()
-      if (!supabase) return fail("El servidor no está configurado.")
-      const result = await getConceptBuyers(supabase, String(args.concepto || ""), args.limite || 500)
-      return ok(result.data)
-    }
+    "Compradores de un concepto",
+    "Personas que compraron o iniciaron un concepto o producto.",
+    {
+      concepto: z.string().trim().min(2).max(160),
+      limite: z.number().int().positive().max(500).optional(),
+    },
+    (s, args) => getConceptBuyers(s, String(args.concepto), args.limite || 500)
   )
-
-  server.tool(
+  register(
+    server,
     "cartera_pendiente",
-    "Cartera pendiente global: total por cobrar, cuántas personas deben y los mayores deudores.",
-    { limite: z.number().int().positive().optional() },
-    async (args: any) => {
-      const supabase = reader()
-      if (!supabase) return fail("El servidor no está configurado.")
-      const result = await getOpenReceivablesSummary(supabase, args.limite || 300)
-      return ok(result.data)
-    }
+    "Cartera pendiente",
+    "Total por cobrar, personas con deuda y mayores saldos; informa si el resultado está truncado.",
+    { limite: z.number().int().positive().max(500).optional() },
+    (s, args) => getOpenReceivablesSummary(s, args.limite || 500)
   )
-
-  server.tool(
-    "conteos",
-    "Conteos del ERP: asistentes activos/total y cuentas por cobrar pendientes.",
-    {},
-    async () => {
-      const supabase = reader()
-      if (!supabase) return fail("El servidor no está configurado.")
-      const result = await getCounts(supabase)
-      return ok(result.data)
-    }
-  )
-
-  server.tool(
+  register(server, "conteos", "Conteos del ERP", "Asistentes activos/totales y cuentas pendientes.", {}, (s) => getCounts(s))
+  register(
+    server,
     "periodos",
-    "Períodos/liquidaciones contables (abiertos y cerrados) con sus fechas.",
+    "Períodos contables",
+    "Liquidaciones abiertas o cerradas y sus fechas.",
     { estado: z.enum(["abierto", "cerrado"]).optional() },
-    async (args: any) => {
-      const supabase = reader()
-      if (!supabase) return fail("El servidor no está configurado.")
-      const result = await getPeriods(supabase, args.estado)
-      return ok(result.data)
-    }
+    (s, args) => getPeriods(s, args.estado)
   )
-
-  server.tool(
+  register(
+    server,
     "socios_liquidacion",
-    "Socios y su reparto/liquidación más reciente (porcentaje, corresponde, adelantos, neto).",
-    { socio: z.string().optional().describe("Nombre del socio (opcional)") },
-    async (args: any) => {
-      const supabase = reader()
-      if (!supabase) return fail("El servidor no está configurado.")
-      const result = await getPartnerSettlement(supabase, args.socio || null)
-      return ok(result.data)
-    }
+    "Liquidación de socios",
+    "Reparto más reciente por socio: porcentaje, corresponde, adelantos y neto.",
+    { socio: z.string().trim().max(160).optional() },
+    (s, args) => getPartnerSettlement(s, args.socio || null)
   )
-
-  server.tool(
+  register(
+    server,
     "buscar_global",
-    "Búsqueda general en todo el ERP (asistentes, cuentas, pagos, etc.) por un término.",
-    { termino: z.string().describe("Texto a buscar") },
-    async (args: any) => {
-      const supabase = reader()
-      if (!supabase) return fail("El servidor no está configurado.")
-      const result = await searchGlobal(supabase, String(args.termino || ""))
-      return ok(result.data)
-    }
+    "Buscar en el ERP",
+    "Búsqueda general de registros financieros seguros; excluye cédulas y notas privadas.",
+    { termino: z.string().trim().min(2).max(160) },
+    (s, args) => searchGlobal(s, String(args.termino))
   )
 
-  // ---- Por rango de fechas ----
-  withRange("resumen_periodo", "Resumen financiero de un rango: ingresos operativos, egresos y utilidad estimada.", (s, from, to) => getSummary(s, from, to))
-  withRange("egresos", "Egresos activos de un rango de fechas.", (s, from, to) => getExpenses(s, from, to))
-  withRange("ventas_externas", "Ventas externas activas de un rango de fechas.", (s, from, to) => getExternalSales(s, from, to))
-  withRange("donaciones_resumen", "Total de donaciones válidas en un rango de fechas.", (s, from, to) => getDonationsSummary(s, from, to))
-  withRange("alertas", "Alertas operativas a revisar (con evidencia) en un rango de fechas.", (s, from, to) => getBusinessAlerts(s, from, to))
+  registerRangeTool(server, "resumen_periodo", "Resumen de un período", "Ingresos operativos, egresos y utilidad estimada.", (s, from, to) => getSummary(s, from, to))
+  registerRangeTool(server, "egresos", "Egresos por período", "Egresos activos de un rango.", (s, from, to) => getExpenses(s, from, to))
+  registerRangeTool(server, "ventas_externas", "Ventas externas por período", "Ventas externas activas de un rango.", (s, from, to) => getExternalSales(s, from, to))
+  registerRangeTool(server, "donaciones_resumen", "Donaciones por período", "Total de donaciones válidas de un rango.", (s, from, to) => getDonationsSummary(s, from, to))
+  registerRangeTool(server, "alertas", "Alertas operativas", "Alertas con evidencia y recomendaciones para un rango.", (s, from, to) => getBusinessAlerts(s, from, to))
+
+  register(
+    server,
+    "search",
+    "Buscar conocimiento del ERP",
+    "Búsqueda estándar de solo lectura para ChatGPT Company Knowledge y otros clientes MCP.",
+    { query: z.string().trim().min(2).max(160) },
+    (s, args) => companySearch(s, String(args.query)),
+    COMPANY_SEARCH_OUTPUT_SCHEMA
+  )
+  register(
+    server,
+    "fetch",
+    "Obtener un registro del ERP",
+    "Recupera de forma segura un resultado devuelto por search.",
+    { id: z.string().trim().min(3).max(200) },
+    (s, args) => companyFetch(s, String(args.id)),
+    COMPANY_FETCH_OUTPUT_SCHEMA
+  )
+
+  installToolListSecurityCompatibility(server)
 }

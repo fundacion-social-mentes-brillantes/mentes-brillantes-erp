@@ -2,17 +2,90 @@ import { describe, expect, it } from "vitest"
 import { mapPersonPurchases } from "../tools/purchases"
 import { summarizeOpenReceivables } from "../tools/open-receivables"
 import { getPersonDonations } from "../tools/donations"
+import { searchGlobal } from "../tools/global-search"
 
 function donationsSupabase(rows: any[]) {
-  const q: any = {
-    select: () => q,
-    eq: () => q,
-    order: () => Promise.resolve({ data: rows, error: null }),
+  return {
+    from: () => {
+      let exactCount = false
+      let cursor: string | number | null = null
+      const q: any = {
+        select: (_columns: string, options?: { count?: string }) => {
+          exactCount = options?.count === "exact"
+          return q
+        },
+        eq: () => q,
+        order: () => q,
+        gt: (_column: string, value: string | number) => {
+          cursor = value
+          return q
+        },
+        limit: (limit: number) => {
+          const sorted = [...rows].sort((a, b) => String(a.id).localeCompare(String(b.id)))
+          const filtered = cursor === null ? sorted : sorted.filter((row) => String(row.id) > String(cursor))
+          return Promise.resolve({
+            data: filtered.slice(0, limit),
+            error: null,
+            count: exactCount ? sorted.length : null,
+          })
+        },
+      }
+      return q
+    },
   }
-  return { from: () => q }
+}
+
+function globalSearchSupabase() {
+  const selections = new Map<string, string>()
+  return {
+    selections,
+    client: {
+      from(table: string) {
+        const query: any = {
+          select(columns: string) {
+            selections.set(table, columns)
+            return query
+          },
+          ilike() {
+            return query
+          },
+          or() {
+            return query
+          },
+          limit() {
+            if (table === "ventas_externas") {
+              return Promise.resolve({
+                data: null,
+                error: { code: "TEST_SOURCE_ERROR", message: "fuente no disponible" },
+              })
+            }
+            return Promise.resolve({
+              data: table === "asistentes" ? [{ id: "a-1", nombre: "Ana", codigo: "1" }] : [],
+              error: null,
+            })
+          },
+        }
+        return query
+      },
+    },
+  }
 }
 
 describe("telegram cajero business tools", () => {
+  it("searchGlobal usa monto y conserva resultados sanos cuando otra fuente falla", async () => {
+    const { client, selections } = globalSearchSupabase()
+
+    const result = await searchGlobal(client as any, "Ana")
+    const data = result.data as any
+
+    expect(selections.get("ventas_externas")).toContain("monto")
+    expect(selections.get("ventas_externas")).not.toContain("valor_total")
+    expect(result.status).toBe("partial")
+    expect(data.asistentes).toHaveLength(1)
+    expect(data.ventas_externas).toEqual([])
+    expect(result.userSafeErrors.join(" ")).toContain("ventas_externas")
+  })
+
   it("getPersonDonations suma donaciones validas y excluye anuladas", async () => {
     const supabase = donationsSupabase([
       { id: "d1", monto: 50000, fecha: "2026-05-01", estado: "activo", notas: null },

@@ -2,6 +2,7 @@ import type { AiPlannerPlan } from "./ai-planner"
 import type { ToolExecutionBundle, ToolExecutionItem } from "./tool-executor"
 import type { TelegramSessionState } from "./memory"
 import type { TelegramConfig } from "./types"
+import { minimizeAiProviderPayload } from "./ai-provider-payload"
 import { toSafeNumber } from "@/lib/utils/contable"
 
 function formatCop(value: unknown) {
@@ -221,6 +222,25 @@ function describeFullProfile(item: ToolExecutionItem) {
   ].filter(Boolean).join("\n\n")
 }
 
+function hasPartialResult(bundle: ToolExecutionBundle) {
+  return bundle.status === "partial" || bundle.results.some(
+    (item) => item.status === "partial" || item.result?.status === "partial"
+  )
+}
+
+function buildPartialResponse(bundle: ToolExecutionBundle) {
+  const warnings = Array.from(new Set([
+    ...bundle.userSafeErrors,
+    ...bundle.results.flatMap((item) => item.result?.userSafeErrors || []),
+  ].filter(Boolean)))
+
+  return [
+    "Ojo: el resultado es parcial y no permite confirmar los totales.",
+    "Los totales son desconocidos; por seguridad no los presento como cero ni afirmo que no exista deuda.",
+    warnings.length ? `Advertencias: ${warnings.join(" ")}` : "Advertencia: faltan datos por consultar.",
+  ].join("\n")
+}
+
 export function buildDeterministicResponse(plan: AiPlannerPlan, bundle: ToolExecutionBundle, state: TelegramSessionState = {}) {
   if (bundle.status === "ambiguous" && bundle.pendingSelection?.matches.length) {
     return [
@@ -228,6 +248,8 @@ export function buildDeterministicResponse(plan: AiPlannerPlan, bundle: ToolExec
       ...bundle.pendingSelection.matches.map((match, index) => `${index + 1}. ${match.nombre}${match.codigo ? ` | codigo ${match.codigo}` : ""}`),
     ].join("\n")
   }
+
+  if (hasPartialResult(bundle)) return buildPartialResponse(bundle)
 
   const calculation = getCalculationText(plan, state, bundle)
   if (calculation) return calculation
@@ -270,6 +292,9 @@ export function buildDeterministicResponse(plan: AiPlannerPlan, bundle: ToolExec
 function shouldUseDeepSeekForWriting(plan: AiPlannerPlan, bundle: ToolExecutionBundle) {
   // La desambiguacion (elige 1/2/3) se responde con plantilla determinista, clara.
   if (bundle.status === "ambiguous") return false
+  // Un resultado parcial conserva null para los totales desconocidos. No se
+  // delega su redaccion para evitar que el proveedor los convierta en cero.
+  if (hasPartialResult(bundle)) return false
   // En cualquier otro caso con resultados (ok, vacios o con error parcial),
   // redacta con IA para que suene natural y resuelva con criterio. Las plantillas
   // deterministas quedan como respaldo seguro si la IA falla.
@@ -287,7 +312,6 @@ async function callDeepSeekWriter({
   bundle,
   state,
   config,
-  fallback,
   advanced,
 }: {
   text: string
@@ -295,7 +319,6 @@ async function callDeepSeekWriter({
   bundle: ToolExecutionBundle
   state: TelegramSessionState
   config: TelegramConfig
-  fallback: string
   advanced: boolean
 }) {
   const { apiKey, baseUrl, model } = config.deepseek || {}
@@ -312,7 +335,7 @@ async function callDeepSeekWriter({
       },
       {
         role: "user",
-        content: JSON.stringify({
+        content: JSON.stringify(minimizeAiProviderPayload({
           pregunta: text,
           plan,
           memoria: {
@@ -328,8 +351,7 @@ async function callDeepSeekWriter({
             sources: item.result?.provenance.sources || [],
           })),
           calculo_deterministico: getCalculationText(plan, state, bundle),
-          fallback_seguro: fallback,
-        }),
+        })),
       },
     ],
   }
@@ -386,11 +408,11 @@ export async function writeAiResponse({
 
   try {
     const advanced = advancedWritingNeeded(plan, text)
-    const content = await callDeepSeekWriter({ text, plan, bundle, state, config, fallback, advanced })
+    const content = await callDeepSeekWriter({ text, plan, bundle, state, config, advanced })
     if (content) return content
 
     if (advanced) {
-      const basicRetry = await callDeepSeekWriter({ text, plan, bundle, state, config, fallback, advanced: false })
+      const basicRetry = await callDeepSeekWriter({ text, plan, bundle, state, config, advanced: false })
       if (basicRetry) return basicRetry
     }
 

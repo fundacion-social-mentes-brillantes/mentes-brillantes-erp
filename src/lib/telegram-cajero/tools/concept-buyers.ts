@@ -1,5 +1,6 @@
 import type { SupabaseReader } from "./types"
 import { toolError, toolResult } from "./types"
+import { fetchPaginatedRows, partialPaginationMessage } from "./pagination"
 
 // Limpia el término para usarlo dentro de un filtro .or() de PostgREST
 // (las comas y paréntesis rompen el filtro).
@@ -18,7 +19,9 @@ function sanitizeTerm(term: string) {
  */
 export async function getConceptBuyers(supabase: SupabaseReader, term: string, limit = 500) {
   const raw = sanitizeTerm(term)
-  const queryScope = { term: raw }
+  const parsedLimit = Math.floor(Number(limit))
+  const resultLimit = Number.isFinite(parsedLimit) ? Math.min(2_000, Math.max(1, parsedLimit)) : 500
+  const queryScope = { term: raw, limit: resultLimit }
 
   if (raw.length < 3) {
     return toolResult({
@@ -39,23 +42,35 @@ export async function getConceptBuyers(supabase: SupabaseReader, term: string, l
   else patterns.add(base + "s")
   const orFilter = Array.from(patterns).map((pattern) => `concepto.ilike.%${pattern}%`).join(",")
 
-  const { data, error } = await supabase
-    .from("cuentas_por_cobrar")
-    .select("asistente_id, concepto, fecha_emision, asistentes(nombre, codigo)")
-    .or(orFilter)
-    .order("fecha_emision", { ascending: true })
-    .limit(2000)
+  const result = await fetchPaginatedRows<any>((withExactCount) =>
+    supabase
+      .from("cuentas_por_cobrar")
+      .select(
+        "id, asistente_id, concepto, fecha_emision, asistentes(nombre, codigo)",
+        withExactCount ? { count: "exact" } : undefined
+      )
+      .or(orFilter),
+    { rowKey: "id" }
+  )
 
-  if (error) return toolError("getConceptBuyers", queryScope, "cuentas_por_cobrar", error)
+  if (result.error && result.rows.length === 0) {
+    return toolError("getConceptBuyers", queryScope, "cuentas_por_cobrar", result.error)
+  }
 
   const byPerson = new Map<string, { nombre: string; codigo: string | null; veces: number; primera_fecha: string | null }>()
-  for (const row of (data as any[]) || []) {
+  for (const row of result.rows) {
     const id = row.asistente_id
     if (!id) continue
     const asistente = row.asistentes || {}
     const existing = byPerson.get(id)
     if (existing) {
       existing.veces += 1
+      if (
+        row.fecha_emision &&
+        (!existing.primera_fecha || String(row.fecha_emision) < String(existing.primera_fecha))
+      ) {
+        existing.primera_fecha = row.fecha_emision
+      }
     } else {
       byPerson.set(id, {
         nombre: asistente.nombre || "Asistente",
@@ -72,18 +87,33 @@ export async function getConceptBuyers(supabase: SupabaseReader, term: string, l
     if (Number.isFinite(ca) && Number.isFinite(cb)) return ca - cb
     return String(a.nombre).localeCompare(String(b.nombre))
   })
+  const personasMostradas = personas.slice(0, resultLimit)
+  const sourceComplete = result.pagination.complete
+  const listTruncated = personasMostradas.length < personas.length
+  const paginationWarning = sourceComplete ? null : partialPaginationMessage("compradores de concepto", result.pagination)
+  const listWarning = listTruncated
+    ? `La lista de compradores se limito a ${personasMostradas.length} de ${personas.length} personas encontradas; el total indicado si es exacto.`
+    : null
+  const partial = !sourceComplete || listTruncated
 
   return toolResult({
     toolName: "getConceptBuyers",
-    status: personas.length ? "ok" : "empty",
-    queryScope: { ...queryScope, patterns: Array.from(patterns) },
+    status: partial ? "partial" : personas.length ? "ok" : "empty",
+    queryScope: { ...queryScope, patterns: Array.from(patterns), maxRows: result.pagination.maxRows },
     sources: ["cuentas_por_cobrar", "asistentes"],
     resultCount: personas.length,
     data: {
       term: raw,
-      total_personas: personas.length,
-      total_cuentas: ((data as any[]) || []).length,
-      personas: personas.slice(0, limit),
+      total_personas: sourceComplete ? personas.length : null,
+      total_cuentas: sourceComplete ? result.rows.length : null,
+      personas_en_filas_consultadas: personas.length,
+      cuentas_consultadas: result.rows.length,
+      personas_mostradas: personasMostradas.length,
+      lista_truncada: listTruncated,
+      personas: personasMostradas,
+      pagination: result.pagination,
     },
+    explanationHints: [paginationWarning, listWarning].filter((message): message is string => Boolean(message)),
+    userSafeErrors: [paginationWarning, listWarning].filter((message): message is string => Boolean(message)),
   })
 }
