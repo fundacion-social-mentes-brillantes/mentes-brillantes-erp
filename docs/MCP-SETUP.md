@@ -17,19 +17,47 @@ local ni copiar claves del ERP en Claude o ChatGPT.
 
 ## Qué permite y qué no
 
-- Consulta información financiera y operativa del ERP.
-- Solo admite usuarios del ERP con rol `admin` o `caja`.
-- Las 19 herramientas son de solo lectura sobre los datos del negocio: no
-  crean, editan ni eliminan asistentes, cuentas, pagos, ventas, egresos,
-  donaciones, sesiones, períodos o liquidaciones.
-- Los roles `admin` y `caja` habilitan el acceso al MCP; actualmente no crean
-  subconjuntos de información diferentes dentro del conector.
+- Consulta información financiera y operativa del ERP (22 herramientas de solo
+  lectura).
+- **Registra movimientos** (30 operaciones), siempre en dos pasos: primero un
+  borrador que no escribe nada, y solo después la confirmación explícita de la
+  persona. Ver "Cómo se registran los movimientos".
+- Solo admite usuarios del ERP con rol `admin` o `caja`, con **exactamente los
+  mismos permisos que tendrían usando el ERP por navegador**.
 - El funcionamiento del ERP normal no depende de que Claude o ChatGPT estén
   conectados.
 
-El servicio sí conserva el estado técnico mínimo necesario para autenticar,
-renovar o revocar conexiones, y registra auditoría técnica de acceso. Eso no
-modifica los datos financieros del negocio.
+El servicio conserva el estado técnico mínimo necesario para autenticar,
+renovar o revocar conexiones, y registra auditoría técnica de acceso.
+
+## Cómo se registran los movimientos
+
+Nada se escribe de un solo golpe. El flujo siempre es el mismo:
+
+1. **`preparar_*`** calcula lo que pasaría y **no escribe nada**. Devuelve el
+   detalle (persona, cuenta, monto, fecha y cómo queda el saldo antes y
+   después) más un `confirmacion_id`.
+2. Se le muestra ese resumen a la persona y se espera su aprobación explícita.
+3. **`confirmar_operacion`** ejecuta. El paso a "ejecutando" es un UPDATE
+   condicional, así que **un mismo borrador no puede escribir dos veces**
+   aunque se reintente o se duplique la confirmación.
+4. **`cancelar_operacion`** descarta un borrador que no se aprobó.
+
+Los borradores caducan a los 10 minutos y avisan si detectan una operación
+idéntica ejecutada en las últimas 24 horas (por ejemplo, la misma foto de un
+comprobante enviada dos veces).
+
+Las operaciones destructivas (anular, eliminar, revertir, cerrar liquidación)
+exigen además una confirmación reforzada y son **solo de rol `admin`**. No
+existe ninguna herramienta que borre en lote: siempre un registro a la vez.
+
+### Un caso típico: registrar el pago de una sesión coach
+
+Se le envía a Claude la foto del comprobante. De ahí salen el nombre, el monto
+y la fecha del pago. Si no se indica la fecha de la sesión, se consulta la
+agenda (que comparte los códigos de persona con el ERP). Después se prepara la
+cuenta de cobro, el pago y la sesión, se muestra el borrador y solo se registra
+tras la aprobación.
 
 ## Acceso individual
 
@@ -126,7 +154,7 @@ antes de configurar varios usuarios. Para el contrato técnico vigente, consulta
 también la [autenticación OAuth de plugins](https://developers.openai.com/plugins/build/auth)
 y el [contrato MCP de `search` y `fetch`](https://developers.openai.com/api/docs/mcp).
 
-## Las 19 herramientas
+## Las herramientas de consulta (22)
 
 ### Consultas por persona
 
@@ -155,6 +183,18 @@ y el [contrato MCP de `search` y `fetch`](https://developers.openai.com/api/docs
 16. `donaciones_resumen`: total de donaciones válidas del rango.
 17. `alertas`: alertas operativas respaldadas por evidencia.
 
+### Revisión y control
+
+18. `ultimos_movimientos`: lo último registrado en todo el ERP (pagos,
+    egresos, donaciones, ventas, cuentas y saldo a favor), ordenado por cuándo
+    se registró.
+19. `cambios_agenda`: diferencias entre la agenda de la familia y el ERP
+    (sesiones dictadas sin registrar, fechas movidas, eventos borrados que ya
+    estaban cobrados, personas que faltan en el ERP).
+20. `sesiones_prepagadas_sin_usar`: sesiones coach pagadas que llevan mucho sin
+    marcarse como dictadas; suele indicar que la sesión sí se dio y nunca se
+    registró.
+
 ### Compatibilidad de búsqueda
 
 18. `search`: búsqueda resumida y segura para clientes MCP, incluida la
@@ -165,6 +205,58 @@ Cuando una consulta pueda superar el límite seguro de lectura, la respuesta
 debe indicar si está completa o truncada. Si aparece como parcial, reduce el
 rango, usa un filtro más específico o divide la pregunta; no uses un subtotal
 parcial como si fuera el total definitivo.
+
+## Las 30 operaciones de escritura
+
+Todas pasan por borrador y confirmación. La columna de rol es **la misma que
+en el ERP por navegador**: si mañana entra una cajera y se le da el MCP con su
+usuario, no puede hacer más (ni menos) de lo que haría haciendo clic en la web.
+Hay una prueba automática que lo comprueba (`roles-escritura.test.ts`).
+
+| Operación | Rol | Riesgo |
+|---|---|---|
+| `preparar_registrar_pago` | admin, caja | crear |
+| `preparar_cuenta` | admin, caja | crear |
+| `preparar_persona` / `preparar_editar_persona` | admin, caja | crear / editar |
+| `preparar_venta_externa` | admin, caja | crear |
+| `preparar_donacion` | admin, caja | crear |
+| `preparar_anticipo` | admin, caja | crear |
+| `preparar_aplicar_saldo_favor` | admin, caja | editar |
+| `preparar_sesion_coach` | admin, caja | crear |
+| `preparar_egreso` | **solo admin** | crear |
+| `preparar_editar_movimiento` / `preparar_editar_valor_cuenta` / `preparar_corregir_monto_pago` | solo admin | editar |
+| `preparar_anular_movimiento` / `preparar_eliminar_movimiento` | solo admin | **destructiva** |
+| `preparar_eliminar_cuenta` / `preparar_eliminar_persona` | solo admin | **destructiva** |
+| `preparar_editar_sesion_coach` / `preparar_eliminar_sesion_coach` | solo admin | editar / **destructiva** |
+| `preparar_revertir_abono` / `preparar_revertir_anticipo` | solo admin | **destructiva** |
+| `preparar_pagar_deudas_con_saldo` | solo admin | editar |
+| `preparar_estado_persona_activa` / `preparar_estado_socio_activo` | solo admin | **destructiva** |
+| `preparar_socio` / `preparar_editar_socio` | solo admin | crear / editar |
+| `preparar_periodo` / `preparar_fecha_fin_periodo` | solo admin | crear / editar |
+| `preparar_adelanto_socio` | solo admin | crear |
+| `preparar_cerrar_liquidacion` | solo admin | **destructiva** |
+| `confirmar_operacion` / `cancelar_operacion` | según la operación | — |
+
+Fuera del MCP a propósito: crear usuarios y cambiar contraseñas (implica
+manejar credenciales), la migración de datos y la configuración de la empresa.
+
+La lógica contable **no está duplicada**: vive en `src/lib/operaciones/` y la
+usan tanto la web como el MCP, para que no puedan divergir.
+
+## Conexión con la agenda
+
+La agenda (`agenda-mentes-brillantes`) comparte los códigos de persona con el
+ERP. La integración es asimétrica a propósito:
+
+- **Del ERP a la agenda:** la agenda consulta y muestra la verdad contable
+  (deuda, saldo a favor, estado del paquete coach). La lee en vivo; no la
+  copia.
+- **De la agenda al ERP:** solo avisa. La agenda reporta sus sesiones coach y
+  el ERP calcula diferencias, pero **nada entra a la contabilidad sin
+  aprobación**. Se revisan con `cambios_agenda` y llegan cada mañana por
+  Telegram.
+
+En fechas manda la agenda (es donde se reprograma); en dinero manda el ERP.
 
 ## Ejemplos de uso
 
