@@ -18,6 +18,8 @@ export type OperacionEscritura =
   | "venta_externa"
   | "donacion"
   | "anticipo"
+  | "aplicar_saldo_favor"
+  | "sesion_coach"
 
 export type BorradorOperacion = {
   id: string

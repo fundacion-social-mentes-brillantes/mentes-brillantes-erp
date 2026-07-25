@@ -14,6 +14,8 @@ import {
   crearEgreso,
   crearVentaExterna,
 } from "@/lib/operaciones/movimientos"
+import { aplicarSaldoAFavor, previsualizarAplicarSaldo, saldoFavorDisponible } from "@/lib/operaciones/saldo-favor"
+import { previsualizarSesionCoach, registrarSesionCoach } from "@/lib/operaciones/coach"
 import { executeTool } from "./erp-tools"
 import { MCP_PRIMARY_SCOPE } from "./constants"
 import {
@@ -429,6 +431,124 @@ const OPERACIONES: DefinicionOperacion[] = [
     ejecutar: async (admin, actor, d) => {
       const r = await crearAnticipo(admin, { userId: actor.userId, role: actor.role }, d as any)
       return { movimiento_id: r.id, monto: r.monto }
+    },
+  },
+  {
+    nombre: "aplicar_saldo_favor",
+    titulo: "Aplicar saldo a favor a una deuda",
+    descripcion:
+      "Usa el saldo a favor que ya tiene la persona para pagar una de sus cuentas pendientes. No entra dinero nuevo: " +
+      "se consume el saldo existente.",
+    roles: ["admin", "caja"],
+    schema: {
+      persona: z.string().trim().min(2).max(160),
+      monto: z.number().positive().max(100_000_000),
+      cuenta_id: z.string().uuid().optional().describe("Cuenta a la que se aplica; si se omite se busca por concepto"),
+      concepto: z.string().trim().max(160).optional(),
+    },
+    previsualizar: async (admin, _actor, args) => {
+      exigirMontoPositivo(args.monto)
+      const persona = await resolverPersona(admin, String(args.persona))
+
+      const disponible = await saldoFavorDisponible(admin, persona.id)
+      if (disponible <= 0) {
+        throw new OperacionMcpError(`${persona.nombre} no tiene saldo a favor disponible.`)
+      }
+
+      let cuentaId: string | undefined = args.cuenta_id
+      if (!cuentaId) {
+        const cuentas = await cuentasPendientesDe(admin, persona.id)
+        if (!cuentas.length) throw new OperacionMcpError(`${persona.nombre} no tiene cuentas pendientes.`)
+        const filtradas = args.concepto
+          ? cuentas.filter((c: any) =>
+              String(c.concepto).toLowerCase().includes(String(args.concepto).toLowerCase())
+            )
+          : cuentas
+        if (filtradas.length === 1) cuentaId = filtradas[0].id
+        else {
+          const lista = (filtradas.length ? filtradas : cuentas)
+            .map((c: any) => `${c.concepto} — pendiente ${money(c.pendiente)} (id ${c.id})`)
+            .join("\n")
+          throw new OperacionMcpError(
+            `${persona.nombre} tiene varias cuentas pendientes. Indica cual con cuenta_id o un concepto mas preciso:\n${lista}`
+          )
+        }
+      }
+
+      const datos = { cuentaId, asistenteId: persona.id, monto: Number(args.monto) }
+      const previa = await previsualizarAplicarSaldo(admin, datos as any)
+
+      return {
+        datos,
+        resumen:
+          `Aplicar ${money(previa.seAplica)} del saldo a favor de ${previa.personaNombre} ` +
+          `a la cuenta "${previa.concepto}"`,
+        detalle: {
+          persona: previa.personaNombre,
+          concepto: previa.concepto,
+          cuenta_id: previa.cuentaId,
+          saldo_disponible_antes: previa.saldoDisponibleAntes,
+          pendiente_antes: previa.pendienteAntes,
+          se_aplica: previa.seAplica,
+          saldo_disponible_despues: previa.saldoDisponibleDespues,
+          pendiente_despues: previa.pendienteDespues,
+        },
+        avisos: [
+          previa.seAplica < Number(args.monto)
+            ? `Se aplicara solo ${money(previa.seAplica)} porque es lo que queda pendiente en esa cuenta.`
+            : null,
+        ],
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const r = await aplicarSaldoAFavor(admin, { userId: actor.userId, role: actor.role }, d as any)
+      return {
+        aplicado: r.seAplica,
+        saldo_disponible_despues: r.saldoDisponibleDespues,
+        pendiente_despues: r.pendienteDespues,
+      }
+    },
+  },
+
+  {
+    nombre: "sesion_coach",
+    titulo: "Registrar una sesion coach",
+    descripcion:
+      "Registra una sesion de coach realizada. Descuenta del paquete mas antiguo que tenga cupo disponible.",
+    roles: ["admin", "caja"],
+    schema: {
+      persona: z.string().trim().min(2).max(160),
+      fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      notas: z.string().trim().max(300).optional(),
+    },
+    previsualizar: async (admin, _actor, args) => {
+      const persona = await resolverPersona(admin, String(args.persona))
+      const datos = {
+        asistenteId: persona.id,
+        fecha: String(args.fecha || fechaHoyBogota()),
+        notas: args.notas ? String(args.notas) : null,
+      }
+      const previa = await previsualizarSesionCoach(admin, datos as any)
+
+      return {
+        datos,
+        resumen: `Registrar sesion coach de ${persona.nombre} el ${previa.fecha}`,
+        detalle: {
+          persona: persona.nombre,
+          fecha: previa.fecha,
+          sesiones_compradas: previa.compradas,
+          sesiones_realizadas: previa.realizadas,
+          restantes_antes: previa.restantesAntes,
+          restantes_despues: previa.restantesDespues,
+        },
+        avisos: [
+          previa.restantesDespues === 0 ? "Con esta sesion se agota el paquete de la persona." : null,
+        ],
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const r = await registrarSesionCoach(admin, { userId: actor.userId, role: actor.role }, d as any)
+      return { fecha: r.fecha, sesiones_restantes: r.restantesDespues }
     },
   },
 ]

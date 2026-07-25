@@ -16,6 +16,7 @@ import { requireAdmin, requireRoles } from "@/lib/utils/authz"
 import { assertFechaEditable } from "@/lib/utils/periodos"
 import { fechaHoyBogota } from "@/lib/utils/fechas"
 import { registrarAbono } from "@/lib/operaciones/abonos"
+import { aplicarSaldoAFavor } from "@/lib/operaciones/saldo-favor"
 
 export type ActionState = { error?: string; success?: boolean } | null
 
@@ -290,49 +291,16 @@ export async function aplicarSaldoFavor(
   formData: FormData
 ): Promise<ActionState> {
   try {
-    const { supabase } = await requireRoles(["admin", "caja"])
+    const { supabase, user } = await requireRoles(["admin", "caja"])
     const monto = toSafeNumber(formData.get("monto"))
 
-    if (monto <= 0) return { error: "El monto debe ser mayor a 0." }
-
-    const { data: cuenta, error: cuentaError } = await supabase
-      .from("cuentas_por_cobrar")
-      .select("asistente_id, valor_total, pagos_abonos(id, monto, notas, estado, metodo_pago, origen_fondos)")
-      .eq("id", cuentaId)
-      .single()
-
-    if (cuentaError || !cuenta) return { error: "No se encontrÃ³ la cuenta." }
-    if (!cuenta.asistente_id) return { error: "La cuenta no tiene un asistente asociado." }
-    if (cuenta.asistente_id !== asistenteId) {
-      return { error: "No puedes aplicar saldo a favor de un asistente a la cuenta de otro." }
-    }
-
-    const saldoDisponible = await getSaldoFavorDisponible(supabase, asistenteId)
-    if (saldoDisponible <= 0) return { error: "No hay saldo a favor disponible para aplicar." }
-    if (monto > saldoDisponible) return { error: "No puedes aplicar mÃ¡s saldo del realmente disponible." }
-
-    const pendiente = calcularPendienteCuenta(toSafeNumber(cuenta.valor_total), cuenta.pagos_abonos)
-    const montoAplicado = Math.min(monto, pendiente)
-    if (montoAplicado <= 0) return { error: "La cuenta no tiene saldo pendiente para aplicar." }
-
-    // En UTC a proposito: el INSERT lo hace la RPC con CURRENT_DATE (UTC); asi el
-    // chequeo de periodo queda consistente con la fecha que realmente se escribira.
-    const fechaHoy = new Date().toISOString().slice(0, 10)
-    const periodoError = await assertFechaEditable(supabase, fechaHoy, "Aplicar saldo a favor")
-    if (periodoError) return { error: periodoError }
-
-    // Aplicacion atomica en una sola transaccion (RPC): inserta el pago espejo,
-    // descuenta el saldo a favor y registra la auditoria juntos, con lock por
-    // asistente y revalidacion del disponible. Evita pagos huerfanos y el doble
-    // uso del saldo ante fallas parciales o concurrencia.
-    const { error: rpcError } = await supabase.rpc("aplicar_saldo_favor_directo", {
-      p_cuenta_id: cuentaId,
-      p_asistente_id: asistenteId,
-      p_monto: montoAplicado,
-    })
-    if (rpcError) {
-      return { error: rpcError.message || "No se pudo aplicar el saldo a favor. La operacion se revirtio por completo." }
-    }
+    // Nucleo compartido con el MCP: valida (cuenta de la persona, saldo
+    // disponible, pendiente, periodo abierto) y aplica de forma atomica.
+    await aplicarSaldoAFavor(
+      supabase,
+      { userId: user?.id || "" },
+      { cuentaId, asistenteId, monto }
+    )
 
     revalidatePath(`/cuentas/${cuentaId}`)
     revalidatePath("/cuentas")

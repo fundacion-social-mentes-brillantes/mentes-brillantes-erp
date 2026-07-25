@@ -961,6 +961,7 @@ describe('cuentas/actions', () => {
       p_cuenta_id: 'cuenta-1',
       p_asistente_id: 'asis-1',
       p_monto: 200,
+        p_usuario_id: 'user-1',
     })
     expect(result?.error).toMatch(/saldo a favor disponible/i)
     expect(result?.success).toBeUndefined()
@@ -1087,6 +1088,7 @@ describe('cuentas/actions', () => {
       p_cuenta_id: 'cuenta-1',
       p_asistente_id: 'asis-1',
       p_monto: 300,
+        p_usuario_id: 'user-1',
     })
   })
 

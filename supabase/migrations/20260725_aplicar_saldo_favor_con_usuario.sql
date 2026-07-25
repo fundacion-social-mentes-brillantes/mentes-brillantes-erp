@@ -1,0 +1,11 @@
+-- Variante de aplicar_saldo_favor_directo que recibe el usuario explicitamente.
+-- Necesaria porque las escrituras del MCP entran como service_role, donde
+-- auth.uid() es NULL y la auditoria quedaba sin autor.
+--
+-- Candado: solo service_role puede indicar el autor; si llama un usuario
+-- normal se ignora el parametro y se usa su propio auth.uid(), de modo que
+-- nadie pueda atribuirle un movimiento a otra persona.
+--
+-- La firma de 3 argumentos (la que usa la web) pasa a delegar en la nueva para
+-- no mantener dos copias de la misma logica contable.
+-- Aplicada en produccion el 2026-07-25 (ver el cuerpo completo en la BD).
