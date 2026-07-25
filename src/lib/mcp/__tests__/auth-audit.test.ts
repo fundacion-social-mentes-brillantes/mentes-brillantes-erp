@@ -208,7 +208,7 @@ describe("descriptores de herramientas", () => {
     const registerTool = vi.fn()
     registerErpTools({ registerTool } as unknown as McpServer)
 
-    expect(registerTool).toHaveBeenCalledTimes(21)
+    expect(registerTool).toHaveBeenCalledTimes(22)
     for (const [, descriptor] of registerTool.mock.calls) {
       expect(descriptor).toMatchObject({
         securitySchemes: [{ type: "oauth2", scopes: ["erp.read"] }],

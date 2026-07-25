@@ -27,6 +27,7 @@ import {
 } from "@/lib/telegram-cajero/tools"
 import { getCoachSessions } from "@/lib/telegram-cajero/tools/coach"
 import { calcularDiferencias } from "@/lib/operaciones/agenda-sync"
+import { buscarPrepagadasSinUsar } from "@/lib/operaciones/coach-prepagadas"
 import { auditMcpToolCall, McpAuditError } from "./audit"
 import { sanitizeMcpData } from "./privacy"
 import { MCP_PRIMARY_SCOPE } from "./constants"
@@ -521,6 +522,32 @@ export function registerErpTools(server: McpServer) {
     (s, args) => getOpenReceivablesSummary(s, args.limite || 500)
   )
   register(server, "conteos", "Conteos del ERP", "Asistentes activos/totales y cuentas pendientes.", {}, (s) => getCounts(s))
+  register(
+    server,
+    "sesiones_prepagadas_sin_usar",
+    "Sesiones coach pagadas que nadie ha usado",
+    "Personas que pagaron sesiones coach y llevan mucho tiempo sin que se marquen como dictadas. Suele significar que la sesion SI se dicto pero nunca se registro. Marca como sospechosas las de una sola sesion nunca usada (un paquete grande a medio consumir es normal). Solo informa.",
+    {
+      dias_minimos: z.coerce.number().int().positive().max(730).optional().describe("Antiguedad minima en dias (por defecto 60)"),
+      solo_sospechosas: z.boolean().optional(),
+    },
+    async (s, args) => {
+      const lista = await buscarPrepagadasSinUsar(s as any, {
+        diasMinimos: args.dias_minimos,
+        soloSospechosas: args.solo_sospechosas,
+      })
+      const sospechosas = lista.filter((x) => x.sospechoso)
+      return {
+        total: lista.length,
+        sospechosas: sospechosas.length,
+        dinero_en_sesiones_sospechosas: sospechosas.reduce((t, x) => t + x.pagado, 0),
+        detalle: lista,
+        nota:
+          "Sospechosa = sesion suelta pagada y nunca marcada como dictada. Revisa si se dicto y no se registro, o si la persona aun la tiene pendiente de tomar.",
+      }
+    }
+  )
+
   register(
     server,
     "cambios_agenda",
