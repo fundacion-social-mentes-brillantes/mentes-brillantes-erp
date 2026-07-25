@@ -1,5 +1,5 @@
-import { timingSafeEqual } from "node:crypto"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { CABECERAS_SIN_CACHE, respuestaNoAutorizada, secretoAgendaValido } from "@/lib/integraciones/agenda-auth"
 import { getPersonFinancialStatus, type SupabaseReader } from "@/lib/telegram-cajero/tools"
 import { getCoachSessions } from "@/lib/telegram-cajero/tools/coach"
 
@@ -17,22 +17,6 @@ import { getCoachSessions } from "@/lib/telegram-cajero/tools/coach"
 export const dynamic = "force-dynamic"
 
 const MAX_CODIGOS = 50
-
-function secretoValido(req: Request): boolean {
-  const esperado = process.env.AGENDA_SHARED_SECRET
-  if (!esperado) return false
-
-  const recibido = req.headers.get("x-agenda-secret") || ""
-  const a = Buffer.from(recibido)
-  const b = Buffer.from(esperado)
-  // Longitudes distintas: timingSafeEqual lanzaria, asi que se compara aparte.
-  if (a.length !== b.length) return false
-  return timingSafeEqual(a, b)
-}
-
-function noAutorizado() {
-  return Response.json({ error: "no_autorizado" }, { status: 401, headers: { "Cache-Control": "no-store" } })
-}
 
 async function estadoDeCodigo(supabase: SupabaseReader, admin: any, codigo: string) {
   const { data: persona, error } = await admin
@@ -79,7 +63,7 @@ async function estadoDeCodigo(supabase: SupabaseReader, admin: any, codigo: stri
 }
 
 export async function GET(req: Request) {
-  if (!secretoValido(req)) return noAutorizado()
+  if (!secretoAgendaValido(req)) return respuestaNoAutorizada()
 
   const url = new URL(req.url)
   const crudos = (url.searchParams.get("codigos") || url.searchParams.get("codigo") || "")
@@ -91,13 +75,13 @@ export async function GET(req: Request) {
   if (!codigos.length) {
     return Response.json(
       { error: "faltan_codigos", detalle: "Usa ?codigos=5,9,211 o ?codigo=5" },
-      { status: 400, headers: { "Cache-Control": "no-store" } }
+      { status: 400, headers: CABECERAS_SIN_CACHE }
     )
   }
 
   const admin = createAdminClient()
   if (!admin) {
-    return Response.json({ error: "servidor_no_configurado" }, { status: 500, headers: { "Cache-Control": "no-store" } })
+    return Response.json({ error: "servidor_no_configurado" }, { status: 500, headers: CABECERAS_SIN_CACHE })
   }
   const supabase = admin as unknown as SupabaseReader
 
@@ -105,10 +89,10 @@ export async function GET(req: Request) {
     const personas = await Promise.all(codigos.map((c) => estadoDeCodigo(supabase, admin, c)))
     return Response.json(
       { consultadas: personas.length, asOf: new Date().toISOString(), personas },
-      { headers: { "Cache-Control": "no-store" } }
+      { headers: CABECERAS_SIN_CACHE }
     )
   } catch (error: any) {
     console.error("[integraciones/agenda] fallo", { message: error?.message })
-    return Response.json({ error: "error_interno" }, { status: 500, headers: { "Cache-Control": "no-store" } })
+    return Response.json({ error: "error_interno" }, { status: 500, headers: CABECERAS_SIN_CACHE })
   }
 }

@@ -26,6 +26,7 @@ import {
   type ToolResult,
 } from "@/lib/telegram-cajero/tools"
 import { getCoachSessions } from "@/lib/telegram-cajero/tools/coach"
+import { calcularDiferencias } from "@/lib/operaciones/agenda-sync"
 import { auditMcpToolCall, McpAuditError } from "./audit"
 import { sanitizeMcpData } from "./privacy"
 import { MCP_PRIMARY_SCOPE } from "./constants"
@@ -520,6 +521,42 @@ export function registerErpTools(server: McpServer) {
     (s, args) => getOpenReceivablesSummary(s, args.limite || 500)
   )
   register(server, "conteos", "Conteos del ERP", "Asistentes activos/totales y cuentas pendientes.", {}, (s) => getCounts(s))
+  register(
+    server,
+    "cambios_agenda",
+    "Cambios pendientes de revisar en la agenda",
+    "Compara la agenda de la familia con lo registrado en el ERP y devuelve lo que hay que revisar: sesiones que ya pasaron y no estan registradas, sesiones que movieron de fecha, eventos borrados cuya sesion si esta cobrada, y personas que estan en la agenda pero no en el ERP. Solo informa: no cambia nada.",
+    {
+      dias_atras: z.number().int().positive().max(180).optional().describe("Cuantos dias hacia atras revisar (por defecto 45)"),
+      dias_adelante: z.number().int().min(0).max(180).optional().describe("Cuantos dias hacia adelante revisar (por defecto 15)"),
+    },
+    async (s, args) => {
+      const atras = args.dias_atras || 45
+      const adelante = args.dias_adelante ?? 15
+      const hoy = new Date()
+      const fecha = (dias: number) => new Date(hoy.getTime() + dias * 86400000).toISOString().slice(0, 10)
+      const desde = fecha(-atras)
+      const hasta = fecha(adelante)
+
+      const diferencias = await calcularDiferencias(s as any, { desde, hasta })
+      const porTipo = diferencias.reduce((acc: Record<string, number>, d) => {
+        acc[d.tipo] = (acc[d.tipo] || 0) + 1
+        return acc
+      }, {})
+
+      return {
+        ventana: { desde, hasta },
+        total: diferencias.length,
+        por_tipo: porTipo,
+        diferencias,
+        nota:
+          diferencias.length === 0
+            ? "La agenda y el ERP coinciden en esta ventana."
+            : "Nada de esto se registra solo: hay que aprobarlo una por una.",
+      }
+    }
+  )
+
   register(
     server,
     "ultimos_movimientos",
