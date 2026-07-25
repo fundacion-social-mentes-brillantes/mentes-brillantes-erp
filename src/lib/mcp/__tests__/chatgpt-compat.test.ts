@@ -107,7 +107,7 @@ describe("compatibilidad MCP real con ChatGPT", () => {
         RAW_TOOLS_LIST_SCHEMA
       )
 
-      expect(listed.tools).toHaveLength(22)
+      expect(listed.tools).toHaveLength(23)
       for (const tool of listed.tools) {
         expect(tool.securitySchemes).toEqual([{ type: "oauth2", scopes: ["erp.read"] }])
         expect(tool._meta?.securitySchemes).toEqual([{ type: "oauth2", scopes: ["erp.read"] }])

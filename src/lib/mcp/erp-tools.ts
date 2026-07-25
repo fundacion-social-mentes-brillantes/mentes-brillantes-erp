@@ -28,6 +28,7 @@ import {
 import { getCoachSessions } from "@/lib/telegram-cajero/tools/coach"
 import { calcularDiferencias } from "@/lib/operaciones/agenda-sync"
 import { buscarPrepagadasSinUsar } from "@/lib/operaciones/coach-prepagadas"
+import { buscarCuentasConResiduo } from "@/lib/operaciones/residuos"
 import { auditMcpToolCall, McpAuditError } from "./audit"
 import { sanitizeMcpData } from "./privacy"
 import { MCP_PRIMARY_SCOPE } from "./constants"
@@ -522,6 +523,26 @@ export function registerErpTools(server: McpServer) {
     (s, args) => getOpenReceivablesSummary(s, args.limite || 500)
   )
   register(server, "conteos", "Conteos del ERP", "Asistentes activos/totales y cuentas pendientes.", {}, (s) => getCounts(s))
+  register(
+    server,
+    "cuentas_con_residuo",
+    "Cuentas atascadas por centavos",
+    "Cuentas que no pueden cerrarse porque les falta menos de un peso (residuos de la migracion). Ademas de no quedar pagadas, descuadran los conteos: aparecen como pendientes pero sin saldo real. Solo informa.",
+    {},
+    async (s) => {
+      const cuentas = await buscarCuentasConResiduo(s as any)
+      return {
+        total: cuentas.length,
+        residuo_total: Number(cuentas.reduce((t, c) => t + c.residuo, 0).toFixed(2)),
+        cuentas,
+        nota:
+          cuentas.length === 0
+            ? "Ninguna cuenta esta atascada por centavos."
+            : "Por debajo de un peso no hay forma de pagarlo: es residuo, no deuda. Ajustar la cifra es decision de quien lleva la contabilidad.",
+      }
+    }
+  )
+
   register(
     server,
     "sesiones_prepagadas_sin_usar",
