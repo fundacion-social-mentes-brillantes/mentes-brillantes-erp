@@ -155,7 +155,16 @@ export async function executeTool(
       message: error instanceof Error ? error.message : "unknown",
     })
     status = "error"
-    response = failure("No se pudo completar la consulta. No asumas cifras en cero; vuelve a intentarlo.")
+    // Los errores marcados como `esParaUsuario` explican por que se rechazo la
+    // operacion y que hacer (cuenta ambigua, confirmación vencida, rol sin
+    // permiso...). Ocultarlos tras el mensaje generico dejaba a la persona sin
+    // saber como continuar.
+    const paraUsuario = (error as { esParaUsuario?: boolean })?.esParaUsuario === true
+    response = failure(
+      paraUsuario && error instanceof Error
+        ? error.message
+        : "No se pudo completar la consulta. No asumas cifras en cero; vuelve a intentarlo."
+    )
   }
 
   // La auditoría es obligatoria (no se entregan datos sin registro), pero un

@@ -74,7 +74,14 @@ const buildAudit = (
 const CUENTA_SELECT =
   "valor_total, estado, asistente_id, concepto, asistentes(nombre), pagos_abonos(id, monto, notas, estado, metodo_pago, origen_fondos)"
 
-export class OperacionError extends Error {}
+/**
+ * Error cuyo mensaje esta redactado para mostrarselo a la persona (por que se
+ * rechazo la operacion y que puede hacer). La marca `esParaUsuario` permite al
+ * MCP entregarlo tal cual en vez del mensaje generico de error interno.
+ */
+export class OperacionError extends Error {
+  readonly esParaUsuario = true
+}
 
 function validarMonto(monto: number) {
   if (!Number.isFinite(monto) || monto <= 0) {

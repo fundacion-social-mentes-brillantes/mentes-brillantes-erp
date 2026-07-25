@@ -1,21 +1,27 @@
 import { createMcpHandler, withMcpAuth } from "mcp-handler"
 import { registerErpTools } from "@/lib/mcp/erp-tools"
+import { registerEscrituraTools } from "@/lib/mcp/escritura-tools"
 import { verifyErpMcpToken } from "@/lib/mcp/auth"
 import { MCP_PRIMARY_SCOPE } from "@/lib/mcp/constants"
 
-// MCP financiero de Mentes Brillantes — SOLO LECTURA, remoto (no local).
+// MCP financiero de Mentes Brillantes, remoto (no local).
 // Endpoint Streamable HTTP: /api/mcp/mcp  (SSE deshabilitado; no requiere Redis).
+// Consultas de solo lectura + escritura en dos pasos (borrador -> confirmacion).
 export const dynamic = "force-dynamic"
 export const maxDuration = 60
 
 const baseHandler = createMcpHandler(
   (server) => {
     registerErpTools(server)
+    registerEscrituraTools(server)
   },
   {
-    serverInfo: { name: "mentes-brillantes-erp", version: "2.0.0" },
+    serverInfo: { name: "mentes-brillantes-erp", version: "2.1.0" },
     instructions:
-      "MCP financiero de Mentes Brillantes. Todas las herramientas consultan en modo solo lectura. Respeta status, provenance, userSafeErrors y cualquier marca truncated/partial antes de afirmar cifras. No solicites ni reveles cédulas, notas coach, contraseñas o tokens.",
+      "MCP financiero de Mentes Brillantes. Las herramientas de consulta son de solo lectura: respeta status, provenance, userSafeErrors y cualquier marca truncated/partial antes de afirmar cifras. " +
+      "Para registrar movimientos hay dos pasos obligatorios: primero preparar_* (no escribe nada, devuelve un borrador con el detalle y un confirmacion_id) y despues confirmar_operacion, que SI escribe. " +
+      "Nunca llames a confirmar_operacion sin haberle mostrado antes el borrador al usuario y recibido su aprobacion explicita en ese mismo turno; si duda o corrige algo, usa cancelar_operacion y prepara uno nuevo. " +
+      "No solicites ni reveles cédulas, notas coach, contraseñas o tokens.",
   },
   {
     basePath: "/api/mcp",
