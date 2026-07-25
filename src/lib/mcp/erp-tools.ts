@@ -18,6 +18,7 @@ import {
   getPersonLastPayment,
   getPersonPayments,
   getPersonPurchasesOrConcepts,
+  getRecentMovements,
   getSummary,
   searchGlobal,
   searchPerson,
@@ -519,6 +520,20 @@ export function registerErpTools(server: McpServer) {
     (s, args) => getOpenReceivablesSummary(s, args.limite || 500)
   )
   register(server, "conteos", "Conteos del ERP", "Asistentes activos/totales y cuentas pendientes.", {}, (s) => getCounts(s))
+  register(
+    server,
+    "ultimos_movimientos",
+    "Últimos movimientos registrados",
+    "Historial general: lo ultimo que se registro en TODO el ERP (pagos, egresos, donaciones, ventas externas, cuentas y saldo a favor), de lo mas reciente a lo mas antiguo. Usala para responder \"¿donde voy?\" o \"¿que se registro ultimamente?\".",
+    {
+      limite: z.number().int().positive().max(100).optional(),
+      tipo: z
+        .enum(["abono", "egreso", "donacion", "venta_externa", "cuenta_cobrar", "anticipo", "aplicacion_saldo"])
+        .optional()
+        .describe("Filtra por un tipo de movimiento"),
+    },
+    (s, args) => getRecentMovements(s, args.limite || 15, args.tipo || null)
+  )
   register(
     server,
     "periodos",
