@@ -22,6 +22,10 @@ import {
   revertirAbonoConSaldo,
   revertirAnticipo,
   saldoFavorDisponible,
+  corregirMontoPago,
+  pagarDeudasConSaldo,
+  previsualizarCorreccionMonto,
+  previsualizarPagarDeudasConSaldo,
 } from "@/lib/operaciones/saldo-favor"
 import {
   editarSesionCoach,
@@ -1309,6 +1313,107 @@ const OPERACIONES: DefinicionOperacion[] = [
     ejecutar: async (admin, actor, d) => {
       const r = await cerrarLiquidacion(admin, { userId: actor.userId, role: actor.role }, String((d as any).periodoId))
       return { periodo_id: r.periodoId, nombre: r.nombre, desde: r.fechaInicio, hasta: r.fechaFin }
+    },
+  },
+
+  {
+    nombre: "corregir_monto_pago",
+    titulo: "Corregir el monto de un pago",
+    descripcion:
+      "Cambia el monto de un pago ya registrado. Internamente hace lo contablemente correcto: anula el pago actual " +
+      "(y el saldo a favor que hubiera generado) y registra uno nuevo con el monto correcto, en la misma fecha y " +
+      "con el mismo metodo. Queda el rastro de ambos.",
+    roles: ["admin"],
+    riesgo: "destructiva",
+    schema: {
+      cuenta_id: z.string().uuid(),
+      abono_id: z.string().uuid(),
+      monto_nuevo: z.number().positive().max(100_000_000),
+    },
+    previsualizar: async (admin, _actor, args) => {
+      const datos = {
+        cuentaId: String(args.cuenta_id),
+        abonoId: String(args.abono_id),
+        montoNuevo: Number(args.monto_nuevo),
+      }
+      const previa = await previsualizarCorreccionMonto(admin, datos as any)
+      return {
+        datos,
+        resumen:
+          `CORREGIR el pago de ${previa.personaNombre} en "${previa.concepto}": ` +
+          `${money(previa.montoAntes)} -> ${money(previa.montoDespues)}`,
+        detalle: {
+          persona: previa.personaNombre,
+          concepto: previa.concepto,
+          fecha: previa.fecha,
+          monto_antes: previa.montoAntes,
+          monto_despues: previa.montoDespues,
+          como_se_hace: previa.efecto,
+        },
+        avisos: ["Se anula el pago original y se crea uno nuevo: en el historial apareceran los dos."],
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const r = await corregirMontoPago(admin, { userId: actor.userId, role: actor.role }, d as any)
+      return {
+        pago_anulado: r.abonoAnulado,
+        pago_nuevo: r.pagoNuevoId,
+        monto_antes: r.montoAntes,
+        monto_despues: r.montoDespues,
+        excedente_a_saldo_a_favor: r.excedenteASaldoFavor,
+        estado_de_la_cuenta: r.estadoDeLaCuenta,
+      }
+    },
+  },
+
+  {
+    nombre: "pagar_deudas_con_saldo",
+    titulo: "Aplicar el saldo a favor a todas las deudas",
+    descripcion:
+      "Usa el saldo a favor disponible de una persona para ir pagando sus cuentas pendientes, de la mas antigua a " +
+      "la mas nueva. Cada aplicacion se ajusta a multiplos de 50 pesos.",
+    roles: ["admin"],
+    riesgo: "destructiva",
+    schema: { persona: z.string().trim().min(2).max(160) },
+    previsualizar: async (admin, _actor, args) => {
+      const persona = await resolverPersona(admin, String(args.persona))
+      const previa = await previsualizarPagarDeudasConSaldo(admin, persona.id)
+      return {
+        datos: { asistenteId: persona.id },
+        resumen:
+          `Aplicar ${money(previa.totalAplicado)} del saldo a favor de ${persona.nombre} ` +
+          `a ${previa.plan.length} cuenta(s)`,
+        detalle: {
+          persona: persona.nombre,
+          saldo_disponible: previa.disponible,
+          se_aplicara: previa.plan.map((p: any) => ({
+            concepto: p.concepto,
+            pendiente: p.pendiente,
+            se_aplica: p.seAplica,
+          })),
+          total_aplicado: previa.totalAplicado,
+          saldo_despues: previa.saldoDespues,
+        },
+        avisos: [
+          previa.saldoDespues > 0
+            ? `Quedaran ${money(previa.saldoDespues)} de saldo a favor sin aplicar.`
+            : null,
+        ],
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const r = await pagarDeudasConSaldo(
+        admin,
+        { userId: actor.userId, role: actor.role },
+        String((d as any).asistenteId)
+      )
+      return {
+        cuentas_pagadas: r.aplicadas.length,
+        total_aplicado: r.totalAplicado,
+        detalle: r.aplicadas,
+        parcial: r.parcial,
+        motivo: r.motivo,
+      }
     },
   },
 

@@ -5,7 +5,7 @@ import { fetchPaginatedRows, partialPaginationMessage, safePageSize } from "./pa
 import { fetchAccountPayments } from "./account-payments"
 
 export function summarizeOpenReceivables(cuentas: any[]) {
-  const rows = (cuentas || [])
+  const todas = (cuentas || [])
     .filter((cuenta: any) => ["pendiente", "parcial"].includes(String(cuenta.estado || "").toLowerCase()))
     .map((cuenta: any) => {
       const valor = Math.round(toSafeNumber(cuenta.valor_total))
@@ -23,8 +23,13 @@ export function summarizeOpenReceivables(cuentas: any[]) {
         pendiente,
       }
     })
-    .filter((row) => row.pendiente > 0)
-    .sort((a, b) => b.pendiente - a.pendiente)
+  const conSaldoEnPesos = todas.filter((row) => row.pendiente > 0)
+  // Cuentas marcadas "pendiente"/"parcial" cuyo saldo, redondeado a pesos, es
+  // 0: residuos de centavos de la migracion. No son cartera real, pero
+  // explican por que este conteo puede diferir del de `conteos`, que cuenta
+  // por estado. Se informan para que los dos numeros reconcilien.
+  const residuoCentavos = todas.length - conSaldoEnPesos.length
+  const rows = conSaldoEnPesos.sort((a, b) => b.pendiente - a.pendiente)
 
   const personas = new Map<string, { nombre: string; codigo: string | null; pendiente: number; cuentas: number }>()
   rows.forEach((row) => {
@@ -39,6 +44,7 @@ export function summarizeOpenReceivables(cuentas: any[]) {
     total_cartera: rows.reduce((acc, row) => acc + row.pendiente, 0),
     personas_con_deuda: personas.size,
     cuentas_pendientes: rows.length,
+    cuentas_sin_saldo_en_pesos: residuoCentavos,
     top_cuentas: rows.slice(0, 10),
     top_personas: Array.from(personas.values()).sort((a, b) => b.pendiente - a.pendiente).slice(0, 10),
   }
@@ -106,6 +112,7 @@ export async function getOpenReceivablesSummary(supabase: SupabaseReader, limit 
       total_cartera: complete ? summary.total_cartera : null,
       personas_con_deuda: complete ? summary.personas_con_deuda : null,
       cuentas_pendientes: complete ? summary.cuentas_pendientes : null,
+      cuentas_sin_saldo_en_pesos: summary.cuentas_sin_saldo_en_pesos,
       subtotal_cartera_consultada: summary.total_cartera,
       personas_con_deuda_consultadas: summary.personas_con_deuda,
       cuentas_pendientes_consultadas: summary.cuentas_pendientes,

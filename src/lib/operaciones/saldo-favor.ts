@@ -268,3 +268,154 @@ export async function revertirAnticipo(
 
   return { anticipoId: params.anticipoId, montoRevertido: v.montoNormalizado, saldoDespues: v.disponible - v.montoNormalizado }
 }
+
+// ------------------------------------------------- correcciones compuestas
+
+/**
+ * Corregir el monto de un pago ya registrado.
+ *
+ * No se edita el monto en el sitio a proposito: ese pago pudo generar saldo a
+ * favor por sobrepago, y mutarlo obligaria a recalcular compensaciones a mano.
+ * En su lugar se hace lo contablemente correcto —revertir el pago (lo que ya
+ * revierte su saldo asociado en una transaccion) y registrar uno nuevo con el
+ * monto correcto—, reutilizando piezas ya verificadas.
+ */
+export type CorregirMontoPagoParams = {
+  cuentaId: string
+  abonoId: string
+  montoNuevo: number
+}
+
+export async function previsualizarCorreccionMonto(supabase: any, params: CorregirMontoPagoParams) {
+  const montoNuevo = exigirMontoPositivo(params.montoNuevo, "El monto nuevo")
+  const previo = await previsualizarReversoAbono(supabase, {
+    cuentaId: params.cuentaId,
+    abonoId: params.abonoId,
+  })
+
+  if (montoNuevo === previo.monto) {
+    throw new OperacionError("El monto nuevo es igual al actual.")
+  }
+
+  return {
+    ...previo,
+    montoAntes: previo.monto,
+    montoDespues: montoNuevo,
+    efecto:
+      "Se anula el pago actual (y el saldo a favor que hubiera generado) y se registra uno nuevo con el monto " +
+      "corregido, en la misma fecha y con el mismo metodo. Queda el rastro de ambos.",
+  }
+}
+
+export async function corregirMontoPago(
+  supabase: any,
+  actor: ActorErp,
+  params: CorregirMontoPagoParams
+) {
+  const montoNuevo = exigirMontoPositivo(params.montoNuevo, "El monto nuevo")
+
+  // Datos del pago original, para reproducirlo con el monto corregido.
+  const { data: abono, error } = await supabase
+    .from("pagos_abonos")
+    .select("monto, metodo_pago, fecha_pago, notas")
+    .eq("id", params.abonoId)
+    .single()
+  if (error || !abono) throw new OperacionError("No se encontró el abono a corregir.")
+
+  const montoAntes = toSafeNumber(abono.monto)
+  if (montoNuevo === montoAntes) throw new OperacionError("El monto nuevo es igual al actual.")
+
+  // 1) Revertir el pago actual (atomico, incluye su saldo a favor si lo hubo).
+  await revertirAbonoConSaldo(supabase, actor, { cuentaId: params.cuentaId, abonoId: params.abonoId })
+
+  // 2) Registrar el pago corregido con los mismos datos.
+  const { registrarAbono } = await import("./abonos")
+  const nuevo = await registrarAbono(supabase, actor, {
+    cuentaId: params.cuentaId,
+    monto: montoNuevo,
+    metodoPago: abono.metodo_pago ?? null,
+    fechaPago: String(abono.fecha_pago),
+    notas: abono.notas ? `${abono.notas} (corregido)` : "Pago corregido",
+  })
+
+  return {
+    abonoAnulado: params.abonoId,
+    montoAntes,
+    montoDespues: montoNuevo,
+    pagoNuevoId: nuevo.pagoId,
+    excedenteASaldoFavor: nuevo.excedenteASaldoFavor,
+    estadoDeLaCuenta: nuevo.estadoDespues,
+  }
+}
+
+// ------------------------------------------- aplicar saldo a varias deudas
+
+/**
+ * Aplica el saldo a favor disponible a las deudas de la persona, de la mas
+ * antigua a la mas nueva. Igual que en la web, cada aplicacion se normaliza a
+ * multiplos de 50 (la unidad operativa en pesos).
+ */
+export async function previsualizarPagarDeudasConSaldo(supabase: any, asistenteId: string) {
+  const disponible = await saldoFavorDisponible(supabase, asistenteId)
+  if (disponible <= 0) throw new OperacionError("No hay saldo a favor disponible para aplicar.")
+
+  const { data: cuentas, error } = await supabase
+    .from("cuentas_por_cobrar")
+    .select("id, concepto, valor_total, fecha_emision, pagos_abonos(id, monto, notas, estado, metodo_pago, origen_fondos)")
+    .eq("asistente_id", asistenteId)
+    .neq("estado", "pagado")
+    .order("fecha_emision", { ascending: true })
+
+  if (error) throw new OperacionError("No se pudieron leer las cuentas de la persona.")
+
+  let restante = disponible
+  const plan: Array<{ cuentaId: string; concepto: string; pendiente: number; seAplica: number }> = []
+
+  for (const c of cuentas || []) {
+    if (restante <= 0) break
+    const pendiente = calcularPendienteCuenta(toSafeNumber(c.valor_total), c.pagos_abonos)
+    if (pendiente <= 0) continue
+    const seAplica = normalizarCop(Math.min(restante, pendiente))
+    if (seAplica <= 0) continue
+    plan.push({ cuentaId: c.id, concepto: c.concepto, pendiente, seAplica })
+    restante -= seAplica
+  }
+
+  if (!plan.length) throw new OperacionError("No hay deudas a las que aplicar el saldo disponible.")
+
+  const totalAplicado = plan.reduce((acc, p) => acc + p.seAplica, 0)
+  return { disponible, plan, totalAplicado, saldoDespues: disponible - totalAplicado }
+}
+
+export async function pagarDeudasConSaldo(supabase: any, actor: ActorErp, asistenteId: string) {
+  const v = await previsualizarPagarDeudasConSaldo(supabase, asistenteId)
+
+  const aplicadas: Array<{ cuentaId: string; concepto: string; monto: number }> = []
+  for (const paso of v.plan) {
+    // Si una falla, las anteriores ya quedaron aplicadas (igual que en la web);
+    // por eso se informa exactamente cuales se alcanzaron a aplicar.
+    try {
+      await aplicarSaldoAFavor(supabase, actor, {
+        cuentaId: paso.cuentaId,
+        asistenteId,
+        monto: paso.seAplica,
+      })
+      aplicadas.push({ cuentaId: paso.cuentaId, concepto: paso.concepto, monto: paso.seAplica })
+    } catch (e: any) {
+      if (!aplicadas.length) throw e
+      return {
+        aplicadas,
+        totalAplicado: aplicadas.reduce((a, x) => a + x.monto, 0),
+        parcial: true,
+        motivo: e?.message || "Se interrumpio al aplicar una de las cuentas.",
+      }
+    }
+  }
+
+  return {
+    aplicadas,
+    totalAplicado: aplicadas.reduce((a, x) => a + x.monto, 0),
+    parcial: false,
+    motivo: null,
+  }
+}

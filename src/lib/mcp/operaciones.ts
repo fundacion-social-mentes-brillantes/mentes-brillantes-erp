@@ -40,6 +40,8 @@ export type OperacionEscritura =
   | "fecha_fin_periodo"
   | "adelanto_socio"
   | "cerrar_liquidacion"
+  | "corregir_monto_pago"
+  | "pagar_deudas_con_saldo"
 
 export type BorradorOperacion = {
   id: string
