@@ -614,9 +614,18 @@ export const OPERACIONES: DefinicionOperacion[] = [
           sesiones_realizadas: previa.realizadas,
           restantes_antes: previa.restantesAntes,
           restantes_despues: previa.restantesDespues,
+          se_descuenta_de: previa.paquete.compradoEl
+            ? `${previa.paquete.concepto || "paquete"} comprado el ${previa.paquete.compradoEl}`
+            : "el paquete disponible mas antiguo",
         },
         avisos: [
           previa.restantesDespues === 0 ? "Con esta sesion se agota el paquete de la persona." : null,
+          // Consumir un credito viejo es correcto (se gasta primero lo mas
+          // antiguo), pero conviene decirlo: significa que la persona ya tenia
+          // una sesion pagada sin usar, o que esa sesion vieja nunca se registro.
+          previa.paquete.diasDeAntiguedad !== null && previa.paquete.diasDeAntiguedad > 45
+            ? `OJO: se descuenta de un cupo comprado hace ${previa.paquete.diasDeAntiguedad} dias (${previa.paquete.compradoEl}), no de la compra mas reciente. Se gasta primero el credito mas antiguo. Revisa si esa sesion vieja quedo sin registrar.`
+            : null,
         ],
       }
     },

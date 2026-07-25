@@ -18,12 +18,24 @@ export type PrevisualizacionSesionCoach = {
   restantesAntes: number
   restantesDespues: number
   fecha: string
+  /**
+   * De que paquete sale la sesion. Se consume siempre el credito prepagado mas
+   * antiguo con cupo, asi que puede NO ser el que se acaba de comprar. Saberlo
+   * antes evita la sorpresa de ver la sesion colgada de una compra vieja.
+   */
+  paquete: {
+    concepto: string | null
+    compradoEl: string | null
+    diasDeAntiguedad: number | null
+  }
 }
 
 async function paquetesDe(supabase: any, asistenteId: string) {
   const { data, error } = await supabase
     .from("coach_paquetes")
-    .select("id, cuenta_id, asistente_id, sesiones_compradas, creado_en, coach_sesiones (id)")
+    .select(
+      "id, cuenta_id, asistente_id, sesiones_compradas, creado_en, coach_sesiones (id), cuentas_por_cobrar (concepto, fecha_emision)"
+    )
     .eq("asistente_id", asistenteId)
 
   if (error) throw new OperacionError("No se pudieron consultar los paquetes coach de la persona.")
@@ -46,6 +58,16 @@ export async function previsualizarSesionCoach(
   const destino = elegirPaquete(paquetes)
   const { compradas, realizadas, restantes } = resumenCoach(paquetes as any)
 
+  const cuenta = Array.isArray((destino as any).cuentas_por_cobrar)
+    ? (destino as any).cuentas_por_cobrar[0]
+    : (destino as any).cuentas_por_cobrar
+  const compradoEl: string | null = cuenta?.fecha_emision ?? null
+  const diasDeAntiguedad = compradoEl
+    ? Math.floor(
+        (new Date(`${fecha}T00:00:00Z`).getTime() - new Date(`${compradoEl}T00:00:00Z`).getTime()) / 86400000
+      )
+    : null
+
   return {
     paqueteId: destino.id,
     compradas,
@@ -53,6 +75,11 @@ export async function previsualizarSesionCoach(
     restantesAntes: restantes,
     restantesDespues: Math.max(0, restantes - 1),
     fecha,
+    paquete: {
+      concepto: cuenta?.concepto ?? null,
+      compradoEl,
+      diasDeAntiguedad,
+    },
   }
 }
 
