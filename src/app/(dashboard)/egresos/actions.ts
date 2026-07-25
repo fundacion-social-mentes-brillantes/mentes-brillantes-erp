@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { requireAdmin } from '@/lib/utils/authz'
 import { parseMoneyInput } from '@/lib/utils/contable'
 import { assertFechaEditable } from '@/lib/utils/periodos'
+import { crearEgreso } from '@/lib/operaciones/movimientos'
 
 export type ActionState = {
   error?: string
@@ -77,19 +78,17 @@ export async function saveEgreso(id: string | null, prevState: ActionState, form
       },
     ])
   } else {
-    const { data: egresoInsertado, error } = await supabase.from('egresos').insert([data]).select('id').single()
-    if (error) return { error: error.message }
-    await supabase.from('auditoria_financiera').insert([
-      {
-        tabla_afectada: 'egresos',
-        registro_id: egresoInsertado.id,
-        usuario_id: user?.id || '',
-        accion: 'crear_egreso',
-        valor_anterior: null,
-        valor_nuevo: monto,
-        motivo: 'Creación de egreso',
-      },
-    ])
+    // La creación vive en @/lib/operaciones/movimientos para que la web y el
+    // MCP registren los egresos con las mismas reglas y la misma auditoría.
+    try {
+      await crearEgreso(
+        supabase,
+        { userId: user?.id || '', role: 'admin' },
+        { concepto, monto, categoria, metodoPago: metodo_pago, fecha, notas }
+      )
+    } catch (e: any) {
+      return { error: e?.message || 'No se pudo registrar el egreso.' }
+    }
   }
 
   revalidatePath('/egresos')

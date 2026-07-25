@@ -5,6 +5,7 @@ import { requireAdmin, requireRoles } from '@/lib/utils/authz'
 import { parseMoneyInput } from '@/lib/utils/contable'
 import { assertFechaEditable } from '@/lib/utils/periodos'
 import { fechaHoyBogota } from '@/lib/utils/fechas'
+import { crearDonacion as crearDonacionCore } from '@/lib/operaciones/movimientos'
 
 export type DonacionState = { error?: string; success?: boolean } | null
 
@@ -53,27 +54,16 @@ export async function crearDonacion(asistente_id: string, formData: FormData): P
     return { error: 'Monto y método de pago son obligatorios y el monto debe ser mayor a 0.' }
   }
 
-  const periodoError = await assertFechaEditable(supabase, fecha, 'Crear la donación')
-  if (periodoError) return { error: periodoError }
-
-  const { data, error } = await supabase
-    .from(TABLE)
-    .insert([
-      {
-        asistente_id,
-        monto,
-        metodo_pago,
-        fecha,
-        notas,
-        usuario_id: user?.id || null,
-      },
-    ])
-    .select('id')
-    .single()
-
-  if (error) return { error: error.message }
-
-  await audit(supabase, user.id, 'crear_donacion', data.id, null, monto, notas || undefined)
+  // Nucleo compartido con el MCP: mismas reglas y misma auditoria.
+  try {
+    await crearDonacionCore(
+      supabase,
+      { userId: user?.id || '', role: 'admin' },
+      { asistenteId: asistente_id, monto: monto as number, metodoPago: metodo_pago, fecha, notas }
+    )
+  } catch (e: any) {
+    return { error: e?.message || 'No se pudo registrar la donación.' }
+  }
 
   revalidatePath(`/asistentes/${asistente_id}`)
   revalidatePath('/movimientos')

@@ -11,7 +11,13 @@ import { createHash } from "node:crypto"
 export const TTL_BORRADOR_MINUTOS = 10
 const VENTANA_DUPLICADOS_HORAS = 24
 
-export type OperacionEscritura = "registrar_pago"
+export type OperacionEscritura =
+  | "registrar_pago"
+  | "cuenta"
+  | "egreso"
+  | "venta_externa"
+  | "donacion"
+  | "anticipo"
 
 export type BorradorOperacion = {
   id: string

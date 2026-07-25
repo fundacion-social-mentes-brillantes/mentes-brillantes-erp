@@ -12,6 +12,7 @@ import {
   parseMoneyInput,
 } from '@/lib/utils/contable'
 import { assertFechaEditable } from '@/lib/utils/periodos'
+import { crearAnticipo } from '@/lib/operaciones/movimientos'
 
 export type ActionState = {
   error?: string
@@ -100,38 +101,16 @@ export async function saveAnticipo(asistente_id: string, prevState: ActionState,
   if (monto === null || monto <= 0) return { error: 'El monto debe ser mayor a 0' }
   if (!metodo_pago || !fecha) return { error: 'Método y fecha son obligatorios' }
 
-  const periodoError = await assertFechaEditable(supabase, fecha, 'Registrar el anticipo')
-  if (periodoError) return { error: periodoError }
-
-  const { data: anticipoInsertado, error } = await supabase
-    .from('movimientos_saldo_favor')
-    .insert([
-      {
-        asistente_id,
-        tipo: 'ingreso',
-        monto,
-        fecha,
-        metodo_pago,
-        notas: notas || null,
-        usuario_id: user?.id || null,
-      },
-    ])
-    .select('id')
-    .single()
-
-  if (error) return { error: error.message }
-
-  await supabase.from('auditoria_financiera').insert([
-    {
-      tabla_afectada: 'movimientos_saldo_favor',
-      registro_id: anticipoInsertado.id,
-      usuario_id: user?.id || '',
-      accion: 'crear_anticipo',
-      valor_anterior: null,
-      valor_nuevo: monto,
-      motivo: notas || 'Registro de anticipo',
-    },
-  ])
+  // Nucleo compartido con el MCP: mismas reglas y misma auditoria.
+  try {
+    await crearAnticipo(
+      supabase,
+      { userId: user?.id || '', role: 'admin' },
+      { asistenteId: asistente_id, monto: monto as number, metodoPago: metodo_pago, fecha, notas }
+    )
+  } catch (e: any) {
+    return { error: e?.message || 'No se pudo registrar el anticipo.' }
+  }
 
   revalidatePath(`/asistentes/${asistente_id}`)
   return { success: true }

@@ -6,6 +6,7 @@ import { requireAdmin, requireRoles } from '@/lib/utils/authz'
 import { parseMoneyInput } from '@/lib/utils/contable'
 import { assertFechaEditable } from '@/lib/utils/periodos'
 import { fechaHoyBogota } from '@/lib/utils/fechas'
+import { crearVentaExterna as crearVentaExternaCore } from '@/lib/operaciones/movimientos'
 
 export type VentaExternaState = { error?: string; success?: boolean } | null
 
@@ -62,18 +63,23 @@ export async function crearVentaExterna(prevState: VentaExternaState, formData: 
     return { error: 'Concepto, monto, metodo de pago y fecha son obligatorios. El monto debe ser mayor a 0.' }
   }
 
-  const periodoError = await assertFechaEditable(supabase, payload.fecha, 'Crear la venta externa')
-  if (periodoError) return { error: periodoError }
-
-  const { data, error } = await supabase
-    .from(TABLE)
-    .insert([{ ...payload, usuario_id: user?.id || null }])
-    .select('id')
-    .single()
-
-  if (error) return { error: error.message }
-
-  await audit(supabase, user.id, 'crear_venta_externa', data.id, null, payload.monto, payload.notas)
+  // Nucleo compartido con el MCP: mismas reglas y misma auditoria.
+  try {
+    await crearVentaExternaCore(
+      supabase,
+      { userId: user?.id || '', role: 'admin' },
+      {
+        concepto: payload.concepto,
+        compradorNombre: payload.comprador_nombre,
+        monto: payload.monto as number,
+        metodoPago: payload.metodo_pago,
+        fecha: payload.fecha,
+        notas: payload.notas,
+      }
+    )
+  } catch (e: any) {
+    return { error: e?.message || 'No se pudo registrar la venta externa.' }
+  }
   revalidarVentasExternas()
   redirect('/ventas-externas')
 }
