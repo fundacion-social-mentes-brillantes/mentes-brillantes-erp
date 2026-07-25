@@ -16,7 +16,16 @@ import {
 } from "@/lib/operaciones/movimientos"
 import { aplicarSaldoAFavor, previsualizarAplicarSaldo, saldoFavorDisponible } from "@/lib/operaciones/saldo-favor"
 import { previsualizarSesionCoach, registrarSesionCoach } from "@/lib/operaciones/coach"
-import { TIPOS_ANULABLES, anularMovimiento, previsualizarAnulacion } from "@/lib/operaciones/anulaciones"
+import {
+  TIPOS_ANULABLES,
+  TIPOS_EDITABLES,
+  anularMovimiento,
+  editarMovimiento,
+  eliminarMovimiento,
+  previsualizarAnulacion,
+  previsualizarEdicion,
+  previsualizarEliminacion,
+} from "@/lib/operaciones/anulaciones"
 import { crearPersona, editarPersona } from "@/lib/operaciones/personas"
 import { executeTool } from "./erp-tools"
 import { MCP_PRIMARY_SCOPE } from "./constants"
@@ -679,6 +688,83 @@ const OPERACIONES: DefinicionOperacion[] = [
     ejecutar: async (admin, actor, d) => {
       const r = await anularMovimiento(admin, { userId: actor.userId, role: actor.role }, d as any)
       return { anulado: r.tipo, movimiento_id: r.movimientoId, monto_anulado: r.montoAnulado }
+    },
+  },
+  {
+    nombre: "eliminar_movimiento",
+    titulo: "Eliminar un movimiento (borrado definitivo)",
+    descripcion:
+      "BORRA por completo un pago, egreso, donacion o venta externa. No queda rastro del registro. Usala solo para " +
+      "deshacer algo creado por error hace un momento; para corregir historia lo correcto es anular_movimiento.",
+    roles: ["admin"],
+    riesgo: "destructiva",
+    schema: {
+      tipo: z.enum(TIPOS_ANULABLES),
+      movimiento_id: z.string().uuid(),
+    },
+    previsualizar: async (admin, _actor, args) => {
+      const datos = { tipo: String(args.tipo), movimientoId: String(args.movimiento_id) }
+      const previa = await previsualizarEliminacion(admin, datos as any)
+      return {
+        datos,
+        resumen: `ELIMINAR DEFINITIVAMENTE: ${previa.descripcion} por ${money(previa.monto)} del ${previa.fecha}`,
+        detalle: {
+          tipo: previa.tipo,
+          descripcion: previa.descripcion,
+          monto: previa.monto,
+          fecha: previa.fecha,
+          efecto: previa.efecto,
+        },
+        avisos: [
+          "El borrado es IRREVERSIBLE y no deja rastro del registro. Si solo quieres corregir un error del pasado, " +
+            "es mejor anular_movimiento, que conserva el historial.",
+        ],
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const r = await eliminarMovimiento(admin, { userId: actor.userId, role: actor.role }, d as any)
+      return { eliminado: r.tipo, movimiento_id: r.movimientoId, monto_eliminado: r.montoEliminado }
+    },
+  },
+
+  {
+    nombre: "editar_movimiento",
+    titulo: "Corregir un egreso, donacion o venta externa",
+    descripcion:
+      "Cambia el monto, la fecha, el concepto o las notas de un egreso, donacion o venta externa ya registrado. " +
+      "El monto de un abono NO se corrige por aqui (debe hacerse en el detalle de la cuenta para no romper el saldo a favor).",
+    roles: ["admin"],
+    riesgo: "destructiva",
+    schema: {
+      tipo: z.enum(TIPOS_EDITABLES),
+      movimiento_id: z.string().uuid(),
+      monto: z.number().positive().max(100_000_000).optional(),
+      fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      concepto: z.string().trim().min(2).max(200).optional(),
+      notas: z.string().trim().max(300).optional(),
+    },
+    previsualizar: async (admin, _actor, args) => {
+      const datos: Record<string, unknown> = { tipo: String(args.tipo), movimientoId: String(args.movimiento_id) }
+      if (args.monto !== undefined) datos.monto = Number(args.monto)
+      if (args.fecha !== undefined) datos.fecha = String(args.fecha)
+      if (args.concepto !== undefined) datos.concepto = String(args.concepto)
+      if (args.notas !== undefined) datos.notas = String(args.notas)
+
+      const previa = await previsualizarEdicion(admin, datos as any)
+      const cambios = Object.entries(previa.cambios)
+        .map(([campo, v]: any) => `${campo}: ${v.antes} -> ${v.despues}`)
+        .join(", ")
+
+      return {
+        datos,
+        resumen: `CORREGIR ${previa.descripcion} (${cambios})`,
+        detalle: { tipo: previa.tipo, descripcion: previa.descripcion, cambios: previa.cambios },
+        avisos: ["Cambia cifras ya registradas: verifica que los valores nuevos sean los correctos."],
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const r = await editarMovimiento(admin, { userId: actor.userId, role: actor.role }, d as any)
+      return { editado: r.tipo, movimiento_id: r.movimientoId, cambios: r.cambios }
     },
   },
 ]

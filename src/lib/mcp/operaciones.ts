@@ -23,6 +23,8 @@ export type OperacionEscritura =
   | "persona"
   | "editar_persona"
   | "anular_movimiento"
+  | "eliminar_movimiento"
+  | "editar_movimiento"
 
 export type BorradorOperacion = {
   id: string

@@ -370,6 +370,18 @@ export async function eliminarMovimiento(
   if (periodoError) return { error: periodoError }
 
   if (tablaDestino === 'pagos_abonos') {
+    // Mismo bloqueo que en anularMovimiento: un pago hecho CON saldo a favor no
+    // puede borrarse en duro, porque dejaria el saldo consumido sin
+    // contrapartida y la deuda reabierta.
+    const origenFondos = recordData?.origen_fondos?.toLowerCase?.()
+    const metodoPago = recordData?.metodo_pago?.toLowerCase?.()
+    if (origenFondos === 'saldo_a_favor' || metodoPago === 'saldo_a_favor') {
+      return {
+        error:
+          'No se puede eliminar este pago porque proviene de saldo a favor. Usa el flujo de devolucion de saldo cuando este disponible.',
+      }
+    }
+
     const tieneSaldoAsociado = await hasSaldoFavorAsociadoAbono(supabase, recordData?.cuenta_id, movimiento_id)
     if (tieneSaldoAsociado) {
       return { error: ABONO_CON_SALDO_BLOQUEADO }

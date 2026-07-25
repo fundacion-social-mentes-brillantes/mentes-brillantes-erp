@@ -215,3 +215,178 @@ export async function anularMovimiento(
 
   return { tipo: params.tipo, movimientoId: params.movimientoId, montoAnulado: v.monto }
 }
+
+// ---------------------------------------------------------------------------
+// ELIMINAR (borrado duro) y EDITAR movimientos
+// ---------------------------------------------------------------------------
+
+export type EliminarMovimientoParams = {
+  tipo: TipoMovimientoAnulable
+  movimientoId: string
+}
+
+/**
+ * Borrado DURO: el registro desaparece, no queda como anulado. Solo deberia
+ * usarse para deshacer algo creado por error hace un momento; para corregir
+ * historia lo correcto es anular.
+ */
+export async function previsualizarEliminacion(supabase: any, params: EliminarMovimientoParams) {
+  const tipo = params.tipo
+  if (!TIPOS_ANULABLES.includes(tipo)) {
+    throw new OperacionError(`Tipo de movimiento no soportado para eliminar: ${tipo}.`)
+  }
+
+  const { data, error, fecha, monto } = await leerMovimiento(supabase, tipo, params.movimientoId)
+  if (error || !data) throw new OperacionError("No encontre ese movimiento.")
+
+  const periodoError = await assertFechaEditable(supabase, fecha, "Eliminar el movimiento")
+  if (periodoError) throw new OperacionError(periodoError)
+
+  if (tipo === "abono") {
+    const origen = String(data.origen_fondos || "").toLowerCase()
+    const metodo = String(data.metodo_pago || "").toLowerCase()
+    if (origen === "saldo_a_favor" || metodo === "saldo_a_favor") {
+      throw new OperacionError(PAGO_DESDE_SALDO_BLOQUEADO)
+    }
+    if (await tieneSaldoFavorAsociado(supabase, data.cuenta_id, params.movimientoId)) {
+      throw new OperacionError(ABONO_CON_SALDO_BLOQUEADO)
+    }
+  }
+
+  return {
+    tipo,
+    movimientoId: params.movimientoId,
+    descripcion: describir(tipo, data),
+    monto,
+    fecha: String(fecha),
+    cuentaId: (data as any).cuenta_id ?? null,
+    efecto: "El registro se borra por completo y no se puede recuperar.",
+  }
+}
+
+export async function eliminarMovimiento(
+  supabase: any,
+  actor: ActorErp,
+  params: EliminarMovimientoParams
+) {
+  const v = await previsualizarEliminacion(supabase, params)
+  const tabla = TABLA_POR_TIPO[params.tipo]
+
+  const { error } = await supabase.from(tabla).delete().eq("id", params.movimientoId)
+  if (error) throw new OperacionError(error.message || "No se pudo eliminar el movimiento.")
+
+  if (params.tipo === "abono") await recalcularEstadoCuenta(supabase, v.cuentaId)
+
+  const { error: auditError } = await supabase.from("auditoria_financiera").insert([
+    {
+      tabla_afectada: tabla,
+      registro_id: params.movimientoId,
+      usuario_id: actor.userId || "",
+      accion: "eliminar_movimiento",
+      valor_anterior: v.monto,
+      valor_nuevo: null,
+      motivo: "Eliminacion solicitada por el usuario.",
+    },
+  ])
+  if (auditError) {
+    console.error("[operaciones] no se pudo auditar la eliminacion", { tabla, code: auditError.code })
+  }
+
+  return { tipo: params.tipo, movimientoId: params.movimientoId, montoEliminado: v.monto }
+}
+
+// --------------------------------------------------------------------- editar
+
+/** Tipos cuyo monto SI se puede corregir desde aqui. El de un abono no: */
+/** hay que hacerlo en el detalle de la cuenta para no romper el sobrepago. */
+export const TIPOS_EDITABLES = ["egreso", "donacion", "venta_externa"] as const
+export type TipoMovimientoEditable = (typeof TIPOS_EDITABLES)[number]
+
+export type EditarMovimientoParams = {
+  tipo: TipoMovimientoEditable
+  movimientoId: string
+  monto?: number
+  fecha?: string
+  notas?: string | null
+  concepto?: string
+}
+
+export async function previsualizarEdicion(supabase: any, params: EditarMovimientoParams) {
+  if (!TIPOS_EDITABLES.includes(params.tipo)) {
+    throw new OperacionError(
+      `Solo se pueden editar egresos, donaciones y ventas externas. El monto de un abono se corrige desde el detalle de la cuenta.`
+    )
+  }
+
+  const { data, error, fecha, monto } = await leerMovimiento(supabase, params.tipo, params.movimientoId)
+  if (error || !data) throw new OperacionError("No encontre ese movimiento.")
+  if (esAnulado(data)) throw new OperacionError("Ese movimiento esta anulado; no se puede editar.")
+
+  // El periodo debe estar abierto tanto para la fecha actual como para la nueva.
+  const periodoActual = await assertFechaEditable(supabase, fecha, "Editar el movimiento")
+  if (periodoActual) throw new OperacionError(periodoActual)
+
+  if (params.fecha && params.fecha !== fecha) {
+    const periodoNuevo = await assertFechaEditable(supabase, params.fecha, "Mover el movimiento a esa fecha")
+    if (periodoNuevo) throw new OperacionError(periodoNuevo)
+  }
+
+  if (params.monto !== undefined && (!Number.isFinite(params.monto) || params.monto <= 0)) {
+    throw new OperacionError("El monto debe ser mayor a 0.")
+  }
+
+  const cambios: Record<string, { antes: unknown; despues: unknown }> = {}
+  if (params.monto !== undefined && params.monto !== monto) cambios.monto = { antes: monto, despues: params.monto }
+  if (params.fecha && params.fecha !== fecha) cambios.fecha = { antes: fecha, despues: params.fecha }
+  if (params.concepto !== undefined && params.concepto !== (data as any).concepto) {
+    cambios.concepto = { antes: (data as any).concepto, despues: params.concepto }
+  }
+  if (params.notas !== undefined && params.notas !== (data as any).notas) {
+    cambios.notas = { antes: (data as any).notas, despues: params.notas }
+  }
+
+  if (Object.keys(cambios).length === 0) throw new OperacionError("No indicaste ningun cambio.")
+
+  return {
+    tipo: params.tipo,
+    movimientoId: params.movimientoId,
+    descripcion: describir(params.tipo, data),
+    montoActual: monto,
+    cambios,
+  }
+}
+
+export async function editarMovimiento(
+  supabase: any,
+  actor: ActorErp,
+  params: EditarMovimientoParams
+) {
+  const v = await previsualizarEdicion(supabase, params)
+  const tabla = TABLA_POR_TIPO[params.tipo]
+
+  const payload: Record<string, unknown> = {}
+  if (params.monto !== undefined) payload.monto = params.monto
+  if (params.fecha !== undefined) payload.fecha = params.fecha
+  if (params.notas !== undefined) payload.notas = params.notas
+  if (params.concepto !== undefined) payload.concepto = params.concepto
+
+  const { error } = await supabase.from(tabla).update(payload).eq("id", params.movimientoId)
+  if (error) throw new OperacionError(error.message || "No se pudo editar el movimiento.")
+
+  const { error: auditError } = await supabase.from("auditoria_financiera").insert([
+    {
+      tabla_afectada: tabla,
+      registro_id: params.movimientoId,
+      usuario_id: actor.userId || "",
+      accion: "edicion_movimiento",
+      valor_anterior: v.montoActual,
+      valor_nuevo: params.monto ?? v.montoActual,
+      motivo: "Edicion solicitada por el usuario.",
+    },
+  ])
+  if (auditError) {
+    console.error("[operaciones] no se pudo auditar la edicion", { tabla, code: auditError.code })
+  }
+
+  return { tipo: params.tipo, movimientoId: params.movimientoId, cambios: v.cambios }
+}
