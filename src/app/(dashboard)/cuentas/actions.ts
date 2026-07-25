@@ -15,6 +15,7 @@ import {
 import { requireAdmin, requireRoles } from "@/lib/utils/authz"
 import { assertFechaEditable } from "@/lib/utils/periodos"
 import { fechaHoyBogota } from "@/lib/utils/fechas"
+import { registrarAbono } from "@/lib/operaciones/abonos"
 
 export type ActionState = { error?: string; success?: boolean } | null
 
@@ -255,101 +256,20 @@ export async function saveAbono(
   formData: FormData
 ): Promise<ActionState> {
   try {
-    const { supabase, user } = await requireRoles(["admin", "caja"])
+    const { supabase, user, perfil } = await requireRoles(["admin", "caja"])
 
     const monto = toSafeNumber(formData.get("monto"))
     const metodo_pago = (formData.get("metodo_pago") as string) || null
     const fecha_pago = (formData.get("fecha_pago") as string) || fechaHoyBogota()
     const notas = ((formData.get("notas") as string) || "").trim() || null
 
-    if (monto <= 0) return { error: "El monto debe ser mayor a 0." }
-
-    const periodoError = await assertFechaEditable(supabase, fecha_pago, "Registrar el abono")
-    if (periodoError) return { error: periodoError }
-
-    const { data: cuenta, error: cuentaError } = await supabase
-      .from("cuentas_por_cobrar")
-      .select("valor_total, estado, asistente_id, pagos_abonos(id, monto, notas, estado, metodo_pago, origen_fondos)")
-      .eq("id", cuentaId)
-      .single()
-
-    if (cuentaError || !cuenta) return { error: "No se encontrÃ³ la cuenta." }
-
-    const pendiente = calcularPendienteCuenta(toSafeNumber(cuenta.valor_total), cuenta.pagos_abonos)
-    const montoAplicado = Math.min(monto, pendiente)
-    const excedente = Math.max(0, monto - montoAplicado)
-
-    let pagoId: string | null = null
-    let saldoFavorId: string | null = null
-
-    if (montoAplicado > 0) {
-      const { data: pagoInsertado, error: insertError } = await supabase
-        .from("pagos_abonos")
-        .insert([
-          {
-            cuenta_id: cuentaId,
-            monto: montoAplicado,
-            metodo_pago,
-            fecha_pago,
-            notas,
-            origen_fondos: "pago_directo",
-            usuario_id: user?.id || null,
-          },
-        ])
-        .select("id")
-        .single()
-
-      if (insertError || !pagoInsertado) return { error: insertError?.message || "No se pudo registrar el abono." }
-      pagoId = pagoInsertado.id
-    }
-
-    if (excedente > 0) {
-      const notaSaldo = pagoId
-        ? overflowNote(pagoId, "Saldo a favor generado por sobrepago del abono")
-        : `Saldo a favor generado por pago adicional sobre la cuenta ${cuentaId}`
-      const { data: saldoFavorInsertado, error: saldoFavorError } = await registrarMovimientoSaldoFavor(supabase, {
-        asistente_id: cuenta.asistente_id,
-        cuenta_id: cuentaId,
-        tipo: "ingreso",
-        monto: excedente,
-        metodo_pago,
-        fecha: fecha_pago,
-        notas: notaSaldo,
-        usuario_id: user?.id || null,
-      })
-
-      if (saldoFavorError || !saldoFavorInsertado) {
-        if (pagoId) {
-          await supabase.from("pagos_abonos").delete().eq("id", pagoId)
-        }
-        return { error: saldoFavorError?.message || "No se pudo registrar el saldo a favor del sobrepago." }
-      }
-      saldoFavorId = saldoFavorInsertado.id
-    }
-
-    const pagosActualizados =
-      montoAplicado > 0
-        ? [...(cuenta.pagos_abonos || []), { monto: montoAplicado, metodo_pago, origen_fondos: "pago_directo" }]
-        : cuenta.pagos_abonos || []
-    const nuevoEstado = calcularEstadoCuentaDesdePagos(toSafeNumber(cuenta.valor_total), pagosActualizados)
-
-    const { error: updateCuentaError } = await supabase.from("cuentas_por_cobrar").update({ estado: nuevoEstado }).eq("id", cuentaId)
-    if (updateCuentaError) {
-      if (saldoFavorId) await supabase.from("movimientos_saldo_favor").delete().eq("id", saldoFavorId)
-      if (pagoId) await supabase.from("pagos_abonos").delete().eq("id", pagoId)
-      return { error: "No se pudo consolidar el abono. Se revirtiÃ³ la operaciÃ³n para evitar inconsistencias." }
-    }
-
-    if (pagoId) {
-      await supabase
-        .from("auditoria_financiera")
-        .insert([buildAudit("pagos_abonos", pagoId, user?.id || "", "crear_abono", null, montoAplicado, notas || "Registro manual de abono")])
-    }
-    if (saldoFavorId) {
-      await supabase
-        .from("auditoria_financiera")
-        .insert([buildAudit("movimientos_saldo_favor", saldoFavorId, user?.id || "", "crear_saldo_favor_sobrepago", null, excedente, "Excedente de abono enviado a saldo a favor")])
-    }
+    // La logica contable vive en @/lib/operaciones/abonos para que la web y el
+    // MCP registren los pagos con exactamente las mismas reglas.
+    await registrarAbono(
+      supabase,
+      { userId: user?.id || "", role: perfil?.rol as "admin" | "caja" | undefined },
+      { cuentaId, monto, metodoPago: metodo_pago, fechaPago: fecha_pago, notas }
+    )
 
     revalidatePath("/cuentas")
     revalidatePath(`/cuentas/${cuentaId}`)
