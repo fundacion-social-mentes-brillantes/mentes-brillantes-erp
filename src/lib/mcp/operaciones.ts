@@ -20,6 +20,9 @@ export type OperacionEscritura =
   | "anticipo"
   | "aplicar_saldo_favor"
   | "sesion_coach"
+  | "persona"
+  | "editar_persona"
+  | "anular_movimiento"
 
 export type BorradorOperacion = {
   id: string

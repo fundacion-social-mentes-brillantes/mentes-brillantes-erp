@@ -16,6 +16,8 @@ import {
 } from "@/lib/operaciones/movimientos"
 import { aplicarSaldoAFavor, previsualizarAplicarSaldo, saldoFavorDisponible } from "@/lib/operaciones/saldo-favor"
 import { previsualizarSesionCoach, registrarSesionCoach } from "@/lib/operaciones/coach"
+import { TIPOS_ANULABLES, anularMovimiento, previsualizarAnulacion } from "@/lib/operaciones/anulaciones"
+import { crearPersona, editarPersona } from "@/lib/operaciones/personas"
 import { executeTool } from "./erp-tools"
 import { MCP_PRIMARY_SCOPE } from "./constants"
 import {
@@ -70,6 +72,8 @@ type DefinicionOperacion = {
   titulo: string
   descripcion: string
   roles: Rol[]
+  /** "destructiva" exige confirmacion reforzada al ejecutar. */
+  riesgo?: "crear" | "editar" | "destructiva"
   schema: Record<string, z.ZodTypeAny>
   previsualizar: (admin: any, actor: Actor, args: any) => Promise<Preparado>
   ejecutar: (admin: any, actor: Actor, datos: any) => Promise<Record<string, unknown>>
@@ -551,6 +555,132 @@ const OPERACIONES: DefinicionOperacion[] = [
       return { fecha: r.fecha, sesiones_restantes: r.restantesDespues }
     },
   },
+  {
+    nombre: "persona",
+    titulo: "Registrar una persona nueva",
+    descripcion:
+      "Da de alta a una persona (asistente) en el ERP. Necesario antes de poder cobrarle o registrarle pagos.",
+    roles: ["admin", "caja"],
+    riesgo: "crear",
+    schema: {
+      nombre: z.string().trim().min(3).max(160),
+      cedula: z.string().trim().max(40).optional(),
+      correo: z.string().trim().email().max(160).optional(),
+      telefono: z.string().trim().max(40).optional(),
+      codigo: z.string().trim().max(40).optional(),
+    },
+    previsualizar: async (admin, _actor, args) => {
+      const nombre = String(args.nombre).trim()
+      const datos = {
+        nombre,
+        cedula: args.cedula ? String(args.cedula).trim() : null,
+        correo: args.correo ? String(args.correo).trim() : null,
+        telefono: args.telefono ? String(args.telefono).trim() : null,
+        codigo: args.codigo ? String(args.codigo).trim() : null,
+      }
+
+      // Aviso de posible homonimo o alta repetida.
+      const { data: parecidos } = await admin
+        .from("asistentes")
+        .select("nombre, codigo")
+        .ilike("nombre", `%${nombre}%`)
+        .limit(5)
+
+      return {
+        datos,
+        resumen: `Registrar a ${nombre} como persona nueva`,
+        detalle: datos,
+        avisos: [
+          parecidos && parecidos.length
+            ? `Ya hay personas con nombre parecido: ${parecidos
+                .map((p: any) => `${p.nombre} (${p.codigo})`)
+                .join(", ")}. Verifica que no sea la misma.`
+            : null,
+        ],
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const r = await crearPersona(admin, { userId: actor.userId, role: actor.role }, d as any)
+      return { asistente_id: r.id, nombre: r.nombre, codigo: r.codigo }
+    },
+  },
+
+  {
+    nombre: "editar_persona",
+    titulo: "Editar los datos de una persona",
+    descripcion: "Corrige nombre, cedula, correo, telefono o codigo de una persona ya registrada.",
+    roles: ["admin", "caja"],
+    riesgo: "editar",
+    schema: {
+      persona: z.string().trim().min(2).max(160).describe("Persona a editar (nombre o codigo actual)"),
+      nombre: z.string().trim().min(3).max(160),
+      cedula: z.string().trim().max(40).optional(),
+      correo: z.string().trim().email().max(160).optional(),
+      telefono: z.string().trim().max(40).optional(),
+      codigo: z.string().trim().max(40).optional(),
+    },
+    previsualizar: async (admin, _actor, args) => {
+      const actual = await resolverPersona(admin, String(args.persona))
+      const datos = {
+        asistenteId: actual.id,
+        nombre: String(args.nombre).trim(),
+        cedula: args.cedula ? String(args.cedula).trim() : null,
+        correo: args.correo ? String(args.correo).trim() : null,
+        telefono: args.telefono ? String(args.telefono).trim() : null,
+        codigo: args.codigo ? String(args.codigo).trim() : null,
+      }
+      return {
+        datos,
+        resumen: `Actualizar los datos de ${actual.nombre}`,
+        detalle: {
+          antes: { nombre: actual.nombre, codigo: actual.codigo, cedula: actual.cedula ?? null },
+          despues: { nombre: datos.nombre, codigo: datos.codigo, cedula: datos.cedula },
+        },
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const { asistenteId, ...datos } = d as any
+      const r = await editarPersona(admin, { userId: actor.userId, role: actor.role }, asistenteId, datos)
+      return { asistente_id: r.id, nombre: r.nombre }
+    },
+  },
+
+  {
+    nombre: "anular_movimiento",
+    titulo: "Anular un movimiento",
+    descripcion:
+      "Marca como ANULADO un pago, egreso, donacion o venta externa mal registrado. No lo borra: queda el rastro. " +
+      "Es la forma correcta de corregir un error. Los pagos hechos con saldo a favor y los que generaron sobrepago " +
+      "no se pueden anular por aqui.",
+    roles: ["admin"],
+    riesgo: "destructiva",
+    schema: {
+      tipo: z.enum(TIPOS_ANULABLES),
+      movimiento_id: z.string().uuid().describe("Id del movimiento a anular"),
+    },
+    previsualizar: async (admin, _actor, args) => {
+      const datos = { tipo: String(args.tipo), movimientoId: String(args.movimiento_id) }
+      const previa = await previsualizarAnulacion(admin, datos as any)
+      return {
+        datos,
+        resumen: `ANULAR: ${previa.descripcion} por ${money(previa.monto)} del ${previa.fecha}`,
+        detalle: {
+          tipo: previa.tipo,
+          descripcion: previa.descripcion,
+          monto: previa.monto,
+          fecha: previa.fecha,
+          efecto: previa.efecto,
+        },
+        avisos: [
+          "Esta operacion cambia cifras ya registradas. Confirma con el usuario que es el movimiento correcto.",
+        ],
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const r = await anularMovimiento(admin, { userId: actor.userId, role: actor.role }, d as any)
+      return { anulado: r.tipo, movimiento_id: r.movimientoId, monto_anulado: r.montoAnulado }
+    },
+  },
 ]
 
 const POR_NOMBRE = new Map(OPERACIONES.map((o) => [o.nombre, o]))
@@ -614,13 +744,20 @@ export function registerEscrituraTools(server: McpServer) {
           )
         }
 
+        const destructiva = op.riesgo === "destructiva"
+
         return {
           status: "borrador",
           confirmacion_id: borrador.id,
           caduca_en_minutos: TTL_BORRADOR_MINUTOS,
-          instruccion_para_el_asistente:
-            "Muestra este resumen al usuario y pide su aprobacion explicita. Solo si responde que si, llama a " +
-            "confirmar_operacion con confirmacion_id. No inventes datos que no esten aqui.",
+          requiere_confirmacion_reforzada: destructiva || undefined,
+          instruccion_para_el_asistente: destructiva
+            ? "OPERACION DELICADA: cambia cifras ya registradas. Muestra el resumen, explica el efecto y pide una " +
+              "aprobacion INEQUIVOCA (que el usuario diga claramente que si a ESTA operacion concreta). Solo entonces " +
+              "llama a confirmar_operacion pasando ademas confirmacion_reforzada: \"CONFIRMO\". Si el usuario duda, " +
+              "corrige algo o no responde con claridad, usa cancelar_operacion."
+            : "Muestra este resumen al usuario y pide su aprobacion explicita. Solo si responde que si, llama a " +
+              "confirmar_operacion con confirmacion_id. No inventes datos que no esten aqui.",
           resumen: preparado.resumen,
           detalle: preparado.detalle,
           avisos: avisos.length ? avisos : null,
@@ -635,7 +772,13 @@ export function registerEscrituraTools(server: McpServer) {
     "Confirmar una operacion preparada",
     "Paso 2 de 2. ESCRIBE en la contabilidad la operacion preparada. Llamala UNICAMENTE despues de que el usuario " +
       "haya aprobado explicitamente el resumen. Cada confirmacion sirve una sola vez.",
-    { confirmacion_id: z.string().uuid().describe("El id devuelto por una herramienta preparar_*") },
+    {
+      confirmacion_id: z.string().uuid().describe("El id devuelto por una herramienta preparar_*"),
+      confirmacion_reforzada: z
+        .literal("CONFIRMO")
+        .optional()
+        .describe("Obligatorio en operaciones delicadas (anular, eliminar, revertir)."),
+    },
     ANOTACIONES_ESCRITURA,
     async (admin, actor, args) => {
       const borrador = await reclamarBorrador(admin, {
@@ -647,6 +790,15 @@ export function registerEscrituraTools(server: McpServer) {
       if (!op) {
         await marcarFallido(admin, borrador.id, "operacion desconocida")
         throw new OperacionMcpError(`Operacion no soportada: ${borrador.operacion}`)
+      }
+
+      // Segundo cerrojo para lo que cambia cifras ya registradas.
+      if (op.riesgo === "destructiva" && args.confirmacion_reforzada !== "CONFIRMO") {
+        await marcarFallido(admin, borrador.id, "falto la confirmacion reforzada")
+        throw new OperacionMcpError(
+          "Esta operacion es delicada y necesita confirmacion reforzada. Verifica con el usuario que quiere " +
+            'hacerla y vuelve a prepararla, confirmando con confirmacion_reforzada: "CONFIRMO".'
+        )
       }
 
       try {
