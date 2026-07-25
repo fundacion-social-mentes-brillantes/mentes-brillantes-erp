@@ -202,6 +202,13 @@ export type CrearCuentaParams = {
   concepto: string
   valorTotal: number
   fechaEmision: string
+  /**
+   * Si se indica, la cuenta es un paquete coach y se crea tambien su
+   * `coach_paquetes` con ese numero de sesiones. Sin el paquete no habria
+   * contra que descontar las sesiones dictadas, que es justo lo que hace la
+   * web al marcar la cuenta como tipo coach.
+   */
+  sesionesCoach?: number | null
 }
 
 /**
@@ -235,8 +242,25 @@ export async function crearCuenta(supabase: any, actor: ActorErp, params: CrearC
 
   if (error || !data) throw new OperacionError(error?.message || "No se pudo crear la cuenta.")
 
+  let paqueteId: string | null = null
+  const sesiones = Number(params.sesionesCoach || 0)
+  if (sesiones > 0) {
+    const { data: paquete, error: errorPaquete } = await supabase
+      .from("coach_paquetes")
+      .insert([{ asistente_id: params.asistenteId, cuenta_id: data.id, sesiones_compradas: sesiones }])
+      .select("id")
+      .single()
+
+    if (errorPaquete || !paquete) {
+      // Sin paquete la cuenta coach queda coja: se deshace para no dejarla a medias.
+      await supabase.from("cuentas_por_cobrar").delete().eq("id", data.id)
+      throw new OperacionError(errorPaquete?.message || "No se pudo crear el paquete coach asociado.")
+    }
+    paqueteId = paquete.id
+  }
+
   await auditar(supabase, "cuentas_por_cobrar", data.id, actor, "crear_cuenta", valorTotal, concepto, "Creación de cuenta")
-  return { id: data.id as string, concepto, valorTotal, fechaEmision }
+  return { id: data.id as string, concepto, valorTotal, fechaEmision, paqueteId, sesionesCoach: sesiones || null }
 }
 
 // --------------------------------------------------------------- anticipos

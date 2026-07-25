@@ -295,6 +295,13 @@ const OPERACIONES: DefinicionOperacion[] = [
       concepto: z.string().trim().min(2).max(160),
       valor_total: z.number().positive().max(100_000_000),
       fecha_emision: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      sesiones_coach: z
+        .number()
+        .int()
+        .positive()
+        .max(60)
+        .optional()
+        .describe("Si es una cuenta de sesiones coach, cuantas incluye (normalmente 1). Crea el paquete para poder descontarlas."),
     },
     previsualizar: async (admin, _actor, args) => {
       exigirMontoPositivo(args.valor_total, "El valor de la cuenta")
@@ -304,10 +311,13 @@ const OPERACIONES: DefinicionOperacion[] = [
         concepto: String(args.concepto).trim(),
         valorTotal: Number(args.valor_total),
         fechaEmision: String(args.fecha_emision || fechaHoyBogota()),
+        sesionesCoach: args.sesiones_coach ? Number(args.sesiones_coach) : null,
       }
       return {
         datos,
-        resumen: `Crear cuenta "${datos.concepto}" por ${money(datos.valorTotal)} a ${persona.nombre}`,
+        resumen:
+          `Crear cuenta "${datos.concepto}" por ${money(datos.valorTotal)} a ${persona.nombre}` +
+          (datos.sesionesCoach ? ` (paquete de ${datos.sesionesCoach} sesión/es coach)` : ""),
         detalle: {
           persona: persona.nombre,
           codigo: persona.codigo,
@@ -315,12 +325,15 @@ const OPERACIONES: DefinicionOperacion[] = [
           valor_total: datos.valorTotal,
           fecha_emision: datos.fechaEmision,
           estado_inicial: "pendiente",
+          paquete_coach: datos.sesionesCoach
+            ? `Se crea con ${datos.sesionesCoach} sesión/es, para poder descontarlas después.`
+            : "No (cuenta normal)",
         },
       }
     },
     ejecutar: async (admin, actor, d) => {
       const r = await crearCuenta(admin, { userId: actor.userId, role: actor.role }, d as any)
-      return { cuenta_id: r.id, concepto: r.concepto, valor_total: r.valorTotal }
+      return { cuenta_id: r.id, concepto: r.concepto, valor_total: r.valorTotal, paquete_coach_id: r.paqueteId }
     },
   },
 
