@@ -33,6 +33,13 @@ export type OperacionEscritura =
   | "eliminar_sesion_coach"
   | "revertir_abono"
   | "revertir_anticipo"
+  | "socio"
+  | "editar_socio"
+  | "estado_socio_activo"
+  | "periodo"
+  | "fecha_fin_periodo"
+  | "adelanto_socio"
+  | "cerrar_liquidacion"
 
 export type BorradorOperacion = {
   id: string

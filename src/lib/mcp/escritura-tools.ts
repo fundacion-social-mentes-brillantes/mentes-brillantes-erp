@@ -54,6 +54,21 @@ import {
   previsualizarEdicionValorCuenta,
   previsualizarEliminacionCuenta,
 } from "@/lib/operaciones/cuentas"
+import {
+  buscarSocio,
+  cambiarEstadoSocio,
+  cerrarLiquidacion,
+  crearAdelanto,
+  crearPeriodo,
+  crearSocio,
+  cambiarFechaFinPeriodo,
+  editarSocio,
+  porcentajeTotalSocios,
+  validarAdelanto,
+  validarCambioFechaFin,
+  validarCierreLiquidacion,
+  validarPeriodoNuevo,
+} from "@/lib/operaciones/administracion"
 import { executeTool } from "./erp-tools"
 import { MCP_PRIMARY_SCOPE } from "./constants"
 import {
@@ -1050,6 +1065,250 @@ const OPERACIONES: DefinicionOperacion[] = [
     ejecutar: async (admin, actor, d) => {
       const r = await revertirAnticipo(admin, { userId: actor.userId, role: actor.role }, d as any)
       return { anticipo_id: r.anticipoId, monto_revertido: r.montoRevertido, saldo_despues: r.saldoDespues }
+    },
+  },
+
+  {
+    nombre: "socio",
+    titulo: "Registrar un socio",
+    descripcion: "Da de alta un socio con su porcentaje de participacion en las liquidaciones.",
+    roles: ["admin"],
+    riesgo: "crear",
+    schema: {
+      nombre: z.string().trim().min(3).max(160),
+      porcentaje: z.number().min(0).max(100),
+    },
+    previsualizar: async (admin, _actor, args) => {
+      const datos = { nombre: String(args.nombre).trim(), porcentaje: Number(args.porcentaje) }
+      const totalActual = await porcentajeTotalSocios(admin)
+      const total = totalActual + datos.porcentaje
+      return {
+        datos,
+        resumen: `Registrar al socio ${datos.nombre} con ${datos.porcentaje}% de participacion`,
+        detalle: {
+          nombre: datos.nombre,
+          porcentaje: datos.porcentaje,
+          porcentaje_actual_de_socios_activos: totalActual,
+          porcentaje_total_quedaria: total,
+        },
+        avisos: [total > 100 ? `OJO: la suma de participaciones quedaria en ${total}%, por encima de 100%.` : null],
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const r = await crearSocio(admin, { userId: actor.userId, role: actor.role }, d as any)
+      return { socio_id: r.id, nombre: r.nombre, porcentaje: r.porcentaje }
+    },
+  },
+
+  {
+    nombre: "editar_socio",
+    titulo: "Editar un socio",
+    descripcion: "Cambia el nombre o el porcentaje de participacion de un socio.",
+    roles: ["admin"],
+    riesgo: "destructiva",
+    schema: {
+      socio: z.string().trim().min(2).max(160).describe("Nombre actual del socio"),
+      nombre: z.string().trim().min(3).max(160),
+      porcentaje: z.number().min(0).max(100),
+    },
+    previsualizar: async (admin, _actor, args) => {
+      const socio = await buscarSocio(admin, String(args.socio))
+      const datos = { socioId: socio.id, nombre: String(args.nombre).trim(), porcentaje: Number(args.porcentaje) }
+      const totalOtros = await porcentajeTotalSocios(admin, socio.id)
+      const total = totalOtros + datos.porcentaje
+      return {
+        datos,
+        resumen: `Editar al socio ${socio.nombre}: ${socio.porcentaje_participacion}% -> ${datos.porcentaje}%`,
+        detalle: {
+          antes: { nombre: socio.nombre, porcentaje: socio.porcentaje_participacion },
+          despues: { nombre: datos.nombre, porcentaje: datos.porcentaje },
+          porcentaje_total_quedaria: total,
+        },
+        avisos: [
+          total > 100 ? `OJO: la suma de participaciones quedaria en ${total}%, por encima de 100%.` : null,
+          "Cambia como se reparte el dinero en las proximas liquidaciones.",
+        ],
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const { socioId, ...datos } = d as any
+      const r = await editarSocio(admin, { userId: actor.userId, role: actor.role }, socioId, datos)
+      return { socio_id: r.id, nombre: r.nombre, porcentaje: r.porcentaje }
+    },
+  },
+
+  {
+    nombre: "estado_socio_activo",
+    titulo: "Activar o desactivar un socio",
+    descripcion:
+      "Marca un socio como activo o inactivo. Un socio inactivo deja de recibir reparto en las liquidaciones.",
+    roles: ["admin"],
+    riesgo: "destructiva",
+    schema: {
+      socio: z.string().trim().min(2).max(160),
+      activo: z.boolean(),
+    },
+    previsualizar: async (admin, _actor, args) => {
+      const socio = await buscarSocio(admin, String(args.socio))
+      const activo = Boolean(args.activo)
+      return {
+        datos: { socioId: socio.id, activo },
+        resumen: `${activo ? "Activar" : "Desactivar"} al socio ${socio.nombre}`,
+        detalle: { socio: socio.nombre, porcentaje: socio.porcentaje_participacion, quedara: activo ? "activo" : "inactivo" },
+        avisos: [!activo ? "Un socio inactivo NO recibe reparto al cerrar la liquidacion." : null],
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const r = await cambiarEstadoSocio(
+        admin,
+        { userId: actor.userId, role: actor.role },
+        String((d as any).socioId),
+        Boolean((d as any).activo)
+      )
+      return { socio_id: r.id, activo: r.activo }
+    },
+  },
+
+  {
+    nombre: "periodo",
+    titulo: "Abrir un periodo contable",
+    descripcion:
+      "Crea un periodo (quincena) nuevo. Solo puede haber UN periodo abierto a la vez y no puede solaparse con otro.",
+    roles: ["admin"],
+    riesgo: "crear",
+    schema: {
+      nombre: z.string().trim().min(3).max(120),
+      fecha_inicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      fecha_fin: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    },
+    previsualizar: async (admin, _actor, args) => {
+      const datos = {
+        nombre: String(args.nombre).trim(),
+        fechaInicio: String(args.fecha_inicio),
+        fechaFin: String(args.fecha_fin),
+      }
+      await validarPeriodoNuevo(admin, datos as any)
+      return {
+        datos,
+        resumen: `Abrir el periodo "${datos.nombre}" del ${datos.fechaInicio} al ${datos.fechaFin}`,
+        detalle: { nombre: datos.nombre, desde: datos.fechaInicio, hasta: datos.fechaFin, estado: "abierto" },
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const r = await crearPeriodo(admin, { userId: actor.userId, role: actor.role }, d as any)
+      return { periodo_id: r.id, nombre: r.nombre, desde: r.fechaInicio, hasta: r.fechaFin }
+    },
+  },
+
+  {
+    nombre: "fecha_fin_periodo",
+    titulo: "Mover la fecha de fin de un periodo",
+    descripcion:
+      "Alarga o acorta el periodo abierto. No puede solaparse con otro periodo ni dejar adelantos fuera del rango.",
+    roles: ["admin"],
+    riesgo: "destructiva",
+    schema: {
+      periodo_id: z.string().uuid(),
+      nueva_fecha_fin: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    },
+    previsualizar: async (admin, _actor, args) => {
+      const datos = { periodoId: String(args.periodo_id), nuevaFechaFin: String(args.nueva_fecha_fin) }
+      const v = await validarCambioFechaFin(admin, datos.periodoId, datos.nuevaFechaFin)
+      return {
+        datos,
+        resumen: `Mover el fin de "${v.periodo.nombre}": ${v.periodo.fecha_fin} -> ${v.fin}`,
+        detalle: { periodo: v.periodo.nombre, desde: v.periodo.fecha_inicio, fin_antes: v.periodo.fecha_fin, fin_despues: v.fin },
+        avisos: ["Cambia que movimientos entran en la liquidacion de este periodo."],
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const r = await cambiarFechaFinPeriodo(
+        admin,
+        { userId: actor.userId, role: actor.role },
+        String((d as any).periodoId),
+        String((d as any).nuevaFechaFin)
+      )
+      return { periodo_id: r.periodoId, nombre: r.nombre, fin_antes: r.fechaFinAntes, fin_despues: r.fechaFinDespues }
+    },
+  },
+
+  {
+    nombre: "adelanto_socio",
+    titulo: "Registrar un adelanto a un socio",
+    descripcion:
+      "Registra dinero entregado a un socio a cuenta de su liquidacion. La fecha debe caer dentro del periodo abierto.",
+    roles: ["admin"],
+    riesgo: "crear",
+    schema: {
+      periodo_id: z.string().uuid(),
+      socio: z.string().trim().min(2).max(160),
+      monto: z.number().positive().max(100_000_000),
+      fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      metodo_pago: z.enum(METODOS_PAGO).optional(),
+      notas: z.string().trim().max(300).optional(),
+    },
+    previsualizar: async (admin, _actor, args) => {
+      exigirMontoPositivo(args.monto)
+      const socio = await buscarSocio(admin, String(args.socio))
+      const datos = {
+        periodoId: String(args.periodo_id),
+        socioId: socio.id,
+        monto: Number(args.monto),
+        fecha: String(args.fecha),
+        metodoPago: args.metodo_pago ? String(args.metodo_pago) : "otro",
+        notas: args.notas ? String(args.notas) : null,
+      }
+      const v = await validarAdelanto(admin, datos as any)
+      return {
+        datos,
+        resumen: `Registrar adelanto de ${money(v.monto)} al socio ${socio.nombre} (${v.fecha})`,
+        detalle: {
+          socio: socio.nombre,
+          monto: v.monto,
+          fecha: v.fecha,
+          periodo: v.periodo.nombre,
+          metodo_pago: datos.metodoPago,
+        },
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const r = await crearAdelanto(admin, { userId: actor.userId, role: actor.role }, d as any)
+      return { adelanto_id: r.id, monto: r.monto, fecha: r.fecha, periodo: r.periodo }
+    },
+  },
+
+  {
+    nombre: "cerrar_liquidacion",
+    titulo: "Cerrar la liquidacion de un periodo",
+    descripcion:
+      "Congela los resultados del periodo (reparto por socio y totales por metodo de pago) y lo marca como CERRADO. " +
+      "Desde ese momento ninguna fecha dentro del periodo admite cambios y la aplicacion NO permite reabrirlo. " +
+      "Es la operacion mas delicada del sistema.",
+    roles: ["admin"],
+    riesgo: "destructiva",
+    schema: { periodo_id: z.string().uuid() },
+    previsualizar: async (admin, _actor, args) => {
+      const datos = { periodoId: String(args.periodo_id) }
+      const periodo = await validarCierreLiquidacion(admin, datos.periodoId)
+      return {
+        datos,
+        resumen: `CERRAR la liquidacion del periodo "${periodo.nombre}" (${periodo.fecha_inicio} a ${periodo.fecha_fin})`,
+        detalle: {
+          periodo: periodo.nombre,
+          desde: periodo.fecha_inicio,
+          hasta: periodo.fecha_fin,
+          efecto:
+            "Se congela el reparto por socio y los totales por metodo de pago; el periodo queda CERRADO.",
+        },
+        avisos: [
+          "IRREVERSIBLE desde la aplicacion: despues de cerrar no se puede registrar ni corregir NADA con fecha " +
+            "dentro de este periodo, y no hay opcion de reabrirlo. Asegurate de que todo este registrado antes.",
+        ],
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const r = await cerrarLiquidacion(admin, { userId: actor.userId, role: actor.role }, String((d as any).periodoId))
+      return { periodo_id: r.periodoId, nombre: r.nombre, desde: r.fechaInicio, hasta: r.fechaFin }
     },
   },
 
