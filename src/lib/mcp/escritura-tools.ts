@@ -181,7 +181,9 @@ async function cuentasPendientesDe(admin: any, asistenteId: string) {
 
 // ------------------------------------------------------------- operaciones
 
-const OPERACIONES: DefinicionOperacion[] = [
+// Exportado para que las pruebas puedan comprobar que los permisos del MCP
+// coinciden EXACTAMENTE con los del ERP por navegador.
+export const OPERACIONES: DefinicionOperacion[] = [
   {
     nombre: "registrar_pago",
     titulo: "Registrar un pago o abono",
