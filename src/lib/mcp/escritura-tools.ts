@@ -191,7 +191,7 @@ const OPERACIONES: DefinicionOperacion[] = [
     roles: ["admin", "caja"],
     schema: {
       persona: z.string().trim().min(1).max(160).describe("Nombre o codigo de quien paga"),
-      monto: z.number().positive().max(100_000_000),
+      monto: z.coerce.number().positive().max(100_000_000),
       metodo_pago: z.enum(METODOS_PAGO),
       cuenta_id: z.string().uuid().optional().describe("Id de la cuenta; si se omite se busca por concepto"),
       concepto: z.string().trim().max(160).optional().describe("Concepto de la cuenta a abonar"),
@@ -293,7 +293,7 @@ const OPERACIONES: DefinicionOperacion[] = [
     schema: {
       persona: z.string().trim().min(1).max(160),
       concepto: z.string().trim().min(2).max(160),
-      valor_total: z.number().positive().max(100_000_000),
+      valor_total: z.coerce.number().positive().max(100_000_000),
       fecha_emision: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       sesiones_coach: z
         .number()
@@ -344,7 +344,7 @@ const OPERACIONES: DefinicionOperacion[] = [
     roles: ["admin"],
     schema: {
       concepto: z.string().trim().min(2).max(200),
-      monto: z.number().positive().max(100_000_000),
+      monto: z.coerce.number().positive().max(100_000_000),
       categoria: z.enum(CATEGORIAS_EGRESO),
       metodo_pago: z.enum(METODOS_PAGO),
       fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -390,7 +390,7 @@ const OPERACIONES: DefinicionOperacion[] = [
     roles: ["admin", "caja"],
     schema: {
       concepto: z.string().trim().min(2).max(200),
-      monto: z.number().positive().max(100_000_000),
+      monto: z.coerce.number().positive().max(100_000_000),
       metodo_pago: z.enum(METODOS_PAGO),
       comprador_nombre: z.string().trim().max(160).optional(),
       fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -433,7 +433,7 @@ const OPERACIONES: DefinicionOperacion[] = [
     roles: ["admin", "caja"],
     schema: {
       persona: z.string().trim().min(1).max(160),
-      monto: z.number().positive().max(100_000_000),
+      monto: z.coerce.number().positive().max(100_000_000),
       metodo_pago: z.enum(METODOS_PAGO),
       fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       notas: z.string().trim().max(300).optional(),
@@ -473,7 +473,7 @@ const OPERACIONES: DefinicionOperacion[] = [
     roles: ["admin", "caja"],
     schema: {
       persona: z.string().trim().min(1).max(160),
-      monto: z.number().positive().max(100_000_000),
+      monto: z.coerce.number().positive().max(100_000_000),
       metodo_pago: z.enum(METODOS_PAGO),
       fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       notas: z.string().trim().max(300).optional(),
@@ -514,7 +514,7 @@ const OPERACIONES: DefinicionOperacion[] = [
     roles: ["admin", "caja"],
     schema: {
       persona: z.string().trim().min(1).max(160),
-      monto: z.number().positive().max(100_000_000),
+      monto: z.coerce.number().positive().max(100_000_000),
       cuenta_id: z.string().uuid().optional().describe("Cuenta a la que se aplica; si se omite se busca por concepto"),
       concepto: z.string().trim().max(160).optional(),
     },
@@ -797,7 +797,7 @@ const OPERACIONES: DefinicionOperacion[] = [
     schema: {
       tipo: z.enum(TIPOS_EDITABLES),
       movimiento_id: z.string().uuid(),
-      monto: z.number().positive().max(100_000_000).optional(),
+      monto: z.coerce.number().positive().max(100_000_000).optional(),
       fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       concepto: z.string().trim().min(2).max(200).optional(),
       notas: z.string().trim().max(300).optional(),
@@ -836,7 +836,7 @@ const OPERACIONES: DefinicionOperacion[] = [
     riesgo: "destructiva",
     schema: {
       cuenta_id: z.string().uuid(),
-      valor_nuevo: z.number().min(0).max(100_000_000),
+      valor_nuevo: z.coerce.number().min(0).max(100_000_000),
       motivo: z.string().trim().max(300).optional(),
     },
     previsualizar: async (admin, _actor, args) => {
@@ -1093,7 +1093,7 @@ const OPERACIONES: DefinicionOperacion[] = [
     riesgo: "crear",
     schema: {
       nombre: z.string().trim().min(3).max(160),
-      porcentaje: z.number().min(0).max(100),
+      porcentaje: z.coerce.number().min(0).max(100),
     },
     previsualizar: async (admin, _actor, args) => {
       const datos = { nombre: String(args.nombre).trim(), porcentaje: Number(args.porcentaje) }
@@ -1126,7 +1126,7 @@ const OPERACIONES: DefinicionOperacion[] = [
     schema: {
       socio: z.string().trim().min(2).max(160).describe("Nombre actual del socio"),
       nombre: z.string().trim().min(3).max(160),
-      porcentaje: z.number().min(0).max(100),
+      porcentaje: z.coerce.number().min(0).max(100),
     },
     previsualizar: async (admin, _actor, args) => {
       const socio = await buscarSocio(admin, String(args.socio))
@@ -1259,7 +1259,7 @@ const OPERACIONES: DefinicionOperacion[] = [
     schema: {
       periodo_id: z.string().uuid(),
       socio: z.string().trim().min(2).max(160),
-      monto: z.number().positive().max(100_000_000),
+      monto: z.coerce.number().positive().max(100_000_000),
       fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       metodo_pago: z.enum(METODOS_PAGO).optional(),
       notas: z.string().trim().max(300).optional(),
@@ -1341,7 +1341,7 @@ const OPERACIONES: DefinicionOperacion[] = [
     schema: {
       cuenta_id: z.string().uuid(),
       abono_id: z.string().uuid(),
-      monto_nuevo: z.number().positive().max(100_000_000),
+      monto_nuevo: z.coerce.number().positive().max(100_000_000),
     },
     previsualizar: async (admin, _actor, args) => {
       const datos = {

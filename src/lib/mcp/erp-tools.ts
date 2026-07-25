@@ -301,7 +301,7 @@ function registerPersonTool(
     description,
     {
       persona: z.string().trim().min(1).max(160).describe("Nombre o código de la persona"),
-      limite: z.number().int().positive().max(100).optional(),
+      limite: z.coerce.number().int().positive().max(100).optional(),
     },
     async (supabase, args) => {
       const resolved = await resolvePerson(supabase, String(args.persona || ""))
@@ -508,7 +508,7 @@ export function registerErpTools(server: McpServer) {
     "Personas que compraron o iniciaron un concepto o producto.",
     {
       concepto: z.string().trim().min(2).max(160),
-      limite: z.number().int().positive().max(500).optional(),
+      limite: z.coerce.number().int().positive().max(500).optional(),
     },
     (s, args) => getConceptBuyers(s, String(args.concepto), args.limite || 500)
   )
@@ -517,7 +517,7 @@ export function registerErpTools(server: McpServer) {
     "cartera_pendiente",
     "Cartera pendiente",
     "Total por cobrar, personas con deuda y mayores saldos; informa si el resultado está truncado.",
-    { limite: z.number().int().positive().max(500).optional() },
+    { limite: z.coerce.number().int().positive().max(500).optional() },
     (s, args) => getOpenReceivablesSummary(s, args.limite || 500)
   )
   register(server, "conteos", "Conteos del ERP", "Asistentes activos/totales y cuentas pendientes.", {}, (s) => getCounts(s))
@@ -527,8 +527,8 @@ export function registerErpTools(server: McpServer) {
     "Cambios pendientes de revisar en la agenda",
     "Compara la agenda de la familia con lo registrado en el ERP y devuelve lo que hay que revisar: sesiones que ya pasaron y no estan registradas, sesiones que movieron de fecha, eventos borrados cuya sesion si esta cobrada, y personas que estan en la agenda pero no en el ERP. Solo informa: no cambia nada.",
     {
-      dias_atras: z.number().int().positive().max(180).optional().describe("Cuantos dias hacia atras revisar (por defecto 45)"),
-      dias_adelante: z.number().int().min(0).max(180).optional().describe("Cuantos dias hacia adelante revisar (por defecto 15)"),
+      dias_atras: z.coerce.number().int().positive().max(180).optional().describe("Cuantos dias hacia atras revisar (por defecto 45)"),
+      dias_adelante: z.coerce.number().int().min(0).max(180).optional().describe("Cuantos dias hacia adelante revisar (por defecto 15)"),
     },
     async (s, args) => {
       const atras = args.dias_atras || 45
@@ -563,7 +563,7 @@ export function registerErpTools(server: McpServer) {
     "Últimos movimientos registrados",
     "Historial general: lo ultimo que se registro en TODO el ERP (pagos, egresos, donaciones, ventas externas, cuentas y saldo a favor), de lo mas reciente a lo mas antiguo. Usala para responder \"¿donde voy?\" o \"¿que se registro ultimamente?\".",
     {
-      limite: z.number().int().positive().max(100).optional(),
+      limite: z.coerce.number().int().positive().max(100).optional(),
       tipo: z
         .enum(["abono", "egreso", "donacion", "venta_externa", "cuenta_cobrar", "anticipo", "aplicacion_saldo"])
         .optional()
