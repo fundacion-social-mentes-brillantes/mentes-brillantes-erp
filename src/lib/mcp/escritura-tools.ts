@@ -295,7 +295,7 @@ const OPERACIONES: DefinicionOperacion[] = [
       concepto: z.string().trim().min(2).max(160),
       valor_total: z.coerce.number().positive().max(100_000_000),
       fecha_emision: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-      sesiones_coach: z
+      sesiones_coach: z.coerce
         .number()
         .int()
         .positive()
