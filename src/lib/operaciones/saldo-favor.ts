@@ -128,3 +128,143 @@ export async function aplicarSaldoAFavor(supabase: any, actor: ActorErp, params:
     pendienteDespues: v.pendiente - v.seAplica,
   }
 }
+
+// ---------------------------------------------------------------- reversos
+
+/** Normalizacion COP a multiplos de 50 que usa el reverso de anticipos. */
+function normalizarCop(valor: number): number {
+  const base = Math.abs(Math.round(valor) - valor) <= 0.05 ? Math.round(valor) : Math.floor(valor)
+  return Math.floor(Math.max(base, 0) / 50) * 50
+}
+
+export type RevertirAbonoParams = { cuentaId: string; abonoId: string }
+
+async function validarReversoAbono(supabase: any, params: RevertirAbonoParams) {
+  const { data: abono, error } = await supabase
+    .from("pagos_abonos")
+    .select("cuenta_id, monto, estado, notas, origen_fondos, fecha_pago, cuentas_por_cobrar(concepto, asistentes(nombre))")
+    .eq("id", params.abonoId)
+    .single()
+
+  if (error || !abono) throw new OperacionError("No se encontró el abono a revertir.")
+  if (abono.cuenta_id !== params.cuentaId) throw new OperacionError("El abono no pertenece a la cuenta indicada.")
+  if (abono.estado === "anulado" || String(abono.notas || "").toUpperCase().includes("[ANULADO]")) {
+    throw new OperacionError("El abono ya esta anulado.")
+  }
+  if (String(abono.origen_fondos || "").toLowerCase() === "saldo_a_favor") {
+    throw new OperacionError("Este pago proviene de saldo a favor; no se revierte por este flujo.")
+  }
+
+  const periodoError = await assertFechaEditable(supabase, abono.fecha_pago, "Revertir el abono")
+  if (periodoError) throw new OperacionError(periodoError)
+
+  const cuenta = Array.isArray(abono.cuentas_por_cobrar) ? abono.cuentas_por_cobrar[0] : abono.cuentas_por_cobrar
+  const persona = cuenta ? (Array.isArray(cuenta.asistentes) ? cuenta.asistentes[0] : cuenta.asistentes) : null
+
+  return {
+    monto: toSafeNumber(abono.monto),
+    fecha: abono.fecha_pago as string,
+    concepto: cuenta?.concepto ?? null,
+    personaNombre: persona?.nombre ?? null,
+  }
+}
+
+export async function previsualizarReversoAbono(supabase: any, params: RevertirAbonoParams) {
+  const v = await validarReversoAbono(supabase, params)
+  return {
+    ...v,
+    efecto:
+      "El pago queda ANULADO y, si habia generado saldo a favor por sobrepago, ese saldo se revierte tambien. " +
+      "La deuda de la cuenta vuelve a subir.",
+  }
+}
+
+/**
+ * Reverso atomico de un abono que pudo generar sobrepago. Toda la operacion
+ * (anular el pago, anular el saldo generado e insertar el asiento
+ * compensatorio) ocurre dentro de una transaccion en Postgres.
+ */
+export async function revertirAbonoConSaldo(
+  supabase: any,
+  actor: ActorErp,
+  params: RevertirAbonoParams
+) {
+  const v = await validarReversoAbono(supabase, params)
+  if (!actor.userId) throw new OperacionError("No se puede revertir sin identificar al usuario.")
+
+  const { error } = await supabase.rpc("revertir_abono_con_saldo_trx", {
+    p_abono_id: params.abonoId,
+    p_cuenta_id: params.cuentaId,
+    p_usuario_id: actor.userId,
+  })
+  if (error) {
+    throw new OperacionError(error.message || "No se pudo revertir el abono. La operacion se revirtio por completo.")
+  }
+
+  return { abonoId: params.abonoId, montoRevertido: v.monto }
+}
+
+export type RevertirAnticipoParams = { asistenteId: string; anticipoId: string }
+
+async function validarReversoAnticipo(supabase: any, params: RevertirAnticipoParams) {
+  const { data: anticipo, error } = await supabase
+    .from("movimientos_saldo_favor")
+    .select("asistente_id, tipo, monto, fecha, notas")
+    .eq("id", params.anticipoId)
+    .single()
+
+  if (error || !anticipo) throw new OperacionError("No se pudo encontrar el anticipo a revertir.")
+  if (anticipo.asistente_id !== params.asistenteId) {
+    throw new OperacionError("El anticipo no pertenece a esta persona.")
+  }
+  if (anticipo.tipo !== "ingreso") {
+    throw new OperacionError("Solo se pueden revertir anticipos que representen ingreso real a saldo a favor.")
+  }
+  if (String(anticipo.notas || "").toUpperCase().includes("[ANULADO]")) {
+    throw new OperacionError("Este anticipo ya fue revertido anteriormente.")
+  }
+
+  const periodoError = await assertFechaEditable(supabase, anticipo.fecha, "Revertir el anticipo")
+  if (periodoError) throw new OperacionError(periodoError)
+
+  const monto = toSafeNumber(anticipo.monto)
+  const montoNormalizado = normalizarCop(monto)
+  const disponible = await saldoFavorDisponible(supabase, params.asistenteId)
+
+  if (normalizarCop(disponible) < montoNormalizado) {
+    throw new OperacionError(
+      "No se puede revertir este anticipo porque el saldo a favor disponible ya no alcanza. Parte o todo del anticipo ya fue consumido."
+    )
+  }
+
+  return { monto, montoNormalizado, disponible, fecha: anticipo.fecha as string }
+}
+
+export async function previsualizarReversoAnticipo(supabase: any, params: RevertirAnticipoParams) {
+  const v = await validarReversoAnticipo(supabase, params)
+  return {
+    ...v,
+    saldoDespues: v.disponible - v.montoNormalizado,
+    efecto: "El anticipo queda anulado y se descuenta del saldo a favor de la persona.",
+  }
+}
+
+export async function revertirAnticipo(
+  supabase: any,
+  actor: ActorErp,
+  params: RevertirAnticipoParams
+) {
+  const v = await validarReversoAnticipo(supabase, params)
+  if (!actor.userId) throw new OperacionError("No se puede revertir sin identificar al usuario.")
+
+  const { error } = await supabase.rpc("revertir_anticipo_trx", {
+    p_anticipo_id: params.anticipoId,
+    p_asistente_id: params.asistenteId,
+    p_usuario_id: actor.userId,
+  })
+  if (error) {
+    throw new OperacionError(error.message || "No se pudo revertir el anticipo. La operacion se revirtio por completo.")
+  }
+
+  return { anticipoId: params.anticipoId, montoRevertido: v.montoNormalizado, saldoDespues: v.disponible - v.montoNormalizado }
+}

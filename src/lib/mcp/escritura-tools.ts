@@ -14,7 +14,15 @@ import {
   crearEgreso,
   crearVentaExterna,
 } from "@/lib/operaciones/movimientos"
-import { aplicarSaldoAFavor, previsualizarAplicarSaldo, saldoFavorDisponible } from "@/lib/operaciones/saldo-favor"
+import {
+  aplicarSaldoAFavor,
+  previsualizarAplicarSaldo,
+  previsualizarReversoAbono,
+  previsualizarReversoAnticipo,
+  revertirAbonoConSaldo,
+  revertirAnticipo,
+  saldoFavorDisponible,
+} from "@/lib/operaciones/saldo-favor"
 import {
   editarSesionCoach,
   eliminarSesionCoach,
@@ -966,6 +974,82 @@ const OPERACIONES: DefinicionOperacion[] = [
     ejecutar: async (admin, actor, d) => {
       const r = await eliminarSesionCoach(admin, { userId: actor.userId, role: actor.role }, String((d as any).sesionId))
       return { sesion_id: r.sesionId, persona: r.personaNombre, fecha: r.fecha }
+    },
+  },
+
+  {
+    nombre: "revertir_abono",
+    titulo: "Revertir un abono con sobrepago",
+    descripcion:
+      "Anula un abono que genero saldo a favor por sobrepago, revirtiendo tambien ese saldo en una sola operacion " +
+      "atomica. Es el flujo correcto cuando anular_movimiento se niega por sobrepago.",
+    roles: ["admin"],
+    riesgo: "destructiva",
+    schema: {
+      cuenta_id: z.string().uuid(),
+      abono_id: z.string().uuid(),
+    },
+    previsualizar: async (admin, _actor, args) => {
+      const datos = { cuentaId: String(args.cuenta_id), abonoId: String(args.abono_id) }
+      const previa = await previsualizarReversoAbono(admin, datos as any)
+      return {
+        datos,
+        resumen:
+          `REVERTIR el abono de ${money(previa.monto)} de ${previa.personaNombre} ` +
+          `en "${previa.concepto}" (${previa.fecha})`,
+        detalle: {
+          persona: previa.personaNombre,
+          concepto: previa.concepto,
+          monto: previa.monto,
+          fecha: previa.fecha,
+          efecto: previa.efecto,
+        },
+        avisos: ["Revierte el pago Y el saldo a favor que genero. La deuda vuelve a subir."],
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const r = await revertirAbonoConSaldo(admin, { userId: actor.userId, role: actor.role }, d as any)
+      return { abono_id: r.abonoId, monto_revertido: r.montoRevertido }
+    },
+  },
+
+  {
+    nombre: "revertir_anticipo",
+    titulo: "Revertir un anticipo",
+    descripcion:
+      "Anula un anticipo (saldo a favor que la persona habia entregado) y lo descuenta de su saldo disponible. " +
+      "Solo procede si ese saldo no se ha consumido ya.",
+    roles: ["admin"],
+    riesgo: "destructiva",
+    schema: {
+      persona: z.string().trim().min(2).max(160),
+      anticipo_id: z.string().uuid(),
+    },
+    previsualizar: async (admin, _actor, args) => {
+      const persona = await resolverPersona(admin, String(args.persona))
+      const datos = { asistenteId: persona.id, anticipoId: String(args.anticipo_id) }
+      const previa = await previsualizarReversoAnticipo(admin, datos as any)
+      return {
+        datos,
+        resumen: `REVERTIR el anticipo de ${money(previa.monto)} de ${persona.nombre} (${previa.fecha})`,
+        detalle: {
+          persona: persona.nombre,
+          monto_original: previa.monto,
+          monto_que_se_revierte: previa.montoNormalizado,
+          saldo_disponible_antes: previa.disponible,
+          saldo_disponible_despues: previa.saldoDespues,
+          efecto: previa.efecto,
+        },
+        avisos: [
+          previa.montoNormalizado !== previa.monto
+            ? `El reverso se hace por ${money(previa.montoNormalizado)} (multiplo de 50), no por ${money(previa.monto)}.`
+            : null,
+        ],
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const r = await revertirAnticipo(admin, { userId: actor.userId, role: actor.role }, d as any)
+      return { anticipo_id: r.anticipoId, monto_revertido: r.montoRevertido, saldo_despues: r.saldoDespues }
     },
   },
 

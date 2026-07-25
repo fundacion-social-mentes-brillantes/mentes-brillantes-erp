@@ -31,6 +31,8 @@ export type OperacionEscritura =
   | "eliminar_persona"
   | "editar_sesion_coach"
   | "eliminar_sesion_coach"
+  | "revertir_abono"
+  | "revertir_anticipo"
 
 export type BorradorOperacion = {
   id: string
