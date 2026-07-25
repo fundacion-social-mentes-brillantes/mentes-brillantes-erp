@@ -223,8 +223,12 @@ export async function searchPerson(supabase: SupabaseReader, term: string, limit
 
   // Termino que es solo digitos y separadores (codigo o cedula, p. ej. "249" o
   // "1.234.567" que tras normalize queda "1 234 567"): busca por codigo/cedula.
+  // Cualquier termino que sea SOLO digitos se trata como codigo o cedula. Antes
+  // se exigian 3 digitos, lo que dejaba fuera a las 99 personas con codigo de 1
+  // o 2 cifras: buscarlas por su codigo no devolvia nada. La busqueda es por
+  // igualdad exacta, asi que admitir codigos cortos no amplia el resultado.
   const digitsOnly = normalized.replace(/\D/g, "")
-  if (digitsOnly.length >= 3 && /^[\d\s]+$/.test(normalized)) {
+  if (digitsOnly.length >= 1 && /^[\d\s]+$/.test(normalized)) {
     const filters = [`codigo.eq.${digitsOnly}`, `cedula.eq.${digitsOnly}`]
     if (digitsOnly.length >= 6) filters.push(`cedula.ilike.%${digitsOnly}%`)
     const { data, error } = await supabase

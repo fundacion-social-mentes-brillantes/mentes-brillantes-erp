@@ -298,7 +298,7 @@ function registerPersonTool(
     title,
     description,
     {
-      persona: z.string().trim().min(2).max(160).describe("Nombre o código de la persona"),
+      persona: z.string().trim().min(1).max(160).describe("Nombre o código de la persona"),
       limite: z.number().int().positive().max(100).optional(),
     },
     async (supabase, args) => {

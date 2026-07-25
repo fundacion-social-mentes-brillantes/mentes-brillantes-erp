@@ -190,7 +190,7 @@ const OPERACIONES: DefinicionOperacion[] = [
       "Si el pago supera lo pendiente, el excedente queda como saldo a favor.",
     roles: ["admin", "caja"],
     schema: {
-      persona: z.string().trim().min(2).max(160).describe("Nombre o codigo de quien paga"),
+      persona: z.string().trim().min(1).max(160).describe("Nombre o codigo de quien paga"),
       monto: z.number().positive().max(100_000_000),
       metodo_pago: z.enum(METODOS_PAGO),
       cuenta_id: z.string().uuid().optional().describe("Id de la cuenta; si se omite se busca por concepto"),
@@ -291,7 +291,7 @@ const OPERACIONES: DefinicionOperacion[] = [
       "Usala antes de registrar un pago cuando el concepto todavia no existe.",
     roles: ["admin", "caja"],
     schema: {
-      persona: z.string().trim().min(2).max(160),
+      persona: z.string().trim().min(1).max(160),
       concepto: z.string().trim().min(2).max(160),
       valor_total: z.number().positive().max(100_000_000),
       fecha_emision: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -419,7 +419,7 @@ const OPERACIONES: DefinicionOperacion[] = [
     descripcion: "Registra una donacion hecha por una persona del programa.",
     roles: ["admin", "caja"],
     schema: {
-      persona: z.string().trim().min(2).max(160),
+      persona: z.string().trim().min(1).max(160),
       monto: z.number().positive().max(100_000_000),
       metodo_pago: z.enum(METODOS_PAGO),
       fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -459,7 +459,7 @@ const OPERACIONES: DefinicionOperacion[] = [
       "Registra dinero que la persona entrega por adelantado y queda como saldo a favor suyo, para aplicarlo despues a sus cuentas.",
     roles: ["admin", "caja"],
     schema: {
-      persona: z.string().trim().min(2).max(160),
+      persona: z.string().trim().min(1).max(160),
       monto: z.number().positive().max(100_000_000),
       metodo_pago: z.enum(METODOS_PAGO),
       fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -500,7 +500,7 @@ const OPERACIONES: DefinicionOperacion[] = [
       "se consume el saldo existente.",
     roles: ["admin", "caja"],
     schema: {
-      persona: z.string().trim().min(2).max(160),
+      persona: z.string().trim().min(1).max(160),
       monto: z.number().positive().max(100_000_000),
       cuenta_id: z.string().uuid().optional().describe("Cuenta a la que se aplica; si se omite se busca por concepto"),
       concepto: z.string().trim().max(160).optional(),
@@ -576,7 +576,7 @@ const OPERACIONES: DefinicionOperacion[] = [
       "Registra una sesion de coach realizada. Descuenta del paquete mas antiguo que tenga cupo disponible.",
     roles: ["admin", "caja"],
     schema: {
-      persona: z.string().trim().min(2).max(160),
+      persona: z.string().trim().min(1).max(160),
       fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       notas: z.string().trim().max(300).optional(),
     },
@@ -667,7 +667,7 @@ const OPERACIONES: DefinicionOperacion[] = [
     roles: ["admin", "caja"],
     riesgo: "editar",
     schema: {
-      persona: z.string().trim().min(2).max(160).describe("Persona a editar (nombre o codigo actual)"),
+      persona: z.string().trim().min(1).max(160).describe("Persona a editar (nombre o codigo actual)"),
       nombre: z.string().trim().min(3).max(160),
       cedula: z.string().trim().max(40).optional(),
       correo: z.string().trim().email().max(160).optional(),
@@ -895,7 +895,7 @@ const OPERACIONES: DefinicionOperacion[] = [
     roles: ["admin"],
     riesgo: "editar",
     schema: {
-      persona: z.string().trim().min(2).max(160),
+      persona: z.string().trim().min(1).max(160),
       activo: z.boolean(),
     },
     previsualizar: async (admin, _actor, args) => {
@@ -927,7 +927,7 @@ const OPERACIONES: DefinicionOperacion[] = [
       "lo correcto es desactivarla para conservar su historial.",
     roles: ["admin"],
     riesgo: "destructiva",
-    schema: { persona: z.string().trim().min(2).max(160) },
+    schema: { persona: z.string().trim().min(1).max(160) },
     previsualizar: async (admin, _actor, args) => {
       const persona = await resolverPersona(admin, String(args.persona))
       const previa = await previsualizarEliminacionPersona(admin, persona.id)
@@ -1041,7 +1041,7 @@ const OPERACIONES: DefinicionOperacion[] = [
     roles: ["admin"],
     riesgo: "destructiva",
     schema: {
-      persona: z.string().trim().min(2).max(160),
+      persona: z.string().trim().min(1).max(160),
       anticipo_id: z.string().uuid(),
     },
     previsualizar: async (admin, _actor, args) => {
@@ -1374,7 +1374,7 @@ const OPERACIONES: DefinicionOperacion[] = [
       "la mas nueva. Cada aplicacion se ajusta a multiplos de 50 pesos.",
     roles: ["admin"],
     riesgo: "destructiva",
-    schema: { persona: z.string().trim().min(2).max(160) },
+    schema: { persona: z.string().trim().min(1).max(160) },
     previsualizar: async (admin, _actor, args) => {
       const persona = await resolverPersona(admin, String(args.persona))
       const previa = await previsualizarPagarDeudasConSaldo(admin, persona.id)
