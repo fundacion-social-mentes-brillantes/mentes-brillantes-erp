@@ -21,6 +21,9 @@ const baseHandler = createMcpHandler(
       "MCP financiero de Mentes Brillantes. Las herramientas de consulta son de solo lectura: respeta status, provenance, userSafeErrors y cualquier marca truncated/partial antes de afirmar cifras. " +
       "Para registrar movimientos hay dos pasos obligatorios: primero preparar_* (no escribe nada, devuelve un borrador con el detalle y un confirmacion_id) y despues confirmar_operacion, que SI escribe. " +
       "Nunca llames a confirmar_operacion sin haberle mostrado antes el borrador al usuario y recibido su aprobacion explicita en ese mismo turno; si duda o corrige algo, usa cancelar_operacion y prepara uno nuevo. " +
+      "Las operaciones delicadas (anular, eliminar, revertir, editar cifras, cerrar liquidacion) exigen ademas confirmacion_reforzada: \"CONFIRMO\", que solo debes enviar tras una aprobacion inequivoca de ESA operacion concreta. " +
+      "Para CORREGIR EL MONTO de un pago ya registrado no existe una herramienta de edicion directa, a proposito: el camino correcto es revertir_abono (o anular_movimiento si no genero saldo a favor) y despues registrar el pago con el monto correcto. " +
+      "La gestion de usuarios y contraseñas no se hace por aqui: dirige a la persona al ERP. " +
       "No solicites ni reveles cédulas, notas coach, contraseñas o tokens.",
   },
   {
