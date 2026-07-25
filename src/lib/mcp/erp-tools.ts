@@ -25,7 +25,7 @@ import {
   type ToolResult,
 } from "@/lib/telegram-cajero/tools"
 import { getCoachSessions } from "@/lib/telegram-cajero/tools/coach"
-import { auditMcpToolCall } from "./audit"
+import { auditMcpToolCall, McpAuditError } from "./audit"
 import { sanitizeMcpData } from "./privacy"
 import { MCP_PRIMARY_SCOPE } from "./constants"
 
@@ -158,7 +158,10 @@ export async function executeTool(
     response = failure("No se pudo completar la consulta. No asumas cifras en cero; vuelve a intentarlo.")
   }
 
-  await auditMcpToolCall({
+  // La auditoría es obligatoria (no se entregan datos sin registro), pero un
+  // fallo suyo NO debe salir como excepción cruda: se reintenta una vez y, si
+  // aun así falla, se responde con un error claro en vez de romper la consulta.
+  const auditada = await registrarAuditoria({
     authInfo: extra?.authInfo,
     toolName: name,
     args,
@@ -166,7 +169,33 @@ export async function executeTool(
     durationMs: Date.now() - startedAt,
     resultCount,
   })
+  if (!auditada) {
+    return failure(
+      "No se pudo registrar la auditoría de esta consulta y por seguridad no se entregan datos. Vuelve a intentarlo."
+    )
+  }
   return response
+}
+
+async function registrarAuditoria(params: Parameters<typeof auditMcpToolCall>[0]): Promise<boolean> {
+  for (let intento = 1; intento <= 2; intento += 1) {
+    try {
+      await auditMcpToolCall(params)
+      return true
+    } catch (error) {
+      const code = error instanceof McpAuditError ? error.code : "exception"
+      // Falta de contexto autenticado es determinista: reintentar no ayuda.
+      if (code === "missing_context") {
+        console.error("[mcp] auditoría rechazada por contexto inválido", { tool: params.toolName })
+        return false
+      }
+      if (intento === 2) {
+        console.error("[mcp] auditoría fallida tras reintento", { tool: params.toolName, code })
+        return false
+      }
+    }
+  }
+  return false
 }
 
 function register(

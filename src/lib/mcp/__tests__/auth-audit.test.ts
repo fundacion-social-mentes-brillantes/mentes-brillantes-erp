@@ -146,14 +146,60 @@ describe("auditoría MCP fail-closed", () => {
     })
     const run = vi.fn().mockResolvedValue({ confidential: "must-not-be-returned" })
 
-    await expect(
-      executeTool("estado_persona", { persona: "Ana" }, { authInfo: validAuthInfo() }, run)
-    ).rejects.toMatchObject({
-      name: "McpAuditError",
-      code: "insert_failed",
-    })
+    // Fail-closed: nunca entrega los datos, pero responde con un error limpio
+    // (no una excepción cruda) y reintenta una vez por si el fallo es pasajero.
+    const response = await executeTool(
+      "estado_persona",
+      { persona: "Ana" },
+      { authInfo: validAuthInfo() },
+      run
+    )
+
+    expect(response.isError).toBe(true)
+    expect(JSON.stringify(response)).not.toContain("must-not-be-returned")
+    expect(response.content[0].text).toContain("auditoría")
     expect(run).toHaveBeenCalledOnce()
-    expect(insert).toHaveBeenCalledOnce()
+    expect(insert).toHaveBeenCalledTimes(2)
+  })
+
+  it("entrega el resultado si la auditoría se recupera en el reintento", async () => {
+    const insert = vi
+      .fn()
+      .mockResolvedValueOnce({ error: { code: "transitorio" } })
+      .mockResolvedValueOnce({ error: null })
+    createAdminClientMock.mockReturnValue({
+      from: vi.fn().mockReturnValue({ insert }),
+    })
+    const run = vi.fn().mockResolvedValue({ dato: 42 })
+
+    const response = await executeTool(
+      "estado_persona",
+      { persona: "Ana" },
+      { authInfo: validAuthInfo() },
+      run
+    )
+
+    expect(response.isError).toBeUndefined()
+    expect(response.content[0].text).toContain("42")
+    expect(insert).toHaveBeenCalledTimes(2)
+  })
+
+  it("no reintenta cuando el contexto autenticado es inválido", async () => {
+    const insert = vi.fn()
+    createAdminClientMock.mockReturnValue({
+      from: vi.fn().mockReturnValue({ insert }),
+    })
+    const run = vi.fn().mockResolvedValue({ dato: 1 })
+
+    const response = await executeTool(
+      "estado_persona",
+      { persona: "Ana" },
+      { authInfo: { ...validAuthInfo(), extra: { ...validAuthInfo().extra, role: "consulta" } } },
+      run
+    )
+
+    expect(response.isError).toBe(true)
+    expect(insert).not.toHaveBeenCalled()
   })
 })
 

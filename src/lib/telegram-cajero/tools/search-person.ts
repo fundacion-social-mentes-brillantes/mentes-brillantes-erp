@@ -255,12 +255,22 @@ export async function searchPerson(supabase: SupabaseReader, term: string, limit
   if (error) return toolError("searchPerson", queryScope, "asistentes", error)
 
   const tokens = tokenize(term)
-  const ranked = ((data || []) as PersonRow[])
+  const scored = ((data || []) as PersonRow[])
     .map((row) => ({ row, score: scorePerson(row, term, tokens) }))
     .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score || normalize(a.row.nombre).localeCompare(normalize(b.row.nombre)))
-    .slice(0, limit)
-    .map((item) => item.row)
+
+  // Coincidencia exacta de nombre completo: si el termino consultado ES el
+  // nombre de UNA sola persona, no hay ambiguedad aunque otras compartan
+  // apellidos (p. ej. "Daniel Santiago Sanchez Alarcon" vs "Jhoan Santiago
+  // Sanchez Parra"). Solo resuelve con igualdad exacta: nunca adivina.
+  const compactQuery = (tokens.length ? tokens.join(" ") : normalized).trim()
+  const exactos = compactQuery
+    ? scored.filter((item) => normalize(item.row.nombre) === compactQuery)
+    : []
+  const finalistas = exactos.length === 1 ? exactos : scored
+
+  const ranked = finalistas.slice(0, limit).map((item) => item.row)
 
   return toolResult({
     toolName: "searchPerson",
