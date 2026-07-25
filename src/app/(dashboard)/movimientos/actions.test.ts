@@ -212,4 +212,30 @@ describe('movimientos/actions', () => {
 
     expect(result?.error).toMatch(/genero movimientos de saldo a favor/i)
   })
+
+  it('bloquea eliminar un pago hecho CON saldo a favor', async () => {
+    // Distinto del sobrepago: aqui el pago SALIO del saldo a favor. Borrarlo en
+    // duro dejaria el saldo consumido sin contrapartida y la deuda reabierta,
+    // asi que se bloquea igual que al anularlo.
+    const supabase = buildSupabase({
+      pagos_abonos: {
+        select: vi.fn(() => ({
+          eq: vi.fn(() =>
+            singleWrapper({
+              cuenta_id: 'c1',
+              fecha_pago: '2024-01-10',
+              notas: '',
+              origen_fondos: 'saldo_a_favor',
+              metodo_pago: 'saldo_a_favor',
+            })
+          ),
+        })),
+      },
+    })
+    requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
+
+    const result = await eliminarMovimiento('abono-sf-1', 'abono', 100, null)
+
+    expect(result?.error).toMatch(/proviene de saldo a favor/i)
+  })
 })
