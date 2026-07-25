@@ -25,6 +25,12 @@ export type OperacionEscritura =
   | "anular_movimiento"
   | "eliminar_movimiento"
   | "editar_movimiento"
+  | "editar_valor_cuenta"
+  | "eliminar_cuenta"
+  | "estado_persona_activa"
+  | "eliminar_persona"
+  | "editar_sesion_coach"
+  | "eliminar_sesion_coach"
 
 export type BorradorOperacion = {
   id: string

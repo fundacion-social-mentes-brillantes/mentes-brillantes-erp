@@ -81,3 +81,49 @@ export async function buscarPersonaPorId(supabase: any, asistenteId: string) {
   if (error || !data) throw new OperacionError("No encontre esa persona.")
   return data
 }
+
+/** Activar o desactivar una persona (no borra nada; deja de aparecer activa). */
+export async function cambiarEstadoPersona(supabase: any, _actor: ActorErp, asistenteId: string, activo: boolean) {
+  exigir(asistenteId, "Falta indicar la persona.")
+  const { error } = await supabase.from("asistentes").update({ activo }).eq("id", asistenteId)
+  if (error) throw new OperacionError(error.message || "No se pudo cambiar el estado de la persona.")
+  return { id: asistenteId, activo }
+}
+
+/**
+ * Borrado de persona. Solo procede si NO tiene cuentas: si las tuviera, la
+ * cascada arrastraria pagos y sesiones y desapareceria dinero del historial.
+ */
+export async function previsualizarEliminacionPersona(supabase: any, asistenteId: string) {
+  const persona = await buscarPersonaPorId(supabase, asistenteId)
+
+  const { count, error } = await supabase
+    .from("cuentas_por_cobrar")
+    .select("id", { count: "exact", head: true })
+    .eq("asistente_id", asistenteId)
+  if (error) throw new OperacionError("No se pudieron validar las cuentas de la persona.")
+  if ((count || 0) > 0) {
+    throw new OperacionError(
+      `No se puede eliminar a ${persona.nombre} porque tiene ${count} cuenta(s) registradas. ` +
+        "Si ya no participa, desactivala en vez de borrarla."
+    )
+  }
+
+  return { asistenteId, nombre: persona.nombre, codigo: persona.codigo }
+}
+
+export async function eliminarPersona(supabase: any, _actor: ActorErp, asistenteId: string) {
+  const v = await previsualizarEliminacionPersona(supabase, asistenteId)
+
+  const { error } = await supabase.from("asistentes").delete().eq("id", asistenteId)
+  if (error) {
+    if (error.code === "23503") {
+      throw new OperacionError(
+        "No se puede eliminar la persona porque tiene registros financieros o históricos asociados."
+      )
+    }
+    throw new OperacionError("Error al eliminar: " + error.message)
+  }
+
+  return { asistenteId, nombre: v.nombre }
+}

@@ -91,3 +91,67 @@ export async function registrarSesionCoach(
     restantesDespues: Math.max(0, restantes - 1),
   }
 }
+
+// --------------------------------------------------- editar / eliminar sesion
+
+async function leerSesion(supabase: any, sesionId: string) {
+  const { data, error } = await supabase
+    .from("coach_sesiones")
+    .select("id, fecha, notas, paquete_id, asistente_id, asistentes(nombre)")
+    .eq("id", sesionId)
+    .single()
+  if (error || !data) throw new OperacionError("No encontre esa sesion coach.")
+  return data
+}
+
+export async function previsualizarEdicionSesion(
+  supabase: any,
+  params: { sesionId: string; fecha?: string; notas?: string | null }
+) {
+  const sesion = await leerSesion(supabase, params.sesionId)
+  const fechaNueva = params.fecha ? exigirFechaIso(params.fecha) : null
+
+  const cambios: Record<string, { antes: unknown; despues: unknown }> = {}
+  if (fechaNueva && fechaNueva !== sesion.fecha) cambios.fecha = { antes: sesion.fecha, despues: fechaNueva }
+  if (params.notas !== undefined && params.notas !== sesion.notas) {
+    cambios.notas = { antes: sesion.notas, despues: params.notas }
+  }
+  if (Object.keys(cambios).length === 0) throw new OperacionError("No indicaste ningun cambio.")
+
+  const persona = Array.isArray(sesion.asistentes) ? sesion.asistentes[0] : sesion.asistentes
+  return { sesionId: params.sesionId, personaNombre: persona?.nombre ?? null, fechaActual: sesion.fecha, cambios }
+}
+
+export async function editarSesionCoach(
+  supabase: any,
+  _actor: ActorErp,
+  params: { sesionId: string; fecha?: string; notas?: string | null }
+) {
+  const v = await previsualizarEdicionSesion(supabase, params)
+
+  const payload: Record<string, unknown> = {}
+  if (params.fecha !== undefined) payload.fecha = params.fecha
+  if (params.notas !== undefined) payload.notas = params.notas
+
+  const { error } = await supabase.from("coach_sesiones").update(payload).eq("id", params.sesionId)
+  if (error) throw new OperacionError(error.message || "No se pudo editar la sesion coach.")
+  return { sesionId: params.sesionId, cambios: v.cambios }
+}
+
+export async function previsualizarEliminacionSesion(supabase: any, sesionId: string) {
+  const sesion = await leerSesion(supabase, sesionId)
+  const persona = Array.isArray(sesion.asistentes) ? sesion.asistentes[0] : sesion.asistentes
+  return {
+    sesionId,
+    personaNombre: persona?.nombre ?? null,
+    fecha: sesion.fecha,
+    efecto: "La sesion se borra y vuelve a quedar disponible en el paquete de la persona.",
+  }
+}
+
+export async function eliminarSesionCoach(supabase: any, _actor: ActorErp, sesionId: string) {
+  const v = await previsualizarEliminacionSesion(supabase, sesionId)
+  const { error } = await supabase.from("coach_sesiones").delete().eq("id", sesionId)
+  if (error) throw new OperacionError(error.message || "No se pudo eliminar la sesion coach.")
+  return { sesionId, personaNombre: v.personaNombre, fecha: v.fecha }
+}

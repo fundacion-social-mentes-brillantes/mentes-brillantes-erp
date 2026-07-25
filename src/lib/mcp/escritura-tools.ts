@@ -15,7 +15,14 @@ import {
   crearVentaExterna,
 } from "@/lib/operaciones/movimientos"
 import { aplicarSaldoAFavor, previsualizarAplicarSaldo, saldoFavorDisponible } from "@/lib/operaciones/saldo-favor"
-import { previsualizarSesionCoach, registrarSesionCoach } from "@/lib/operaciones/coach"
+import {
+  editarSesionCoach,
+  eliminarSesionCoach,
+  previsualizarEdicionSesion,
+  previsualizarEliminacionSesion,
+  previsualizarSesionCoach,
+  registrarSesionCoach,
+} from "@/lib/operaciones/coach"
 import {
   TIPOS_ANULABLES,
   TIPOS_EDITABLES,
@@ -26,7 +33,19 @@ import {
   previsualizarEdicion,
   previsualizarEliminacion,
 } from "@/lib/operaciones/anulaciones"
-import { crearPersona, editarPersona } from "@/lib/operaciones/personas"
+import {
+  cambiarEstadoPersona,
+  crearPersona,
+  editarPersona,
+  eliminarPersona,
+  previsualizarEliminacionPersona,
+} from "@/lib/operaciones/personas"
+import {
+  editarValorCuenta,
+  eliminarCuenta,
+  previsualizarEdicionValorCuenta,
+  previsualizarEliminacionCuenta,
+} from "@/lib/operaciones/cuentas"
 import { executeTool } from "./erp-tools"
 import { MCP_PRIMARY_SCOPE } from "./constants"
 import {
@@ -767,6 +786,189 @@ const OPERACIONES: DefinicionOperacion[] = [
       return { editado: r.tipo, movimiento_id: r.movimientoId, cambios: r.cambios }
     },
   },
+  {
+    nombre: "editar_valor_cuenta",
+    titulo: "Corregir el valor de una cuenta",
+    descripcion:
+      "Cambia cuanto se le cobra a una persona por un concepto. Recalcula el estado de la cuenta. " +
+      "No se puede dejar en 0 si ya tiene abonos activos.",
+    roles: ["admin"],
+    riesgo: "destructiva",
+    schema: {
+      cuenta_id: z.string().uuid(),
+      valor_nuevo: z.number().min(0).max(100_000_000),
+      motivo: z.string().trim().max(300).optional(),
+    },
+    previsualizar: async (admin, _actor, args) => {
+      const datos = {
+        cuentaId: String(args.cuenta_id),
+        valorNuevo: Number(args.valor_nuevo),
+        motivo: args.motivo ? String(args.motivo) : null,
+      }
+      const previa = await previsualizarEdicionValorCuenta(admin, datos as any)
+      return {
+        datos,
+        resumen:
+          `CORREGIR el valor de "${previa.concepto}" de ${previa.personaNombre}: ` +
+          `${money(previa.valorAntes)} -> ${money(previa.valorDespues)}`,
+        detalle: {
+          persona: previa.personaNombre,
+          concepto: previa.concepto,
+          valor_antes: previa.valorAntes,
+          valor_despues: previa.valorDespues,
+          estado_antes: previa.estadoAntes,
+          estado_despues: previa.estadoDespues,
+        },
+        avisos: ["Cambia lo que la persona debe. Verifica el valor nuevo con el usuario."],
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const r = await editarValorCuenta(admin, { userId: actor.userId, role: actor.role }, d as any)
+      return { cuenta_id: r.cuentaId, valor_antes: r.valorAntes, valor_despues: r.valorDespues, estado: r.estadoDespues }
+    },
+  },
+
+  {
+    nombre: "eliminar_cuenta",
+    titulo: "Eliminar una cuenta por cobrar",
+    descripcion:
+      "Borra una cuenta creada por error. Solo procede si no tiene pagos validos, ni saldo a favor aplicado, " +
+      "ni sesiones coach ya dictadas.",
+    roles: ["admin"],
+    riesgo: "destructiva",
+    schema: { cuenta_id: z.string().uuid() },
+    previsualizar: async (admin, _actor, args) => {
+      const datos = { cuentaId: String(args.cuenta_id) }
+      const previa = await previsualizarEliminacionCuenta(admin, datos.cuentaId)
+      return {
+        datos,
+        resumen: `ELIMINAR la cuenta "${previa.concepto}" de ${previa.personaNombre} por ${money(previa.valorTotal)}`,
+        detalle: {
+          persona: previa.personaNombre,
+          concepto: previa.concepto,
+          valor_total: previa.valorTotal,
+          fecha_emision: previa.fechaEmision,
+          efecto: previa.efecto,
+        },
+        avisos: ["El borrado es IRREVERSIBLE."],
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const r = await eliminarCuenta(admin, { userId: actor.userId, role: actor.role }, String((d as any).cuentaId))
+      return { cuenta_id: r.cuentaId, concepto: r.concepto, valor_total: r.valorTotal }
+    },
+  },
+
+  {
+    nombre: "estado_persona_activa",
+    titulo: "Activar o desactivar una persona",
+    descripcion:
+      "Marca a una persona como activa o inactiva. No borra nada: es la forma recomendada de retirar a alguien " +
+      "que ya no participa, conservando su historial.",
+    roles: ["admin"],
+    riesgo: "editar",
+    schema: {
+      persona: z.string().trim().min(2).max(160),
+      activo: z.boolean(),
+    },
+    previsualizar: async (admin, _actor, args) => {
+      const persona = await resolverPersona(admin, String(args.persona))
+      const activo = Boolean(args.activo)
+      const datos = { asistenteId: persona.id, activo }
+      return {
+        datos,
+        resumen: `${activo ? "Activar" : "Desactivar"} a ${persona.nombre}`,
+        detalle: { persona: persona.nombre, codigo: persona.codigo, quedara: activo ? "activa" : "inactiva" },
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const r = await cambiarEstadoPersona(
+        admin,
+        { userId: actor.userId, role: actor.role },
+        String((d as any).asistenteId),
+        Boolean((d as any).activo)
+      )
+      return { asistente_id: r.id, activo: r.activo }
+    },
+  },
+
+  {
+    nombre: "eliminar_persona",
+    titulo: "Eliminar una persona",
+    descripcion:
+      "Borra a una persona del ERP. Solo procede si NO tiene cuentas registradas. Si ya participo alguna vez, " +
+      "lo correcto es desactivarla para conservar su historial.",
+    roles: ["admin"],
+    riesgo: "destructiva",
+    schema: { persona: z.string().trim().min(2).max(160) },
+    previsualizar: async (admin, _actor, args) => {
+      const persona = await resolverPersona(admin, String(args.persona))
+      const previa = await previsualizarEliminacionPersona(admin, persona.id)
+      return {
+        datos: { asistenteId: persona.id },
+        resumen: `ELIMINAR a ${previa.nombre} del ERP`,
+        detalle: { persona: previa.nombre, codigo: previa.codigo },
+        avisos: ["El borrado es IRREVERSIBLE. Si tiene historial, es mejor desactivarla."],
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const r = await eliminarPersona(admin, { userId: actor.userId, role: actor.role }, String((d as any).asistenteId))
+      return { asistente_id: r.asistenteId, nombre: r.nombre }
+    },
+  },
+
+  {
+    nombre: "editar_sesion_coach",
+    titulo: "Corregir una sesion coach",
+    descripcion: "Cambia la fecha o las notas de una sesion coach ya registrada.",
+    roles: ["admin"],
+    riesgo: "destructiva",
+    schema: {
+      sesion_id: z.string().uuid(),
+      fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      notas: z.string().trim().max(300).optional(),
+    },
+    previsualizar: async (admin, _actor, args) => {
+      const datos: Record<string, unknown> = { sesionId: String(args.sesion_id) }
+      if (args.fecha !== undefined) datos.fecha = String(args.fecha)
+      if (args.notas !== undefined) datos.notas = String(args.notas)
+      const previa = await previsualizarEdicionSesion(admin, datos as any)
+      return {
+        datos,
+        resumen: `CORREGIR la sesion coach de ${previa.personaNombre} del ${previa.fechaActual}`,
+        detalle: { persona: previa.personaNombre, cambios: previa.cambios },
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const r = await editarSesionCoach(admin, { userId: actor.userId, role: actor.role }, d as any)
+      return { sesion_id: r.sesionId, cambios: r.cambios }
+    },
+  },
+
+  {
+    nombre: "eliminar_sesion_coach",
+    titulo: "Eliminar una sesion coach",
+    descripcion:
+      "Borra una sesion coach registrada por error. La sesion vuelve a quedar disponible en el paquete de la persona.",
+    roles: ["admin"],
+    riesgo: "destructiva",
+    schema: { sesion_id: z.string().uuid() },
+    previsualizar: async (admin, _actor, args) => {
+      const datos = { sesionId: String(args.sesion_id) }
+      const previa = await previsualizarEliminacionSesion(admin, datos.sesionId)
+      return {
+        datos,
+        resumen: `ELIMINAR la sesion coach de ${previa.personaNombre} del ${previa.fecha}`,
+        detalle: { persona: previa.personaNombre, fecha: previa.fecha, efecto: previa.efecto },
+        avisos: ["El borrado es IRREVERSIBLE."],
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const r = await eliminarSesionCoach(admin, { userId: actor.userId, role: actor.role }, String((d as any).sesionId))
+      return { sesion_id: r.sesionId, persona: r.personaNombre, fecha: r.fecha }
+    },
+  },
+
 ]
 
 const POR_NOMBRE = new Map(OPERACIONES.map((o) => [o.nombre, o]))
