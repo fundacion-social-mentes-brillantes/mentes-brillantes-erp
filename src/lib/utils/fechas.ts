@@ -24,3 +24,17 @@ export function fechaLocalISO(date: Date = new Date(), timeZone: string = ZONA_H
 
 // Fecha de hoy en Colombia (YYYY-MM-DD).
 export const fechaHoyBogota = (): string => fechaLocalISO()
+
+/**
+ * Muestra una fecha DATE ('AAAA-MM-DD') tal cual, sin pasarla por new Date().
+ *
+ * Es importante: new Date('2026-07-30') se interpreta como medianoche UTC, y al
+ * formatearla en Bogota (UTC-5) devuelve el 29. Asi es como la misma sesion se
+ * veia con una fecha en una pantalla y con la del dia anterior en otra.
+ */
+export function formatearFechaIso(fecha?: string | null, alterno = '—'): string {
+  if (!fecha) return alterno
+  const [anio, mes, dia] = String(fecha).slice(0, 10).split('-')
+  if (!anio || !mes || !dia) return String(fecha)
+  return `${dia}/${mes}/${anio}`
+}

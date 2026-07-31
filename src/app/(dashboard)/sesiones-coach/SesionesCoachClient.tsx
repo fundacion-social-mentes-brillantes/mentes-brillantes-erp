@@ -7,7 +7,22 @@ import { registrarSesionCoachAsistente, editarSesion, eliminarSesion } from '@/a
 import { estadoCoach } from '@/lib/utils/coach'
 import { coincideBusqueda } from '@/lib/utils/busqueda'
 
-type Sesion = { id: string; fecha: string; notas?: string | null }
+type Sesion = { id: string; fecha: string; notas?: string | null; paqueteId?: string; paqueteConcepto?: string | null }
+
+/** Una compra concreta, con las sesiones que salieron de ella. */
+type Compra = {
+  id: string
+  cuentaId: string | null
+  concepto: string | null
+  compradoEl: string | null
+  valorTotal: number
+  pendiente: number
+  compradas: number
+  usadas: number
+  restantes: number
+  sesiones: Sesion[]
+}
+
 type AsistenteCoach = {
   asistenteId: string
   nombre: string
@@ -18,7 +33,10 @@ type AsistenteCoach = {
   restantes: number
   ultimaSesion: string | null
   sesiones: Sesion[]
+  compras: Compra[]
 }
+
+const pesos = (n: number) => `$${Math.round(n).toLocaleString('es-CO')}`
 
 type Filtro = 'todos' | 'pendientes' | 'sin'
 
@@ -216,6 +234,53 @@ function HistorialModal({
 
         {error && <p className="text-sm text-[rgb(var(--danger))] bg-red-50 border border-red-200 rounded-md px-3 py-2">{error}</p>}
 
+        {/* Compra por compra, de la más nueva a la más vieja, con las sesiones que
+            salieron de cada una. El total de arriba sigue estando; esto es para
+            poder ver qué se compró y cuándo, sin que quede todo revuelto. */}
+        {asistente.compras.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[rgb(var(--text-muted))]">
+              Paquetes comprados ({asistente.compras.length})
+            </p>
+            {asistente.compras.map((compra, i) => (
+              <div key={compra.id} className="rounded-lg border border-[rgb(var(--border))] overflow-hidden">
+                <div className="px-3 py-2 bg-[rgb(var(--surface-2))] space-y-0.5">
+                  <p className="text-sm font-medium text-[rgb(var(--text-primary))]">
+                    {compra.concepto || 'Paquete coach'}
+                    {i === 0 && asistente.compras.length > 1 && (
+                      <span className="ml-2 text-[10px] font-bold uppercase text-[rgb(var(--accent))]">el último</span>
+                    )}
+                  </p>
+                  <p className="text-xs text-[rgb(var(--text-muted))]">
+                    Comprado el {fmtFecha(compra.compradoEl)} · {compra.usadas} de {compra.compradas} tomadas ·{' '}
+                    {compra.restantes} {compra.restantes === 1 ? 'queda' : 'quedan'}
+                    {compra.valorTotal > 0 && <> · {pesos(compra.valorTotal)}</>}
+                    {compra.pendiente > 0 && (
+                      <span className="text-[rgb(var(--warning))]"> · debe {pesos(compra.pendiente)}</span>
+                    )}
+                  </p>
+                </div>
+                {compra.sesiones.length === 0 ? (
+                  <p className="px-3 py-2 text-xs text-[rgb(var(--text-muted))]">Sin sesiones tomadas todavía.</p>
+                ) : (
+                  <ul className="divide-y divide-[rgb(var(--border))]">
+                    {compra.sesiones.map((s) => (
+                      <li key={s.id} className="px-3 py-1.5 text-xs text-[rgb(var(--text-primary))]">
+                        {fmtFecha(s.fecha)}
+                        {s.notas && <span className="text-[rgb(var(--text-muted))]"> · {s.notas}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <p className="text-xs font-semibold uppercase tracking-wide text-[rgb(var(--text-muted))] pt-1">
+          Todas las sesiones
+        </p>
+
         {asistente.sesiones.length === 0 ? (
           <p className="text-sm text-[rgb(var(--text-muted))] py-6 text-center">Aún no hay sesiones registradas.</p>
         ) : (
@@ -391,6 +456,18 @@ export function SesionesCoachClient({
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   Última sesión: {fmtFecha(a.ultimaSesion)}
                 </p>
+
+                {/* Cuál fue la última compra: sin esto los paquetes se leen revueltos. */}
+                {a.compras[0] && (
+                  <p className="text-xs text-[rgb(var(--text-muted))]">
+                    Último paquete: <span className="text-[rgb(var(--text-primary))]">{a.compras[0].concepto || 'Paquete coach'}</span>{' '}
+                    · comprado el {fmtFecha(a.compras[0].compradoEl)} · {a.compras[0].usadas}/{a.compras[0].compradas}
+                    {a.compras.length > 1 && <> · {a.compras.length} compras en total</>}
+                    {a.compras[0].pendiente > 0 && (
+                      <span className="text-[rgb(var(--warning))]"> · debe {pesos(a.compras[0].pendiente)}</span>
+                    )}
+                  </p>
+                )}
 
                 <div className="flex gap-2 pt-1">
                   <button

@@ -8,6 +8,7 @@ import { EditValorModal, EditAbonoModal } from './EditModals'
 import { DeleteCuentaButton } from './DeleteCuentaButton'
 import { RevertAbonoConSaldoButton } from './RevertAbonoConSaldoButton'
 import { calcularSaldoFavorDisponibleRaw, filtrarPagosValidos, sumarMontos } from '@/lib/utils/contable'
+import { formatearFechaIso } from '@/lib/utils/fechas'
 import { RegisterCoachSessionForm } from '@/components/coach/RegisterCoachSessionForm'
 import { CoachSessionsPdf } from '@/components/coach/CoachSessionsPdf'
 import { CoachSessionActions } from '@/components/coach/CoachSessionActions'
@@ -196,7 +197,7 @@ export default async function DetalleCuentaPage({
                     .map((s: any) => (
                       <div key={s.id} className="px-4 py-3 text-sm flex justify-between items-start gap-3">
                         <div className="space-y-1">
-                          <span className="block text-[rgb(var(--text-primary))]">{new Date(s.fecha).toLocaleDateString('es-CO')}</span>
+                          <span className="block text-[rgb(var(--text-primary))]">{formatearFechaIso(s.fecha)}</span>
                           <span className="block text-[rgb(var(--text-muted))] truncate max-w-[260px]">{s.notas || 'Sin notas'}</span>
                         </div>
                         {isAdmin && <CoachSessionActions sesionId={s.id} fecha={s.fecha} notas={s.notas} />}

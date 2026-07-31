@@ -10,6 +10,7 @@ import {
   HeartHandshake,
 } from "lucide-react"
 import { notFound } from "next/navigation"
+import { formatearFechaIso } from "@/lib/utils/fechas"
 import { AnticipoForm } from "./AnticipoForm"
 import { PagarConSaldoButton } from "./PagarConSaldoButton"
 import { calcularSaldoFavorDisponible, esAnuladoCompleto, filtrarPagosValidos, sumarMontos, toSafeNumber } from "@/lib/utils/contable"
@@ -21,7 +22,7 @@ import { CoachSessionsPdf } from "@/components/coach/CoachSessionsPdf"
 import { CoachSessionActions } from "@/components/coach/CoachSessionActions"
 import { requireRoles } from "@/lib/utils/authz"
 import { estadoPorActividad } from "@/lib/utils/asistentes"
-import { resumenCoach } from "@/lib/utils/coach"
+import { paqueteDestino, resumenCoach } from "@/lib/utils/coach"
 
 const cardContainer =
   "rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] shadow-sm overflow-hidden"
@@ -68,8 +69,11 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
 
   const { data: paquetesCoach } = await supabase
     .from("coach_paquetes")
-    .select("id, cuenta_id, sesiones_compradas, coach_sesiones (id, fecha, notas)")
+    .select(
+      "id, cuenta_id, sesiones_compradas, creado_en, coach_sesiones (id, fecha, notas), cuentas_por_cobrar (concepto, valor_total, fecha_emision)"
+    )
     .eq("asistente_id", id)
+    .order("creado_en", { ascending: true })
 
   const { data: sesionesCoach } = await supabase
     .from("coach_sesiones")
@@ -87,9 +91,36 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
     paquete_id: s.paquete_id,
     cuenta_id: s.coach_paquetes?.cuenta_id || null,
   }))
-  const paqueteActivo = (paquetesCoach || []).find(
-    (p: any) => (sesionesCoach || []).filter((s) => s.paquete_id === p.id).length < toSafeNumber(p.sesiones_compradas)
-  )
+  // La MISMA regla que usan /sesiones-coach, el bot y la agenda: se gasta primero
+  // el credito mas antiguo. Antes aqui era un .find() sobre una consulta sin
+  // orden, asi que la sesion podia caer en un paquete distinto segun la pantalla.
+  const paqueteActivo = paqueteDestino(paquetesCoach || [])
+
+  // Cada compra por separado, de la mas nueva a la mas vieja, con sus sesiones.
+  const comprasCoach = [...(paquetesCoach || [])]
+    .map((p: any) => {
+      const cuenta = Array.isArray(p.cuentas_por_cobrar) ? p.cuentas_por_cobrar[0] : p.cuentas_por_cobrar
+      const usadas = (p.coach_sesiones || []).length
+      const compradasPaq = toSafeNumber(p.sesiones_compradas)
+      return {
+        id: p.id,
+        cuentaId: p.cuenta_id as string | null,
+        concepto: cuenta?.concepto ?? null,
+        compradoEl: cuenta?.fecha_emision ?? null,
+        valorTotal: toSafeNumber(cuenta?.valor_total),
+        compradas: compradasPaq,
+        usadas,
+        restantes: Math.max(0, compradasPaq - usadas),
+        sesiones: [...(p.coach_sesiones || [])].sort((a: any, b: any) =>
+          a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0
+        ),
+      }
+    })
+    .sort((a, b) => {
+      const fa = a.compradoEl || ""
+      const fb = b.compradoEl || ""
+      return fa < fb ? 1 : fa > fb ? -1 : 0
+    })
 
   const actividad = estadoPorActividad({
     cuentas_por_cobrar: cuentas || [],
@@ -330,6 +361,42 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                 <span className="text-zinc-600">Restantes</span>
                 <span className="font-medium text-zinc-900">{sesionesRestantes}</span>
               </div>
+
+              {/* El total de arriba suma todas las compras. Aquí se ven una por
+                  una, que es lo que hace falta para no leerlas revueltas. */}
+              {comprasCoach.length > 0 && (
+                <div className="pt-3 border-t border-zinc-200 space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                    Paquetes comprados ({comprasCoach.length})
+                  </p>
+                  {comprasCoach.map((compra, i) => (
+                    <div key={compra.id} className="rounded-lg border border-zinc-200 bg-white px-3 py-2">
+                      <p className="text-xs font-medium text-zinc-900">
+                        {compra.cuentaId ? (
+                          <Link href={`/cuentas/${compra.cuentaId}`} className="hover:underline">
+                            {compra.concepto || "Paquete coach"}
+                          </Link>
+                        ) : (
+                          compra.concepto || "Paquete coach"
+                        )}
+                        {i === 0 && comprasCoach.length > 1 && (
+                          <span className="ml-2 text-[10px] font-bold uppercase text-emerald-600">el último</span>
+                        )}
+                      </p>
+                      <p className="text-[11px] text-zinc-500">
+                        Comprado el {formatearFechaIso(compra.compradoEl)} · {compra.usadas} de {compra.compradas} tomadas ·{" "}
+                        {compra.restantes} {compra.restantes === 1 ? "queda" : "quedan"}
+                      </p>
+                      {compra.sesiones.length > 0 && (
+                        <p className="mt-1 text-[11px] text-zinc-600">
+                          {compra.sesiones.map((s: any) => formatearFechaIso(s.fecha)).join(" · ")}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {paqueteActivo && (
                 <div className="pt-2">
                   <RegisterCoachSessionForm paqueteId={paqueteActivo.id} disabled={false} />
@@ -474,7 +541,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                       className="flex items-center justify-between border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white"
                     >
                       <div className="flex flex-col gap-1">
-                        <span>{new Date(s.fecha).toLocaleDateString("es-CO")}</span>
+                        <span>{formatearFechaIso(s.fecha)}</span>
                         <span className="text-zinc-600 truncate max-w-[200px]">{s.notas || "Sin notas"}</span>
                       </div>
                       {isAdmin && s.id && (

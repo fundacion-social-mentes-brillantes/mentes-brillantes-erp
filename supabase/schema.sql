@@ -216,11 +216,20 @@ CREATE TABLE coach_sesiones (
   asistente_id UUID NOT NULL REFERENCES asistentes(id) ON DELETE RESTRICT,
   fecha DATE NOT NULL DEFAULT CURRENT_DATE,
   notas TEXT,
+  -- Evento de la agenda (Firestore) del que salio esta sesion, si vino de alli.
+  -- Es lo unico que permite notar despues que borraron de la agenda algo ya
+  -- cobrado. Queda vacio cuando la sesion se registra directamente en el ERP.
+  evento_agenda_id TEXT,
   creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_coach_sesiones_paquete ON coach_sesiones (paquete_id);
 CREATE INDEX idx_coach_sesiones_asistente ON coach_sesiones (asistente_id);
+-- Un evento de la agenda no puede quedar cobrado dos veces. Parcial porque la
+-- mayoria de sesiones no vienen de la agenda y ahi el valor es NULL.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_coach_sesiones_evento_agenda
+  ON coach_sesiones (evento_agenda_id)
+  WHERE evento_agenda_id IS NOT NULL;
 
 -- SOCIOS Y PERIODOS
 CREATE TABLE socios (

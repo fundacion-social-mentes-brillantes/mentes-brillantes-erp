@@ -130,16 +130,91 @@ export async function pasarSesionDeAgendaAlErp(
   }
 }
 
-/** Cuales de estos eventos ya estan en la contabilidad, para pintar el boton. */
-export async function eventosYaEnElErp(admin: any, eventoIds: string[]): Promise<string[]> {
-  const ids = Array.from(new Set(eventoIds.filter(Boolean))).slice(0, 200)
-  if (!ids.length) return []
+export type EventoConsultado = { id: string; codigo?: string | null; fecha?: string | null }
 
-  const { data, error } = await admin
+/**
+ * Cuales de estos eventos ya estan en la contabilidad, para pintar el boton.
+ *
+ * Cruza por DOS caminos, y el segundo es el que importa: el enlace directo
+ * (evento_agenda_id) solo existe cuando la sesion se paso desde la agenda. Si
+ * el duenio la registro en el ERP —que es lo normal— la fila queda con el
+ * enlace vacio y un NULL nunca entra en un IN, asi que el evento se quedaba
+ * gris para siempre aunque la sesion SI estuviera registrada.
+ *
+ * Por eso tambien se cruza por persona+fecha, que es el mismo criterio que ya
+ * usan sesionYaRegistrada y el panel de diferencias. Y cuando se encuentra por
+ * ahi, se aprovecha para rellenar el enlace que faltaba: asi el verde no se
+ * pierde al recargar y el ERP recupera la capacidad de notar que borraron de la
+ * agenda algo ya cobrado.
+ */
+export async function eventosYaEnElErp(
+  admin: any,
+  eventos: Array<EventoConsultado | string>
+): Promise<string[]> {
+  const lista: EventoConsultado[] = eventos
+    .map((e) => (typeof e === "string" ? { id: e } : e))
+    .filter((e) => e && e.id)
+    .slice(0, 200)
+
+  if (!lista.length) return []
+
+  const ids = Array.from(new Set(lista.map((e) => e.id)))
+  const registrados = new Set<string>()
+
+  // 1) Enlace directo.
+  const { data: porEnlace, error } = await admin
     .from("coach_sesiones")
     .select("evento_agenda_id")
     .in("evento_agenda_id", ids)
 
   if (error) throw new OperacionError("No se pudo consultar el estado de los eventos.")
-  return (data || []).map((s: any) => s.evento_agenda_id).filter(Boolean)
+  for (const s of porEnlace || []) if (s.evento_agenda_id) registrados.add(s.evento_agenda_id)
+
+  // 2) Persona + fecha, para lo registrado directamente en el ERP.
+  const conDatos = lista.filter((e) => !registrados.has(e.id) && e.codigo && e.fecha)
+  if (!conDatos.length) return Array.from(registrados)
+
+  const codigos = Array.from(new Set(conDatos.map((e) => String(e.codigo))))
+  const { data: personas } = await admin.from("asistentes").select("id, codigo").in("codigo", codigos)
+
+  const idPorCodigo = new Map<string, string>((personas || []).map((p: any) => [String(p.codigo), p.id]))
+  if (!idPorCodigo.size) return Array.from(registrados)
+
+  const fechas = Array.from(new Set(conDatos.map((e) => String(e.fecha))))
+  const { data: sesiones } = await admin
+    .from("coach_sesiones")
+    .select("id, asistente_id, fecha, evento_agenda_id")
+    .in("asistente_id", Array.from(new Set(idPorCodigo.values())))
+    .in("fecha", fechas)
+
+  const porPersonaFecha = new Map<string, any>()
+  for (const s of sesiones || []) porPersonaFecha.set(`${s.asistente_id}|${s.fecha}`, s)
+
+  const porRellenar: Array<{ sesionId: string; eventoId: string }> = []
+  for (const evento of conDatos) {
+    const asistenteId = idPorCodigo.get(String(evento.codigo))
+    if (!asistenteId) continue
+    const sesion = porPersonaFecha.get(`${asistenteId}|${evento.fecha}`)
+    if (!sesion) continue
+
+    registrados.add(evento.id)
+    if (!sesion.evento_agenda_id) porRellenar.push({ sesionId: sesion.id, eventoId: evento.id })
+  }
+
+  // Rellenar el enlace es lo que hace que el verde no se pierda al recargar.
+  // Si falla no se cae la consulta: el verde ya se contesto bien.
+  for (const { sesionId, eventoId } of porRellenar) {
+    const { error: errorEnlace } = await admin
+      .from("coach_sesiones")
+      .update({ evento_agenda_id: eventoId })
+      .eq("id", sesionId)
+      .is("evento_agenda_id", null)
+    if (errorEnlace) {
+      console.error("[agenda-registro] no se pudo enlazar la sesion con su evento", {
+        code: errorEnlace.code,
+      })
+    }
+  }
+
+  return Array.from(registrados)
 }

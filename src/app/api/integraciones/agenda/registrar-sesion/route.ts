@@ -25,6 +25,23 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json().catch(() => ({}))
+
+    // Modo consulta: llega una lista de eventos con su persona y fecha. Va por
+    // POST y no por GET porque son hasta 200 eventos y no caben comodos en la
+    // direccion.
+    if (Array.isArray(body?.eventos)) {
+      const eventos = body.eventos
+        .map((e: any) => ({
+          id: String(e?.id ?? "").trim(),
+          codigo: e?.codigo === undefined || e?.codigo === null ? null : String(e.codigo).trim(),
+          fecha: typeof e?.fecha === "string" && /^\d{4}-\d{2}-\d{2}$/.test(e.fecha) ? e.fecha : null,
+        }))
+        .filter((e: any) => e.id)
+
+      const registrados = await eventosYaEnElErp(admin, eventos)
+      return Response.json({ registrados }, { headers: CABECERAS_SIN_CACHE })
+    }
+
     const codigo = String(body?.codigo ?? body?.clientCode ?? "").trim()
     const fecha = String(body?.fecha ?? body?.date ?? "").trim()
     const eventoAgendaId = String(body?.eventoId ?? body?.eventoAgendaId ?? "").trim() || null

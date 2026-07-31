@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { pasarSesionDeAgendaAlErp } from "../agenda-registro"
+import { eventosYaEnElErp, pasarSesionDeAgendaAlErp } from "../agenda-registro"
 
 // Supabase falso: guarda lo insertado para poder afirmar que NO se escribe nada
 // cuando la persona no tiene cupo. Es la garantia importante de este modulo.
@@ -120,5 +120,114 @@ describe("pasarSesionDeAgendaAlErp", () => {
 
     await expect(pasarSesionDeAgendaAlErp(admin, { codigo: "211", fecha: "29/07/2026" })).rejects.toThrow()
     expect(admin.insertados).toHaveLength(0)
+  })
+})
+
+/**
+ * Supabase falso para la consulta que pinta el botón. Distingue las tres
+ * consultas de coach_sesiones por lo que piden en el select, y anota los
+ * update para poder afirmar que el enlace se rellena.
+ */
+function fakeConsulta(opts: { sesiones?: any[]; personas?: any[] }) {
+  const actualizados: Array<{ id: string; eventoId: string }> = []
+
+  const client: any = {
+    actualizados,
+    from(tabla: string) {
+      let seleccion = ""
+      let cambios: any = null
+      const filtros: Record<string, unknown> = {}
+
+      const resolver = async () => {
+        if (cambios) {
+          actualizados.push({ id: String(filtros.id), eventoId: cambios.evento_agenda_id })
+          return { data: null, error: null }
+        }
+        if (tabla === "asistentes") return { data: opts.personas ?? [], error: null }
+        if (tabla === "coach_sesiones") {
+          const todas = opts.sesiones ?? []
+          // La primera consulta solo pide el enlace: se responde con las que lo tienen.
+          if (seleccion === "evento_agenda_id") {
+            return { data: todas.filter((s: any) => s.evento_agenda_id), error: null }
+          }
+          return { data: todas, error: null }
+        }
+        return { data: [], error: null }
+      }
+
+      const q: any = {
+        select: (cols: string) => {
+          seleccion = cols
+          return q
+        },
+        update: (v: any) => {
+          cambios = v
+          return q
+        },
+        eq: (col: string, val: unknown) => {
+          filtros[col] = val
+          return q
+        },
+        in: () => q,
+        is: () => q,
+        limit: () => resolver(),
+        maybeSingle: () => resolver(),
+        then: (res: any, rej: any) => resolver().then(res, rej),
+      }
+      return q
+    },
+  }
+  return client
+}
+
+describe("eventosYaEnElErp", () => {
+  it("reconoce el evento por su enlace directo", async () => {
+    const admin = fakeConsulta({ sesiones: [{ id: "s1", evento_agenda_id: "evt-1" }] })
+
+    expect(await eventosYaEnElErp(admin, ["evt-1"])).toEqual(["evt-1"])
+  })
+
+  // El caso del dueño: registra en el ERP y la sesión queda sin enlace.
+  it("reconoce una sesión registrada en el ERP, sin enlace, por persona y fecha", async () => {
+    const admin = fakeConsulta({
+      personas: [{ id: "p-1", codigo: "211" }],
+      sesiones: [{ id: "s1", asistente_id: "p-1", fecha: "2026-07-29", evento_agenda_id: null }],
+    })
+
+    const r = await eventosYaEnElErp(admin, [{ id: "evt-1", codigo: "211", fecha: "2026-07-29" }])
+
+    expect(r).toEqual(["evt-1"])
+  })
+
+  it("aprovecha y rellena el enlace que faltaba, para que el verde no se pierda", async () => {
+    const admin = fakeConsulta({
+      personas: [{ id: "p-1", codigo: "211" }],
+      sesiones: [{ id: "s1", asistente_id: "p-1", fecha: "2026-07-29", evento_agenda_id: null }],
+    })
+
+    await eventosYaEnElErp(admin, [{ id: "evt-1", codigo: "211", fecha: "2026-07-29" }])
+
+    expect(admin.actualizados).toEqual([{ id: "s1", eventoId: "evt-1" }])
+  })
+
+  it("no marca como registrado un día en el que la persona no tuvo sesión", async () => {
+    const admin = fakeConsulta({
+      personas: [{ id: "p-1", codigo: "211" }],
+      sesiones: [{ id: "s1", asistente_id: "p-1", fecha: "2026-07-29", evento_agenda_id: null }],
+    })
+
+    const r = await eventosYaEnElErp(admin, [{ id: "evt-2", codigo: "211", fecha: "2026-08-05" }])
+
+    expect(r).toEqual([])
+    expect(admin.actualizados).toHaveLength(0)
+  })
+
+  it("sin código ni fecha se comporta como antes: solo el enlace directo", async () => {
+    const admin = fakeConsulta({
+      personas: [{ id: "p-1", codigo: "211" }],
+      sesiones: [{ id: "s1", asistente_id: "p-1", fecha: "2026-07-29", evento_agenda_id: null }],
+    })
+
+    expect(await eventosYaEnElErp(admin, ["evt-1"])).toEqual([])
   })
 })
