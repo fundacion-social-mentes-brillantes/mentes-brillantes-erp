@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { modeloDeepSeekTelegram, PENSAR_DEEPSEEK } from "@/lib/deepseek-modelo"
 import {
   calcularSaldoFavorDisponible,
   filtrarPagosValidos,
@@ -371,7 +372,9 @@ export function getConfig(): TelegramConfig | null {
       // separada invalida o ausente.
       apiKey: process.env.DEEPSEEK_TELEGRAM_API_KEY || process.env.DEEPSEEK_API_KEY,
       baseUrl: process.env.DEEPSEEK_TELEGRAM_BASE_URL || process.env.DEEPSEEK_BASE_URL,
-      model: process.env.DEEPSEEK_TELEGRAM_MODEL || process.env.DEEPSEEK_MODEL,
+      // DEEPSEEK_TELEGRAM_MODEL manda; si no, DEEPSEEK_MODEL; si tampoco, el
+      // modelo por defecto (deepseek-v4-flash). Ver src/lib/deepseek-modelo.ts.
+      model: modeloDeepSeekTelegram(),
     },
   }
 }
@@ -616,6 +619,8 @@ async function classifyIntentWithDeepSeek(text: string, config: TelegramConfig):
       },
       body: JSON.stringify({
         model,
+        // Se manda siempre explicito: DeepSeek asume "enabled" si no se manda.
+        thinking: PENSAR_DEEPSEEK,
         temperature: 0,
         messages: [
           {
@@ -1670,7 +1675,8 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig, m
   const analyst = analyzeErpQuestion(naturalText || text, memory?.session.state || {})
   if (analyst.kind === "compare_periods") return analyst.text
 
-  // El planner de IA (DeepSeek V4 Pro) es el CEREBRO PRINCIPAL: razona el intent,
+  // El planner de IA (DeepSeek; el modelo se define en src/lib/deepseek-modelo.ts)
+  // es el CEREBRO PRINCIPAL: razona el intent,
   // usa el contexto y elige tools. Las rutas deterministas (analista por reglas y
   // clasificador legacy) quedan como respaldo abajo, solo si la IA no produjo un
   // plan accionable (mode ignore) o no esta disponible.

@@ -5,7 +5,7 @@ import { ejecutarConsultaCajero } from "@/lib/telegram-cajero/qa-runner"
 export const dynamic = "force-dynamic"
 
 // QA solo-lectura del bot cajero SIN tocar Telegram: corre el cerebro real
-// (planner V4 Pro -> tools -> redactor) y devuelve la respuesta que daria.
+// (planner IA -> tools -> redactor) y devuelve la respuesta que daria.
 // Solo-admin (sesion). Util para validar respuestas desde el navegador.
 
 export async function GET(request: Request) {

@@ -1,4 +1,5 @@
 import type { TelegramConfig } from "./types"
+import { modeloDeepSeekTelegram } from "@/lib/deepseek-modelo"
 
 export const BOT_USERNAME = "cajero_mb_pagos_bot"
 
@@ -23,7 +24,9 @@ export function getTelegramCajeroConfig(): TelegramConfig | null {
       // especificas del bot de Telegram. Mantiene una sola clave de IA.
       apiKey: process.env.DEEPSEEK_TELEGRAM_API_KEY || process.env.DEEPSEEK_API_KEY,
       baseUrl: process.env.DEEPSEEK_TELEGRAM_BASE_URL || process.env.DEEPSEEK_BASE_URL,
-      model: process.env.DEEPSEEK_TELEGRAM_MODEL || process.env.DEEPSEEK_MODEL,
+      // DEEPSEEK_TELEGRAM_MODEL manda; si no, DEEPSEEK_MODEL; si tampoco, el
+      // modelo por defecto (deepseek-v4-flash). Ver src/lib/deepseek-modelo.ts.
+      model: modeloDeepSeekTelegram(),
     },
   }
 }

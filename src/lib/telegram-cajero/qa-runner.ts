@@ -4,7 +4,7 @@ import { planWithAi } from "./ai-planner"
 import { executeAiToolPlan } from "./tool-executor"
 import { writeAiResponse } from "./ai-response-writer"
 
-// Corre el cerebro real del bot cajero (planner V4 Pro -> tools -> redactor) y
+// Corre el cerebro real del bot cajero (planner IA -> tools -> redactor) y
 // devuelve la respuesta que daria, SIN tocar Telegram. Solo lectura. Compartido
 // por los endpoints de QA (probar-cajero y el de diagnostico bajo /api/telegram).
 export async function ejecutarConsultaCajero(pregunta: string, state: any) {

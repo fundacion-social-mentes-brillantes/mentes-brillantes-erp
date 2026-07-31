@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { AuthzError, requireRoles } from "@/lib/utils/authz"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { modeloDeepSeek, modeloDeepSeekTelegram, PENSAR_DEEPSEEK } from "@/lib/deepseek-modelo"
 
 export const dynamic = "force-dynamic"
 
@@ -24,7 +25,7 @@ async function pingDeepSeek(apiKey?: string, baseUrl?: string, model?: string) {
     const res = await fetch(`${baseUrl!.replace(/\/+$/, "")}/chat/completions`, {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model, messages: [{ role: "user", content: "ping" }], max_tokens: 1 }),
+      body: JSON.stringify({ model, thinking: PENSAR_DEEPSEEK, messages: [{ role: "user", content: "ping" }], max_tokens: 1 }),
       signal: controller.signal,
     })
     clearTimeout(timer)
@@ -122,13 +123,16 @@ export async function GET(request: Request) {
   const telegram_webhook = await telegramWebhookInfo(env.TELEGRAM_BOT_TOKEN)
 
   const sinPing = { nota: "Agrega ?ping=1 a la URL para probar DeepSeek en vivo." }
+  // El ping usa el modelo EFECTIVO (el del entorno o, si no hay, el por defecto
+  // deepseek-v4-flash), igual que los bots. Asi el diagnostico prueba lo mismo que
+  // se usa de verdad aunque DEEPSEEK_MODEL no este definida.
   const deepseek_test = {
-    web: hacerPing ? await pingDeepSeek(env.DEEPSEEK_API_KEY, env.DEEPSEEK_BASE_URL, env.DEEPSEEK_MODEL) : sinPing,
+    web: hacerPing ? await pingDeepSeek(env.DEEPSEEK_API_KEY, env.DEEPSEEK_BASE_URL, modeloDeepSeek()) : sinPing,
     telegram: hacerPing
       ? await pingDeepSeek(
           env.DEEPSEEK_TELEGRAM_API_KEY || env.DEEPSEEK_API_KEY,
           env.DEEPSEEK_TELEGRAM_BASE_URL || env.DEEPSEEK_BASE_URL,
-          env.DEEPSEEK_TELEGRAM_MODEL || env.DEEPSEEK_MODEL
+          modeloDeepSeekTelegram()
         )
       : sinPing,
   }

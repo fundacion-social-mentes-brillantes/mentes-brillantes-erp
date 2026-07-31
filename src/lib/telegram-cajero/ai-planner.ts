@@ -3,6 +3,7 @@ import { normalizeText } from "./input"
 import type { TelegramSessionState } from "./memory"
 import type { TelegramConfig } from "./types"
 import { getToolCatalogForPrompt, isAllowedToolName, TOOL_LIMIT, type AllowedToolName } from "./tool-catalog"
+import { PENSAR_DEEPSEEK } from "@/lib/deepseek-modelo"
 
 export type AiPlannerMode = "answer_from_memory" | "tool_plan" | "clarify" | "ignore"
 export type AiPlannerConfidence = "high" | "medium" | "low"
@@ -691,8 +692,9 @@ function reasoningEffortFor(text: string, fallback: AiPlannerPlan): "high" | "ma
   return "high"
 }
 
-// Razona "pensando" (mas lento) solo cuando la consulta lo amerita; las consultas
-// simples usan el modelo sin thinking para responder rapido pero igual inteligente.
+// Marca las consultas que ameritarian razonar "pensando" (mas lento). Hoy el modo
+// pensar esta APAGADO en PENSAR_DEEPSEEK, asi que esta senal solo ajusta timeout y
+// el reintento; si se vuelve a encender el pensar, tambien elige el reasoning_effort.
 function wantsDeepReasoning(text: string, fallback: AiPlannerPlan): boolean {
   const normalized = normalizeText(text)
   return Boolean(
@@ -737,8 +739,11 @@ function buildDeepSeekPlannerBody(text: string, state: TelegramSessionState, fal
     ],
   }
 
-  if (advanced) {
-    body.thinking = { type: "enabled" }
+  // El modo "pensar" se manda SIEMPRE explicito (DeepSeek asume "enabled" si no se
+  // manda) y hoy va apagado: mas rapido y mas barato. Al encenderlo en
+  // PENSAR_DEEPSEEK vuelve tambien el reasoning_effort de las consultas profundas.
+  body.thinking = PENSAR_DEEPSEEK
+  if (advanced && PENSAR_DEEPSEEK.type === "enabled") {
     body.reasoning_effort = reasoningEffortFor(text, fallback)
   }
 

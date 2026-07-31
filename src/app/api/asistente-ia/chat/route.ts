@@ -8,6 +8,7 @@ import {
 import { buildContabilidadContext, shouldUseContabilidadContext } from "@/lib/asistente-ia/contabilidad"
 import { buildConceptBuyersContext, detectConceptBuyers } from "@/lib/asistente-ia/concept-buyers"
 import { AuthzError, requireRoles } from "@/lib/utils/authz"
+import { modeloDeepSeek, PENSAR_DEEPSEEK } from "@/lib/deepseek-modelo"
 
 const SYSTEM_PROMPT =
   "Eres el asistente interno de solo lectura del ERP de Gimnasio Emocional Mentes Brillantes. Respondes únicamente con los datos proporcionados por el sistema. No inventes pagos, saldos, cuentas, nombres ni fechas. No puedes crear, editar, eliminar, registrar pagos ni modificar información. Si la información no está disponible, dilo claramente. Usa pesos colombianos COP y lenguaje natural. Si el contexto trae error de consulta, informa que no se pudo consultar la información y no des cifras en cero. Para sesiones coach: cuenta las sesiones del módulo (coach_sesiones) y ADEMÁS las que vienen de la migración (sesiones_migradas: cuentas de 'sesión coach' no conectadas al contador); esas cuentas migradas SÍ son sesiones tomadas. Si la persona no tiene módulo pero sí cuentas migradas de sesión coach, di cuántas sesiones tomó y enumera sus fechas (la fecha de cada cuenta); no digas que no tiene sesiones. Aclara brevemente cuando el conteo viene de registros migrados. Para análisis contable, distingue ingresos de cartera, donaciones, ventas externas, ingresos operativos, egresos operativos, adelantos no operativos y utilidad."
@@ -152,7 +153,9 @@ export async function POST(request: Request) {
     }
 
     const apiKey = process.env.DEEPSEEK_API_KEY
-    const model = process.env.DEEPSEEK_MODEL
+    // Si no hay DEEPSEEK_MODEL en el entorno usa el modelo por defecto
+    // (deepseek-v4-flash). Ver src/lib/deepseek-modelo.ts.
+    const model = modeloDeepSeek()
     const baseUrl = process.env.DEEPSEEK_BASE_URL?.replace(/\/+$/, "")
 
     if (!apiKey || !model || !baseUrl) {
@@ -186,6 +189,8 @@ export async function POST(request: Request) {
 
     const requestBody = JSON.stringify({
       model,
+      // Se manda siempre explicito: DeepSeek asume "enabled" si no se manda.
+      thinking: PENSAR_DEEPSEEK,
       temperature: 0.2,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },

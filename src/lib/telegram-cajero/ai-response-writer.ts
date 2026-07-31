@@ -4,6 +4,7 @@ import type { TelegramSessionState } from "./memory"
 import type { TelegramConfig } from "./types"
 import { minimizeAiProviderPayload } from "./ai-provider-payload"
 import { toSafeNumber } from "@/lib/utils/contable"
+import { PENSAR_DEEPSEEK } from "@/lib/deepseek-modelo"
 
 function formatCop(value: unknown) {
   return `$${Math.round(toSafeNumber(value)).toLocaleString("es-CO")}`
@@ -356,11 +357,12 @@ async function callDeepSeekWriter({
     ],
   }
 
-  if (advanced) {
-    body.thinking = { type: "enabled" }
+  // El modo "pensar" se manda SIEMPRE explicito (DeepSeek asume "enabled" si no se
+  // manda) y hoy va apagado: mas rapido y mas barato. Al encenderlo en
+  // PENSAR_DEEPSEEK vuelve tambien el reasoning_effort de las redacciones profundas.
+  body.thinking = PENSAR_DEEPSEEK
+  if (advanced && PENSAR_DEEPSEEK.type === "enabled") {
     body.reasoning_effort = "max"
-  } else {
-    body.thinking = { type: "disabled" }
   }
 
   const controller = new AbortController()
