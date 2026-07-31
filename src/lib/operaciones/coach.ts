@@ -9,6 +9,13 @@ export type RegistrarSesionCoachParams = {
   asistenteId: string
   fecha: string
   notas?: string | null
+  /**
+   * Evento de la agenda del que sale la sesion, si viene de alli. Sin este
+   * enlace el ERP no puede notar que borraron de la agenda algo ya cobrado:
+   * cruzar por persona+fecha alcanza para saber que la sesion ya esta, pero no
+   * para seguirle el rastro al evento.
+   */
+  eventoAgendaId?: string | null
 }
 
 export type PrevisualizacionSesionCoach = {
@@ -92,12 +99,15 @@ export async function registrarSesionCoach(
   const paquetes = await paquetesDe(supabase, params.asistenteId)
   const destino = elegirPaquete(paquetes)
 
+  const eventoAgendaId = params.eventoAgendaId ? String(params.eventoAgendaId).trim().slice(0, 128) : null
+
   const { error } = await supabase.from("coach_sesiones").insert([
     {
       paquete_id: destino.id,
       asistente_id: params.asistenteId,
       fecha,
       notas: params.notas && String(params.notas).trim() ? String(params.notas).trim() : null,
+      evento_agenda_id: eventoAgendaId || null,
     },
   ])
 

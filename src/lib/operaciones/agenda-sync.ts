@@ -1,4 +1,6 @@
 import { OperacionError } from "./errores"
+import { fechaHoyBogota } from "@/lib/utils/fechas"
+import { cargarEstadoCupo, repartirCupo, type Cobertura } from "./agenda-cobertura"
 
 // Reconciliacion entre la AGENDA (calendario de la familia) y el ERP
 // (contabilidad).
@@ -40,6 +42,12 @@ export type Diferencia = {
   mensaje: string
   /** Que se propone hacer si lo apruebas. */
   accionSugerida: string
+  /**
+   * Solo en sesion_sin_registrar: si esa sesion ya venia comprada y si el
+   * paquete de donde sale esta pagado. Es la diferencia entre "descontala del
+   * paquete" y "hay que cobrarla".
+   */
+  cobertura?: Cobertura
   detalle?: Record<string, unknown>
 }
 
@@ -155,7 +163,9 @@ export async function calcularDiferencias(
     porPersonaFecha.set(`${s.asistente_id}|${s.fecha}`, s)
   }
 
-  const hoy = new Date().toISOString().slice(0, 10)
+  // En Colombia, no en UTC: el servidor corre en UTC y de noche ya va un dia
+  // adelante, asi que una sesion de manana se reportaba como "ya dictada".
+  const hoy = fechaHoyBogota()
   const diferencias: Diferencia[] = []
 
   const agregar = (d: Diferencia) => {
@@ -231,6 +241,8 @@ export async function calcularDiferencias(
     }
   }
 
+  await adjuntarCobertura(admin, diferencias)
+
   const orden: Record<TipoDiferencia, number> = {
     evento_borrado_con_sesion: 0,
     sesion_sin_registrar: 1,
@@ -238,6 +250,45 @@ export async function calcularDiferencias(
     persona_nueva: 3,
   }
   return diferencias.sort((a, b) => orden[a.tipo] - orden[b.tipo] || (a.fecha < b.fecha ? 1 : -1))
+}
+
+/**
+ * Le dice a cada sesion sin registrar si ya venia comprada y si esta pagada.
+ *
+ * Se reparte por persona y por fecha: el cupo es un saldo que se agota, no una
+ * respuesta que valga igual para todas sus sesiones pendientes.
+ */
+async function adjuntarCobertura(admin: any, diferencias: Diferencia[]) {
+  const porPersona = new Map<string, Diferencia[]>()
+  for (const d of diferencias) {
+    if (d.tipo !== "sesion_sin_registrar") continue
+    const asistenteId = String((d.detalle as any)?.asistenteId || "")
+    if (!asistenteId) continue
+    const lista = porPersona.get(asistenteId) || []
+    lista.push(d)
+    porPersona.set(asistenteId, lista)
+  }
+  if (!porPersona.size) return
+
+  let estados
+  try {
+    estados = await cargarEstadoCupo(admin, Array.from(porPersona.keys()))
+  } catch (error: any) {
+    // Avisar sin el cupo sigue siendo mejor que no avisar.
+    console.error("[agenda-sync] no se pudo calcular el cupo", { message: error?.message })
+    return
+  }
+
+  for (const [asistenteId, lista] of Array.from(porPersona.entries())) {
+    // De la mas vieja a la mas nueva: es el orden en que se registrarian.
+    lista.sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0))
+    const coberturas = repartirCupo(estados.get(asistenteId), lista.length)
+    lista.forEach((d, i) => {
+      const cobertura = coberturas[i]
+      d.cobertura = cobertura
+      d.accionSugerida = cobertura.accion
+    })
+  }
 }
 
 export async function marcarDiferenciaResuelta(

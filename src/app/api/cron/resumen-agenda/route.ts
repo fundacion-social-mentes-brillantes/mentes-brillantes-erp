@@ -1,7 +1,9 @@
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getTelegramCajeroConfig } from "@/lib/telegram-cajero/config"
 import { sendTelegramMessage } from "@/lib/telegram-cajero/telegram"
-import { calcularDiferencias, type Diferencia } from "@/lib/operaciones/agenda-sync"
+import { calcularDiferencias } from "@/lib/operaciones/agenda-sync"
+import { armarMensaje } from "@/lib/operaciones/agenda-resumen-mensaje"
+import { fechaHoyBogota } from "@/lib/utils/fechas"
 
 // Resumen diario de diferencias entre la agenda y el ERP, por Telegram.
 //
@@ -11,13 +13,6 @@ import { calcularDiferencias, type Diferencia } from "@/lib/operaciones/agenda-s
 export const dynamic = "force-dynamic"
 export const maxDuration = 60
 
-const TITULOS: Record<Diferencia["tipo"], string> = {
-  evento_borrado_con_sesion: "Se borró de la agenda algo ya cobrado",
-  sesion_sin_registrar: "Sesiones dictadas sin registrar",
-  fecha_movida: "Sesiones que cambiaron de fecha",
-  persona_nueva: "Personas de la agenda que no están en el ERP",
-}
-
 /** Vercel firma sus crons con este encabezado; tambien se acepta CRON_SECRET. */
 function llamadaAutorizada(req: Request): boolean {
   const secreto = process.env.CRON_SECRET
@@ -25,34 +20,6 @@ function llamadaAutorizada(req: Request): boolean {
   if (secreto && auth === `Bearer ${secreto}`) return true
   // Vercel Cron añade este encabezado en produccion.
   return req.headers.get("x-vercel-cron") !== null
-}
-
-function armarMensaje(diferencias: Diferencia[], ventana: { desde: string; hasta: string }): string {
-  const porTipo = new Map<Diferencia["tipo"], Diferencia[]>()
-  for (const d of diferencias) {
-    const lista = porTipo.get(d.tipo) || []
-    lista.push(d)
-    porTipo.set(d.tipo, lista)
-  }
-
-  const partes: string[] = [
-    `Agenda vs ERP — ${diferencias.length} cosa(s) por revisar`,
-    `(del ${ventana.desde} al ${ventana.hasta})`,
-    "",
-  ]
-
-  // El orden de calcularDiferencias ya pone primero lo mas delicado.
-  for (const [tipo, lista] of Array.from(porTipo.entries())) {
-    partes.push(`▸ ${TITULOS[tipo]} (${lista.length})`)
-    for (const d of lista.slice(0, 8)) {
-      partes.push(`   · ${d.mensaje}`)
-    }
-    if (lista.length > 8) partes.push(`   · …y ${lista.length - 8} más`)
-    partes.push("")
-  }
-
-  partes.push("Nada se registra solo. Dime cuáles apruebas.")
-  return partes.join("\n")
 }
 
 export async function GET(req: Request) {
@@ -66,8 +33,10 @@ export async function GET(req: Request) {
     return Response.json({ error: "no_configurado" }, { status: 503 })
   }
 
-  const hoy = new Date()
-  const fecha = (dias: number) => new Date(hoy.getTime() + dias * 86400000).toISOString().slice(0, 10)
+  // La ventana se cuenta desde el dia colombiano, no el del servidor (UTC).
+  const hoy = fechaHoyBogota()
+  const fecha = (dias: number) =>
+    new Date(new Date(`${hoy}T12:00:00Z`).getTime() + dias * 86400000).toISOString().slice(0, 10)
   const ventana = { desde: fecha(-45), hasta: fecha(15) }
 
   try {

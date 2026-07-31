@@ -594,6 +594,12 @@ export const OPERACIONES: DefinicionOperacion[] = [
       persona: z.string().trim().min(1).max(160),
       fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       notas: z.string().trim().max(300).optional(),
+      evento_agenda_id: z
+        .string()
+        .trim()
+        .max(128)
+        .optional()
+        .describe("Evento de la agenda del que sale la sesion, para poder seguirle el rastro si lo borran alla."),
     },
     previsualizar: async (admin, _actor, args) => {
       const persona = await resolverPersona(admin, String(args.persona))
@@ -601,6 +607,7 @@ export const OPERACIONES: DefinicionOperacion[] = [
         asistenteId: persona.id,
         fecha: String(args.fecha || fechaHoyBogota()),
         notas: args.notas ? String(args.notas) : null,
+        eventoAgendaId: args.evento_agenda_id ? String(args.evento_agenda_id) : null,
       }
       const previa = await previsualizarSesionCoach(admin, datos as any)
 
