@@ -59,7 +59,23 @@ const cardHeader =
 const cardTitle = 'text-sm font-semibold tracking-tight text-[rgb(var(--text-primary))]'
 const headerAccent = 'inline-block w-1.5 h-6 rounded-full bg-[rgb(var(--accent))] mr-2'
 
-export function CuentasClient({ cuentas, isAdmin = false }: { cuentas: Cuenta[]; isAdmin?: boolean }) {
+export function CuentasClient({
+  cuentas,
+  isAdmin = false,
+  busqueda = '',
+  total = 0,
+  paginaActual = 1,
+  totalPaginas = 1,
+  porPagina = 100,
+}: {
+  cuentas: Cuenta[]
+  isAdmin?: boolean
+  busqueda?: string
+  total?: number
+  paginaActual?: number
+  totalPaginas?: number
+  porPagina?: number
+}) {
   const [selectedCuenta, setSelectedCuenta] = useState<Cuenta | null>(null)
   const [isSheetOpen, setIsSheetOpen] = useState(false)
 
@@ -68,8 +84,51 @@ export function CuentasClient({ cuentas, isAdmin = false }: { cuentas: Cuenta[];
     setIsSheetOpen(true)
   }
 
+  const desde = total === 0 ? 0 : (paginaActual - 1) * porPagina + 1
+  const hasta = Math.min(paginaActual * porPagina, total)
+  const enlacePagina = (p: number) =>
+    `/cuentas?${new URLSearchParams({ ...(busqueda ? { q: busqueda } : {}), pagina: String(p) })}`
+
   return (
     <>
+      {/* Buscador y contador. El buscador es un formulario normal (GET) para que
+          filtre en la BASE, no en pantalla: es lo que permite llegar a las
+          cuentas viejas, que antes ni siquiera se descargaban. */}
+      <div className={`${cardBase} p-4 space-y-3`}>
+        <form method="get" action="/cuentas" className="flex flex-col sm:flex-row gap-2">
+          <input
+            type="search"
+            name="q"
+            defaultValue={busqueda}
+            placeholder="Buscar por persona o concepto…"
+            className="flex-1 h-10 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--input-bg))] px-3 text-sm text-[rgb(var(--text-primary))]"
+          />
+          <button
+            type="submit"
+            className="h-10 px-4 rounded-md bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))] text-sm font-medium hover:bg-[rgb(var(--accent-strong))]"
+          >
+            Buscar
+          </button>
+          {busqueda && (
+            <Link
+              href="/cuentas"
+              className="h-10 px-4 inline-flex items-center rounded-md border border-[rgb(var(--border))] text-sm font-medium text-[rgb(var(--text-primary))] hover:bg-[rgb(var(--surface-2))]"
+            >
+              Limpiar
+            </Link>
+          )}
+        </form>
+        <p className="text-xs text-[rgb(var(--text-muted))]">
+          {total === 0
+            ? busqueda
+              ? `Ninguna cuenta coincide con «${busqueda}».`
+              : 'No hay cuentas registradas.'
+            : <>Mostrando <strong className="text-[rgb(var(--text-primary))]">{desde}–{hasta}</strong> de{' '}
+              <strong className="text-[rgb(var(--text-primary))]">{total}</strong>
+              {busqueda ? <> que coinciden con «{busqueda}»</> : ' cuentas'}.</>}
+        </p>
+      </div>
+
       {/* Desktop Table */}
       <div className={`hidden md:block ${cardBase} overflow-hidden`}>
         <div className="overflow-x-auto">
@@ -334,6 +393,34 @@ export function CuentasClient({ cuentas, isAdmin = false }: { cuentas: Cuenta[];
           )}
         </SheetContent>
       </Sheet>
+
+      {totalPaginas > 1 && (
+        <div className={`${cardBase} p-4 flex items-center justify-between gap-3`}>
+          {paginaActual > 1 ? (
+            <Link
+              href={enlacePagina(paginaActual - 1)}
+              className="h-10 px-4 inline-flex items-center rounded-md border border-[rgb(var(--border))] text-sm font-medium text-[rgb(var(--text-primary))] hover:bg-[rgb(var(--surface-2))]"
+            >
+              ← Anteriores
+            </Link>
+          ) : (
+            <span />
+          )}
+          <span className="text-sm text-[rgb(var(--text-muted))]">
+            Página {paginaActual} de {totalPaginas}
+          </span>
+          {paginaActual < totalPaginas ? (
+            <Link
+              href={enlacePagina(paginaActual + 1)}
+              className="h-10 px-4 inline-flex items-center rounded-md border border-[rgb(var(--border))] text-sm font-medium text-[rgb(var(--text-primary))] hover:bg-[rgb(var(--surface-2))]"
+            >
+              Siguientes →
+            </Link>
+          ) : (
+            <span />
+          )}
+        </div>
+      )}
     </>
   )
 }
