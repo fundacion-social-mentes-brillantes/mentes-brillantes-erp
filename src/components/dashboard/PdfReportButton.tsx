@@ -2,8 +2,11 @@
 
 import { useState } from 'react'
 import { FileDown, Loader2 } from 'lucide-react'
-import html2canvas from 'html2canvas'
-import jsPDF from 'jspdf'
+
+// html2canvas y jsPDF NO se importan arriba a proposito: entre las dos pesan
+// ~174 KB comprimidos y solo hacen falta cuando alguien oprime el boton. Al
+// estar arriba, viajaban al celular en cada carga del tablero aunque nadie
+// generara un PDF. Se cargan dentro del handler, con el boton ya en "Generando".
 
 async function loadLogoDataUrl() {
   const response = await fetch('/logo-mentes-brillantes.png')
@@ -24,7 +27,13 @@ export function PdfReportButton({ displayMonthName }: { displayMonthName: string
     
     try {
       setIsGenerating(true)
-      
+
+      // Se bajan aqui, con el boton ya mostrando "Generando...".
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ])
+
       const dashboardElement = document.getElementById('dashboard-content')
       if (!dashboardElement) {
         throw new Error('No se encontrÃ³ el contenido del dashboard')

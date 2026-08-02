@@ -1,10 +1,20 @@
 import { AlertCircle, Receipt, History, Banknote, ShoppingCart, TrendingUp, TrendingDown, Minus, Lock, Gift, Landmark, Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import { PeriodSelector } from "./PeriodSelector";
-import { BalanceChart } from "./BalanceChart";
-import { PdfReportButton } from "./PdfReportButton";
 import { AnimatedNumber } from "./AnimatedNumber";
+
+// La grafica (recharts) y el boton de PDF (jsPDF + html2canvas) son la mitad del
+// peso del tablero y ninguno hace falta para ver los numeros: la grafica va
+// DEBAJO de las tarjetas y el PDF solo se usa al oprimirlo. Cargandolos aparte,
+// el celular deja de bajar ~280 KB antes de mostrar nada.
+const BalanceChart = dynamic(() => import("./BalanceChart").then((m) => m.BalanceChart), {
+  loading: () => <div className="h-[300px] w-full animate-pulse rounded-xl bg-[rgb(var(--surface-2))]" />,
+});
+const PdfReportButton = dynamic(() => import("./PdfReportButton").then((m) => m.PdfReportButton), {
+  loading: () => <div className="h-10 w-48 animate-pulse rounded-xl bg-[rgb(var(--surface-2))]" />,
+});
 import { filtrarIngresosOperativos, filtrarIngresosRealesSaldoAFavor, esAnuladoCompleto, filtrarPagosValidosCuentas, sumarMontos } from "@/lib/utils/contable";
 import { construirSerieDiaria } from "@/lib/utils/dashboard";
 
