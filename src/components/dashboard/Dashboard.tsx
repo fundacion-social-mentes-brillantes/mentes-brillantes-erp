@@ -122,7 +122,38 @@ export async function Dashboard({ periodo: periodoId }: { periodo?: string }) {
   };
 
   // Totales de un período: CONGELADOS si cerrado (igual a la liquidación), en vivo si abierto.
-  const getTotales = async (inicio: string, fin: string, estado: string | null, id?: string): Promise<Totales> => {
+  //
+  // `conGrafica` es false para el período ANTERIOR, que solo se usa para las
+  // flechas de comparación: su gráfica nunca se dibuja. Eso permite saltarse
+  // consultas cuando además el período está cerrado y sus cifras ya vienen
+  // congeladas de la liquidación.
+  const getTotales = async (
+    inicio: string,
+    fin: string,
+    estado: string | null,
+    id?: string,
+    opciones: { conGrafica?: boolean } = {}
+  ): Promise<Totales> => {
+    const conGrafica = opciones.conGrafica !== false;
+
+    // Si el período está cerrado, la liquidación manda: sus cifras sobreescriben
+    // todo lo que se calcule en vivo. Por eso se pregunta PRIMERO — así, cuando
+    // ya hay liquidación y no hace falta la gráfica, las cinco consultas de
+    // movimientos ni se piden, porque su resultado se iba a descartar igual.
+    const cerrado = estado === "cerrado" && !!id;
+    const [{ data: liqRows }, { data: resumenRows }] = cerrado
+      ? await Promise.all([
+          supabase.from("liquidaciones_socios").select("ingresos_cobrados, donaciones_periodo, ingresos_operativos").eq("periodo_id", id!).limit(1),
+          supabase.from("liquidaciones_resumen_cuentas").select("ingresos_ventas_externas, salidas_egresos").eq("periodo_id", id!),
+        ])
+      : [{ data: null }, { data: null }];
+
+    const hayLiquidacion = Boolean(liqRows && liqRows.length > 0);
+    // Salvaguarda: si el período está cerrado pero NO tiene liquidación, se
+    // calculan en vivo como siempre. Nunca se muestra un período en blanco.
+    const necesitaMovimientos = !hayLiquidacion || conGrafica;
+    const vacio = { data: [] as any[] };
+
     const [
       { data: rawIngresos },
       { data: rawSaldo },
@@ -131,11 +162,11 @@ export async function Dashboard({ periodo: periodoId }: { periodo?: string }) {
       { data: rawEgresos },
       { data: cuentasRango },
     ] = await Promise.all([
-      supabase.from("pagos_abonos").select("monto, fecha_pago, metodo_pago, origen_fondos, estado, notas").gte("fecha_pago", inicio).lte("fecha_pago", fin),
-      supabase.from("movimientos_saldo_favor").select("monto, fecha, metodo_pago, tipo, notas").gte("fecha", inicio).lte("fecha", fin),
-      supabase.from("donaciones_asistentes").select("monto, estado, notas, fecha").gte("fecha", inicio).lte("fecha", fin),
-      supabase.from("ventas_externas").select("monto, estado, notas, fecha").gte("fecha", inicio).lte("fecha", fin),
-      supabase.from("egresos").select("monto, fecha, estado, notas").gte("fecha", inicio).lte("fecha", fin),
+      necesitaMovimientos ? supabase.from("pagos_abonos").select("monto, fecha_pago, metodo_pago, origen_fondos, estado, notas").gte("fecha_pago", inicio).lte("fecha_pago", fin) : vacio,
+      necesitaMovimientos ? supabase.from("movimientos_saldo_favor").select("monto, fecha, metodo_pago, tipo, notas").gte("fecha", inicio).lte("fecha", fin) : vacio,
+      necesitaMovimientos ? supabase.from("donaciones_asistentes").select("monto, estado, notas, fecha").gte("fecha", inicio).lte("fecha", fin) : vacio,
+      necesitaMovimientos ? supabase.from("ventas_externas").select("monto, estado, notas, fecha").gte("fecha", inicio).lte("fecha", fin) : vacio,
+      necesitaMovimientos ? supabase.from("egresos").select("monto, fecha, estado, notas").gte("fecha", inicio).lte("fecha", fin) : vacio,
       supabase.from("cuentas_por_cobrar").select("valor_total, pagos_abonos(monto, estado, notas)").gte("fecha_emision", inicio).lte("fecha_emision", fin),
     ]);
 
@@ -153,21 +184,16 @@ export async function Dashboard({ periodo: periodoId }: { periodo?: string }) {
     let utilidad = Math.round(ingresosTotales - egresos);
     let congelado = false;
 
-    if (estado === "cerrado" && id) {
-      const [{ data: liqRows }, { data: resumenRows }] = await Promise.all([
-        supabase.from("liquidaciones_socios").select("ingresos_cobrados, donaciones_periodo, ingresos_operativos").eq("periodo_id", id).limit(1),
-        supabase.from("liquidaciones_resumen_cuentas").select("ingresos_ventas_externas, salidas_egresos").eq("periodo_id", id),
-      ]);
-      if (liqRows && liqRows.length > 0) {
-        const liq: any = liqRows[0];
-        ingresosCartera = Math.round(Number(liq.ingresos_cobrados) || 0);
-        donaciones = Math.round(Number(liq.donaciones_periodo) || 0);
-        ingresosTotales = Math.round(Number(liq.ingresos_operativos ?? ingresosCartera + donaciones) || 0);
-        egresos = Math.round((resumenRows ?? []).reduce((a: number, r: any) => a + Number(r.salidas_egresos || 0), 0));
-        ventasExternas = Math.round((resumenRows ?? []).reduce((a: number, r: any) => a + Number(r.ingresos_ventas_externas || 0), 0));
-        utilidad = Math.round(ingresosTotales - egresos);
-        congelado = true;
-      }
+    // La liquidación ya se consultó arriba; aquí solo se aplican sus cifras.
+    if (hayLiquidacion) {
+      const liq: any = liqRows![0];
+      ingresosCartera = Math.round(Number(liq.ingresos_cobrados) || 0);
+      donaciones = Math.round(Number(liq.donaciones_periodo) || 0);
+      ingresosTotales = Math.round(Number(liq.ingresos_operativos ?? ingresosCartera + donaciones) || 0);
+      egresos = Math.round((resumenRows ?? []).reduce((a: number, r: any) => a + Number(r.salidas_egresos || 0), 0));
+      ventasExternas = Math.round((resumenRows ?? []).reduce((a: number, r: any) => a + Number(r.ingresos_ventas_externas || 0), 0));
+      utilidad = Math.round(ingresosTotales - egresos);
+      congelado = true;
     }
 
     const facturado = Math.round((cuentasRango ?? []).reduce((acc: number, c: any) => acc + Number(c.valor_total), 0));
@@ -176,15 +202,20 @@ export async function Dashboard({ periodo: periodoId }: { periodo?: string }) {
       return acc + (Number(c.valor_total) - abonado);
     }, 0));
 
-    const dias = buildDays(inicio, fin);
-    const ingresosDiarios = [
-      ...ingresosData.map((it: any) => ({ fecha: it.fecha_pago, monto: it.monto })),
-      ...saldoFavorIngresos.map((it: any) => ({ fecha: it.fecha, monto: it.monto })),
-      ...ventasValidas.map((it: any) => ({ fecha: it.fecha, monto: it.monto })),
-      ...donacionesValidas.map((it: any) => ({ fecha: it.fecha, monto: it.monto })),
-    ];
-    const egresosDiarios = egresosValidos.map((it: any) => ({ fecha: it.fecha, monto: it.monto }));
-    const chartData = construirSerieDiaria(dias, ingresosDiarios, egresosDiarios);
+    // La gráfica del período ANTERIOR nunca se dibuja (solo se lee cur.chartData),
+    // y buildDays puede recorrer cientos de días para nada.
+    let chartData: Totales["chartData"] = [];
+    if (conGrafica) {
+      const dias = buildDays(inicio, fin);
+      const ingresosDiarios = [
+        ...ingresosData.map((it: any) => ({ fecha: it.fecha_pago, monto: it.monto })),
+        ...saldoFavorIngresos.map((it: any) => ({ fecha: it.fecha, monto: it.monto })),
+        ...ventasValidas.map((it: any) => ({ fecha: it.fecha, monto: it.monto })),
+        ...donacionesValidas.map((it: any) => ({ fecha: it.fecha, monto: it.monto })),
+      ];
+      const egresosDiarios = egresosValidos.map((it: any) => ({ fecha: it.fecha, monto: it.monto }));
+      chartData = construirSerieDiaria(dias, ingresosDiarios, egresosDiarios);
+    }
 
     return { ingresosCartera, donaciones, ventasExternas, ingresosTotales, egresos, utilidad, facturado, pendiente, chartData, congelado };
   };
@@ -193,14 +224,19 @@ export async function Dashboard({ periodo: periodoId }: { periodo?: string }) {
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
 
-  // Todo en paralelo: período actual, período anterior y la cartera general
-  const [cur, prev, carteraTotalRes, carteraAntiguaRes] = await Promise.all([
+  // Todo en paralelo: período actual, período anterior y la cartera general.
+  //
+  // La cartera se pide UNA sola vez. Antes eran dos consultas casi idénticas
+  // (las mismas cuentas pendientes, la segunda solo con el filtro de +30 días):
+  // ~671 y ~664 filas con sus abonos anidados, 99% de solapamiento, cruzando el
+  // país dos veces para sacar dos números. Ahora se trae `fecha_emision` y la
+  // parte vieja se separa aquí mismo, con el mismo criterio que usaba el filtro.
+  const [cur, prev, carteraTotalRes] = await Promise.all([
     getTotales(rangeInicio, rangeFin, periodoEstado, selectedPeriodo?.id),
     prevPeriodo
-      ? getTotales(prevPeriodo.fecha_inicio, prevPeriodo.fecha_fin, prevPeriodo.estado, prevPeriodo.id)
+      ? getTotales(prevPeriodo.fecha_inicio, prevPeriodo.fecha_fin, prevPeriodo.estado, prevPeriodo.id, { conGrafica: false })
       : Promise.resolve(null as Totales | null),
-    supabase.from("cuentas_por_cobrar").select("valor_total, pagos_abonos(monto, estado, notas)").in("estado", ["pendiente", "parcial"]),
-    supabase.from("cuentas_por_cobrar").select("valor_total, pagos_abonos(monto, estado, notas)").in("estado", ["pendiente", "parcial"]).lt("fecha_emision", thirtyDaysAgoStr),
+    supabase.from("cuentas_por_cobrar").select("valor_total, fecha_emision, pagos_abonos(monto, estado, notas)").in("estado", ["pendiente", "parcial"]),
   ]);
 
   const ingresosMes = cur.ingresosCartera;
@@ -227,13 +263,17 @@ export async function Dashboard({ periodo: periodoId }: { periodo?: string }) {
 
   // --- Cartera (acumulado general) — datos ya traídos en paralelo arriba ---
   const carteraTotalData = carteraTotalRes.data;
-  const carteraAntiguaData = carteraAntiguaRes.data;
+  // Las cuentas con más de 30 días salen de la misma lista: es exactamente el
+  // mismo criterio que tenía la consulta que se eliminó (fecha_emision < corte).
+  const carteraAntiguaData = (carteraTotalData ?? []).filter(
+    (c: any) => c.fecha_emision && c.fecha_emision < thirtyDaysAgoStr
+  );
   const carteraTotal = Math.round(carteraTotalData?.reduce((acc, curr) => {
     const abonado = filtrarPagosValidosCuentas(curr.pagos_abonos || []).reduce((sum: number, pago: any) => sum + Number(pago.monto), 0);
     return acc + (Number(curr.valor_total) - abonado);
   }, 0) || 0);
   let carteraAntigua = 0;
-  carteraAntiguaData?.forEach((curr) => {
+  carteraAntiguaData.forEach((curr: any) => {
     const abonado = filtrarPagosValidosCuentas(curr.pagos_abonos || []).reduce((sum: number, p: any) => sum + Number(p.monto), 0);
     const pendiente = Number(curr.valor_total) - abonado;
     if (pendiente > 0) carteraAntigua += pendiente;
