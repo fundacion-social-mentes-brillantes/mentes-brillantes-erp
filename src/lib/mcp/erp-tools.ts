@@ -26,7 +26,7 @@ import {
   type ToolResult,
 } from "@/lib/telegram-cajero/tools"
 import { getCoachSessions } from "@/lib/telegram-cajero/tools/coach"
-import { calcularDiferencias } from "@/lib/operaciones/agenda-sync"
+import { calcularDiferencias, resumenEspejoAgenda } from "@/lib/operaciones/agenda-sync"
 import { buscarPrepagadasSinUsar } from "@/lib/operaciones/coach-prepagadas"
 import { buscarCuentasConResiduo } from "@/lib/operaciones/residuos"
 import { auditMcpToolCall, McpAuditError } from "./audit"
@@ -586,7 +586,10 @@ export function registerErpTools(server: McpServer) {
       const desde = fecha(-atras)
       const hasta = fecha(adelante)
 
-      const diferencias = await calcularDiferencias(s as any, { desde, hasta })
+      const [diferencias, espejo] = await Promise.all([
+        calcularDiferencias(s as any, { desde, hasta }),
+        resumenEspejoAgenda(s as any, { desde, hasta }),
+      ])
       const porTipo = diferencias.reduce((acc: Record<string, number>, d) => {
         acc[d.tipo] = (acc[d.tipo] || 0) + 1
         return acc
@@ -594,11 +597,16 @@ export function registerErpTools(server: McpServer) {
 
       return {
         ventana: { desde, hasta },
+        // El cruce se hace contra el espejo de la agenda, no contra la agenda
+        // en vivo: si dejo de reportar, "no hay diferencias" no significa que
+        // este al dia. Por eso el espejo viaja con la respuesta.
+        espejo,
         total: diferencias.length,
         por_tipo: porTipo,
         diferencias,
-        nota:
-          diferencias.length === 0
+        nota: espejo.aviso
+          ? `${espejo.aviso} No lo des por cuadrado sin revisar que la agenda este sincronizando.`
+          : diferencias.length === 0
             ? "La agenda y el ERP coinciden en esta ventana."
             : "Nada de esto se registra solo: hay que aprobarlo una por una.",
       }

@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getTelegramCajeroConfig } from "@/lib/telegram-cajero/config"
 import { sendTelegramMessage } from "@/lib/telegram-cajero/telegram"
-import { calcularDiferencias } from "@/lib/operaciones/agenda-sync"
+import { calcularDiferencias, resumenEspejoAgenda } from "@/lib/operaciones/agenda-sync"
 import { armarMensaje } from "@/lib/operaciones/agenda-resumen-mensaje"
 import { fechaHoyBogota } from "@/lib/utils/fechas"
 
@@ -40,14 +40,29 @@ export async function GET(req: Request) {
   const ventana = { desde: fecha(-45), hasta: fecha(15) }
 
   try {
-    const diferencias = await calcularDiferencias(admin, ventana)
+    const [diferencias, espejo] = await Promise.all([
+      calcularDiferencias(admin, ventana),
+      resumenEspejoAgenda(admin, ventana),
+    ])
 
-    if (!diferencias.length) {
+    // Callarse solo se vale cuando el silencio de verdad significa "todo al
+    // dia". Si la agenda dejo de reportar, no hay diferencias porque no hay
+    // datos, y eso hay que decirlo.
+    if (!diferencias.length && !espejo.aviso) {
       return Response.json({ enviado: false, motivo: "sin_diferencias", ventana })
     }
 
-    await sendTelegramMessage(config, Number(config.allowedChatId), armarMensaje(diferencias, ventana))
-    return Response.json({ enviado: true, diferencias: diferencias.length, ventana })
+    await sendTelegramMessage(
+      config,
+      Number(config.allowedChatId),
+      armarMensaje(diferencias, ventana, espejo.aviso)
+    )
+    return Response.json({
+      enviado: true,
+      diferencias: diferencias.length,
+      aviso: espejo.aviso ?? null,
+      ventana,
+    })
   } catch (error: any) {
     console.error("[cron/resumen-agenda] fallo", { message: error?.message })
     return Response.json({ error: "error_interno" }, { status: 500 })

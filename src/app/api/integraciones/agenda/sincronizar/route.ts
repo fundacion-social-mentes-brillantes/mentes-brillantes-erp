@@ -12,12 +12,22 @@ import { OperacionError } from "@/lib/operaciones/errores"
 export const dynamic = "force-dynamic"
 export const maxDuration = 30
 
+/** Sesiones coach que se guardan por reporte. */
 const MAX_EVENTOS = 500
+/** Tope duro de eventos crudos que se leen, para no procesar un cuerpo enorme. */
+const MAX_ENTRADA = 5_000
 
-function normalizarEventos(valor: unknown): EventoAgenda[] {
-  if (!Array.isArray(valor)) return []
-  return valor
-    .slice(0, MAX_EVENTOS)
+/**
+ * El recorte va DESPUES de filtrar las sesiones coach. Recortar antes hacia que
+ * un calendario cargado de eventos normales (reuniones, festivos, viajes)
+ * empujara las sesiones fuera del reporte: llegaban de menos y el ERP las daba
+ * por borradas. Tambien avisa si el reporte quedo recortado, porque entonces no
+ * se puede dar por borrado nada.
+ */
+function normalizarEventos(valor: unknown): { eventos: EventoAgenda[]; completo: boolean } {
+  if (!Array.isArray(valor)) return { eventos: [], completo: false }
+  const coach = valor
+    .slice(0, MAX_ENTRADA)
     .map((e: any) => ({
       id: String(e?.id || "").slice(0, 128),
       workspaceId: String(e?.workspaceId || "").slice(0, 128),
@@ -34,6 +44,11 @@ function normalizarEventos(valor: unknown): EventoAgenda[] {
     // Solo sesiones coach: el resto del calendario (reuniones, festivos) no
     // tiene nada que ver con la contabilidad.
     .filter((e) => e.id && e.codigoPersona !== null && /^\d{4}-\d{2}-\d{2}$/.test(e.fecha))
+
+  return {
+    eventos: coach.slice(0, MAX_EVENTOS),
+    completo: valor.length <= MAX_ENTRADA && coach.length <= MAX_EVENTOS,
+  }
 }
 
 export async function POST(req: Request) {
@@ -49,14 +64,24 @@ export async function POST(req: Request) {
     const workspaceId = String(body?.workspaceId || "").slice(0, 128)
     const desde = String(body?.desde || "").slice(0, 10)
     const hasta = String(body?.hasta || "").slice(0, 10)
-    const eventos = normalizarEventos(body?.eventos)
+    const { eventos, completo } = normalizarEventos(body?.eventos)
 
-    const resultado = await guardarSnapshotAgenda(admin, { workspaceId, desde, hasta, eventos })
+    const resultado = await guardarSnapshotAgenda(admin, {
+      workspaceId,
+      desde,
+      hasta,
+      eventos,
+      reporteCompleto: completo,
+    })
     const diferencias = await calcularDiferencias(admin, { desde, hasta })
 
     return Response.json(
       {
         ...resultado,
+        reporteCompleto: completo,
+        aviso: completo
+          ? undefined
+          : "El reporte llego recortado: no se dio nada por borrado. Manda la ventana en tramos mas cortos.",
         diferencias: diferencias.length,
         // Se devuelve un resumen para que la agenda pueda avisar si quiere,
         // pero la revision de verdad se hace desde el ERP.

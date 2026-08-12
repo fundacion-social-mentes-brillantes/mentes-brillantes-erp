@@ -88,9 +88,15 @@ function bloqueSesionesSinRegistrar(lista: Diferencia[]): string[] {
   return lineas
 }
 
+/**
+ * `aviso` llega cuando el espejo de la agenda no da para concluir nada (dejo de
+ * reportar, o la ventana quedo vacia). Sin el, una comparacion sin datos se lee
+ * igual que una comparacion limpia.
+ */
 export function armarMensaje(
   diferencias: Diferencia[],
-  ventana: { desde: string; hasta: string }
+  ventana: { desde: string; hasta: string },
+  aviso?: string | null
 ): string {
   const porTipo = new Map<Diferencia["tipo"], Diferencia[]>()
   for (const d of diferencias) {
@@ -99,11 +105,24 @@ export function armarMensaje(
     porTipo.set(d.tipo, lista)
   }
 
+  if (!diferencias.length && aviso) {
+    return [
+      "Agenda vs ERP — no se pudo comparar",
+      `(del ${ventana.desde} al ${ventana.hasta})`,
+      "",
+      `⚠️ ${aviso}`,
+      "",
+      "No hay diferencias porque no hay con qué compararlas. Revisa que la agenda esté sincronizando.",
+    ].join("\n")
+  }
+
   const partes: string[] = [
     `Agenda vs ERP — ${diferencias.length} cosa(s) por revisar`,
     `(del ${ventana.desde} al ${ventana.hasta})`,
     "",
   ]
+
+  if (aviso) partes.push(`⚠️ ${aviso}`, "")
 
   // El orden de calcularDiferencias ya pone primero lo mas delicado.
   for (const [tipo, lista] of Array.from(porTipo.entries())) {

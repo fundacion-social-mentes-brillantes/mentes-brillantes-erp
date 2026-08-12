@@ -98,4 +98,27 @@ describe("armarMensaje", () => {
   it("sigue sin registrar nada por su cuenta", () => {
     expect(mensaje).toContain("Nada se registra solo")
   })
+
+  // Sin esto, una comparación hecha contra un espejo viejo se lee igual que una
+  // comparación limpia: el silencio deja de significar "estoy al día".
+  it("pone arriba el aviso de que la comparación puede estar incompleta", () => {
+    const conAviso = armarMensaje(escenarioReal(), { desde: "2026-06-15", hasta: "2026-08-14" }, "La agenda no reporta desde hace 7 dia(s).")
+
+    expect(conAviso.split("\n")[3]).toBe("⚠️ La agenda no reporta desde hace 7 dia(s).")
+    expect(conAviso).toContain("7 ya estaban compradas")
+  })
+
+  it("sin diferencias pero con aviso, no dice que todo cuadra", () => {
+    const soloAviso = armarMensaje([], { desde: "2026-06-15", hasta: "2026-08-14" }, "La agenda no reporta desde hace 7 dia(s).")
+
+    expect(soloAviso).toContain("no se pudo comparar")
+    expect(soloAviso).toContain("no hay con qué compararlas")
+    expect(soloAviso).not.toContain("cosa(s) por revisar")
+  })
+
+  it("sin diferencias y sin aviso no se arma mensaje alarmista", () => {
+    const limpio = armarMensaje([], { desde: "2026-06-15", hasta: "2026-08-14" })
+
+    expect(limpio).toContain("0 cosa(s) por revisar")
+  })
 })

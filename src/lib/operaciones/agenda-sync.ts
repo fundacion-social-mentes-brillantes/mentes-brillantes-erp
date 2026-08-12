@@ -56,16 +56,46 @@ export function esEventoCoach(evento: { codigoPersona?: number | null; kind?: st
   return evento.kind === "coach" || (evento.codigoPersona !== null && evento.codigoPersona !== undefined)
 }
 
+export type ResultadoSnapshot = {
+  recibidos: number
+  ventana: { desde: string; hasta: string }
+  /** Tramo en el que se dio algo por borrado. null cuando no se barrió nada. */
+  ventanaBarrida: { desde: string; hasta: string } | null
+  marcadosEliminados: number
+  /** Por qué no se barrió, cuando no se barrió. */
+  sinBarrer?: "reporte_incompleto" | "reporte_vacio" | "fallo_al_barrer"
+}
+
 /**
  * Guarda el espejo de lo que reporta la agenda. Los eventos de la ventana que
  * NO vengan en este reporte se marcan como eliminados: asi se detecta cuando
  * borran algo del calendario.
+ *
+ * Dar algo por borrado no es gratis: un evento marcado asi deja de compararse
+ * (ver calcularDiferencias), y si esa sesion si se dicto se queda dictada y
+ * sin cobrar, sin que nadie avise. Un reporte que llega recortado no dice
+ * "esto se borro", dice "de esto no alcance a contarte". Por eso solo se barre
+ * lo que el reporte de verdad alcanzo a cubrir:
+ *
+ *  - reporte recortado (reporteCompleto: false) o vacio: no se barre nada.
+ *  - nunca mas alla de la ultima fecha reportada: si el reporte dejo de contar
+ *    en el 31 de julio, lo de agosto no esta borrado, es que no lo contaron.
+ *
+ * Equivocarse al reves solo cuesta que siga preguntando por una sesion que ya
+ * cancelaron, y eso se responde una vez.
  */
 export async function guardarSnapshotAgenda(
   admin: any,
-  params: { workspaceId: string; desde: string; hasta: string; eventos: EventoAgenda[] }
-) {
-  const { workspaceId, desde, hasta, eventos } = params
+  params: {
+    workspaceId: string
+    desde: string
+    hasta: string
+    eventos: EventoAgenda[]
+    /** false cuando el reporte llego recortado y no se puede dar por completo. */
+    reporteCompleto?: boolean
+  }
+): Promise<ResultadoSnapshot> {
+  const { workspaceId, desde, hasta, eventos, reporteCompleto = true } = params
 
   if (!workspaceId) throw new OperacionError("Falta la agenda de origen.")
   if (!/^\d{4}-\d{2}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}-\d{2}$/.test(hasta)) {
@@ -91,24 +121,133 @@ export async function guardarSnapshotAgenda(
     if (error) throw new OperacionError("No se pudo guardar el reporte de la agenda.")
   }
 
+  const ventana = { desde, hasta }
+  const sinBarrido = (sinBarrer: ResultadoSnapshot["sinBarrer"]): ResultadoSnapshot => ({
+    recibidos: filas.length,
+    ventana,
+    ventanaBarrida: null,
+    marcadosEliminados: 0,
+    sinBarrer,
+  })
+
+  // Un reporte recortado o vacio no autoriza a borrar nada: no distingue
+  // "ya no esta" de "no me lo contaste".
+  if (!reporteCompleto) return sinBarrido("reporte_incompleto")
+  if (!filas.length) return sinBarrido("reporte_vacio")
+
   // Lo que estaba en la ventana y ya no lo reportan: se borro en la agenda.
+  // Pero solo hasta donde el reporte llego de verdad.
+  const ultimaReportada = filas.reduce((max, f) => (f.fecha > max ? f.fecha : max), filas[0].fecha)
+  const hastaBarrido = ultimaReportada < hasta ? ultimaReportada : hasta
   const vistos = filas.map((f) => f.id)
-  let query = admin
+
+  const { data: borrados, error: errorBorrados } = await admin
     .from("agenda_eventos")
     .update({ eliminado: true })
     .eq("workspace_id", workspaceId)
     .gte("fecha", desde)
-    .lte("fecha", hasta)
+    .lte("fecha", hastaBarrido)
     .eq("eliminado", false)
+    .not("id", "in", `(${vistos.map((v) => `"${v}"`).join(",")})`)
+    .select("id")
 
-  if (vistos.length) query = query.not("id", "in", `(${vistos.map((v) => `"${v}"`).join(",")})`)
-
-  const { error: errorBorrados } = await query
   if (errorBorrados) {
     console.error("[agenda-sync] no se pudieron marcar los borrados", { code: errorBorrados.code })
+    return sinBarrido("fallo_al_barrer")
   }
 
-  return { recibidos: filas.length, ventana: { desde, hasta } }
+  return {
+    recibidos: filas.length,
+    ventana,
+    ventanaBarrida: { desde, hasta: hastaBarrido },
+    marcadosEliminados: Array.isArray(borrados) ? borrados.length : 0,
+  }
+}
+
+export type EspejoAgenda = {
+  /** Ultima vez que la agenda reporto algo, en cualquier ventana. */
+  ultimoReporte: string | null
+  diasSinReporte: number | null
+  eventosEnVentana: number
+  eventosVivos: number
+  eventosDadosPorBorrados: number
+  /** Ultima fecha con sesion viva en el espejo dentro de la ventana. */
+  ultimaFechaConSesion: string | null
+  /**
+   * Frase corta cuando el espejo no da para concluir nada. Existe para que
+   * "no hay diferencias" no se confunda con "no hay datos".
+   */
+  aviso: string | null
+}
+
+/** A partir de aqui se considera que la agenda dejo de reportar. */
+const DIAS_TOLERANCIA_REPORTE = 2
+
+/**
+ * Que tan confiable es la comparacion. El cruce se hace contra el espejo, no
+ * contra la agenda en vivo: si la agenda no reporta, el cruce sale limpio
+ * aunque falten sesiones. Esto lo dice en voz alta.
+ */
+export async function resumenEspejoAgenda(
+  admin: any,
+  opciones: { desde: string; hasta: string; ahora?: number }
+): Promise<EspejoAgenda> {
+  const { desde, hasta } = opciones
+  const vacio: EspejoAgenda = {
+    ultimoReporte: null,
+    diasSinReporte: null,
+    eventosEnVentana: 0,
+    eventosVivos: 0,
+    eventosDadosPorBorrados: 0,
+    ultimaFechaConSesion: null,
+    aviso: null,
+  }
+
+  const [enVentana, ultimo] = await Promise.all([
+    admin
+      .from("agenda_eventos")
+      .select("fecha, eliminado")
+      .gte("fecha", desde)
+      .lte("fecha", hasta)
+      .not("codigo_persona", "is", null),
+    admin.from("agenda_eventos").select("visto_en").order("visto_en", { ascending: false }).limit(1),
+  ])
+
+  if (enVentana?.error || ultimo?.error) {
+    return { ...vacio, aviso: "No se pudo revisar si la agenda esta reportando: toma esta comparacion con pinzas." }
+  }
+
+  const lista = (enVentana?.data || []) as Array<{ fecha: string; eliminado: boolean }>
+  const vivos = lista.filter((e) => !e.eliminado)
+  const ultimoReporte = (ultimo?.data || [])[0]?.visto_en ?? null
+  const marca = ultimoReporte ? Date.parse(ultimoReporte) : NaN
+  const diasSinReporte = Number.isFinite(marca)
+    ? Math.max(0, Math.floor(((opciones.ahora ?? Date.now()) - marca) / 86400000))
+    : null
+
+  const espejo: EspejoAgenda = {
+    ultimoReporte,
+    diasSinReporte,
+    eventosEnVentana: lista.length,
+    eventosVivos: vivos.length,
+    eventosDadosPorBorrados: lista.length - vivos.length,
+    ultimaFechaConSesion: vivos.reduce<string | null>((max, e) => (!max || e.fecha > max ? e.fecha : max), null),
+    aviso: null,
+  }
+
+  if (!ultimoReporte) {
+    return { ...espejo, aviso: "La agenda todavia no ha reportado sus sesiones al ERP: esta comparacion no prueba nada." }
+  }
+  if (diasSinReporte !== null && diasSinReporte >= DIAS_TOLERANCIA_REPORTE) {
+    return {
+      ...espejo,
+      aviso: `La agenda no reporta desde hace ${diasSinReporte} dia(s): puede faltar lo mas reciente.`,
+    }
+  }
+  if (!vivos.length) {
+    return { ...espejo, aviso: "En esta ventana el espejo no tiene ninguna sesion de la agenda." }
+  }
+  return espejo
 }
 
 /**
