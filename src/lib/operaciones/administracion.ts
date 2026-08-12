@@ -1,4 +1,5 @@
 import { assertNoPeriodOverlap, assertPeriodoAbierto } from "@/lib/utils/periodos"
+import { agruparAdelantosConDevoluciones } from "@/lib/utils/liquidaciones"
 import { OperacionError, exigir, exigirFechaIso, exigirMontoPositivo } from "./errores"
 import type { ActorErp } from "./abonos"
 
@@ -257,6 +258,174 @@ export async function crearAdelanto(supabase: any, actor: ActorErp, datos: Datos
   ])
 
   return { id: data.id as string, monto: v.monto, fecha: v.fecha, periodo: v.periodo.nombre }
+}
+
+// --------------------------------------------- devoluciones de adelantos
+
+/** Pesos con dos decimales: la plata no se compara con flotantes crudos. */
+const redondear = (n: number) => Math.round(n * 100) / 100
+const pesos = (n: number) => `$${Math.round(n).toLocaleString("es-CO")}`
+
+export type DatosDevolucionAdelanto = {
+  adelantoId: string
+  monto: number
+  fecha: string
+  metodoPago?: string | null
+  notas?: string | null
+}
+
+/**
+ * El socio regresa plata de un adelanto, completa o por partes ("abono al
+ * adelanto"). No es un ingreso del negocio: es el mismo adelanto
+ * deshaciendose, asi que se guarda como movimiento negativo apuntando al
+ * adelanto original.
+ *
+ * El signo va DENTRO del monto porque todo lo que suma adelantos hace
+ * SUM(monto) —el cierre de liquidacion, el resumen por metodo de pago, la
+ * proyeccion por socio, los exportes—: asi la devolucion se descuenta sola en
+ * todas partes y no hay que tocar el cierre.
+ */
+export async function validarDevolucionAdelanto(supabase: any, datos: DatosDevolucionAdelanto) {
+  exigir(datos.adelantoId, "Falta indicar de cual adelanto es la devolucion.")
+  const monto = exigirMontoPositivo(datos.monto, "El monto devuelto")
+  const fecha = exigirFechaIso(datos.fecha)
+
+  const { data: adelanto, error: adelantoError } = await supabase
+    .from("adelantos_socios")
+    .select("id, socio_id, periodo_id, monto, fecha, tipo")
+    .eq("id", datos.adelantoId)
+    .single()
+  if (adelantoError || !adelanto) throw new OperacionError("No se encontro ese adelanto.")
+  if (adelanto.tipo === "devolucion") {
+    throw new OperacionError("Ese movimiento ya es una devolucion: no se devuelve una devolucion.")
+  }
+
+  const { error, periodo } = await assertPeriodoAbierto(
+    supabase,
+    adelanto.periodo_id,
+    "Registrar la devolucion del adelanto"
+  )
+  if (error || !periodo) throw new OperacionError(error || "No se encontró el período contable.")
+
+  if (fecha < periodo.fecha_inicio || fecha > periodo.fecha_fin) {
+    throw new OperacionError(
+      `La fecha de la devolucion debe estar dentro del periodo ${periodo.nombre} (${periodo.fecha_inicio} a ${periodo.fecha_fin}).`
+    )
+  }
+
+  const { data: previas, error: previasError } = await supabase
+    .from("adelantos_socios")
+    .select("monto")
+    .eq("adelanto_id", adelanto.id)
+  if (previasError) throw new OperacionError("No se pudieron leer las devoluciones de ese adelanto.")
+
+  const entregado = Number(adelanto.monto)
+  // Las devoluciones se guardan en negativo: lo devuelto es su valor absoluto.
+  const devuelto = (previas || []).reduce((t: number, d: any) => t + Math.abs(Number(d.monto) || 0), 0)
+  const pendiente = redondear(entregado - devuelto)
+
+  if (pendiente <= 0) throw new OperacionError("Ese adelanto ya esta devuelto por completo.")
+  if (monto > pendiente) {
+    throw new OperacionError(
+      `La devolucion no puede pasarse de lo que queda del adelanto: quedan ${pesos(pendiente)} de ${pesos(entregado)}.`
+    )
+  }
+
+  return { adelanto, monto, fecha, periodo, entregado, devuelto, pendiente }
+}
+
+/**
+ * El adelanto del socio al que le toca la devolucion: el mas viejo con saldo
+ * por devolver del periodo abierto. Mismo criterio que el cupo de las sesiones
+ * coach —primero se gasta lo mas antiguo—, para que desde el chat no haya que
+ * andar con ids.
+ */
+export async function buscarAdelantoParaDevolver(supabase: any, socioId: string) {
+  const { data: periodos, error: periodosError } = await supabase
+    .from("periodos")
+    .select("id, nombre, fecha_inicio, fecha_fin")
+    .eq("estado", "abierto")
+    .limit(1)
+  if (periodosError) throw new OperacionError("No se pudieron leer los periodos.")
+  const periodo = (periodos || [])[0]
+  if (!periodo) throw new OperacionError("No hay ningun periodo abierto donde registrar la devolucion.")
+
+  const { data: movimientos, error: movimientosError } = await supabase
+    .from("adelantos_socios")
+    .select("id, monto, fecha, tipo, adelanto_id")
+    .eq("periodo_id", periodo.id)
+    .eq("socio_id", socioId)
+  if (movimientosError) throw new OperacionError("No se pudieron leer los adelantos del socio.")
+
+  const { adelantos } = agruparAdelantosConDevoluciones(movimientos || [])
+  const conSaldo = adelantos
+    .filter((a) => a.pendiente > 0)
+    .sort((a, b) => String(a.adelanto.fecha || "").localeCompare(String(b.adelanto.fecha || "")))
+
+  if (!conSaldo.length) {
+    throw new OperacionError(
+      `Ese socio no tiene adelantos por devolver en ${periodo.nombre}.`
+    )
+  }
+
+  return { periodo, elegido: conSaldo[0], pendientes: conSaldo }
+}
+
+export async function crearDevolucionAdelanto(
+  supabase: any,
+  actor: ActorErp,
+  datos: DatosDevolucionAdelanto
+) {
+  const v = await validarDevolucionAdelanto(supabase, datos)
+
+  const { data, error } = await supabase
+    .from("adelantos_socios")
+    .insert([
+      {
+        periodo_id: v.adelanto.periodo_id,
+        socio_id: v.adelanto.socio_id,
+        // Negativo a proposito: ver el comentario de validarDevolucionAdelanto.
+        monto: -v.monto,
+        fecha: v.fecha,
+        metodo_pago: datos.metodoPago || "otro",
+        notas: datos.notas || null,
+        tipo: "devolucion",
+        adelanto_id: v.adelanto.id,
+      },
+    ])
+    .select("id")
+    .single()
+  if (error || !data) throw new OperacionError(error?.message || "No se pudo registrar la devolucion.")
+
+  const pendienteDespues = redondear(v.pendiente - v.monto)
+
+  await supabase.from("auditoria_financiera").insert([
+    {
+      tabla_afectada: "adelantos_socios",
+      registro_id: data.id,
+      usuario_id: actor.userId || "",
+      accion: "devolver_adelanto",
+      valor_anterior: v.pendiente,
+      valor_nuevo: pendienteDespues,
+      motivo:
+        datos.notas ||
+        `Devolucion de ${pesos(v.monto)} del adelanto del ${v.adelanto.fecha} (quedan ${pesos(pendienteDespues)})`,
+    },
+  ])
+
+  return {
+    id: data.id as string,
+    adelantoId: v.adelanto.id,
+    periodoId: v.adelanto.periodo_id as string,
+    socioId: v.adelanto.socio_id as string,
+    monto: v.monto,
+    fecha: v.fecha,
+    entregado: v.entregado,
+    pendienteAntes: v.pendiente,
+    pendienteDespues,
+    quedaDevueltoCompleto: pendienteDespues === 0,
+    periodo: v.periodo.nombre,
+  }
 }
 
 // ----------------------------------------------------------- liquidacion

@@ -59,16 +59,19 @@ import {
   previsualizarEliminacionCuenta,
 } from "@/lib/operaciones/cuentas"
 import {
+  buscarAdelantoParaDevolver,
   buscarSocio,
   cambiarEstadoSocio,
   cerrarLiquidacion,
   crearAdelanto,
+  crearDevolucionAdelanto,
   crearPeriodo,
   crearSocio,
   cambiarFechaFinPeriodo,
   editarSocio,
   porcentajeTotalSocios,
   validarAdelanto,
+  validarDevolucionAdelanto,
   validarCambioFechaFin,
   validarCierreLiquidacion,
   validarPeriodoNuevo,
@@ -1309,6 +1312,83 @@ export const OPERACIONES: DefinicionOperacion[] = [
     ejecutar: async (admin, actor, d) => {
       const r = await crearAdelanto(admin, { userId: actor.userId, role: actor.role }, d as any)
       return { adelanto_id: r.id, monto: r.monto, fecha: r.fecha, periodo: r.periodo }
+    },
+  },
+
+  {
+    nombre: "devolucion_adelanto",
+    titulo: "Registrar que un socio devolvio plata de un adelanto",
+    descripcion:
+      "El socio regresa plata de un adelanto, completa o por partes (un abono al adelanto). NO es un ingreso del " +
+      "negocio: baja el adelanto, asi que en la liquidacion se le descuenta menos. Si no se pasa adelanto_id, sale " +
+      "del adelanto mas viejo que le quede por devolver en el periodo abierto.",
+    roles: ["admin"],
+    riesgo: "crear",
+    schema: {
+      socio: z.string().trim().min(2).max(160),
+      monto: z.coerce.number().positive().max(100_000_000),
+      fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      adelanto_id: z.string().uuid().optional(),
+      metodo_pago: z.enum(METODOS_PAGO).optional(),
+      notas: z.string().trim().max(300).optional(),
+    },
+    previsualizar: async (admin, _actor, args) => {
+      exigirMontoPositivo(args.monto)
+      const socio = await buscarSocio(admin, String(args.socio))
+
+      let adelantoId = args.adelanto_id ? String(args.adelanto_id) : ""
+      let otrosPendientes = 0
+      if (!adelantoId) {
+        const encontrado = await buscarAdelantoParaDevolver(admin, socio.id)
+        adelantoId = String(encontrado.elegido.adelanto.id)
+        otrosPendientes = encontrado.pendientes.length - 1
+      }
+
+      const datos = {
+        adelantoId,
+        monto: Number(args.monto),
+        fecha: String(args.fecha),
+        metodoPago: args.metodo_pago ? String(args.metodo_pago) : "otro",
+        notas: args.notas ? String(args.notas) : null,
+      }
+      const v = await validarDevolucionAdelanto(admin, datos as any)
+
+      const avisos: string[] = []
+      if (otrosPendientes > 0) {
+        avisos.push(
+          `${socio.nombre} tiene ${otrosPendientes} adelanto(s) mas por devolver; esta devolucion sale del mas viejo.`
+        )
+      }
+      if (v.monto === v.pendiente) avisos.push("Con esta devolucion ese adelanto queda devuelto por completo.")
+
+      return {
+        datos,
+        resumen: `Registrar que ${socio.nombre} devolvio ${money(v.monto)} del adelanto del ${v.adelanto.fecha}`,
+        detalle: {
+          socio: socio.nombre,
+          adelanto_del: v.adelanto.fecha,
+          adelanto_entregado: v.entregado,
+          ya_devuelto: v.devuelto,
+          devuelve_ahora: v.monto,
+          queda_del_adelanto: Math.round((v.pendiente - v.monto) * 100) / 100,
+          periodo: v.periodo.nombre,
+          metodo_pago: datos.metodoPago,
+          efecto: "Baja el adelanto: en la liquidacion se le descuenta menos. No entra como ingreso.",
+        },
+        avisos: avisos.length ? avisos : undefined,
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const r = await crearDevolucionAdelanto(admin, { userId: actor.userId, role: actor.role }, d as any)
+      return {
+        devolucion_id: r.id,
+        adelanto_id: r.adelantoId,
+        monto: r.monto,
+        fecha: r.fecha,
+        queda_del_adelanto: r.pendienteDespues,
+        devuelto_completo: r.quedaDevueltoCompleto,
+        periodo: r.periodo,
+      }
     },
   },
 

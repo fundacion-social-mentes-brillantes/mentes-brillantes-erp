@@ -50,6 +50,7 @@ const PERMISOS_ESPERADOS: Record<string, Array<"admin" | "caja">> = {
   periodo: ["admin"],
   fecha_fin_periodo: ["admin"],
   adelanto_socio: ["admin"],
+  devolucion_adelanto: ["admin"],
   cerrar_liquidacion: ["admin"],
 }
 

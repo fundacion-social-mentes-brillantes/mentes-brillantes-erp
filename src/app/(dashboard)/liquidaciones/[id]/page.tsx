@@ -3,10 +3,12 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Wallet, Lock, Calculator } from 'lucide-react'
 import { AdelantoForm } from './AdelantoForm'
+import { DevolucionAdelantoForm } from './DevolucionAdelantoForm'
 import { GenerarLiquidacionBtn } from './GenerarLiquidacionBtn'
 import { ResumenPorCuentaInteractivo } from './ResumenPorCuentaInteractivo'
 import { ExportarLiquidacion } from '@/components/liquidaciones/ExportarLiquidacion'
-import { agruparPorMetodo, construirDetallesResumenPorCuenta, MetodoPago, METODOS_PAGO_RESUMEN } from '@/lib/utils/liquidaciones'
+import { agruparAdelantosConDevoluciones, agruparPorMetodo, construirDetallesResumenPorCuenta, MetodoPago, METODOS_PAGO_RESUMEN } from '@/lib/utils/liquidaciones'
+import { fechaHoyBogota } from '@/lib/utils/fechas'
 import { esAnuladoCompleto, filtrarIngresosOperativos, filtrarIngresosRealesSaldoAFavor, sumarMontos } from '@/lib/utils/contable'
 
 export const dynamic = 'force-dynamic'
@@ -22,13 +24,23 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
   // Socios activos
   const { data: socios } = await supabase?.from('socios').select('id, nombre, porcentaje_participacion').eq('activo', true) || { data: [] }
 
-  // Adelantos
+  // Adelantos y sus devoluciones. OJO: `adelantos` lleva AMBAS cosas, porque las
+  // devoluciones se guardan como movimiento negativo del mismo adelanto y todas
+  // las cuentas de abajo (resumen por cuenta, proyeccion por socio, exportes)
+  // salen de sumar `monto` con su signo. Filtrar aqui las devoluciones haria que
+  // la plata devuelta no se descontara.
   const { data: adelantosData } = await supabase
     ?.from('adelantos_socios')
     .select('*, socios(nombre)')
     .eq('periodo_id', id)
     .order('fecha', { ascending: false }) || { data: [] }
   const adelantos = adelantosData || []
+  // Solo para mostrar: cada adelanto con lo que ya devolvieron y lo que queda.
+  const { adelantos: adelantosConDevoluciones, devolucionesHuerfanas } =
+    agruparAdelantosConDevoluciones(adelantos)
+  const hoyBogota = fechaHoyBogota()
+  const fechaSugeridaDevolucion =
+    hoyBogota < periodo.fecha_inicio ? periodo.fecha_inicio : hoyBogota > periodo.fecha_fin ? periodo.fecha_fin : hoyBogota
 
   // Liquidaciones (si está cerrado)
   const { data: liquidacionesData } = await supabase
@@ -361,12 +373,12 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
             <div className="p-4 border-b border-zinc-200 bg-zinc-50">
               <h3 className="font-semibold text-zinc-900">Adelantos Registrados</h3>
             </div>
-            <div className="divide-y divide-zinc-100 max-h-[400px] overflow-y-auto">
-              {adelantos.map((adelanto: any) => (
+            <div className="divide-y divide-zinc-100 max-h-[500px] overflow-y-auto">
+              {adelantosConDevoluciones.map(({ adelanto, devoluciones, entregado, devuelto, pendiente }: any) => (
                 <div key={adelanto.id} className="p-4 hover:bg-zinc-50/50">
                   <div className="flex justify-between items-start mb-1">
                     <p className="font-medium text-zinc-900 text-sm">{adelanto.socios?.nombre}</p>
-                    <p className="font-semibold text-amber-600 text-sm">${Number(adelanto.monto).toLocaleString()}</p>
+                    <p className="font-semibold text-amber-600 text-sm">${entregado.toLocaleString()}</p>
                   </div>
                   <div className="flex justify-between items-center text-xs text-zinc-500">
                     <p>{new Date(adelanto.fecha).toLocaleDateString()}</p>
@@ -377,8 +389,60 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                       <p className="truncate max-w-[120px]">{adelanto.notas}</p>
                     </div>
                   </div>
+
+                  {devuelto > 0 && (
+                    <div className="mt-2 rounded-lg bg-emerald-50 border border-emerald-200 p-2 space-y-1">
+                      <div className="flex justify-between text-xs font-medium text-emerald-700">
+                        <span>Devuelto</span>
+                        <span>-${devuelto.toLocaleString()}</span>
+                      </div>
+                      {devoluciones.map((devolucion: any) => (
+                        <div key={devolucion.id} className="flex justify-between text-[11px] text-emerald-700/80">
+                          <span>
+                            {new Date(devolucion.fecha).toLocaleDateString()} · {devolucion.metodo_pago || 'otro'}
+                            {devolucion.notas ? ` · ${devolucion.notas}` : ''}
+                          </span>
+                          <span>${Math.abs(Number(devolucion.monto)).toLocaleString()}</span>
+                        </div>
+                      ))}
+                      <div className="flex justify-between text-xs font-semibold text-zinc-700 pt-1 border-t border-emerald-200">
+                        <span>{pendiente > 0 ? 'Queda del adelanto' : 'Devuelto completo'}</span>
+                        <span>${pendiente.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {periodo.estado === 'abierto' && pendiente > 0 && (
+                    <details className="mt-2 group">
+                      <summary className="text-xs font-medium text-zinc-600 cursor-pointer hover:text-zinc-900 list-none">
+                        + Devolvió plata de este adelanto
+                      </summary>
+                      <DevolucionAdelantoForm
+                        adelantoId={adelanto.id}
+                        pendiente={pendiente}
+                        fechaMinima={periodo.fecha_inicio}
+                        fechaMaxima={periodo.fecha_fin}
+                        fechaSugerida={fechaSugeridaDevolucion}
+                      />
+                    </details>
+                  )}
                 </div>
               ))}
+
+              {devolucionesHuerfanas.map((devolucion: any) => (
+                <div key={devolucion.id} className="p-4 bg-emerald-50/40">
+                  <div className="flex justify-between items-start mb-1">
+                    <p className="font-medium text-zinc-900 text-sm">{devolucion.socios?.nombre}</p>
+                    <p className="font-semibold text-emerald-700 text-sm">
+                      -${Math.abs(Number(devolucion.monto)).toLocaleString()}
+                    </p>
+                  </div>
+                  <p className="text-xs text-zinc-500">
+                    Devolución del {new Date(devolucion.fecha).toLocaleDateString()} — su adelanto quedó en otro período.
+                  </p>
+                </div>
+              ))}
+
               {!adelantos.length && (
                 <div className="p-8 text-center text-sm text-zinc-500">
                   No hay adelantos en este Período.

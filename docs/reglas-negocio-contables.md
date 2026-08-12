@@ -13,6 +13,7 @@ Esta es la referencia oficial de comportamiento financiero del ERP. Si codigo, S
 2. Aplicar saldo a favor a una cuenta no crea ingreso nuevo.
 3. Utilidad del periodo = ingresos validos - egresos validos.
 4. Adelantos a socios no reducen la utilidad; solo descuentan el neto a pagar del socio.
+4b. Si el socio devuelve plata de un adelanto, eso no es ingreso del negocio: baja el adelanto, y por lo tanto sube su neto a pagar. Se guarda en `adelantos_socios` con `tipo='devolucion'`, monto NEGATIVO y `adelanto_id` apuntando al adelanto, para que toda suma de adelantos lo neteé sola. No se puede devolver mas de lo que queda de ese adelanto, y la fecha debe caer dentro del mismo periodo abierto.
 5. Si un pago supera el pendiente de la cuenta, solo se aplica lo necesario y el excedente pasa a saldo a favor.
 6. Anulados no cuentan en estados de cuenta, ingresos, dashboard ni liquidaciones.
 7. Al cerrar un periodo se congela el snapshot contable y el periodo deja de ser editable.
@@ -72,6 +73,7 @@ Se audita como minimo:
 - crear, editar, anular y eliminar donacion
 - crear, editar, anular y eliminar venta externa
 - crear adelanto
+- devolver adelanto (accion `devolver_adelanto`: queda lo que faltaba antes y despues)
 - cerrar liquidacion
 - editar la fecha fin de un periodo abierto
 

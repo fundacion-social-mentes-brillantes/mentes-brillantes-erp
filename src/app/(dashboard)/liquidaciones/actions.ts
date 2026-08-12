@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { requireAdmin } from '@/lib/utils/authz'
 import { parseMoneyInput } from '@/lib/utils/contable'
 import { assertNoPeriodOverlap, assertPeriodoAbierto } from '@/lib/utils/periodos'
+import { crearDevolucionAdelanto } from '@/lib/operaciones/administracion'
 
 export type ActionState = {
   error?: string
@@ -229,6 +230,50 @@ export async function saveAdelanto(periodo_id: string, prevState: ActionState, f
 
   revalidatePath(`/liquidaciones/${periodo_id}`)
   return { success: true }
+}
+
+/**
+ * El socio devuelve plata de un adelanto (completa o por partes). No entra como
+ * ingreso: se guarda como movimiento negativo del mismo adelanto, asi que se
+ * descuenta solo de la liquidacion y de todos los resumenes.
+ */
+export async function saveDevolucionAdelanto(
+  adelanto_id: string,
+  prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  let supabase, user
+  try {
+    ;({ supabase, user } = await requireAdmin())
+  } catch (e: any) {
+    return { error: e?.message || 'Acceso denegado' }
+  }
+
+  const monto_str = formData.get('monto') as string
+  const fecha = formData.get('fecha') as string
+  const metodo_pago = (formData.get('metodo_pago') as string) || 'otro'
+  const notas = formData.get('notas') as string
+
+  if (!adelanto_id || !monto_str || !fecha) {
+    return { error: 'Monto y fecha de la devolución son obligatorios' }
+  }
+
+  const monto = parseMoneyInput(monto_str)
+  if (monto === null) {
+    return { error: 'El monto tiene un formato invalido' }
+  }
+
+  try {
+    const devolucion = await crearDevolucionAdelanto(
+      supabase,
+      { userId: user?.id || '', role: 'admin' },
+      { adelantoId: adelanto_id, monto, fecha, metodoPago: metodo_pago, notas: notas || null }
+    )
+    revalidatePath(`/liquidaciones/${devolucion.periodoId}`)
+    return { success: true }
+  } catch (e: any) {
+    return { error: e?.message || 'No se pudo registrar la devolución del adelanto.' }
+  }
 }
 
 export async function generarLiquidacion(periodo_id: string): Promise<ActionState> {

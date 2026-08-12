@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { agruparPorMetodo, construirDetallesResumenPorCuenta } from './liquidaciones'
+import { agruparAdelantosConDevoluciones, agruparPorMetodo, construirDetallesResumenPorCuenta } from './liquidaciones'
 
 describe('liquidaciones y saldo a favor', () => {
   it('cuenta el excedente real a saldo a favor una sola vez y no vuelve a sumarlo al aplicarlo', () => {
@@ -142,5 +142,76 @@ describe('liquidaciones y saldo a favor', () => {
     expect(adelantosNequi.reduce((acc, d) => acc + d.monto, 0)).toBe(resumen.find((r) => r.metodo_pago === 'nequi')?.salidas_adelantos)
     expect(egresosNequi).toHaveLength(1)
     expect(adelantosNequi).toHaveLength(1)
+  })
+})
+
+// La devolucion de un adelanto viaja en la MISMA lista de adelantos, con monto
+// negativo. De eso depende que se descuente sola en el resumen, en la
+// proyeccion por socio y en el cierre.
+describe('devoluciones de adelantos', () => {
+  const conDevolucion = {
+    adelantos: [
+      { id: 'ade-1', socio_id: 's1', monto: 500000, metodo_pago: 'nequi', fecha: '2026-08-03', socios: { nombre: 'Valeria' } },
+      { id: 'dev-1', socio_id: 's1', monto: -200000, metodo_pago: 'nequi', fecha: '2026-08-10', tipo: 'devolucion', adelanto_id: 'ade-1', socios: { nombre: 'Valeria' } },
+    ],
+  }
+
+  it('baja las salidas por adelantos del metodo en que devolvieron', () => {
+    const { resumen } = agruparPorMetodo(conDevolucion)
+
+    expect(resumen.find((r) => r.metodo_pago === 'nequi')?.salidas_adelantos).toBe(300000)
+  })
+
+  it('devolver por otro metodo deja el neto correcto sumando los dos', () => {
+    const { totales } = agruparPorMetodo({
+      adelantos: [
+        { id: 'ade-1', monto: 500000, metodo_pago: 'efectivo', fecha: '2026-08-03' },
+        { id: 'dev-1', monto: -500000, metodo_pago: 'nequi', fecha: '2026-08-10', tipo: 'devolucion', adelanto_id: 'ade-1' },
+      ],
+    })
+
+    expect(totales.salidas_adelantos).toBe(0)
+  })
+
+  it('en el detalle se llama devolución, no adelanto', () => {
+    const detalles = construirDetallesResumenPorCuenta(conDevolucion)
+    const devolucion = detalles.find((d) => d.monto === -200000)
+
+    expect(devolucion?.concepto).toBe('Devolución de adelanto')
+    expect(devolucion?.categoria).toBe('adelanto')
+    expect(detalles.find((d) => d.monto === 500000)?.concepto).toBe('Adelanto a socio')
+  })
+
+  it('cuelga cada devolución de su adelanto y dice cuánto queda', () => {
+    const { adelantos, devolucionesHuerfanas } = agruparAdelantosConDevoluciones(conDevolucion.adelantos)
+
+    expect(adelantos).toHaveLength(1)
+    expect(adelantos[0].entregado).toBe(500000)
+    expect(adelantos[0].devuelto).toBe(200000)
+    expect(adelantos[0].pendiente).toBe(300000)
+    expect(adelantos[0].devoluciones).toHaveLength(1)
+    expect(devolucionesHuerfanas).toHaveLength(0)
+  })
+
+  it('suma varias devoluciones del mismo adelanto', () => {
+    const { adelantos } = agruparAdelantosConDevoluciones([
+      { id: 'ade-1', monto: 500000, fecha: '2026-08-03' },
+      { id: 'dev-1', monto: -100000, tipo: 'devolucion', adelanto_id: 'ade-1', fecha: '2026-08-05' },
+      { id: 'dev-2', monto: -150000, tipo: 'devolucion', adelanto_id: 'ade-1', fecha: '2026-08-09' },
+    ])
+
+    expect(adelantos[0].devuelto).toBe(250000)
+    expect(adelantos[0].pendiente).toBe(250000)
+  })
+
+  // Si el adelanto quedo en otro periodo, la devolucion no puede desaparecer de
+  // la pantalla: se muestra aparte.
+  it('no se traga una devolución cuyo adelanto no está en la lista', () => {
+    const { adelantos, devolucionesHuerfanas } = agruparAdelantosConDevoluciones([
+      { id: 'dev-1', monto: -100000, tipo: 'devolucion', adelanto_id: 'ade-de-otro-periodo', fecha: '2026-08-05' },
+    ])
+
+    expect(adelantos).toHaveLength(0)
+    expect(devolucionesHuerfanas).toHaveLength(1)
   })
 })

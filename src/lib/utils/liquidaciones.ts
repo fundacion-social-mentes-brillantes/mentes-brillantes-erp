@@ -17,6 +17,9 @@ type Movimiento = {
   notas?: string | null
   origen_fondos?: string | null
   tipo?: string | null
+  /** Solo en devoluciones de adelanto: el adelanto del que salen. */
+  adelanto_id?: string | null
+  socio_id?: string | null
   fecha?: string | null
   fecha_pago?: string | null
   concepto?: string | null
@@ -76,6 +79,64 @@ const personaSocio = (mov: Movimiento) => {
 }
 
 const detalleId = (prefix: TipoResumenDetalle, index: number, id?: string) => `${prefix}-${id || index}`
+
+/**
+ * Un adelanto devuelto por el socio se guarda en la misma tabla, con
+ * `tipo='devolucion'` y monto negativo, para que TODA suma de adelantos lo
+ * descuente sola. Aqui solo se usa para nombrarlo distinto.
+ */
+export const esDevolucionAdelanto = (m: { tipo?: string | null }) => (m?.tipo || "") === "devolucion"
+
+export type AdelantoConDevoluciones<T extends Movimiento = Movimiento> = {
+  adelanto: T
+  devoluciones: T[]
+  entregado: number
+  devuelto: number
+  pendiente: number
+}
+
+/**
+ * Cuelga cada devolucion del adelanto que devuelve y dice cuanto queda por
+ * devolver. Es solo para mostrar: las cuentas siguen saliendo de sumar el
+ * `monto` de todos los movimientos, con su signo.
+ *
+ * Una devolucion huerfana (su adelanto no viene en la lista, p. ej. porque el
+ * adelanto quedo en otro periodo) no se pierde: se devuelve aparte para poder
+ * mostrarla en vez de tragarsela.
+ */
+export function agruparAdelantosConDevoluciones<T extends Movimiento>(
+  movimientos: T[] = []
+): { adelantos: AdelantoConDevoluciones<T>[]; devolucionesHuerfanas: T[] } {
+  const adelantos = movimientos.filter((m) => !esDevolucionAdelanto(m))
+  const devoluciones = movimientos.filter((m) => esDevolucionAdelanto(m))
+
+  const grupos = new Map<string, AdelantoConDevoluciones<T>>()
+  for (const adelanto of adelantos) {
+    const clave = String((adelanto as any).id || "")
+    grupos.set(clave, {
+      adelanto,
+      devoluciones: [],
+      entregado: toSafeNumber(adelanto.monto),
+      devuelto: 0,
+      pendiente: toSafeNumber(adelanto.monto),
+    })
+  }
+
+  const huerfanas: T[] = []
+  for (const devolucion of devoluciones) {
+    const clave = String((devolucion as any).adelanto_id || "")
+    const grupo = grupos.get(clave)
+    if (!grupo) {
+      huerfanas.push(devolucion)
+      continue
+    }
+    grupo.devoluciones.push(devolucion)
+    grupo.devuelto += Math.abs(toSafeNumber(devolucion.monto))
+    grupo.pendiente = Math.round((grupo.entregado - grupo.devuelto) * 100) / 100
+  }
+
+  return { adelantos: Array.from(grupos.values()), devolucionesHuerfanas: huerfanas }
+}
 
 export function construirDetallesResumenPorCuenta({
   abonos = [],
@@ -175,7 +236,10 @@ export function construirDetallesResumenPorCuenta({
       categoria: "adelanto",
       tipo: "adelanto",
       persona: personaSocio(a),
-      concepto: fallbackText(a.notas, "Adelanto a socio"),
+      // La devolucion viaja en la misma lista, con monto negativo. Se distingue
+      // solo en el texto: la categoria sigue siendo adelanto porque es la misma
+      // plata, de vuelta.
+      concepto: fallbackText(a.notas, esDevolucionAdelanto(a) ? "Devolución de adelanto" : "Adelanto a socio"),
       monto: toSafeNumber(a.monto),
     })
   })
