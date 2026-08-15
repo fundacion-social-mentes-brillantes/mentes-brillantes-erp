@@ -4,6 +4,7 @@ import { useActionState, useRef } from 'react'
 import { saveAdelanto } from '../actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { MoneyInput } from '@/components/ui/money-input'
 import { AlertCircle, CheckCircle2 } from 'lucide-react'
 
 export function AdelantoForm({ periodoId, socios }: { periodoId: string, socios: any[] }) {
@@ -50,7 +51,7 @@ export function AdelantoForm({ periodoId, socios }: { periodoId: string, socios:
 
       <div className="space-y-2">
         <label className="text-sm font-medium text-[rgb(var(--text-primary))]">Monto ($) *</label>
-        <Input name="monto" type="number" step="0.01" min="0.01" required disabled={isPending}
+        <MoneyInput name="monto" required disabled={isPending}
           className="bg-[rgb(var(--input-bg))] text-[rgb(var(--text-primary))]" />
       </div>
 

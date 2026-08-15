@@ -4,6 +4,7 @@ import { useActionState, useRef } from 'react'
 import { saveDevolucionSocio } from '../actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { MoneyInput } from '@/components/ui/money-input'
 import { AlertCircle, CheckCircle2, Undo2 } from 'lucide-react'
 
 type SocioConSaldo = { id: string; nombre: string; pendiente: number }
@@ -78,11 +79,8 @@ export function DevolucionAdelantoForm({
 
       <div className="space-y-2">
         <label className="text-sm font-medium text-[rgb(var(--text-primary))]">¿Cuánto devolvió? *</label>
-        <Input
+        <MoneyInput
           name="monto"
-          type="number"
-          step="0.01"
-          min="0.01"
           required
           disabled={isPending}
           className="bg-[rgb(var(--input-bg))] text-[rgb(var(--text-primary))]"
