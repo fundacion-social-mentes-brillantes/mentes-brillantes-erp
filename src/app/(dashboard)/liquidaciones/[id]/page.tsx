@@ -1,7 +1,7 @@
 ﻿import { requireRoles } from '@/lib/utils/authz'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Wallet, Lock, Calculator } from 'lucide-react'
+import { ArrowLeft, Wallet, Lock, Calculator, Undo2 } from 'lucide-react'
 import { AdelantoForm } from './AdelantoForm'
 import { DevolucionAdelantoForm } from './DevolucionAdelantoForm'
 import { GenerarLiquidacionBtn } from './GenerarLiquidacionBtn'
@@ -372,6 +372,9 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
           <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-zinc-200 bg-zinc-50">
               <h3 className="font-semibold text-zinc-900">Adelantos Registrados</h3>
+              <p className="mt-0.5 text-xs text-zinc-500">
+                Aquí también se registra cuando el socio devuelve o abona plata de un adelanto.
+              </p>
             </div>
             <div className="divide-y divide-zinc-100 max-h-[500px] overflow-y-auto">
               {adelantosConDevoluciones.map(({ adelanto, devoluciones, entregado, devuelto, pendiente }: any) => (
@@ -413,9 +416,12 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                   )}
 
                   {periodo.estado === 'abierto' && pendiente > 0 && (
-                    <details className="mt-2 group">
-                      <summary className="text-xs font-medium text-zinc-600 cursor-pointer hover:text-zinc-900 list-none">
-                        + Devolvió plata de este adelanto
+                    // Botón de verdad, no un enlace gris: es la única puerta para
+                    // registrar que el socio devolvió plata, y hay que verla sin buscarla.
+                    <details className="mt-3">
+                      <summary className="flex cursor-pointer list-none items-center justify-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 [&::-webkit-details-marker]:hidden">
+                        <Undo2 className="w-4 h-4" />
+                        Devolvió plata de este adelanto
                       </summary>
                       <DevolucionAdelantoForm
                         adelantoId={adelanto.id}
