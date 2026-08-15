@@ -7,7 +7,8 @@ import { DevolucionAdelantoForm } from './DevolucionAdelantoForm'
 import { GenerarLiquidacionBtn } from './GenerarLiquidacionBtn'
 import { ResumenPorCuentaInteractivo } from './ResumenPorCuentaInteractivo'
 import { ExportarLiquidacion } from '@/components/liquidaciones/ExportarLiquidacion'
-import { agruparAdelantosConDevoluciones, agruparPorMetodo, construirDetallesResumenPorCuenta, MetodoPago, METODOS_PAGO_RESUMEN } from '@/lib/utils/liquidaciones'
+import { ImagenAdelantosSocio } from './ImagenAdelantosSocio'
+import { agruparAdelantosConDevoluciones, agruparAdelantosPorSocio, agruparPorMetodo, construirDetallesResumenPorCuenta, MetodoPago, METODOS_PAGO_RESUMEN } from '@/lib/utils/liquidaciones'
 import { fechaHoyBogota } from '@/lib/utils/fechas'
 import { esAnuladoCompleto, filtrarIngresosOperativos, filtrarIngresosRealesSaldoAFavor, sumarMontos } from '@/lib/utils/contable'
 
@@ -38,9 +39,33 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
   // Solo para mostrar: cada adelanto con lo que ya devolvieron y lo que queda.
   const { adelantos: adelantosConDevoluciones, devolucionesHuerfanas } =
     agruparAdelantosConDevoluciones(adelantos)
+  const adelantosPorSocio = agruparAdelantosPorSocio(adelantosConDevoluciones)
   const hoyBogota = fechaHoyBogota()
   const fechaSugeridaDevolucion =
     hoyBogota < periodo.fecha_inicio ? periodo.fecha_inicio : hoyBogota > periodo.fecha_fin ? periodo.fecha_fin : hoyBogota
+
+  // Lo que se convierte en la imagen que se le manda a cada socio.
+  const sociosParaImagen = adelantosPorSocio.map((socio) => ({
+    socioId: socio.socioId,
+    nombre: socio.nombre,
+    entregado: socio.entregado,
+    devuelto: socio.devuelto,
+    pendiente: socio.pendiente,
+    adelantos: socio.adelantos.map(({ adelanto, devoluciones, entregado, devuelto, pendiente }: any) => ({
+      fecha: String(adelanto.fecha || ''),
+      monto: entregado,
+      metodo: String(adelanto.metodo_pago || 'otro'),
+      notas: adelanto.notas || null,
+      devuelto,
+      pendiente,
+      devoluciones: devoluciones.map((devolucion: any) => ({
+        fecha: String(devolucion.fecha || ''),
+        monto: Math.abs(Number(devolucion.monto) || 0),
+        metodo: String(devolucion.metodo_pago || 'otro'),
+        notas: devolucion.notas || null,
+      })),
+    })),
+  }))
 
   // Liquidaciones (si está cerrado)
   const { data: liquidacionesData } = await supabase
@@ -369,11 +394,47 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
             </div>
           )}
 
+          {periodo.estado === 'abierto' && (
+            <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
+              <div className="flex items-center gap-2 mb-1">
+                <Undo2 className="w-5 h-5 text-zinc-400" />
+                <h3 className="font-semibold text-zinc-900">Registrar Devolución</h3>
+              </div>
+              <p className="mb-4 text-xs text-zinc-500">
+                Pones cuánto devolvió y el ERP lo reparte entre sus adelantos, del más antiguo al más nuevo.
+              </p>
+              <DevolucionAdelantoForm
+                periodoId={periodo.id}
+                socios={adelantosPorSocio.map((s) => ({ id: s.socioId, nombre: s.nombre, pendiente: s.pendiente }))}
+                fechaMinima={periodo.fecha_inicio}
+                fechaMaxima={periodo.fecha_fin}
+                fechaSugerida={fechaSugeridaDevolucion}
+              />
+            </div>
+          )}
+
+          {sociosParaImagen.length > 0 && (
+            <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
+              <div className="p-4 border-b border-zinc-200 bg-zinc-50">
+                <h3 className="font-semibold text-zinc-900">Estado por socio</h3>
+                <p className="mt-0.5 text-xs text-zinc-500">
+                  Descarga la imagen de una persona y se la mandas: explica sola cuánto se le adelantó, qué ha devuelto
+                  y qué queda.
+                </p>
+              </div>
+              <ImagenAdelantosSocio
+                socios={sociosParaImagen}
+                empresa={{ nombre: empresa.nombre, nit: empresa.nit }}
+                periodo={{ nombre: periodo.nombre, fecha_inicio: periodo.fecha_inicio, fecha_fin: periodo.fecha_fin }}
+              />
+            </div>
+          )}
+
           <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-zinc-200 bg-zinc-50">
               <h3 className="font-semibold text-zinc-900">Adelantos Registrados</h3>
               <p className="mt-0.5 text-xs text-zinc-500">
-                Aquí también se registra cuando el socio devuelve o abona plata de un adelanto.
+                Uno por uno, con lo que ya devolvieron de cada uno.
               </p>
             </div>
             <div className="divide-y divide-zinc-100 max-h-[500px] overflow-y-auto">
@@ -415,22 +476,8 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                     </div>
                   )}
 
-                  {periodo.estado === 'abierto' && pendiente > 0 && (
-                    // Botón de verdad, no un enlace gris: es la única puerta para
-                    // registrar que el socio devolvió plata, y hay que verla sin buscarla.
-                    <details className="mt-3">
-                      <summary className="flex cursor-pointer list-none items-center justify-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 [&::-webkit-details-marker]:hidden">
-                        <Undo2 className="w-4 h-4" />
-                        Devolvió plata de este adelanto
-                      </summary>
-                      <DevolucionAdelantoForm
-                        adelantoId={adelanto.id}
-                        pendiente={pendiente}
-                        fechaMinima={periodo.fecha_inicio}
-                        fechaMaxima={periodo.fecha_fin}
-                        fechaSugerida={fechaSugeridaDevolucion}
-                      />
-                    </details>
+                  {devuelto === 0 && periodo.estado === 'abierto' && (
+                    <p className="mt-1 text-[11px] text-zinc-400">Sin devoluciones todavía</p>
                   )}
                 </div>
               ))}

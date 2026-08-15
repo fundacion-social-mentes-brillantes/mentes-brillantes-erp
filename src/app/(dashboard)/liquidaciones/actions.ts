@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation'
 import { requireAdmin } from '@/lib/utils/authz'
 import { parseMoneyInput } from '@/lib/utils/contable'
 import { assertNoPeriodOverlap, assertPeriodoAbierto } from '@/lib/utils/periodos'
-import { crearDevolucionAdelanto } from '@/lib/operaciones/administracion'
+import { crearDevolucionSocio } from '@/lib/operaciones/administracion'
 
 export type ActionState = {
   error?: string
@@ -233,12 +233,16 @@ export async function saveAdelanto(periodo_id: string, prevState: ActionState, f
 }
 
 /**
- * El socio devuelve plata de un adelanto (completa o por partes). No entra como
- * ingreso: se guarda como movimiento negativo del mismo adelanto, asi que se
- * descuenta solo de la liquidacion y de todos los resumenes.
+ * El socio devolvió plata de sus adelantos. Se pone UN valor —lo que pagó— y el
+ * ERP lo reparte entre sus adelantos pendientes, del más viejo al más nuevo.
+ * Casi nunca hay un solo adelanto: hay varios chiquitos y un pago que los
+ * cubre en parte o del todo.
+ *
+ * No entra como ingreso: baja el adelanto, así que en la liquidación se le
+ * descuenta menos.
  */
-export async function saveDevolucionAdelanto(
-  adelanto_id: string,
+export async function saveDevolucionSocio(
+  periodo_id: string,
   prevState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
@@ -249,13 +253,14 @@ export async function saveDevolucionAdelanto(
     return { error: e?.message || 'Acceso denegado' }
   }
 
+  const socio_id = formData.get('socio_id') as string
   const monto_str = formData.get('monto') as string
   const fecha = formData.get('fecha') as string
   const metodo_pago = (formData.get('metodo_pago') as string) || 'otro'
   const notas = formData.get('notas') as string
 
-  if (!adelanto_id || !monto_str || !fecha) {
-    return { error: 'Monto y fecha de la devolución son obligatorios' }
+  if (!socio_id || !monto_str || !fecha) {
+    return { error: 'Socio, monto y fecha son obligatorios' }
   }
 
   const monto = parseMoneyInput(monto_str)
@@ -264,15 +269,15 @@ export async function saveDevolucionAdelanto(
   }
 
   try {
-    const devolucion = await crearDevolucionAdelanto(
+    await crearDevolucionSocio(
       supabase,
       { userId: user?.id || '', role: 'admin' },
-      { adelantoId: adelanto_id, monto, fecha, metodoPago: metodo_pago, notas: notas || null }
+      { socioId: socio_id, monto, fecha, metodoPago: metodo_pago, notas: notas || null }
     )
-    revalidatePath(`/liquidaciones/${devolucion.periodoId}`)
+    revalidatePath(`/liquidaciones/${periodo_id}`)
     return { success: true }
   } catch (e: any) {
-    return { error: e?.message || 'No se pudo registrar la devolución del adelanto.' }
+    return { error: e?.message || 'No se pudo registrar la devolución.' }
   }
 }
 

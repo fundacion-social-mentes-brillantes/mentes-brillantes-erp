@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { agruparAdelantosConDevoluciones, agruparPorMetodo, construirDetallesResumenPorCuenta } from './liquidaciones'
+import { agruparAdelantosConDevoluciones, agruparAdelantosPorSocio, agruparPorMetodo, construirDetallesResumenPorCuenta } from './liquidaciones'
 
 describe('liquidaciones y saldo a favor', () => {
   it('cuenta el excedente real a saldo a favor una sola vez y no vuelve a sumarlo al aplicarlo', () => {
@@ -202,6 +202,27 @@ describe('devoluciones de adelantos', () => {
 
     expect(adelantos[0].devuelto).toBe(250000)
     expect(adelantos[0].pendiente).toBe(250000)
+  })
+
+  // Es lo que se convierte en la imagen que se le manda al socio: tiene que
+  // cuadrar sin que nadie sume a mano.
+  it('junta por persona sus adelantos, lo devuelto y lo que queda', () => {
+    const { adelantos } = agruparAdelantosConDevoluciones([
+      { id: 'ade-1', socio_id: 's1', monto: 100000, fecha: '2026-08-03', socios: { nombre: 'Valeria' } },
+      { id: 'ade-2', socio_id: 's1', monto: 20000, fecha: '2026-08-05', socios: { nombre: 'Valeria' } },
+      { id: 'dev-1', socio_id: 's1', monto: -30000, fecha: '2026-08-10', tipo: 'devolucion', adelanto_id: 'ade-1', socios: { nombre: 'Valeria' } },
+      { id: 'ade-3', socio_id: 's2', monto: 300000, fecha: '2026-08-04', socios: { nombre: 'Sebastián' } },
+    ])
+
+    const porSocio = agruparAdelantosPorSocio(adelantos)
+
+    expect(porSocio.map((s) => s.nombre)).toEqual(['Sebastián', 'Valeria'])
+    const valeria = porSocio.find((s) => s.nombre === 'Valeria')!
+    expect(valeria.entregado).toBe(120000)
+    expect(valeria.devuelto).toBe(30000)
+    expect(valeria.pendiente).toBe(90000)
+    // Del más viejo al más nuevo: así se lee la historia en la imagen.
+    expect(valeria.adelantos.map((a) => (a.adelanto as any).fecha)).toEqual(['2026-08-03', '2026-08-05'])
   })
 
   // Si el adelanto quedo en otro periodo, la devolucion no puede desaparecer de

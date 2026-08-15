@@ -335,12 +335,11 @@ export async function validarDevolucionAdelanto(supabase: any, datos: DatosDevol
 }
 
 /**
- * El adelanto del socio al que le toca la devolucion: el mas viejo con saldo
- * por devolver del periodo abierto. Mismo criterio que el cupo de las sesiones
- * coach —primero se gasta lo mas antiguo—, para que desde el chat no haya que
- * andar con ids.
+ * Los adelantos del socio que todavia tienen saldo por devolver, del mas viejo
+ * al mas nuevo. Ese orden importa: es el mismo criterio del cupo de las
+ * sesiones coach —primero se salda lo mas antiguo—.
  */
-export async function buscarAdelantoParaDevolver(supabase: any, socioId: string) {
+export async function cargarAdelantosPendientes(supabase: any, socioId: string) {
   const { data: periodos, error: periodosError } = await supabase
     .from("periodos")
     .select("id, nombre, fecha_inicio, fecha_fin")
@@ -358,17 +357,134 @@ export async function buscarAdelantoParaDevolver(supabase: any, socioId: string)
   if (movimientosError) throw new OperacionError("No se pudieron leer los adelantos del socio.")
 
   const { adelantos } = agruparAdelantosConDevoluciones(movimientos || [])
-  const conSaldo = adelantos
+  const pendientes = adelantos
     .filter((a) => a.pendiente > 0)
     .sort((a, b) => String(a.adelanto.fecha || "").localeCompare(String(b.adelanto.fecha || "")))
 
-  if (!conSaldo.length) {
+  const totalPendiente = redondear(pendientes.reduce((t, a) => t + a.pendiente, 0))
+  return { periodo, pendientes, totalPendiente }
+}
+
+/** Compatibilidad: el adelanto mas viejo con saldo. */
+export async function buscarAdelantoParaDevolver(supabase: any, socioId: string) {
+  const { periodo, pendientes } = await cargarAdelantosPendientes(supabase, socioId)
+  if (!pendientes.length) {
+    throw new OperacionError(`Ese socio no tiene adelantos por devolver en ${periodo.nombre}.`)
+  }
+  return { periodo, elegido: pendientes[0], pendientes }
+}
+
+export type DatosDevolucionSocio = {
+  socioId: string
+  monto: number
+  fecha: string
+  metodoPago?: string | null
+  notas?: string | null
+}
+
+/**
+ * Casi nunca devuelven un adelanto exacto: se hacen varios micro-adelantos y
+ * despues llega UN pago por una parte o por todo. Aqui se decide como se
+ * reparte ese pago entre los adelantos que le quedan al socio, del mas viejo
+ * al mas nuevo, sin pedirle a nadie que haga la cuenta.
+ *
+ * No escribe nada: solo calcula, para poder mostrarlo antes de guardar.
+ */
+export async function planearDevolucionSocio(supabase: any, datos: DatosDevolucionSocio) {
+  exigir(datos.socioId, "Falta indicar el socio.")
+  const monto = exigirMontoPositivo(datos.monto, "El monto devuelto")
+  const fecha = exigirFechaIso(datos.fecha)
+
+  const { periodo, pendientes, totalPendiente } = await cargarAdelantosPendientes(supabase, datos.socioId)
+
+  if (!pendientes.length) {
+    throw new OperacionError(`Ese socio no tiene adelantos por devolver en ${periodo.nombre}.`)
+  }
+  if (fecha < periodo.fecha_inicio || fecha > periodo.fecha_fin) {
     throw new OperacionError(
-      `Ese socio no tiene adelantos por devolver en ${periodo.nombre}.`
+      `La fecha de la devolucion debe estar dentro del periodo ${periodo.nombre} (${periodo.fecha_inicio} a ${periodo.fecha_fin}).`
+    )
+  }
+  if (monto > totalPendiente) {
+    throw new OperacionError(
+      `Devolvio mas de lo que se le habia adelantado: solo quedan ${pesos(totalPendiente)} por devolver.`
     )
   }
 
-  return { periodo, elegido: conSaldo[0], pendientes: conSaldo }
+  const reparto: Array<{ adelantoId: string; fechaAdelanto: string; adelantado: number; seAplica: number; quedaDespues: number }> = []
+  let porRepartir = monto
+  for (const grupo of pendientes) {
+    if (porRepartir <= 0) break
+    const seAplica = redondear(Math.min(porRepartir, grupo.pendiente))
+    if (seAplica <= 0) continue
+    reparto.push({
+      adelantoId: String(grupo.adelanto.id),
+      fechaAdelanto: String(grupo.adelanto.fecha || ""),
+      adelantado: grupo.entregado,
+      seAplica,
+      quedaDespues: redondear(grupo.pendiente - seAplica),
+    })
+    porRepartir = redondear(porRepartir - seAplica)
+  }
+
+  return {
+    periodo,
+    monto,
+    fecha,
+    reparto,
+    adelantosTocados: reparto.length,
+    totalPendienteAntes: totalPendiente,
+    totalPendienteDespues: redondear(totalPendiente - monto),
+    quedaTodoSaldado: redondear(totalPendiente - monto) === 0,
+  }
+}
+
+/**
+ * Guarda la devolucion repartida. Las filas entran en UN solo insert: si algo
+ * falla no queda media devolucion aplicada.
+ */
+export async function crearDevolucionSocio(supabase: any, actor: ActorErp, datos: DatosDevolucionSocio) {
+  const plan = await planearDevolucionSocio(supabase, datos)
+
+  const filas = plan.reparto.map((parte) => ({
+    periodo_id: plan.periodo.id,
+    socio_id: datos.socioId,
+    monto: -parte.seAplica,
+    fecha: plan.fecha,
+    metodo_pago: datos.metodoPago || "otro",
+    notas: datos.notas || null,
+    tipo: "devolucion",
+    adelanto_id: parte.adelantoId,
+  }))
+
+  const { data, error } = await supabase.from("adelantos_socios").insert(filas).select("id")
+  if (error || !data) throw new OperacionError(error?.message || "No se pudo registrar la devolucion.")
+
+  await supabase.from("auditoria_financiera").insert(
+    plan.reparto.map((parte, i) => ({
+      tabla_afectada: "adelantos_socios",
+      registro_id: (data as any[])[i]?.id || null,
+      usuario_id: actor.userId || "",
+      accion: "devolver_adelanto",
+      valor_anterior: redondear(parte.seAplica + parte.quedaDespues),
+      valor_nuevo: parte.quedaDespues,
+      motivo:
+        `Devolucion de ${pesos(parte.seAplica)} aplicada al adelanto del ${parte.fechaAdelanto}` +
+        (plan.reparto.length > 1 ? ` (parte de un pago de ${pesos(plan.monto)})` : "") +
+        (datos.notas ? ` — ${datos.notas}` : ""),
+    }))
+  )
+
+  return {
+    ids: (data as any[]).map((d) => d.id as string),
+    monto: plan.monto,
+    fecha: plan.fecha,
+    periodo: plan.periodo.nombre,
+    reparto: plan.reparto,
+    adelantosTocados: plan.adelantosTocados,
+    totalPendienteDespues: plan.totalPendienteDespues,
+    quedaTodoSaldado: plan.quedaTodoSaldado,
+  }
 }
 
 export async function crearDevolucionAdelanto(

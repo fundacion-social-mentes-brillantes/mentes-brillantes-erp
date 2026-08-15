@@ -247,6 +247,59 @@ export function construirDetallesResumenPorCuenta({
   return detalles.sort((a, b) => b.fecha.localeCompare(a.fecha))
 }
 
+export type AdelantosDeSocio<T extends Movimiento = Movimiento> = {
+  socioId: string
+  nombre: string
+  entregado: number
+  devuelto: number
+  pendiente: number
+  adelantos: AdelantoConDevoluciones<T>[]
+}
+
+/**
+ * Junta por persona los adelantos con sus devoluciones. Es lo que hace falta
+ * para responder "¿cuánto le debe Valeria?" sin sumar a mano, y para contarle
+ * a ella misma la historia completa: cuánto se le adelantó, cuánto ha
+ * devuelto y qué queda.
+ */
+export function agruparAdelantosPorSocio<T extends Movimiento>(
+  adelantos: AdelantoConDevoluciones<T>[] = []
+): AdelantosDeSocio<T>[] {
+  const porSocio = new Map<string, AdelantosDeSocio<T>>()
+
+  for (const grupo of adelantos) {
+    const fila = grupo.adelanto as any
+    const socioId = String(fila?.socio_id || "")
+    const socio = Array.isArray(fila?.socios) ? fila.socios[0] : fila?.socios
+    const actual =
+      porSocio.get(socioId) ||
+      ({
+        socioId,
+        nombre: socio?.nombre || "Sin nombre",
+        entregado: 0,
+        devuelto: 0,
+        pendiente: 0,
+        adelantos: [],
+      } as AdelantosDeSocio<T>)
+
+    actual.entregado = Math.round((actual.entregado + grupo.entregado) * 100) / 100
+    actual.devuelto = Math.round((actual.devuelto + grupo.devuelto) * 100) / 100
+    actual.pendiente = Math.round((actual.pendiente + grupo.pendiente) * 100) / 100
+    actual.adelantos.push(grupo)
+    porSocio.set(socioId, actual)
+  }
+
+  // Del más viejo al más nuevo: es el orden en que se cuenta la historia y el
+  // orden en que se van pagando.
+  for (const socio of Array.from(porSocio.values())) {
+    socio.adelantos.sort((a, b) =>
+      String((a.adelanto as any).fecha || "").localeCompare(String((b.adelanto as any).fecha || ""))
+    )
+  }
+
+  return Array.from(porSocio.values()).sort((a, b) => a.nombre.localeCompare(b.nombre))
+}
+
 export function agruparPorMetodo({
   abonos = [],
   donaciones = [],

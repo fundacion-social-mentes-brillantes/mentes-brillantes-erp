@@ -6,7 +6,12 @@ vi.mock("@/lib/utils/periodos", () => ({
 }))
 
 import { assertPeriodoAbierto } from "@/lib/utils/periodos"
-import { crearDevolucionAdelanto, validarDevolucionAdelanto } from "../administracion"
+import {
+  crearDevolucionAdelanto,
+  crearDevolucionSocio,
+  planearDevolucionSocio,
+  validarDevolucionAdelanto,
+} from "../administracion"
 
 // Cuando el socio regresa plata de un adelanto, eso NO es un ingreso del
 // negocio: es el mismo adelanto bajando. Se guarda como movimiento negativo del
@@ -207,5 +212,146 @@ describe("devolución de un adelanto", () => {
     expect(auditoria.valor_anterior).toBe(400000)
     expect(auditoria.valor_nuevo).toBe(250000)
     expect(auditoria.usuario_id).toBe("user-1")
+  })
+})
+
+// Lo normal en la vida real: varios micro-adelantos y despues UN pago que los
+// cubre en parte o del todo. Nadie deberia tener que decidir a mano cual paga
+// primero, y menos hacer la resta.
+describe("devolución repartida entre los adelantos del socio", () => {
+  const MOVIMIENTOS = [
+    { id: "ade-1", monto: 100000, fecha: "2026-08-03", tipo: "adelanto", adelanto_id: null },
+    { id: "ade-2", monto: 20000, fecha: "2026-08-05", tipo: "adelanto", adelanto_id: null },
+    { id: "ade-3", monto: 7000, fecha: "2026-08-09", tipo: "adelanto", adelanto_id: null },
+  ]
+
+  function adminConAdelantos(movimientos: any[], opts: { sinPeriodo?: boolean } = {}) {
+    const insertados: Array<{ tabla: string; filas: any[] }> = []
+
+    const client = {
+      insertados,
+      from(tabla: string) {
+        const q: any = {
+          select: () => q,
+          eq: () => q,
+          limit: () => q,
+          then: (resolver: any) =>
+            resolver(
+              tabla === "periodos"
+                ? { data: opts.sinPeriodo ? [] : [PERIODO], error: null }
+                : { data: movimientos, error: null }
+            ),
+          insert(filas: any[]) {
+            insertados.push({ tabla, filas })
+            const respuesta = { data: filas.map((_, i) => ({ id: `dev-${i + 1}` })), error: null }
+            return {
+              select: () => ({ then: (resolver: any) => resolver(respuesta) }),
+              then: (resolver: any) => resolver({ error: null }),
+            }
+          },
+        }
+        return q
+      },
+    }
+    return client as any
+  }
+
+  const datosSocio = (monto: number) => ({
+    socioId: "socio-1",
+    monto,
+    fecha: "2026-08-14",
+    metodoPago: "nequi",
+  })
+
+  it("un pago chico sale del adelanto más viejo", async () => {
+    const plan = await planearDevolucionSocio(adminConAdelantos(MOVIMIENTOS), datosSocio(50000))
+
+    expect(plan.reparto).toHaveLength(1)
+    expect(plan.reparto[0].fechaAdelanto).toBe("2026-08-03")
+    expect(plan.reparto[0].seAplica).toBe(50000)
+    expect(plan.totalPendienteDespues).toBe(77000)
+  })
+
+  it("un pago grande se reparte en cascada, del más viejo al más nuevo", async () => {
+    const plan = await planearDevolucionSocio(adminConAdelantos(MOVIMIENTOS), datosSocio(115000))
+
+    expect(plan.reparto.map((p) => [p.fechaAdelanto, p.seAplica])).toEqual([
+      ["2026-08-03", 100000],
+      ["2026-08-05", 15000],
+    ])
+    expect(plan.totalPendienteDespues).toBe(12000)
+    expect(plan.quedaTodoSaldado).toBe(false)
+  })
+
+  it("pagar todo deja al socio al día", async () => {
+    const plan = await planearDevolucionSocio(adminConAdelantos(MOVIMIENTOS), datosSocio(127000))
+
+    expect(plan.reparto).toHaveLength(3)
+    expect(plan.totalPendienteDespues).toBe(0)
+    expect(plan.quedaTodoSaldado).toBe(true)
+  })
+
+  it("cuenta lo ya devuelto antes de repartir", async () => {
+    const conDevolucion = [...MOVIMIENTOS, { id: "dev-x", monto: -90000, fecha: "2026-08-10", tipo: "devolucion", adelanto_id: "ade-1" }]
+
+    const plan = await planearDevolucionSocio(adminConAdelantos(conDevolucion), datosSocio(15000))
+
+    // Del primer adelanto solo quedaban 10.000; los otros 5.000 pasan al segundo.
+    expect(plan.reparto.map((p) => [p.fechaAdelanto, p.seAplica])).toEqual([
+      ["2026-08-03", 10000],
+      ["2026-08-05", 5000],
+    ])
+  })
+
+  it("no deja devolver más de lo que se le adelantó", async () => {
+    await expect(
+      planearDevolucionSocio(adminConAdelantos(MOVIMIENTOS), datosSocio(200000))
+    ).rejects.toThrow(/solo quedan \$127\.000/)
+  })
+
+  it("si no debe nada, lo dice en vez de inventar un movimiento", async () => {
+    await expect(planearDevolucionSocio(adminConAdelantos([]), datosSocio(1000))).rejects.toThrow(
+      /no tiene adelantos por devolver/
+    )
+  })
+
+  it("sin periodo abierto no se registra nada", async () => {
+    await expect(
+      planearDevolucionSocio(adminConAdelantos(MOVIMIENTOS, { sinPeriodo: true }), datosSocio(1000))
+    ).rejects.toThrow(/No hay ningun periodo abierto/)
+  })
+
+  it("la fecha tiene que caer dentro del periodo", async () => {
+    await expect(
+      planearDevolucionSocio(adminConAdelantos(MOVIMIENTOS), { ...datosSocio(1000), fecha: "2026-09-30" })
+    ).rejects.toThrow(/dentro del periodo/)
+  })
+
+  // Las filas entran en UN insert: media devolucion aplicada seria peor que
+  // ninguna.
+  it("guarda todas las partes en un solo insert, con el signo negativo", async () => {
+    const admin = adminConAdelantos(MOVIMIENTOS)
+
+    const resultado = await crearDevolucionSocio(admin, ACTOR, datosSocio(115000))
+
+    const escrituras = admin.insertados.filter((i: any) => i.tabla === "adelantos_socios")
+    expect(escrituras).toHaveLength(1)
+    expect(escrituras[0].filas.map((f: any) => f.monto)).toEqual([-100000, -15000])
+    expect(escrituras[0].filas.every((f: any) => f.tipo === "devolucion")).toBe(true)
+    expect(escrituras[0].filas.map((f: any) => f.adelanto_id)).toEqual(["ade-1", "ade-2"])
+    expect(resultado.adelantosTocados).toBe(2)
+  })
+
+  it("audita cada parte del reparto", async () => {
+    const admin = adminConAdelantos(MOVIMIENTOS)
+
+    await crearDevolucionSocio(admin, ACTOR, datosSocio(115000))
+
+    const auditoria = admin.insertados.find((i: any) => i.tabla === "auditoria_financiera")?.filas
+    expect(auditoria).toHaveLength(2)
+    expect(auditoria[0].accion).toBe("devolver_adelanto")
+    expect(auditoria[0].valor_nuevo).toBe(0)
+    expect(auditoria[1].valor_nuevo).toBe(5000)
+    expect(auditoria[1].motivo).toContain("parte de un pago de $115.000")
   })
 })
