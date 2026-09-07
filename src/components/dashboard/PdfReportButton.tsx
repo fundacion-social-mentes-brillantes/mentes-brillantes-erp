@@ -36,7 +36,7 @@ export function PdfReportButton({ displayMonthName }: { displayMonthName: string
 
       const dashboardElement = document.getElementById('dashboard-content')
       if (!dashboardElement) {
-        throw new Error('No se encontrÃ³ el contenido del dashboard')
+        throw new Error('No se encontró el contenido del dashboard')
       }
 
       // 1. Clonar el elemento
@@ -62,7 +62,7 @@ export function PdfReportButton({ displayMonthName }: { displayMonthName: string
       clone.style.left = '-9999px' // Oculto fuera de pantalla
       clone.style.width = `${dashboardElement.offsetWidth}px` // Mantener ancho
       
-      // 3. Remover clases problemÃ¡ticas y forzar colores estÃ¡ndar
+      // 3. Remover clases problemáticas y forzar colores estándar
       const elementsWithBlur = clone.querySelectorAll('.backdrop-blur-xl, .backdrop-blur-md, .backdrop-blur')
       elementsWithBlur.forEach(el => {
         el.classList.remove('backdrop-blur-xl', 'backdrop-blur-md', 'backdrop-blur')
@@ -72,7 +72,7 @@ export function PdfReportButton({ displayMonthName }: { displayMonthName: string
       document.body.appendChild(clone)
       
       // 5. Normalizar TODO color moderno (oklch, lab, color()) a formatos seguros para html2canvas
-      // Es vital hacerlo despuÃ©s de adjuntar al DOM para que getComputedStyle funcione
+      // Es vital hacerlo después de adjuntar al DOM para que getComputedStyle funcione
       const allElements = clone.querySelectorAll('*')
       
       const safeFallbackColors: Record<string, string> = {
@@ -98,7 +98,7 @@ export function PdfReportButton({ displayMonthName }: { displayMonthName: string
         })
       })
 
-      // Limpieza manual adicional para fondos transparentes problemÃ¡ticos
+      // Limpieza manual adicional para fondos transparentes problemáticos
       elementsWithBlur.forEach(el => {
         if (el.classList.contains('bg-[#ffffff]/60') || el.classList.contains('bg-[#ffffff]/90')) {
           el.classList.remove('bg-[#ffffff]/60', 'bg-[#ffffff]/90')
@@ -142,7 +142,7 @@ export function PdfReportButton({ displayMonthName }: { displayMonthName: string
       
       pdf.setFontSize(12)
       pdf.setTextColor(113, 113, 122) // zinc-500
-      pdf.text(`PerÃ­odo: ${displayMonthName}`, 10, 28)
+      pdf.text(`Período: ${displayMonthName}`, 10, 28)
       pdf.text(`Generado el: ${new Date().toLocaleDateString('es-CO')} ${new Date().toLocaleTimeString('es-CO')}`, 10, 34)
 
       // Divider
@@ -154,7 +154,7 @@ export function PdfReportButton({ displayMonthName }: { displayMonthName: string
       pdf.save(`Reporte_Gerencial_${displayMonthName.replace(' ', '_')}.pdf`)
     } catch (error) {
       console.error('Error Fatal generando PDF:', error)
-      alert('Hubo un error al generar el reporte PDF. Revisa la consola (F12) para mÃ¡s detalles.')
+      alert('Hubo un error al generar el reporte PDF. Revisa la consola (F12) para más detalles.')
     } finally {
       setIsGenerating(false)
       // Limpieza: Asegurarnos de remover siempre el nodo clonado

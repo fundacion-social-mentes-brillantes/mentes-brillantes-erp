@@ -84,7 +84,7 @@ export default function UsuariosTable({ perfiles, asistentes }: Props) {
         <div className="flex items-start justify-between gap-2">
           <div>
             <p className="text-[rgb(var(--text-primary))] font-semibold leading-snug">{perfil.nombre}</p>
-            <p className="text-[11px] text-[rgb(var(--text-muted))]">EdiciÃ³n rÃ¡pida</p>
+            <p className="text-[11px] text-[rgb(var(--text-muted))]">Edición rápida</p>
           </div>
         </div>
 

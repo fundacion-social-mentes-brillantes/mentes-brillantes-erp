@@ -80,7 +80,7 @@ export default async function SociosPage() {
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
                   <p className="font-semibold text-zinc-900 leading-snug">{socio.nombre}</p>
-                  <p className="text-sm text-zinc-500">ParticipaciÃ³n: {socio.porcentaje_participacion}%</p>
+                  <p className="text-sm text-zinc-500">Participación: {socio.porcentaje_participacion}%</p>
                   <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${socio.activo ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-600'}`}>
                     {socio.activo ? 'Activo' : 'Inactivo'}
                   </span>

@@ -169,7 +169,7 @@ export async function deleteCuenta(cuentaId: string): Promise<ActionState> {
       .eq("id", cuentaId)
       .single()
 
-    if (cuentaBaseError || !cuentaBase) return { error: "No se encontrÃ³ la cuenta." }
+    if (cuentaBaseError || !cuentaBase) return { error: "No se encontró la cuenta." }
 
     const periodoError = await assertFechaEditable(supabase, cuentaBase.fecha_emision, "Eliminar la cuenta")
     if (periodoError) return { error: periodoError }
@@ -201,7 +201,7 @@ export async function deleteCuenta(cuentaId: string): Promise<ActionState> {
       const tieneSaldoFavor = pagosValidos.some((p) => esSaldoAFavor(p))
       if (tieneSaldoFavor) {
         return {
-          error: "No se puede eliminar la cuenta porque tiene pagos provenientes de saldo a favor. ReviÃ©rtalos antes de borrar.",
+          error: "No se puede eliminar la cuenta porque tiene pagos provenientes de saldo a favor. Reviértalos antes de borrar.",
         }
       }
       return { error: "No se puede eliminar la cuenta porque tiene pagos activos registrados. Anula o elimina los pagos primero." }
@@ -237,7 +237,7 @@ export async function deleteCuenta(cuentaId: string): Promise<ActionState> {
 
     await supabase
       .from("auditoria_financiera")
-      .insert([buildAudit("cuentas_por_cobrar", cuentaId, user?.id || "", "eliminar_cuenta", cuentaBase.valor_total, null, "EliminaciÃ³n definitiva de cuenta")])
+      .insert([buildAudit("cuentas_por_cobrar", cuentaId, user?.id || "", "eliminar_cuenta", cuentaBase.valor_total, null, "Eliminación definitiva de cuenta")])
 
     revalidatePath("/cuentas")
     redirect("/cuentas")
@@ -333,7 +333,7 @@ export async function editValorCuenta(
       .select("fecha_emision, pagos_abonos(id, monto, notas, estado, metodo_pago, origen_fondos)")
       .eq("id", cuentaId)
       .single()
-    if (cuentaBaseError || !cuentaBase) return { error: "No se encontrÃ³ la cuenta." }
+    if (cuentaBaseError || !cuentaBase) return { error: "No se encontró la cuenta." }
 
     const abonosActivos = filtrarPagosValidosCuentas(cuentaBase.pagos_abonos || [])
     if (valorNuevo === 0 && abonosActivos.length > 0) {
@@ -392,7 +392,7 @@ export async function editMontoAbono(
       .select("monto, origen_fondos, metodo_pago, fecha_pago")
       .eq("id", abonoId)
       .single()
-    if (abonoError || !abono) return { error: "No se encontrÃ³ el abono." }
+    if (abonoError || !abono) return { error: "No se encontró el abono." }
 
     const periodoError = await assertFechaEditable(supabase, abono.fecha_pago, "Editar el abono")
     if (periodoError) return { error: periodoError }
@@ -403,7 +403,7 @@ export async function editMontoAbono(
       .eq("id", cuentaId)
       .single()
 
-    if (cuentaError || !cuenta) return { error: "No se encontrÃ³ la cuenta asociada." }
+    if (cuentaError || !cuenta) return { error: "No se encontró la cuenta asociada." }
 
     const pagosOtros = filtrarPagosValidosCuentas(cuenta.pagos_abonos || []).filter((p) => p.id !== abonoId)
     const totalOtros = pagosOtros.reduce((acc, pago) => acc + toSafeNumber(pago.monto), 0)
@@ -440,7 +440,7 @@ export async function editMontoAbono(
             monto: movimientoAjusteMonto,
             metodo_pago: "saldo_a_favor",
             fecha: fechaMovimiento,
-            notas: overflowNote(abonoId, "Ajuste de aplicaciÃ³n de saldo a favor del abono"),
+            notas: overflowNote(abonoId, "Ajuste de aplicación de saldo a favor del abono"),
             usuario_id: user?.id || null,
           })
 
@@ -448,7 +448,7 @@ export async function editMontoAbono(
             const { error: rollbackAbonoError } = await supabase.from("pagos_abonos").update({ monto: montoActual }).eq("id", abonoId)
             if (rollbackAbonoError) {
               return {
-                error: "Se modificÃ³ el abono, pero fallÃ³ el ajuste de saldo a favor y no se pudo revertir automÃ¡ticamente. Requiere revisiÃ³n manual.",
+                error: "Se modificó el abono, pero falló el ajuste de saldo a favor y no se pudo revertir automáticamente. Requiere revisión manual.",
               }
             }
             return { error: "No se pudo registrar el ajuste de saldo a favor. El abono fue restaurado para evitar inconsistencias." }
@@ -468,7 +468,7 @@ export async function editMontoAbono(
             monto: movimientoAjusteMonto,
             metodo_pago: deltaExcedente > 0 ? abono.metodo_pago : "saldo_a_favor",
             fecha: fechaMovimiento,
-            notas: overflowNote(abonoId, "Ajuste de saldo a favor por ediciÃ³n del abono"),
+            notas: overflowNote(abonoId, "Ajuste de saldo a favor por edición del abono"),
             usuario_id: user?.id || null,
           })
 
@@ -476,7 +476,7 @@ export async function editMontoAbono(
             const { error: rollbackAbonoError } = await supabase.from("pagos_abonos").update({ monto: montoActual }).eq("id", abonoId)
             if (rollbackAbonoError) {
               return {
-                error: "Se modificÃ³ el abono, pero fallÃ³ el ajuste del saldo a favor y no se pudo revertir automÃ¡ticamente. Requiere revisiÃ³n manual.",
+                error: "Se modificó el abono, pero falló el ajuste del saldo a favor y no se pudo revertir automáticamente. Requiere revisión manual.",
               }
             }
             return { error: "No se pudo ajustar el saldo a favor del abono. El pago fue restaurado para evitar inconsistencias." }
@@ -501,7 +501,7 @@ export async function editMontoAbono(
             movimientoAjusteTipo === "ingreso" ? "ajuste_saldo_a_favor_ingreso" : "ajuste_saldo_a_favor_aplicacion",
             null,
             movimientoAjusteMonto,
-            "Ajuste automÃ¡tico del saldo a favor por ediciÃ³n de abono"
+            "Ajuste automático del saldo a favor por edición de abono"
           ),
         ])
     }
@@ -514,7 +514,7 @@ export async function editMontoAbono(
         await supabase.from("movimientos_saldo_favor").delete().eq("id", movimientoAjusteId)
       }
       await supabase.from("pagos_abonos").update({ monto: montoActual }).eq("id", abonoId)
-      return { error: "No se pudo consolidar la ediciÃ³n del abono. Se restaurÃ³ la operaciÃ³n para evitar inconsistencias." }
+      return { error: "No se pudo consolidar la edición del abono. Se restauró la operación para evitar inconsistencias." }
     }
 
     revalidatePath(`/cuentas/${cuentaId}`)
@@ -632,7 +632,7 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
     if (valorTotalCero && abonoInicialValue > 0) {
       return { error: "No se puede registrar abono inicial en una cuenta de valor 0." }
     }
-    if (abonoInicialValue > 0 && !metodoPago) return { error: "Debes indicar el mÃ©todo de pago del abono inicial." }
+    if (abonoInicialValue > 0 && !metodoPago) return { error: "Debes indicar el método de pago del abono inicial." }
     if (abonoInicialValue > 0 && !fechaPagoInicial) {
       return { error: "Debes indicar la fecha de pago inicial." }
     }
@@ -744,7 +744,7 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
           pagoId: pagoInicialId,
           saldoFavorId,
         })
-        return { error: "La cuenta se creÃ³, pero no se pudo consolidar el abono inicial. Se revirtiÃ³ la operaciÃ³n para evitar inconsistencias." }
+        return { error: "La cuenta se creó, pero no se pudo consolidar el abono inicial. Se revirtió la operación para evitar inconsistencias." }
       }
     }
 
@@ -777,7 +777,7 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
 
     await supabase
       .from("auditoria_financiera")
-      .insert([buildAudit("cuentas_por_cobrar", cuentaIdCreada, user?.id || "", "crear_cuenta", null, valor_total, "CreaciÃ³n de cuenta por cobrar")])
+      .insert([buildAudit("cuentas_por_cobrar", cuentaIdCreada, user?.id || "", "crear_cuenta", null, valor_total, "Creación de cuenta por cobrar")])
     if (pagoInicialId) {
       const montoAplicado = Math.min(abonoInicialValue, valor_total)
       await supabase
