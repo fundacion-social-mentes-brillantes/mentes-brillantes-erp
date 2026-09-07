@@ -108,6 +108,54 @@ describe('saldo a favor y aplicaciones', () => {
     expect(esIngresoRealSaldoAFavor({ tipo: 'ingreso', notas: 'Ajuste de aplicación de saldo a favor del abono' })).toBe(false)
     expect(esIngresoRealSaldoAFavor({ tipo: 'ingreso', notas: 'Ajuste de saldo a favor por edición del abono' })).toBe(false)
   })
+
+  it('un ajuste que entró por dinero real SÍ es ingreso, aunque la nota diga "Ajuste"', () => {
+    // Subir el monto de un abono ya registrado deja el excedente con nota de ajuste,
+    // pero el dinero entró por efectivo/Nequi: es plata nueva del período.
+    for (const metodo of ['efectivo', 'nequi', 'daviplata']) {
+      expect(
+        esIngresoRealSaldoAFavor({
+          tipo: 'ingreso',
+          metodo_pago: metodo,
+          notas: '[ABONO:abc] Ajuste de saldo a favor por edición del abono',
+        })
+      ).toBe(true)
+    }
+  })
+
+  it('el mismo ajuste pagado con saldo a favor sigue sin ser ingreso', () => {
+    expect(
+      esIngresoRealSaldoAFavor({
+        tipo: 'ingreso',
+        metodo_pago: 'saldo_a_favor',
+        notas: '[ABONO:abc] Ajuste de saldo a favor por edición del abono',
+      })
+    ).toBe(false)
+    expect(
+      esIngresoRealSaldoAFavor({
+        tipo: 'ingreso',
+        metodo_pago: 'efectivo',
+        origen_fondos: 'saldo_a_favor',
+        notas: 'Ajuste de aplicación de saldo a favor del abono',
+      })
+    ).toBe(false)
+  })
+
+  it('sin método de pago un ajuste se mantiene excluido, para no inflar ingresos', () => {
+    expect(
+      esIngresoRealSaldoAFavor({ tipo: 'ingreso', metodo_pago: null, notas: 'Ajuste de saldo a favor por edicion del abono' })
+    ).toBe(false)
+  })
+
+  it('un ajuste anulado no es ingreso ni entrando por efectivo', () => {
+    expect(
+      esIngresoRealSaldoAFavor({
+        tipo: 'ingreso',
+        metodo_pago: 'efectivo',
+        notas: '[ANULADO] Ajuste de saldo a favor por edición del abono',
+      })
+    ).toBe(false)
+  })
 })
 
 describe('toSafeNumber y sumarMontos', () => {

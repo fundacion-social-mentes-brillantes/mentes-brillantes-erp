@@ -34,16 +34,36 @@ export const esPagoDeSaldoAFavor = (p: {
   tipo?: string | null
 }) => esSaldoAFavor(p) || esAplicacionSaldo(p)
 
+// De los patrones de arriba, estos son los unicos que pueden traer dinero NUEVO.
+// Al subir el monto de un abono ya registrado, el excedente es plata que la persona
+// acaba de entregar; el sistema le pone "Ajuste" a la nota, pero si entro por
+// efectivo, Nequi o Daviplata es un ingreso real del periodo. Los demas patrones
+// (aplicaciones y reversiones) siempre mueven saldo dentro de la casa.
+const PATRONES_AJUSTE_QUE_PUEDEN_SER_DINERO_NUEVO = [
+  "ajuste de saldo a favor por edicion del abono",
+  "ajuste de saldo a favor por edición del abono",
+]
+
+// Sin metodo_pago no podemos afirmar que entro dinero, asi que se mantiene
+// excluido: preferimos quedarnos cortos antes que inflar los ingresos.
+const esEntradaDeDineroReal = (p: { metodo_pago?: string | null; origen_fondos?: string | null }) =>
+  !!toLower(p.metodo_pago) && !esSaldoAFavor(p)
+
 export const esIngresoRealSaldoAFavor = (p: {
   tipo?: string | null
   notas?: string | null
   estado?: string | null
+  metodo_pago?: string | null
+  origen_fondos?: string | null
 }) => {
   if (!esPagoValido(p)) return false
   if (toLower(p.tipo) !== "ingreso") return false
 
   const nota = toLower(p.notas) || ""
-  return !PATRONES_NOTAS_AJUSTE_NO_INGRESO_SALDO_A_FAVOR.some((pattern) => nota.includes(pattern))
+  const coincide = (patrones: string[]) => patrones.some((pattern) => nota.includes(pattern))
+
+  if (!coincide(PATRONES_NOTAS_AJUSTE_NO_INGRESO_SALDO_A_FAVOR)) return true
+  return coincide(PATRONES_AJUSTE_QUE_PUEDEN_SER_DINERO_NUEVO) && esEntradaDeDineroReal(p)
 }
 
 export const toSafeNumber = (value: unknown): number => {
