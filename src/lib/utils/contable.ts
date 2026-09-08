@@ -59,6 +59,13 @@ export const esIngresoRealSaldoAFavor = (p: {
   if (!esPagoValido(p)) return false
   if (toLower(p.tipo) !== "ingreso") return false
 
+  // Si el dinero salio del propio saldo a favor, no entro plata nueva: es un
+  // movimiento interno, diga lo que diga la nota. Esta regla no depende del texto
+  // y por eso atrapa tambien las notas que nadie previo: es la que descubre las
+  // "Reversion automatica por ELIMINACION del movimiento", que se colaban como
+  // ingreso porque la lista de abajo solo nombraba las del anticipo.
+  if (esSaldoAFavor(p)) return false
+
   const nota = toLower(p.notas) || ""
   const coincide = (patrones: string[]) => patrones.some((pattern) => nota.includes(pattern))
 

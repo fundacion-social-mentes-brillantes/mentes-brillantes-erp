@@ -147,6 +147,34 @@ describe('saldo a favor y aplicaciones', () => {
     ).toBe(false)
   })
 
+  it('una reversion interna no es ingreso, aunque su nota no este en ninguna lista', () => {
+    // Caso real: 5 movimientos por $200.000 con esta nota se contaban como
+    // ingreso porque los patrones solo nombraban "del anticipo", no "del
+    // movimiento". Lo que los delata es el metodo de pago, no el texto.
+    expect(
+      esIngresoRealSaldoAFavor({
+        tipo: 'ingreso',
+        metodo_pago: 'saldo_a_favor',
+        notas: 'Reversión automática por ELIMINACIÓN del movimiento: 3b61d7f2-c09c-4520-96d0-000000000000',
+      })
+    ).toBe(false)
+    // Y cualquier nota futura que nadie previó, por el mismo camino.
+    expect(
+      esIngresoRealSaldoAFavor({ tipo: 'ingreso', metodo_pago: 'saldo_a_favor', notas: 'texto que nadie previo' })
+    ).toBe(false)
+    expect(
+      esIngresoRealSaldoAFavor({ tipo: 'ingreso', origen_fondos: 'saldo_a_favor', notas: 'sin patron conocido' })
+    ).toBe(false)
+  })
+
+  it('los ingresos que sí entraron por caja siguen contando', () => {
+    for (const metodo of ['efectivo', 'nequi', 'daviplata', 'otro']) {
+      expect(esIngresoRealSaldoAFavor({ tipo: 'ingreso', metodo_pago: metodo, notas: 'Anticipo real' })).toBe(true)
+    }
+    // El movimiento de $822.000 con la nota escueta "Ajuste", que sí es plata real.
+    expect(esIngresoRealSaldoAFavor({ tipo: 'ingreso', metodo_pago: 'efectivo', notas: 'Ajuste' })).toBe(true)
+  })
+
   it('un ajuste anulado no es ingreso ni entrando por efectivo', () => {
     expect(
       esIngresoRealSaldoAFavor({
