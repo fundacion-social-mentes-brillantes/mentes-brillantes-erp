@@ -3,9 +3,30 @@ import { Plus, Edit2 } from 'lucide-react'
 import { DeleteEgresoButton } from './DeleteEgresoButton'
 import { requireRoles } from '@/lib/utils/authz'
 
-export default async function EgresosPage() {
+// Se pide una pagina a la vez, igual que en Cuentas: la lista crecia para
+// siempre y se bajaba entera en cada carga.
+const POR_PAGINA = 100
+
+type Params = { searchParams: Promise<{ pagina?: string }> }
+
+export default async function EgresosPage({ searchParams }: Params) {
   const { supabase } = await requireRoles(['admin', 'caja'])
-  const { data: egresos } = await supabase?.from('egresos').select('*').order('fecha', { ascending: false }) || { data: [] }
+
+  const { pagina } = await searchParams
+  const paginaActual = Math.max(1, Number(pagina) || 1)
+  const desde = (paginaActual - 1) * POR_PAGINA
+
+  const { data: egresos, count } =
+    (await supabase
+      ?.from('egresos')
+      .select('id, fecha, concepto, categoria, metodo_pago, monto, notas', { count: 'exact' })
+      .order('fecha', { ascending: false })
+      .range(desde, desde + POR_PAGINA - 1)) || { data: [], count: 0 }
+
+  const total = count ?? 0
+  const totalPaginas = Math.max(1, Math.ceil(total / POR_PAGINA))
+  const primero = total === 0 ? 0 : desde + 1
+  const ultimo = Math.min(desde + POR_PAGINA, total)
 
   return (
     <div className="space-y-6">
@@ -51,7 +72,7 @@ export default async function EgresosPage() {
                     ${Number(egreso.monto).toLocaleString()}
                   </td>
                   <td className="px-6 py-4 text-right space-x-2">
-                    <Link href={`/egresos/${egreso.id}/editar`} className="inline-flex p-2 text-zinc-400 hover:text-blue-600 transition-colors rounded-md hover:bg-blue-50">
+                    <Link href={`/egresos/${egreso.id}/editar`} prefetch={false} className="inline-flex p-2 text-zinc-400 hover:text-blue-600 transition-colors rounded-md hover:bg-blue-50">
                       <Edit2 className="w-4 h-4" />
                     </Link>
                     <DeleteEgresoButton id={egreso.id} />
@@ -95,7 +116,7 @@ export default async function EgresosPage() {
 
               <div className="flex flex-col sm:flex-row gap-2 pt-1">
                 <Link
-                  href={`/egresos/${egreso.id}/editar`}
+                  href={`/egresos/${egreso.id}/editar`} prefetch={false}
                   className="inline-flex items-center justify-center gap-2 rounded-md border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
                 >
                   <Edit2 className="w-4 h-4" />
@@ -107,6 +128,37 @@ export default async function EgresosPage() {
           ))
         )}
       </div>
+
+      {total > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm">
+          <p className="text-zinc-500">
+            Mostrando {primero}–{ultimo} de {total.toLocaleString('es-CO')} egresos
+          </p>
+          {totalPaginas > 1 && (
+            <div className="flex items-center gap-2">
+              {paginaActual > 1 && (
+                <Link
+                  href={`/egresos?pagina=${paginaActual - 1}`}
+                  className="inline-flex items-center rounded-md border border-zinc-200 px-3 py-2 font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+                >
+                  Anterior
+                </Link>
+              )}
+              <span className="text-zinc-500">
+                Página {paginaActual} de {totalPaginas}
+              </span>
+              {paginaActual < totalPaginas && (
+                <Link
+                  href={`/egresos?pagina=${paginaActual + 1}`}
+                  className="inline-flex items-center rounded-md border border-zinc-200 px-3 py-2 font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+                >
+                  Siguiente
+                </Link>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

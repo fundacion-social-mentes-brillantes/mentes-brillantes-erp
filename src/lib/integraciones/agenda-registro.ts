@@ -203,18 +203,23 @@ export async function eventosYaEnElErp(
 
   // Rellenar el enlace es lo que hace que el verde no se pierda al recargar.
   // Si falla no se cae la consulta: el verde ya se contesto bien.
-  for (const { sesionId, eventoId } of porRellenar) {
-    const { error: errorEnlace } = await admin
-      .from("coach_sesiones")
-      .update({ evento_agenda_id: eventoId })
-      .eq("id", sesionId)
-      .is("evento_agenda_id", null)
-    if (errorEnlace) {
-      console.error("[agenda-registro] no se pudo enlazar la sesion con su evento", {
-        code: errorEnlace.code,
-      })
-    }
-  }
+  // Van en paralelo: cada sesion necesita SU propio evento, asi que no se
+  // pueden juntar en un solo UPDATE, pero si lanzarse a la vez en vez de una
+  // detras de otra —esto corre en cada carga del calendario.
+  await Promise.all(
+    porRellenar.map(async ({ sesionId, eventoId }) => {
+      const { error: errorEnlace } = await admin
+        .from("coach_sesiones")
+        .update({ evento_agenda_id: eventoId })
+        .eq("id", sesionId)
+        .is("evento_agenda_id", null)
+      if (errorEnlace) {
+        console.error("[agenda-registro] no se pudo enlazar la sesion con su evento", {
+          code: errorEnlace.code,
+        })
+      }
+    })
+  )
 
   return Array.from(registrados)
 }

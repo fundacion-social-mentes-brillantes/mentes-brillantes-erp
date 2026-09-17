@@ -161,7 +161,7 @@ export function CuentasClient({
                     <td className="px-6 py-4 font-medium text-[rgb(var(--text-primary))] break-words">
                       {cuenta.asistente_nombre ? (
                         <Link
-                          href={`/asistentes/${cuenta.asistente_id}`}
+                          href={`/asistentes/${cuenta.asistente_id}`} prefetch={false}
                           onClick={(e) => e.stopPropagation()}
                           className="text-[rgb(var(--accent))] hover:underline transition-colors"
                         >
@@ -192,7 +192,7 @@ export function CuentasClient({
                       <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
                         {cuenta.estado !== 'pagado' && (
                           <Link
-                            href={`/cuentas/${cuenta.id}`}
+                            href={`/cuentas/${cuenta.id}`} prefetch={false}
                             className="inline-flex items-center justify-center gap-1.5 rounded-md text-xs font-medium transition-colors h-8 px-3 border border-[rgba(var(--success),0.35)] bg-[rgba(var(--success),0.12)] text-[rgb(var(--success))] hover:bg-[rgba(var(--success),0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--accent),0.35)]"
                           >
                             Registrar abono
@@ -225,7 +225,7 @@ export function CuentasClient({
                 <div className="min-w-0">
                   {cuenta.asistente_nombre ? (
                     <Link
-                      href={`/asistentes/${cuenta.asistente_id}`}
+                      href={`/asistentes/${cuenta.asistente_id}`} prefetch={false}
                       onClick={(e) => e.stopPropagation()}
                       className="font-medium text-[rgb(var(--accent))] hover:underline"
                     >
@@ -283,7 +283,7 @@ export function CuentasClient({
                     <h3 className={cardTitle}>Acciones (Admin)</h3>
                   </div>
                   <Link
-                    href={`/cuentas/${selectedCuenta.id}`}
+                    href={`/cuentas/${selectedCuenta.id}`} prefetch={false}
                     className="inline-flex items-center justify-center gap-2 rounded-md border border-[rgb(var(--border))] px-3 py-2 text-sm font-medium text-[rgb(var(--text-primary))] hover:bg-[rgb(var(--surface-2))]"
                   >
                     Editar cuenta
@@ -305,7 +305,7 @@ export function CuentasClient({
                     <>
                       <p className="font-medium text-[rgb(var(--text-primary))]">{selectedCuenta.asistente_nombre}</p>
                       <Link
-                        href={`/asistentes/${selectedCuenta.asistente_id}`}
+                        href={`/asistentes/${selectedCuenta.asistente_id}`} prefetch={false}
                         className="inline-flex items-center gap-1.5 mt-1.5 text-xs font-medium text-[rgb(var(--accent))] hover:text-[rgb(var(--accent))] bg-[rgba(var(--accent),0.12)] hover:bg-[rgba(var(--accent),0.2)] px-2.5 py-1 rounded-md transition-colors border border-[rgba(var(--accent),0.35)]"
                       >
                         <ExternalLink className="w-3 h-3" />
@@ -382,7 +382,7 @@ export function CuentasClient({
               {selectedCuenta.estado !== 'pagado' && (
                 <div className="pt-4 border-t border-[rgb(var(--border))]">
                   <Link
-                    href={`/cuentas/${selectedCuenta.id}`}
+                    href={`/cuentas/${selectedCuenta.id}`} prefetch={false}
                     className="w-full flex justify-center items-center gap-2 bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))] py-2.5 rounded-lg font-medium hover:bg-[rgb(var(--accent-strong))] transition-colors text-sm"
                   >
                     Registrar Abono

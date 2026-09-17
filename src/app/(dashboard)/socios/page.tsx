@@ -45,7 +45,7 @@ export default async function SociosPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right space-x-2">
-                    <Link href={`/socios/${socio.id}/editar`} className="inline-flex p-2 text-zinc-400 hover:text-blue-600 transition-colors rounded-md hover:bg-blue-50">
+                    <Link href={`/socios/${socio.id}/editar`} prefetch={false} className="inline-flex p-2 text-zinc-400 hover:text-blue-600 transition-colors rounded-md hover:bg-blue-50">
                       <Edit2 className="w-4 h-4" />
                     </Link>
                     <form action={toggleSocioEstado.bind(null, socio.id, !socio.activo)} className="inline-block">
@@ -86,7 +86,7 @@ export default async function SociosPage() {
                   </span>
                 </div>
                 <Link
-                  href={`/socios/${socio.id}/editar`}
+                  href={`/socios/${socio.id}/editar`} prefetch={false}
                   className="inline-flex items-center justify-center gap-1.5 rounded-md border border-zinc-200 px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
                 >
                   <Edit2 className="w-4 h-4" />

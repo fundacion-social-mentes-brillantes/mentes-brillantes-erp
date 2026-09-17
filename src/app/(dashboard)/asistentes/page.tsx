@@ -23,6 +23,18 @@ export default async function AsistentesPage({ searchParams }: { searchParams: P
         coach_sesiones (fecha)
       `)
     .order('nombre')
+    // De estas tres relaciones solo interesa la fecha MAS RECIENTE, asi que se
+    // pide una sola fila de cada una en vez del historial entero. El resultado
+    // es identico —el maximo de una lista ordenada es su primer elemento— pero
+    // se dejan de bajar filas que luego se descartaban.
+    // Ojo: cuentas_por_cobrar NO se recorta igual, porque un pago reciente
+    // puede colgar de una cuenta vieja y se perderia esa fecha.
+    .order('fecha', { referencedTable: 'movimientos_saldo_favor', ascending: false })
+    .limit(1, { referencedTable: 'movimientos_saldo_favor' })
+    .order('fecha', { referencedTable: 'donaciones_asistentes', ascending: false })
+    .limit(1, { referencedTable: 'donaciones_asistentes' })
+    .order('fecha', { referencedTable: 'coach_sesiones', ascending: false })
+    .limit(1, { referencedTable: 'coach_sesiones' })
 
   const asistentes = (rawAsistentes || [])
     .map((a: any) => {

@@ -57,7 +57,7 @@ export default async function LiquidacionesPage() {
                           fechaFin={periodo.fecha_fin}
                         />
                       )}
-                      <Link href={`/liquidaciones/${periodo.id}`} className="inline-flex p-2 text-zinc-400 hover:text-blue-600 transition-colors rounded-md hover:bg-blue-50">
+                      <Link href={`/liquidaciones/${periodo.id}`} prefetch={false} className="inline-flex p-2 text-zinc-400 hover:text-blue-600 transition-colors rounded-md hover:bg-blue-50">
                       <Eye className="w-4 h-4" />
                       </Link>
                     </div>
@@ -106,7 +106,7 @@ export default async function LiquidacionesPage() {
                   />
                 )}
                 <Link
-                  href={`/liquidaciones/${periodo.id}`}
+                  href={`/liquidaciones/${periodo.id}`} prefetch={false}
                   className="flex-1 inline-flex items-center justify-center gap-2 rounded-md border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
                 >
                   <Eye className="w-4 h-4" />

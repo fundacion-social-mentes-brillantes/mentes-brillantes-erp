@@ -50,8 +50,13 @@ export async function saveEgreso(id: string | null, prevState: ActionState, form
     if (periodoActualError) return { error: periodoActualError }
   }
 
-  const periodoError = await assertFechaEditable(supabase, fecha, id ? 'Editar el egreso' : 'Crear el egreso')
-  if (periodoError) return { error: periodoError }
+  // Solo al editar: al crear, crearEgreso valida el periodo con esta misma
+  // funcion y devuelve el mismo mensaje, asi que hacerlo aqui era un viaje de
+  // mas a la base en cada alta.
+  if (id) {
+    const periodoError = await assertFechaEditable(supabase, fecha, 'Editar el egreso')
+    if (periodoError) return { error: periodoError }
+  }
 
   const data = {
     concepto,

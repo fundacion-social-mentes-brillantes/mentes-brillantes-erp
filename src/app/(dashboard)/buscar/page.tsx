@@ -94,7 +94,7 @@ export default async function BuscarPage({ searchParams }: { searchParams?: { q?
           <h2 className="text-lg font-semibold text-[rgb(var(--text-primary))]">Asistentes</h2>
           <div className="divide-y divide-[rgb(var(--border))] rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] overflow-hidden">
             {results.asistentes.map((a) => (
-              <Link key={a.id} href={`/asistentes/${a.id}`} className="block px-4 py-3 hover:bg-[rgb(var(--surface-2))] transition-colors">
+              <Link key={a.id} href={`/asistentes/${a.id}`} prefetch={false} className="block px-4 py-3 hover:bg-[rgb(var(--surface-2))] transition-colors">
                 <p className="font-medium text-[rgb(var(--text-primary))]">{a.nombre}</p>
                 <p className="text-xs text-[rgb(var(--text-muted))] flex gap-2">
                   {a.codigo && <span>Cod: {a.codigo}</span>}
@@ -111,7 +111,7 @@ export default async function BuscarPage({ searchParams }: { searchParams?: { q?
           <h2 className="text-lg font-semibold text-[rgb(var(--text-primary))]">Cuentas por cobrar</h2>
           <div className="divide-y divide-[rgb(var(--border))] rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] overflow-hidden">
             {results.cuentas.map((c: any) => (
-              <Link key={c.id} href={`/cuentas/${c.id}`} className="block px-4 py-3 hover:bg-[rgb(var(--surface-2))] transition-colors">
+              <Link key={c.id} href={`/cuentas/${c.id}`} prefetch={false} className="block px-4 py-3 hover:bg-[rgb(var(--surface-2))] transition-colors">
                 <div className="flex items-center justify-between">
                   <p className="font-medium text-[rgb(var(--text-primary))]">{c.concepto}</p>
                   <span className="text-sm text-[rgb(var(--text-muted))]">${Number(c.valor_total).toLocaleString()}</span>

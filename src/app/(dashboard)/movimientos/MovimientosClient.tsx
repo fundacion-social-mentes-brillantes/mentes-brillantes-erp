@@ -54,10 +54,14 @@ type Movimiento = {
 export const isMovimientoBloqueadoEnHistorial = (tipo: Movimiento['tipo_movimiento'] | string | null | undefined) =>
   tipo === 'aplicacion_saldo' || tipo === 'anticipo'
 
+/** Cuantos movimientos se bajan como maximo de una sola vez. */
+const TOPE_MOVIMIENTOS = 2000
+
 export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes: Asistente[], isAdmin?: boolean }) {
   const [movimientos, setMovimientos] = useState<Movimiento[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [topeAlcanzado, setTopeAlcanzado] = useState(false)
 
   // Filters
   const [rangoFecha, setRangoFecha] = useState<'este_mes' | 'mes_pasado' | 'todos' | 'custom'>('este_mes')
@@ -106,8 +110,15 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
   }, [rangoFecha])
 
   useEffect(() => {
+    // Al arrancar, el rango ya es "este mes" pero las fechas todavia estan
+    // vacias (las calcula el efecto de arriba, que corre despues). Sin esta
+    // guarda se lanzaba una primera consulta SIN filtro que bajaba el historial
+    // entero —anos de movimientos— y acto seguido otra con el mes: el trabajo
+    // pesado se hacia para nada. Con rango "todos" si se consulta sin fechas,
+    // porque ahi es lo que la persona pidio.
+    if (rangoFecha !== 'todos' && (!fechaInicio || !fechaFin)) return
     fetchMovimientos()
-  }, [fechaInicio, fechaFin, tipoFiltro, asistenteFiltro, metodoFiltro, mostrarAplicaciones])
+  }, [rangoFecha, fechaInicio, fechaFin, tipoFiltro, asistenteFiltro, metodoFiltro, mostrarAplicaciones])
 
   async function fetchMovimientos() {
     if (!supabase) return
@@ -124,7 +135,13 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
     if (asistenteFiltro !== 'todos') query = query.eq('asistente_id', asistenteFiltro)
     if (metodoFiltro !== 'todos') query = query.eq('metodo_pago', metodoFiltro)
 
-    query = query.order('fecha', { ascending: false }).order('creado_en', { ascending: false })
+    // Tope de seguridad: con rango "todos" esto baja anos de movimientos al
+    // navegador. Se piden los mas recientes y, si se alcanza el tope, se avisa
+    // en pantalla para que nadie crea que esta viendo el historial completo.
+    query = query
+      .order('fecha', { ascending: false })
+      .order('creado_en', { ascending: false })
+      .limit(TOPE_MOVIMIENTOS)
 
     const { data, error } = await query
 
@@ -132,6 +149,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
       console.error('Error cargando movimientos:', error)
       setLoadError('No se pudo cargar el historial porque falta la vista de movimientos o hay un problema de conexión. Contacta al administrador.')
     } else if (data) {
+      setTopeAlcanzado(data.length >= TOPE_MOVIMIENTOS)
       let result = data as Movimiento[]
       if (!mostrarAplicaciones) {
         result = result.filter(m =>
@@ -285,6 +303,13 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
       {loadError && (
         <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg p-3">
           {loadError}
+        </div>
+      )}
+
+      {topeAlcanzado && !loadError && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg p-3">
+          Se están mostrando los {TOPE_MOVIMIENTOS.toLocaleString('es-CO')} movimientos más recientes de este filtro.
+          Hay más: acota el rango de fechas para verlos todos.
         </div>
       )}
 

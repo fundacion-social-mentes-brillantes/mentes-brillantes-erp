@@ -56,7 +56,7 @@ export default async function VentasExternasPage() {
                   </td>
                   {isAdmin && (
                     <td className="px-6 py-4 text-right space-x-2">
-                      <Link href={`/ventas-externas/${venta.id}/editar`} className="inline-flex p-2 text-zinc-400 hover:text-blue-600 transition-colors rounded-md hover:bg-blue-50">
+                      <Link href={`/ventas-externas/${venta.id}/editar`} prefetch={false} className="inline-flex p-2 text-zinc-400 hover:text-blue-600 transition-colors rounded-md hover:bg-blue-50">
                         <Edit2 className="w-4 h-4" />
                       </Link>
                       <VentaExternaActions id={venta.id} estado={venta.estado} />
@@ -111,7 +111,7 @@ export default async function VentasExternasPage() {
                 {isAdmin && (
                   <div className="flex items-center gap-1">
                     <Link
-                      href={`/ventas-externas/${venta.id}/editar`}
+                      href={`/ventas-externas/${venta.id}/editar`} prefetch={false}
                       className="inline-flex items-center justify-center gap-1.5 rounded-md border border-zinc-200 px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
                     >
                       <Edit2 className="w-4 h-4" />

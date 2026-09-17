@@ -45,10 +45,10 @@ const iconBtn =
 function AccionesAsistente({ a }: { a: Asistente }) {
   return (
     <>
-      <Link href={`/asistentes/${a.id}`} className={iconBtn} title="Ver detalle">
+      <Link href={`/asistentes/${a.id}`} prefetch={false} className={iconBtn} title="Ver detalle">
         <Eye className="w-4 h-4" />
       </Link>
-      <Link href={`/asistentes/${a.id}/editar`} className={iconBtn} title="Editar asistente">
+      <Link href={`/asistentes/${a.id}/editar`} prefetch={false} className={iconBtn} title="Editar asistente">
         <Edit2 className="w-4 h-4" />
       </Link>
       <form action={toggleAsistenteEstado.bind(null, a.id, !a.activo)} className="inline-block">
@@ -122,7 +122,7 @@ export function AsistentesClient({
                 <tr key={a.id} className="hover:bg-[rgb(var(--surface-2))] transition-colors">
                   <td className="px-6 py-4 font-medium text-[rgb(var(--text-primary))]">{a.codigo || '-'}</td>
                   <td className="px-6 py-4 font-medium">
-                    <Link href={`/asistentes/${a.id}`} className="text-[rgb(var(--accent))] hover:underline">
+                    <Link href={`/asistentes/${a.id}`} prefetch={false} className="text-[rgb(var(--accent))] hover:underline">
                       {a.nombre}
                     </Link>
                   </td>
@@ -167,7 +167,7 @@ export function AsistentesClient({
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-xs font-semibold text-[rgb(var(--text-muted))] shrink-0">#{a.codigo || '-'}</span>
-                    <Link href={`/asistentes/${a.id}`} className="font-medium text-[rgb(var(--accent))] hover:underline truncate">
+                    <Link href={`/asistentes/${a.id}`} prefetch={false} className="font-medium text-[rgb(var(--accent))] hover:underline truncate">
                       {a.nombre}
                     </Link>
                   </div>
