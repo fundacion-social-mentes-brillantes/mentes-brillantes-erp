@@ -10,6 +10,8 @@ export default withSentryConfig(nextConfig, {
   // Sin ruido en la consola durante el build local.
   silent: !process.env.CI,
 
-  // Source maps: pendiente, requiere un token de Sentry en Vercel.
-  sourcemaps: { disable: true },
+  // Sube los source maps a Sentry y los borra del paquete publico, para
+  // que los errores se lean con nombres reales sin exponer el codigo.
+  // Usa SENTRY_AUTH_TOKEN, que vive en las variables de entorno de Vercel.
+  sourcemaps: { deleteSourcemapsAfterUpload: true },
 });
