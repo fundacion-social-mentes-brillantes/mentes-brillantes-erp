@@ -7,7 +7,10 @@
  *  - APIs / Supabase / peticiones POST: nunca se cachean (pasan directo a la red).
  *  - Solo se cachean assets estáticos inmutables (/_next/static, iconos, fuentes).
  */
-const CACHE = "mb-erp-static-v1";
+// Subir el número cuando cambien los íconos u otros archivos cacheados: los
+// .png se sirven de la caché sin volver a preguntar, y solo así se renuevan.
+// v2 (30 sep 2026): ícono Finanzas de la Familia GEMB.
+const CACHE = "mb-erp-static-v2";
 const OFFLINE_URL = "/offline.html";
 
 self.addEventListener("install", (event) => {
