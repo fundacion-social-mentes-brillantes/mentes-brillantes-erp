@@ -1,4 +1,5 @@
-import { OperacionError, exigir } from "./errores"
+import { fechaHoyBogota } from "@/lib/utils/fechas"
+import { OperacionError, exigir, exigirFechaIso } from "./errores"
 import type { ActorErp } from "./abonos"
 
 // Alta y edicion de personas (asistentes). Sin dinero de por medio, pero es la
@@ -14,28 +15,38 @@ export type DatosPersona = {
   fechaInicioProceso?: string | null
 }
 
+/**
+ * Cambios a una persona ya registrada. Cada campo tiene tres estados:
+ * `undefined` = no se toca, `null` o "" = se borra, y un valor = se cambia.
+ *
+ * Antes la edicion reescribia la fila entera: un campo que no se mandaba
+ * quedaba en NULL, y como el rol admin siempre escribia las fechas, editar el
+ * telefono de alguien le borraba la fecha de registro y la de inicio de
+ * proceso sin avisar.
+ */
+export type CambiosPersona = Partial<DatosPersona>
+
+const CAMPOS_TEXTO = ["nombre", "cedula", "correo", "telefono", "codigo"] as const
+const CAMPOS_FECHA = ["fechaRegistro", "fechaInicioProceso"] as const
+
+const COLUMNA: Record<keyof DatosPersona, string> = {
+  nombre: "nombre",
+  cedula: "cedula",
+  correo: "correo",
+  telefono: "telefono",
+  codigo: "codigo",
+  fechaRegistro: "fecha_registro",
+  fechaInicioProceso: "fecha_inicio_proceso",
+}
+
 function limpiar(v: unknown): string | null {
   const s = String(v ?? "").trim()
   return s ? s : null
 }
 
-/**
- * Solo `admin` puede fijar las fechas de registro e inicio de proceso; `caja`
- * las deja como esten (misma regla que el formulario de la web).
- */
-function payload(datos: DatosPersona, rol: ActorErp["role"]) {
-  const base: Record<string, string | null> = {
-    nombre: String(datos.nombre).trim(),
-    cedula: limpiar(datos.cedula),
-    correo: limpiar(datos.correo),
-    telefono: limpiar(datos.telefono),
-    codigo: limpiar(datos.codigo),
-  }
-  if (rol === "admin") {
-    base.fecha_registro = limpiar(datos.fechaRegistro)
-    base.fecha_inicio_proceso = limpiar(datos.fechaInicioProceso)
-  }
-  return base
+function fechaOpcional(v: unknown, etiqueta: string): string | null {
+  const s = limpiar(v)
+  return s ? exigirFechaIso(s, etiqueta) : null
 }
 
 function traducirError(error: any): OperacionError {
@@ -45,31 +56,128 @@ function traducirError(error: any): OperacionError {
   return new OperacionError(error?.message || "No se pudo guardar la persona.")
 }
 
+/**
+ * El siguiente codigo libre, igual que el que la web propone al abrir el
+ * formulario. El codigo es lo que comparten el ERP y la agenda: una persona sin
+ * codigo no se puede cruzar con sus sesiones.
+ */
+export async function siguienteCodigoPersona(supabase: any): Promise<string> {
+  const { data, error } = await supabase.from("asistentes").select("codigo")
+  if (error) throw new OperacionError("No se pudo calcular el siguiente codigo.")
+  const numeros = (data || [])
+    .map((fila: any) => Number.parseInt(String(fila.codigo ?? ""), 10))
+    .filter((n: number) => Number.isFinite(n))
+  return String((numeros.length ? Math.max(...numeros) : 0) + 1)
+}
+
+/**
+ * Solo `admin` puede fijar fechas a mano (misma regla que el formulario de la
+ * web). La fecha de registro, si nadie la indica, es la de hoy: dejarla vacia
+ * escondia a la persona de los reportes de altas.
+ */
 export async function crearPersona(supabase: any, actor: ActorErp, datos: DatosPersona) {
-  exigir(String(datos.nombre || "").trim(), "El nombre es obligatorio.")
+  const nombre = String(datos.nombre || "").trim()
+  exigir(nombre, "El nombre es obligatorio.")
+
+  const quiereFechas = limpiar(datos.fechaRegistro) || limpiar(datos.fechaInicioProceso)
+  if (quiereFechas && actor.role !== "admin") {
+    throw new OperacionError("Solo un administrador puede fijar las fechas de registro o de inicio de proceso.")
+  }
+
+  const fila: Record<string, string | null> = {
+    nombre,
+    cedula: limpiar(datos.cedula),
+    correo: limpiar(datos.correo),
+    telefono: limpiar(datos.telefono),
+    codigo: limpiar(datos.codigo) ?? (await siguienteCodigoPersona(supabase)),
+    fecha_registro: fechaOpcional(datos.fechaRegistro, "La fecha de registro") ?? fechaHoyBogota(),
+    fecha_inicio_proceso: fechaOpcional(datos.fechaInicioProceso, "La fecha de inicio de proceso"),
+  }
 
   const { data, error } = await supabase
     .from("asistentes")
-    .insert([payload(datos, actor.role)])
-    .select("id, nombre, codigo")
+    .insert([fila])
+    .select("id, nombre, codigo, fecha_registro")
     .single()
 
   if (error || !data) throw traducirError(error)
-  return { id: data.id as string, nombre: data.nombre as string, codigo: data.codigo as string | null }
+  return {
+    id: data.id as string,
+    nombre: data.nombre as string,
+    codigo: data.codigo as string | null,
+    fechaRegistro: data.fecha_registro as string | null,
+  }
+}
+
+async function leerPersonaCompleta(supabase: any, asistenteId: string) {
+  const { data, error } = await supabase
+    .from("asistentes")
+    .select("id, nombre, codigo, cedula, correo, telefono, fecha_registro, fecha_inicio_proceso, activo")
+    .eq("id", asistenteId)
+    .single()
+  if (error || !data) throw new OperacionError("No encontre esa persona.")
+  return data
+}
+
+export type CambioCampo = { antes: string | null; despues: string | null }
+
+/**
+ * Calcula que cambiaria, sin escribir. Solo aparecen los campos que de verdad
+ * cambian; si no cambia nada, se avisa en vez de "guardar" en vacio.
+ */
+export async function previsualizarEdicionPersona(
+  supabase: any,
+  actor: ActorErp,
+  asistenteId: string,
+  cambios: CambiosPersona
+) {
+  exigir(asistenteId, "Falta indicar a quien se edita.")
+  const actual = await leerPersonaCompleta(supabase, asistenteId)
+
+  const tocaFechas = CAMPOS_FECHA.some((campo) => cambios[campo] !== undefined)
+  if (tocaFechas && actor.role !== "admin") {
+    throw new OperacionError("Solo un administrador puede cambiar las fechas de registro o de inicio de proceso.")
+  }
+
+  const resultado: Partial<Record<keyof DatosPersona, CambioCampo>> = {}
+  for (const campo of [...CAMPOS_TEXTO, ...CAMPOS_FECHA]) {
+    if (cambios[campo] === undefined) continue
+    const despues = CAMPOS_FECHA.includes(campo as any)
+      ? fechaOpcional(cambios[campo], "La fecha")
+      : limpiar(cambios[campo])
+    const antes = (actual[COLUMNA[campo]] ?? null) as string | null
+    if (campo === "nombre" && !despues) throw new OperacionError("El nombre no puede quedar vacio.")
+    if ((antes ?? null) !== (despues ?? null)) resultado[campo] = { antes, despues }
+  }
+
+  if (Object.keys(resultado).length === 0) {
+    throw new OperacionError(`No hay nada que cambiar: los datos de ${actual.nombre} ya son esos.`)
+  }
+
+  return { asistenteId, nombreActual: actual.nombre as string, codigoActual: actual.codigo as string | null, cambios: resultado }
 }
 
 export async function editarPersona(
   supabase: any,
   actor: ActorErp,
   asistenteId: string,
-  datos: DatosPersona
+  cambios: CambiosPersona
 ) {
-  exigir(asistenteId, "Falta indicar a quien se edita.")
-  exigir(String(datos.nombre || "").trim(), "El nombre es obligatorio.")
+  const previa = await previsualizarEdicionPersona(supabase, actor, asistenteId, cambios)
 
-  const { error } = await supabase.from("asistentes").update(payload(datos, actor.role)).eq("id", asistenteId)
+  // Solo se escriben las columnas que cambian: lo demas queda como estaba.
+  const payload: Record<string, string | null> = {}
+  for (const [campo, cambio] of Object.entries(previa.cambios) as Array<[keyof DatosPersona, CambioCampo]>) {
+    payload[COLUMNA[campo]] = cambio.despues
+  }
+
+  const { error } = await supabase.from("asistentes").update(payload).eq("id", asistenteId)
   if (error) throw traducirError(error)
-  return { id: asistenteId, nombre: String(datos.nombre).trim() }
+  return {
+    id: asistenteId,
+    nombre: (previa.cambios.nombre?.despues ?? previa.nombreActual) as string,
+    camposCambiados: Object.keys(previa.cambios),
+  }
 }
 
 export async function buscarPersonaPorId(supabase: any, asistenteId: string) {

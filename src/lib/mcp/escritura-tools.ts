@@ -9,10 +9,12 @@ import { OperacionError, exigir, exigirMontoPositivo } from "@/lib/operaciones/e
 import {
   CATEGORIAS_EGRESO,
   crearAnticipo,
-  crearCuenta,
+  MODALIDADES_COBRO,
+  crearCuentaCompleta,
   crearDonacion,
   crearEgreso,
   crearVentaExterna,
+  validarCuentaCompleta,
 } from "@/lib/operaciones/movimientos"
 import {
   aplicarSaldoAFavor,
@@ -50,7 +52,9 @@ import {
   crearPersona,
   editarPersona,
   eliminarPersona,
+  previsualizarEdicionPersona,
   previsualizarEliminacionPersona,
+  siguienteCodigoPersona,
 } from "@/lib/operaciones/personas"
 import {
   editarValorCuenta,
@@ -77,6 +81,10 @@ import {
   validarCierreLiquidacion,
   validarPeriodoNuevo,
 } from "@/lib/operaciones/administracion"
+import {
+  actualizarConfiguracionEmpresa,
+  previsualizarConfiguracionEmpresa,
+} from "@/lib/operaciones/configuracion"
 import { executeTool } from "./erp-tools"
 import { MCP_PRIMARY_SCOPE } from "./constants"
 import {
@@ -139,6 +147,23 @@ type DefinicionOperacion = {
 }
 
 const money = (n: number) => `$${Math.round(n).toLocaleString("es-CO")}`
+
+const FECHA = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+
+/**
+ * Para mostrar en un borrador un dato de contacto sin exponerlo entero (el
+ * filtro de privacidad del MCP no deja salir cedulas, correos ni telefonos).
+ * Alcanza para que la persona reconozca que es el dato correcto.
+ */
+function enmascarar(valor: unknown): string {
+  const s = String(valor ?? "").trim()
+  if (!s) return "(vacio)"
+  if (s.includes("@")) {
+    const [usuario, dominio] = s.split("@")
+    return `${usuario.slice(0, 2)}•••@${dominio}`
+  }
+  return s.length <= 4 ? "••••" : `••••${s.slice(-4)}`
+}
 
 function actorDe(extra: any): Actor {
   const info = extra?.authInfo?.extra
@@ -293,14 +318,20 @@ export const OPERACIONES: DefinicionOperacion[] = [
     nombre: "cuenta",
     titulo: "Crear una cuenta por cobrar",
     descripcion:
-      "Registra que a una persona se le cobra un concepto por cierto valor (ej: 'primer paso' $100.000). " +
-      "Usala antes de registrar un pago cuando el concepto todavia no existe.",
+      "Registra que a una persona se le cobra un concepto por cierto valor (ej: 'primer paso' $100.000). Hace todo lo " +
+      "del formulario de la web: paquete coach (sesiones_coach), cortesia o cubierto por otro proceso/familiar " +
+      "(modalidad, con valor 0, solo para paquetes coach), abono inicial en el mismo paso (si supera el valor, el " +
+      "excedente va a saldo a favor) y la primera sesion ya dictada (fecha_sesion), que cae en ESTE paquete nuevo.",
     roles: ["admin", "caja"],
     schema: {
       persona: z.string().trim().min(1).max(160),
       concepto: z.string().trim().min(2).max(160),
-      valor_total: z.coerce.number().positive().max(100_000_000),
-      fecha_emision: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      valor_total: z.coerce
+        .number()
+        .min(0)
+        .max(100_000_000)
+        .describe("Valor a cobrar. 0 solo con modalidad cortesia o cubierto_por_otro_proceso"),
+      fecha_emision: FECHA.optional(),
       sesiones_coach: z.coerce
         .number()
         .int()
@@ -308,38 +339,116 @@ export const OPERACIONES: DefinicionOperacion[] = [
         .max(60)
         .optional()
         .describe("Si es una cuenta de sesiones coach, cuantas incluye (normalmente 1). Crea el paquete para poder descontarlas."),
+      modalidad: z
+        .enum(MODALIDADES_COBRO)
+        .optional()
+        .describe(
+          "normal (por defecto), cortesia (regalada) o cubierto_por_otro_proceso (la paga otro proceso o un familiar). " +
+            "Las dos ultimas solo para paquetes coach y con valor_total 0: la cuenta nace pagada y no genera deuda."
+        ),
+      abono_inicial: z.coerce.number().positive().max(100_000_000).optional().describe("Lo que ya pago al crearla"),
+      metodo_pago: z.enum(METODOS_PAGO).optional().describe("Obligatorio si hay abono_inicial"),
+      fecha_pago_inicial: FECHA.optional().describe("Fecha del abono inicial; por defecto, la de emision"),
+      notas_pago: z.string().trim().max(300).optional(),
+      fecha_sesion: FECHA.optional().describe("Si la primera sesion coach ya se dicto, su fecha"),
+      evento_agenda_id: z
+        .string()
+        .trim()
+        .max(128)
+        .optional()
+        .describe("Evento de la agenda de esa primera sesion, para enlazarla"),
     },
     previsualizar: async (admin, _actor, args) => {
-      exigirMontoPositivo(args.valor_total, "El valor de la cuenta")
       const persona = await resolverPersona(admin, String(args.persona))
+      const fechaEmision = String(args.fecha_emision || fechaHoyBogota())
+      if (args.abono_inicial && !args.metodo_pago) {
+        throw new OperacionMcpError("Indica el metodo_pago del abono inicial.")
+      }
+      if (args.evento_agenda_id && !args.fecha_sesion) {
+        throw new OperacionMcpError("Para enlazar un evento de la agenda indica tambien la fecha_sesion.")
+      }
+
       const datos = {
         asistenteId: persona.id,
         concepto: String(args.concepto).trim(),
         valorTotal: Number(args.valor_total),
-        fechaEmision: String(args.fecha_emision || fechaHoyBogota()),
+        fechaEmision,
         sesionesCoach: args.sesiones_coach ? Number(args.sesiones_coach) : null,
+        modalidad: args.modalidad || "normal",
+        abonoInicial: args.abono_inicial
+          ? {
+              monto: Number(args.abono_inicial),
+              metodoPago: String(args.metodo_pago),
+              fechaPago: String(args.fecha_pago_inicial || fechaEmision),
+              notas: args.notas_pago ? String(args.notas_pago) : null,
+            }
+          : null,
+        primeraSesion: args.fecha_sesion
+          ? {
+              fecha: String(args.fecha_sesion),
+              eventoAgendaId: args.evento_agenda_id ? String(args.evento_agenda_id) : null,
+            }
+          : null,
       }
+      const plan = await validarCuentaCompleta(admin, datos as any)
+      const enCero = plan.cuenta.valorTotal === 0
+
       return {
         datos,
         resumen:
-          `Crear cuenta "${datos.concepto}" por ${money(datos.valorTotal)} a ${persona.nombre}` +
-          (datos.sesionesCoach ? ` (paquete de ${datos.sesionesCoach} sesión/es coach)` : ""),
+          `Crear cuenta "${plan.cuenta.concepto}" por ${money(plan.cuenta.valorTotal)} a ${persona.nombre}` +
+          (plan.cuenta.sesiones ? ` (paquete de ${plan.cuenta.sesiones} sesión/es coach)` : "") +
+          (plan.abono ? `, con abono inicial de ${money(plan.abono.monto)} (${plan.abono.metodoPago})` : "") +
+          (plan.sesion ? `, y su primera sesion el ${plan.sesion.fecha}` : ""),
         detalle: {
           persona: persona.nombre,
           codigo: persona.codigo,
-          concepto: datos.concepto,
-          valor_total: datos.valorTotal,
-          fecha_emision: datos.fechaEmision,
-          estado_inicial: "pendiente",
-          paquete_coach: datos.sesionesCoach
-            ? `Se crea con ${datos.sesionesCoach} sesión/es, para poder descontarlas después.`
+          concepto: plan.cuenta.concepto,
+          modalidad: plan.cuenta.modalidad,
+          valor_total: plan.cuenta.valorTotal,
+          fecha_emision: plan.cuenta.fechaEmision,
+          paquete_coach: plan.cuenta.sesiones
+            ? `Se crea con ${plan.cuenta.sesiones} sesión/es, para poder descontarlas después.`
             : "No (cuenta normal)",
+          abono_inicial: plan.abono
+            ? {
+                monto: plan.abono.monto,
+                metodo_pago: plan.abono.metodoPago,
+                fecha_pago: plan.abono.fechaPago,
+                se_aplica_a_la_cuenta: plan.abono.montoAplicado,
+                excedente_a_saldo_a_favor: plan.abono.excedente,
+              }
+            : "ninguno",
+          primera_sesion: plan.sesion
+            ? { fecha: plan.sesion.fecha, enlazada_a_evento_agenda: Boolean(plan.sesion.eventoAgendaId) }
+            : "ninguna",
+          pendiente_despues: plan.pendienteDespues,
+          estado_despues: plan.estadoDespues,
         },
+        avisos: [
+          enCero
+            ? `Cuenta en $0 (${plan.cuenta.modalidad === "cortesia" ? "cortesia" : "cubierta por otro proceso/familiar"}): ` +
+              "nace pagada, no genera deuda ni cuenta como ingreso."
+            : null,
+          plan.abono && plan.abono.excedente > 0
+            ? `El abono supera el valor: ${money(plan.abono.excedente)} quedaran como saldo a favor de ${persona.nombre}.`
+            : null,
+        ],
       }
     },
     ejecutar: async (admin, actor, d) => {
-      const r = await crearCuenta(admin, { userId: actor.userId, role: actor.role }, d as any)
-      return { cuenta_id: r.id, concepto: r.concepto, valor_total: r.valorTotal, paquete_coach_id: r.paqueteId }
+      const r = await crearCuentaCompleta(admin, { userId: actor.userId, role: actor.role }, d as any)
+      return {
+        cuenta_id: r.id,
+        concepto: r.concepto,
+        valor_total: r.valorTotal,
+        modalidad: r.modalidad,
+        estado: r.estado,
+        paquete_coach_id: r.paqueteId,
+        pago_id: r.abono?.pagoId ?? null,
+        excedente_a_saldo_a_favor: r.abono?.excedenteASaldoFavor ?? 0,
+        primera_sesion: r.sesion ? { fecha: r.sesion.fecha, sesiones_restantes: r.sesion.restantesDespues } : null,
+      }
     },
   },
 
@@ -649,7 +758,9 @@ export const OPERACIONES: DefinicionOperacion[] = [
     nombre: "persona",
     titulo: "Registrar una persona nueva",
     descripcion:
-      "Da de alta a una persona (asistente) en el ERP. Necesario antes de poder cobrarle o registrarle pagos.",
+      "Da de alta a una persona (asistente) en el ERP. Necesario antes de poder cobrarle o registrarle pagos. " +
+      "Si no indicas codigo, se le asigna el siguiente libre (el mismo que propone la web), porque el codigo es lo " +
+      "que la une con la agenda. La fecha de registro es hoy salvo que un admin indique otra.",
     roles: ["admin", "caja"],
     riesgo: "crear",
     schema: {
@@ -657,16 +768,36 @@ export const OPERACIONES: DefinicionOperacion[] = [
       cedula: z.string().trim().max(40).optional(),
       correo: z.string().trim().email().max(160).optional(),
       telefono: z.string().trim().max(40).optional(),
-      codigo: z.string().trim().max(40).optional(),
+      codigo: z.string().trim().max(40).optional().describe("Si se omite, se asigna el siguiente codigo libre"),
+      fecha_registro: FECHA.optional().describe("Solo admin. Por defecto, hoy"),
+      fecha_inicio_proceso: FECHA.optional().describe("Solo admin. Si se omite, se llena sola con la primera sesion coach"),
     },
-    previsualizar: async (admin, _actor, args) => {
+    previsualizar: async (admin, actor, args) => {
       const nombre = String(args.nombre).trim()
+      if ((args.fecha_registro || args.fecha_inicio_proceso) && actor.role !== "admin") {
+        throw new OperacionMcpError("Solo un administrador puede fijar las fechas de registro o de inicio de proceso.")
+      }
+      const codigoAsignado = !args.codigo
       const datos = {
         nombre,
         cedula: args.cedula ? String(args.cedula).trim() : null,
         correo: args.correo ? String(args.correo).trim() : null,
         telefono: args.telefono ? String(args.telefono).trim() : null,
-        codigo: args.codigo ? String(args.codigo).trim() : null,
+        codigo: args.codigo ? String(args.codigo).trim() : await siguienteCodigoPersona(admin),
+        // Sin fecha, crearPersona pone la de hoy (para cualquier rol).
+        fechaRegistro: args.fecha_registro ? String(args.fecha_registro) : null,
+        fechaInicioProceso: args.fecha_inicio_proceso ? String(args.fecha_inicio_proceso) : null,
+      }
+
+      const { data: mismoCodigo } = await admin
+        .from("asistentes")
+        .select("nombre")
+        .eq("codigo", datos.codigo)
+        .limit(1)
+      if (mismoCodigo?.length) {
+        throw new OperacionMcpError(
+          `El codigo ${datos.codigo} ya es de ${mismoCodigo[0].nombre}. Usa otro o deja que se asigne solo.`
+        )
       }
 
       // Aviso de posible homonimo o alta repetida.
@@ -678,8 +809,18 @@ export const OPERACIONES: DefinicionOperacion[] = [
 
       return {
         datos,
-        resumen: `Registrar a ${nombre} como persona nueva`,
-        detalle: datos,
+        resumen: `Registrar a ${nombre} como persona nueva, con el codigo ${datos.codigo}`,
+        detalle: {
+          nombre,
+          codigo: datos.codigo,
+          codigo_asignado_automaticamente: codigoAsignado,
+          // Enmascarados: el filtro de privacidad del MCP no deja salir estos datos completos.
+          identificacion: enmascarar(datos.cedula),
+          contacto_mail: enmascarar(datos.correo),
+          contacto_movil: enmascarar(datos.telefono),
+          fecha_registro: datos.fechaRegistro ?? fechaHoyBogota(),
+          fecha_inicio_proceso: datos.fechaInicioProceso ?? "se llena sola con la primera sesion coach",
+        },
         avisos: [
           parecidos && parecidos.length
             ? `Ya hay personas con nombre parecido: ${parecidos
@@ -691,47 +832,84 @@ export const OPERACIONES: DefinicionOperacion[] = [
     },
     ejecutar: async (admin, actor, d) => {
       const r = await crearPersona(admin, { userId: actor.userId, role: actor.role }, d as any)
-      return { asistente_id: r.id, nombre: r.nombre, codigo: r.codigo }
+      return { asistente_id: r.id, nombre: r.nombre, codigo: r.codigo, fecha_registro: r.fechaRegistro }
     },
   },
 
   {
     nombre: "editar_persona",
     titulo: "Editar los datos de una persona",
-    descripcion: "Corrige nombre, cedula, correo, telefono o codigo de una persona ya registrada.",
+    descripcion:
+      "Corrige nombre, cedula, correo, telefono, codigo o (solo admin) las fechas de registro e inicio de proceso. " +
+      "Manda SOLO los campos que cambian: lo que no mandes queda como esta. Para borrar un dato, mandalo vacio (\"\").",
     roles: ["admin", "caja"],
     riesgo: "editar",
     schema: {
       persona: z.string().trim().min(1).max(160).describe("Persona a editar (nombre o codigo actual)"),
-      nombre: z.string().trim().min(3).max(160),
+      nombre: z.string().trim().min(3).max(160).optional(),
       cedula: z.string().trim().max(40).optional(),
-      correo: z.string().trim().email().max(160).optional(),
+      correo: z.union([z.literal(""), z.string().trim().email().max(160)]).optional(),
       telefono: z.string().trim().max(40).optional(),
       codigo: z.string().trim().max(40).optional(),
+      fecha_registro: z.union([z.literal(""), FECHA]).optional().describe("Solo admin"),
+      fecha_inicio_proceso: z.union([z.literal(""), FECHA]).optional().describe("Solo admin"),
     },
-    previsualizar: async (admin, _actor, args) => {
+    previsualizar: async (admin, actor, args) => {
       const actual = await resolverPersona(admin, String(args.persona))
-      const datos = {
-        asistenteId: actual.id,
-        nombre: String(args.nombre).trim(),
-        cedula: args.cedula ? String(args.cedula).trim() : null,
-        correo: args.correo ? String(args.correo).trim() : null,
-        telefono: args.telefono ? String(args.telefono).trim() : null,
-        codigo: args.codigo ? String(args.codigo).trim() : null,
+      const cambios: Record<string, unknown> = {}
+      if (args.nombre !== undefined) cambios.nombre = String(args.nombre)
+      if (args.cedula !== undefined) cambios.cedula = String(args.cedula)
+      if (args.correo !== undefined) cambios.correo = String(args.correo)
+      if (args.telefono !== undefined) cambios.telefono = String(args.telefono)
+      if (args.codigo !== undefined) cambios.codigo = String(args.codigo)
+      if (args.fecha_registro !== undefined) cambios.fechaRegistro = String(args.fecha_registro)
+      if (args.fecha_inicio_proceso !== undefined) cambios.fechaInicioProceso = String(args.fecha_inicio_proceso)
+
+      const previa = await previsualizarEdicionPersona(
+        admin,
+        { userId: actor.userId, role: actor.role },
+        actual.id,
+        cambios as any
+      )
+
+      // Los datos de contacto se muestran enmascarados: el filtro de privacidad
+      // del MCP no deja salir cedulas, correos ni telefonos completos.
+      const ETIQUETA: Record<string, string> = {
+        nombre: "nombre",
+        codigo: "codigo",
+        cedula: "identificacion",
+        correo: "contacto_mail",
+        telefono: "contacto_movil",
+        fechaRegistro: "fecha_registro",
+        fechaInicioProceso: "fecha_inicio_proceso",
       }
+      const SENSIBLE = new Set(["cedula", "correo", "telefono"])
+      const visibles = Object.fromEntries(
+        Object.entries(previa.cambios).map(([campo, c]: any) => [
+          ETIQUETA[campo] || campo,
+          SENSIBLE.has(campo)
+            ? { antes: enmascarar(c.antes), despues: enmascarar(c.despues) }
+            : { antes: c.antes ?? "(vacio)", despues: c.despues ?? "(vacio)" },
+        ])
+      )
+
       return {
-        datos,
-        resumen: `Actualizar los datos de ${actual.nombre}`,
-        detalle: {
-          antes: { nombre: actual.nombre, codigo: actual.codigo, cedula: actual.cedula ?? null },
-          despues: { nombre: datos.nombre, codigo: datos.codigo, cedula: datos.cedula },
-        },
+        datos: { asistenteId: actual.id, ...cambios },
+        resumen:
+          `Actualizar ${Object.keys(visibles).join(", ")} de ${previa.nombreActual} ` +
+          `(codigo ${previa.codigoActual ?? "sin codigo"})`,
+        detalle: { persona: previa.nombreActual, cambios: visibles, lo_demas: "queda igual" },
+        avisos: [
+          previa.cambios.codigo
+            ? "Cambia el codigo: es lo que une a la persona con la agenda. Verifica que la agenda use el mismo."
+            : null,
+        ],
       }
     },
     ejecutar: async (admin, actor, d) => {
-      const { asistenteId, ...datos } = d as any
-      const r = await editarPersona(admin, { userId: actor.userId, role: actor.role }, asistenteId, datos)
-      return { asistente_id: r.id, nombre: r.nombre }
+      const { asistenteId, ...cambios } = d as any
+      const r = await editarPersona(admin, { userId: actor.userId, role: actor.role }, asistenteId, cambios)
+      return { asistente_id: r.id, nombre: r.nombre, campos_cambiados: r.camposCambiados }
     },
   },
 
@@ -1147,12 +1325,19 @@ export const OPERACIONES: DefinicionOperacion[] = [
     riesgo: "destructiva",
     schema: {
       socio: z.string().trim().min(2).max(160).describe("Nombre actual del socio"),
-      nombre: z.string().trim().min(3).max(160),
-      porcentaje: z.coerce.number().min(0).max(100),
+      nombre: z.string().trim().min(3).max(160).optional().describe("Si se omite, queda el actual"),
+      porcentaje: z.coerce.number().min(0).max(100).optional().describe("Si se omite, queda el actual"),
     },
     previsualizar: async (admin, _actor, args) => {
       const socio = await buscarSocio(admin, String(args.socio))
-      const datos = { socioId: socio.id, nombre: String(args.nombre).trim(), porcentaje: Number(args.porcentaje) }
+      if (args.nombre === undefined && args.porcentaje === undefined) {
+        throw new OperacionMcpError("Indica el nombre nuevo, el porcentaje nuevo o ambos.")
+      }
+      const datos = {
+        socioId: socio.id,
+        nombre: args.nombre !== undefined ? String(args.nombre).trim() : String(socio.nombre),
+        porcentaje: args.porcentaje !== undefined ? Number(args.porcentaje) : Number(socio.porcentaje_participacion),
+      }
       const totalOtros = await porcentajeTotalSocios(admin, socio.id)
       const total = totalOtros + datos.porcentaje
       return {
@@ -1555,6 +1740,44 @@ export const OPERACIONES: DefinicionOperacion[] = [
     },
   },
 
+  {
+    nombre: "configuracion_empresa",
+    titulo: "Cambiar los datos de la fundacion",
+    descripcion:
+      "Actualiza el nombre, NIT, correo, telefono o ciudad de la fundacion (los que salen en las liquidaciones " +
+      "exportadas). Manda solo lo que cambia; el nombre y el NIT no pueden quedar vacios.",
+    roles: ["admin"],
+    riesgo: "editar",
+    schema: {
+      nombre: z.string().trim().min(2).max(200).optional(),
+      nit: z.string().trim().min(3).max(40).optional(),
+      correo: z.union([z.literal(""), z.string().trim().email().max(160)]).optional(),
+      telefono: z.string().trim().max(40).optional(),
+      ciudad: z.string().trim().max(120).optional(),
+    },
+    previsualizar: async (admin, _actor, args) => {
+      const cambios: Record<string, string> = {}
+      for (const campo of ["nombre", "nit", "correo", "telefono", "ciudad"]) {
+        if (args[campo] !== undefined) cambios[campo] = String(args[campo])
+      }
+      const previa = await previsualizarConfiguracionEmpresa(admin, cambios)
+      // Son datos de la fundacion, no de una persona: se muestran completos,
+      // con nombres de campo que el filtro de privacidad no confunde con PII.
+      const visibles = Object.fromEntries(
+        Object.entries(previa.cambios).map(([campo, c]: any) => [`${campo}_fundacion`, c])
+      )
+      return {
+        datos: cambios,
+        resumen: `Cambiar ${Object.keys(previa.cambios).join(", ")} de la fundacion`,
+        detalle: { cambios: visibles, lo_demas: "queda igual" },
+        avisos: ["Estos datos salen en las liquidaciones que se exportan y se mandan a los socios."],
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const r = await actualizarConfiguracionEmpresa(admin, { userId: actor.userId, role: actor.role }, d as any)
+      return { campos_cambiados: r.camposCambiados }
+    },
+  },
 ]
 
 const POR_NOMBRE = new Map(OPERACIONES.map((o) => [o.nombre, o]))

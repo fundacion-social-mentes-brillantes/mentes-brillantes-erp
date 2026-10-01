@@ -31,6 +31,7 @@ import { buscarPrepagadasSinUsar } from "@/lib/operaciones/coach-prepagadas"
 import { buscarCuentasConResiduo } from "@/lib/operaciones/residuos"
 import { auditMcpToolCall, McpAuditError } from "./audit"
 import { sanitizeMcpData } from "./privacy"
+import { leerConfiguracionEmpresa } from "@/lib/operaciones/configuracion"
 import { MCP_PRIMARY_SCOPE } from "./constants"
 
 type ToolOutput = {
@@ -652,6 +653,25 @@ export function registerErpTools(server: McpServer) {
     (s, args) => searchGlobal(s, String(args.termino))
   )
 
+  register(
+    server,
+    "configuracion_empresa",
+    "Datos de la fundación",
+    "Nombre, NIT, correo, teléfono y ciudad de la fundación, los que salen en las liquidaciones exportadas.",
+    {},
+    async (s) => {
+      const empresa = await leerConfiguracionEmpresa(s as any)
+      // Son datos de la fundacion, no de una persona: se renombran para que el
+      // filtro de privacidad (que actua por nombre de campo) no los oculte.
+      return {
+        nombre: empresa.nombre,
+        nit: empresa.nit,
+        correo_fundacion: empresa.correo,
+        telefono_fundacion: empresa.telefono,
+        ciudad: empresa.ciudad,
+      }
+    }
+  )
   registerRangeTool(server, "resumen_periodo", "Resumen de un período", "Ingresos operativos, egresos y utilidad estimada.", (s, from, to) => getSummary(s, from, to))
   registerRangeTool(server, "egresos", "Egresos por período", "Egresos activos de un rango.", (s, from, to) => getExpenses(s, from, to))
   registerRangeTool(server, "ventas_externas", "Ventas externas por período", "Ventas externas activas de un rango.", (s, from, to) => getExternalSales(s, from, to))

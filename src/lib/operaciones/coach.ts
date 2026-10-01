@@ -1,4 +1,4 @@
-import { paqueteDestino, resumenCoach } from "@/lib/utils/coach"
+import { paqueteConCupo, paqueteDestino, resumenCoach } from "@/lib/utils/coach"
 import { OperacionError, exigirFechaIso } from "./errores"
 import type { ActorErp } from "./abonos"
 
@@ -16,6 +16,12 @@ export type RegistrarSesionCoachParams = {
    * para seguirle el rastro al evento.
    */
   eventoAgendaId?: string | null
+  /**
+   * Paquete del que debe salir la sesion. Normalmente se omite y se gasta el
+   * credito mas antiguo con cupo; se indica cuando la sesion pertenece a una
+   * compra concreta, como la primera sesion de una cuenta recien creada.
+   */
+  paqueteId?: string | null
 }
 
 export type PrevisualizacionSesionCoach = {
@@ -50,7 +56,12 @@ async function paquetesDe(supabase: any, asistenteId: string) {
   return data
 }
 
-function elegirPaquete(paquetes: any[]) {
+function elegirPaquete(paquetes: any[], paqueteId?: string | null) {
+  if (paqueteId) {
+    const elegido = paqueteConCupo(paquetes as any, paqueteId)
+    if (!elegido) throw new OperacionError("Ese paquete no es de la persona o ya no le quedan sesiones.")
+    return elegido
+  }
   const destino = paqueteDestino(paquetes as any)
   if (!destino) throw new OperacionError("No quedan sesiones disponibles en los paquetes de esa persona.")
   return destino
@@ -62,7 +73,7 @@ export async function previsualizarSesionCoach(
 ): Promise<PrevisualizacionSesionCoach> {
   const fecha = exigirFechaIso(params.fecha)
   const paquetes = await paquetesDe(supabase, params.asistenteId)
-  const destino = elegirPaquete(paquetes)
+  const destino = elegirPaquete(paquetes, params.paqueteId)
   const { compradas, realizadas, restantes } = resumenCoach(paquetes as any)
 
   const cuenta = Array.isArray((destino as any).cuentas_por_cobrar)
@@ -97,7 +108,7 @@ export async function registrarSesionCoach(
 ) {
   const fecha = exigirFechaIso(params.fecha)
   const paquetes = await paquetesDe(supabase, params.asistenteId)
-  const destino = elegirPaquete(paquetes)
+  const destino = elegirPaquete(paquetes, params.paqueteId)
 
   const eventoAgendaId = params.eventoAgendaId ? String(params.eventoAgendaId).trim().slice(0, 128) : null
 

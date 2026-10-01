@@ -47,6 +47,14 @@ export function paqueteDestino(paquetes: CoachPaquete[] = []): CoachPaquete | nu
   return ordenados.find((p) => cuentaSesiones(p) < compradasPaquete(p)) || null
 }
 
+// Igual que paqueteDestino pero para un paquete concreto: lo devuelve solo si es
+// de la lista y aun tiene cupo. Sirve cuando la sesion tiene que caer en un
+// paquete determinado (el que se acaba de crear) y no en el mas antiguo.
+export function paqueteConCupo(paquetes: CoachPaquete[] = [], paqueteId: string): CoachPaquete | null {
+  const paquete = paquetes.find((p) => p.id === paqueteId)
+  return paquete && cuentaSesiones(paquete) < compradasPaquete(paquete) ? paquete : null
+}
+
 export type EstadoCoach = 'disponible' | 'ultima' | 'agotado'
 
 // Semaforo visual: verde (disponible), amarillo (queda 1), rojo/gris (agotado).

@@ -52,6 +52,9 @@ const PERMISOS_ESPERADOS: Record<string, Array<"admin" | "caja">> = {
   adelanto_socio: ["admin"],
   devolucion_adelanto: ["admin"],
   cerrar_liquidacion: ["admin"],
+
+  // Datos de la fundacion: en la web es requireAdmin
+  configuracion_empresa: ["admin"],
 }
 
 describe("permisos de escritura del MCP", () => {

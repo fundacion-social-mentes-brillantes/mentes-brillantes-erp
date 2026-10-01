@@ -1,5 +1,8 @@
 import type { SupabaseReader } from "./types"
 import { toolResult } from "./types"
+import { searchPerson } from "./search-person"
+
+const SIN_RESULTADOS = Promise.resolve({ data: [] as any[], error: null as any })
 
 export async function searchGlobal(supabase: SupabaseReader, term: string) {
   const queryScope = { term }
@@ -18,21 +21,69 @@ export async function searchGlobal(supabase: SupabaseReader, term: string) {
     })
   }
 
-  const [asistentes, cuentas, pagos, saldoFavor, donaciones, egresos, ventas, coachPaquetes, socios, periodos] = await Promise.all([
-    supabase.from("asistentes").select("id, nombre, codigo").ilike("nombre", `%${normalized}%`).limit(5),
+  // Las personas se buscan por palabras y sin tildes, igual que en el resto del
+  // ERP: "Gloria Fernandez" encuentra a "Gloria Stella Fernández Camelo". Antes
+  // se buscaba la frase pegada y no la encontraba.
+  const personas: any = await searchPerson(supabase, normalized, 5)
+  const errorPersonas = personas.status === "error"
+  const filasPersonas = !errorPersonas && Array.isArray(personas.data) ? (personas.data as any[]) : []
+  const ids = filasPersonas.map((p) => p.id).filter(Boolean)
+  const hayPersonas = ids.length > 0
+
+  // Pagos, saldo a favor, donaciones y paquetes no tienen texto propio que
+  // buscar: se buscan por la persona encontrada. Antes se comparaba el termino
+  // contra `metodo_pago`, que en pagos y donaciones es un tipo enumerado y no
+  // admite ILIKE: esas dos fuentes fallaban SIEMPRE y la busqueda salia
+  // "parcial" en todas las consultas. Y los paquetes se filtraban por el
+  // concepto de la cuenta sin `!inner`, lo que no filtraba nada: devolvia los
+  // primeros cinco paquetes de la base, fuera lo que fuera lo buscado.
+  const [cuentas, pagos, saldoFavor, donaciones, egresos, ventas, coachPaquetes, socios, periodos] = await Promise.all([
     supabase.from("cuentas_por_cobrar").select("id, concepto, asistentes(nombre, codigo)").ilike("concepto", `%${normalized}%`).limit(5),
-    supabase.from("pagos_abonos").select("id, monto, metodo_pago, fecha_pago, cuentas_por_cobrar(concepto, asistentes(nombre, codigo))").ilike("metodo_pago", `%${normalized}%`).limit(5),
-    supabase.from("movimientos_saldo_favor").select("id, tipo, monto, fecha, metodo_pago, asistentes(nombre, codigo)").ilike("metodo_pago", `%${normalized}%`).limit(5),
-    supabase.from("donaciones_asistentes").select("id, monto, metodo_pago, fecha, asistentes(nombre, codigo)").ilike("metodo_pago", `%${normalized}%`).limit(5),
+    hayPersonas
+      ? supabase
+          .from("pagos_abonos")
+          .select("id, monto, metodo_pago, fecha_pago, cuentas_por_cobrar!inner(concepto, asistente_id, asistentes(nombre, codigo))")
+          .in("cuentas_por_cobrar.asistente_id", ids)
+          .order("fecha_pago", { ascending: false })
+          .limit(5)
+      : SIN_RESULTADOS,
+    hayPersonas
+      ? supabase
+          .from("movimientos_saldo_favor")
+          .select("id, tipo, monto, fecha, metodo_pago, asistentes(nombre, codigo)")
+          .in("asistente_id", ids)
+          .order("fecha", { ascending: false })
+          .limit(5)
+      : SIN_RESULTADOS,
+    hayPersonas
+      ? supabase
+          .from("donaciones_asistentes")
+          .select("id, monto, metodo_pago, fecha, asistentes(nombre, codigo)")
+          .in("asistente_id", ids)
+          .order("fecha", { ascending: false })
+          .limit(5)
+      : SIN_RESULTADOS,
     supabase.from("egresos").select("id, concepto, monto, fecha").ilike("concepto", `%${normalized}%`).limit(5),
     supabase.from("ventas_externas").select("id, comprador_nombre, concepto, monto, fecha").or(`comprador_nombre.ilike.%${normalized}%,concepto.ilike.%${normalized}%`).limit(5),
-    supabase.from("coach_paquetes").select("id, sesiones_compradas, cuentas_por_cobrar(concepto, asistentes(nombre, codigo))").ilike("cuentas_por_cobrar.concepto", `%${normalized}%`).limit(5),
+    hayPersonas
+      ? supabase
+          .from("coach_paquetes")
+          .select("id, sesiones_compradas, creado_en, cuentas_por_cobrar(concepto, asistentes(nombre, codigo))")
+          .in("asistente_id", ids)
+          .order("creado_en", { ascending: false })
+          .limit(5)
+      : supabase
+          .from("coach_paquetes")
+          .select("id, sesiones_compradas, creado_en, cuentas_por_cobrar!inner(concepto, asistentes(nombre, codigo))")
+          .ilike("cuentas_por_cobrar.concepto", `%${normalized}%`)
+          .limit(5),
     supabase.from("socios").select("id, nombre").ilike("nombre", `%${normalized}%`).limit(5),
     supabase.from("periodos").select("id, nombre, estado").ilike("nombre", `%${normalized}%`).limit(5),
   ])
 
   const data = {
-    asistentes: asistentes.error ? [] : asistentes.data || [],
+    // Solo nombre y codigo: la cedula con la que searchPerson desempata no sale de aqui.
+    asistentes: filasPersonas.map((p) => ({ id: p.id, nombre: p.nombre, codigo: p.codigo })),
     cuentas: cuentas.error ? [] : cuentas.data || [],
     pagos_abonos: pagos.error ? [] : pagos.data || [],
     movimientos_saldo_favor: saldoFavor.error ? [] : saldoFavor.data || [],
@@ -46,7 +97,7 @@ export async function searchGlobal(supabase: SupabaseReader, term: string) {
   }
   const count = Object.values(data).reduce((acc, rows: any) => acc + rows.length, 0)
   const failedSources = [
-    asistentes.error ? "asistentes" : null,
+    errorPersonas ? "asistentes" : null,
     cuentas.error ? "cuentas_por_cobrar" : null,
     pagos.error ? "pagos_abonos" : null,
     saldoFavor.error ? "movimientos_saldo_favor" : null,
@@ -79,7 +130,10 @@ export async function searchGlobal(supabase: SupabaseReader, term: string) {
     ],
     resultCount: count,
     data,
-    explanationHints: warning ? [warning] : [],
+    explanationHints: [
+      ...(warning ? [warning] : []),
+      ...(hayPersonas ? ["Pagos, saldo a favor, donaciones y paquetes son los mas recientes de las personas encontradas."] : []),
+    ],
     userSafeErrors: warning ? [warning] : [],
   })
 }

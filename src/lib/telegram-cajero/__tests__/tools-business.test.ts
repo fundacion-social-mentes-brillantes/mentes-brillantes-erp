@@ -52,6 +52,13 @@ function globalSearchSupabase() {
           or() {
             return query
           },
+          // La busqueda de personas ordena; pagos, saldo y donaciones filtran por persona.
+          order() {
+            return query
+          },
+          in() {
+            return query
+          },
           limit() {
             if (table === "ventas_externas") {
               return Promise.resolve({
