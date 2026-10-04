@@ -10,14 +10,14 @@ import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  applicationName: "Mentes Brillantes ERP",
+  applicationName: "Finanzas GEMB",
   title: "Mentes Brillantes ERP",
   description: "Sistema de gestión financiera y administrativa",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Mentes ERP",
+    title: "Finanzas GEMB",
   },
   // Compatibilidad con iOS antiguos (la meta moderna es mobile-web-app-capable).
   other: {

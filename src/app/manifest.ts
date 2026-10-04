@@ -4,8 +4,8 @@ import type { MetadataRoute } from "next";
 // ("Agregar a pantalla de inicio" / "Instalar app").
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Mentes Brillantes ERP",
-    short_name: "Mentes ERP",
+    name: "Finanzas GEMB",
+    short_name: "Finanzas GEMB",
     description:
       "Sistema de gestión financiera y administrativa del Gimnasio Emocional Mentes Brillantes.",
     start_url: "/",
