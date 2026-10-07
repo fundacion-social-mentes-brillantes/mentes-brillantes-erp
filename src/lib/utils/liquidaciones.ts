@@ -9,6 +9,11 @@ export type MetodoPago = "efectivo" | "nequi" | "daviplata" | "otro"
 export type CategoriaResumenDetalle = "ingreso" | "egreso" | "adelanto"
 export type TipoResumenDetalle = "abono" | "saldo_favor" | "donacion" | "venta_externa" | "egreso" | "adelanto"
 
+/** Algo con nombre, embebido por PostgREST (persona, socio). */
+type ConNombre = { nombre?: string | null }
+/** Un embebido de PostgREST llega como objeto, como lista de uno o vacio. */
+type Embebido<T> = T | T[] | null
+
 type Movimiento = {
   id?: string
   monto?: number | string
@@ -25,9 +30,9 @@ type Movimiento = {
   concepto?: string | null
   comprador_nombre?: string | null
   categoria?: string | null
-  cuentas_por_cobrar?: any
-  asistentes?: any
-  socios?: any
+  cuentas_por_cobrar?: Embebido<{ concepto?: string | null; asistentes?: Embebido<ConNombre> }>
+  asistentes?: Embebido<ConNombre>
+  socios?: Embebido<ConNombre>
 }
 
 export type MovimientoResumenDetalle = {
@@ -60,7 +65,8 @@ export const normalizarMetodo = (m?: string | null): MetodoPago => {
   return METODOS_PAGO_RESUMEN.includes(v) ? v : "otro"
 }
 
-const firstRecord = (value: any) => (Array.isArray(value) ? value[0] : value)
+const firstRecord = <T>(value: Embebido<T> | undefined): T | null | undefined =>
+  Array.isArray(value) ? value[0] : value
 
 const cleanText = (value: unknown) => (typeof value === "string" ? value.trim() : "")
 
@@ -112,7 +118,7 @@ export function agruparAdelantosConDevoluciones<T extends Movimiento>(
 
   const grupos = new Map<string, AdelantoConDevoluciones<T>>()
   for (const adelanto of adelantos) {
-    const clave = String((adelanto as any).id || "")
+    const clave = String(adelanto.id || "")
     grupos.set(clave, {
       adelanto,
       devoluciones: [],
@@ -124,7 +130,7 @@ export function agruparAdelantosConDevoluciones<T extends Movimiento>(
 
   const huerfanas: T[] = []
   for (const devolucion of devoluciones) {
-    const clave = String((devolucion as any).adelanto_id || "")
+    const clave = String(devolucion.adelanto_id || "")
     const grupo = grupos.get(clave)
     if (!grupo) {
       huerfanas.push(devolucion)
@@ -268,9 +274,9 @@ export function agruparAdelantosPorSocio<T extends Movimiento>(
   const porSocio = new Map<string, AdelantosDeSocio<T>>()
 
   for (const grupo of adelantos) {
-    const fila = grupo.adelanto as any
+    const fila = grupo.adelanto
     const socioId = String(fila?.socio_id || "")
-    const socio = Array.isArray(fila?.socios) ? fila.socios[0] : fila?.socios
+    const socio = firstRecord(fila?.socios)
     const actual =
       porSocio.get(socioId) ||
       ({
@@ -293,7 +299,7 @@ export function agruparAdelantosPorSocio<T extends Movimiento>(
   // orden en que se van pagando.
   for (const socio of Array.from(porSocio.values())) {
     socio.adelantos.sort((a, b) =>
-      String((a.adelanto as any).fecha || "").localeCompare(String((b.adelanto as any).fecha || ""))
+      String(a.adelanto.fecha || "").localeCompare(String(b.adelanto.fecha || ""))
     )
   }
 

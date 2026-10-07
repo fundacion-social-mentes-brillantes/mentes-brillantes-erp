@@ -1,4 +1,6 @@
-type SupabaseLike = any
+import type { DbClient } from "@/lib/supabase/types"
+
+type SupabaseLike = DbClient
 
 type PeriodoRecord = {
   id: string
