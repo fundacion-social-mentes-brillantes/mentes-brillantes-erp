@@ -1,3 +1,4 @@
+import type { DbClient } from "@/lib/supabase/types"
 import { OperacionError } from "./errores"
 import type { ActorErp } from "./abonos"
 
@@ -18,7 +19,7 @@ export type CambiosEmpresa = Partial<DatosEmpresa>
 const CAMPOS = ["nombre", "nit", "correo", "telefono", "ciudad"] as const
 const OBLIGATORIOS = new Set(["nombre", "nit"])
 
-export async function leerConfiguracionEmpresa(supabase: any): Promise<DatosEmpresa> {
+export async function leerConfiguracionEmpresa(supabase: DbClient): Promise<DatosEmpresa> {
   const { data, error } = await supabase
     .from("configuracion_empresa")
     .select("nombre, nit, correo, telefono, ciudad")
@@ -28,7 +29,7 @@ export async function leerConfiguracionEmpresa(supabase: any): Promise<DatosEmpr
   return data
 }
 
-export async function previsualizarConfiguracionEmpresa(supabase: any, cambios: CambiosEmpresa) {
+export async function previsualizarConfiguracionEmpresa(supabase: DbClient, cambios: CambiosEmpresa) {
   const actual = await leerConfiguracionEmpresa(supabase)
   const resultado: Partial<Record<keyof DatosEmpresa, { antes: string | null; despues: string | null }>> = {}
 
@@ -46,7 +47,7 @@ export async function previsualizarConfiguracionEmpresa(supabase: any, cambios: 
   return { actual, cambios: resultado }
 }
 
-export async function actualizarConfiguracionEmpresa(supabase: any, _actor: ActorErp, cambios: CambiosEmpresa) {
+export async function actualizarConfiguracionEmpresa(supabase: DbClient, _actor: ActorErp, cambios: CambiosEmpresa) {
   const previa = await previsualizarConfiguracionEmpresa(supabase, cambios)
 
   const payload: Record<string, string | null> = {}

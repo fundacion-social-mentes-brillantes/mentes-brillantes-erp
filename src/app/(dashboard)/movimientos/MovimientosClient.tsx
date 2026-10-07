@@ -21,6 +21,7 @@ import {
   ExternalLink
 } from 'lucide-react'
 import { anularMovimiento, editarMovimiento, eliminarMovimiento } from './actions'
+import { FORM_VACIO, camposCambiados, type FormEdicion } from './edicion'
 import {
   Sheet,
   SheetContent,
@@ -78,7 +79,8 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
 
   // Edit State
   const [isEditing, setIsEditing] = useState(false)
-  const [editForm, setEditForm] = useState<any>({})
+  const [editForm, setEditForm] = useState<FormEdicion>(FORM_VACIO)
+  const [editInicial, setEditInicial] = useState<FormEdicion>(FORM_VACIO)
   const [isSaving, setIsSaving] = useState(false)
   const [isAnulando, setIsAnulando] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -213,16 +215,20 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
   const handleRowClick = (mov: Movimiento) => {
     setSelectedMov(mov)
     // Initialize edit form based on movement type
-    setEditForm({
-      monto: mov.tipo_movimiento === 'egreso' || mov.tipo_movimiento === 'aplicacion_saldo'
-        ? mov.valor_egreso
-        : mov.valor_ingreso,
+    const inicial: FormEdicion = {
+      monto: String(
+        mov.tipo_movimiento === 'egreso' || mov.tipo_movimiento === 'aplicacion_saldo'
+          ? mov.valor_egreso
+          : mov.valor_ingreso
+      ),
       fecha: mov.fecha,
-      concepto: mov.concepto,
+      concepto: mov.concepto || '',
       metodo_pago: mov.metodo_pago || '',
       asistente_id: mov.asistente_id || '',
       notas: mov.notas || ''
-    })
+    }
+    setEditForm(inicial)
+    setEditInicial(inicial)
     setIsEditing(false)
     setIsSheetOpen(true)
   }
@@ -231,7 +237,12 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
     if (!selectedMov) return
     setIsSaving(true)
     try {
-      const result = await editarMovimiento(selectedMov.movimiento_id, selectedMov.tipo_movimiento, editForm)
+      const cambios = camposCambiados(editInicial, editForm)
+      if (Object.keys(cambios).length === 0) {
+        setIsEditing(false)
+        return
+      }
+      const result = await editarMovimiento(selectedMov.movimiento_id, selectedMov.tipo_movimiento, cambios)
       if (result?.error) {
         alert(result.error)
       } else {
@@ -251,8 +262,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
 
     setIsAnulando(true)
     try {
-      let monto_revertir = selectedMov.tipo_movimiento === 'egreso' ? selectedMov.valor_egreso : selectedMov.valor_ingreso;
-      const result = await anularMovimiento(selectedMov.movimiento_id, selectedMov.tipo_movimiento, monto_revertir, selectedMov.asistente_id)
+      const result = await anularMovimiento(selectedMov.movimiento_id, selectedMov.tipo_movimiento)
 
       if (result?.error) {
         alert(result.error)
@@ -274,8 +284,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
 
     setIsDeleting(true)
     try {
-      let monto_revertir = selectedMov.tipo_movimiento === 'egreso' ? selectedMov.valor_egreso : selectedMov.valor_ingreso;
-      const result = await eliminarMovimiento(selectedMov.movimiento_id, selectedMov.tipo_movimiento, monto_revertir, selectedMov.asistente_id)
+      const result = await eliminarMovimiento(selectedMov.movimiento_id, selectedMov.tipo_movimiento)
 
       if (result?.error) {
         alert(result.error)

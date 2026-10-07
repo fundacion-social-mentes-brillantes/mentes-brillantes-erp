@@ -1,3 +1,4 @@
+import type { DbClient } from "@/lib/supabase/types"
 import {
   calcularEstadoCuentaDesdePagos,
   esSaldoAFavor,
@@ -5,7 +6,8 @@ import {
   toSafeNumber,
 } from "@/lib/utils/contable"
 import { assertFechaEditable } from "@/lib/utils/periodos"
-import { OperacionError, exigir } from "./errores"
+import { registrarAuditoria } from "./auditoria"
+import { OperacionError } from "./errores"
 import type { ActorErp } from "./abonos"
 
 // Editar el valor de una cuenta y eliminarla.
@@ -17,7 +19,7 @@ import type { ActorErp } from "./abonos"
 const SELECT_CUENTA =
   "concepto, valor_total, fecha_emision, estado, asistente_id, asistentes(nombre), pagos_abonos(id, monto, notas, estado, metodo_pago, origen_fondos)"
 
-async function leerCuenta(supabase: any, cuentaId: string) {
+async function leerCuenta(supabase: DbClient, cuentaId: string) {
   const { data, error } = await supabase
     .from("cuentas_por_cobrar")
     .select(SELECT_CUENTA)
@@ -27,7 +29,9 @@ async function leerCuenta(supabase: any, cuentaId: string) {
   return data
 }
 
-function nombrePersona(cuenta: any): string | null {
+type ConPersona = { asistentes: { nombre: string } | Array<{ nombre: string }> | null }
+
+function nombrePersona(cuenta: ConPersona): string | null {
   const a = Array.isArray(cuenta.asistentes) ? cuenta.asistentes[0] : cuenta.asistentes
   return a?.nombre ?? null
 }
@@ -40,7 +44,7 @@ export type EditarValorCuentaParams = {
   motivo?: string | null
 }
 
-async function validarEdicionValor(supabase: any, params: EditarValorCuentaParams) {
+async function validarEdicionValor(supabase: DbClient, params: EditarValorCuentaParams) {
   if (!Number.isFinite(params.valorNuevo) || params.valorNuevo < 0) {
     throw new OperacionError("El valor debe ser 0 o mayor.")
   }
@@ -62,7 +66,7 @@ async function validarEdicionValor(supabase: any, params: EditarValorCuentaParam
   return { cuenta, valorActual, estadoDespues }
 }
 
-export async function previsualizarEdicionValorCuenta(supabase: any, params: EditarValorCuentaParams) {
+export async function previsualizarEdicionValorCuenta(supabase: DbClient, params: EditarValorCuentaParams) {
   const v = await validarEdicionValor(supabase, params)
   return {
     cuentaId: params.cuentaId,
@@ -76,7 +80,7 @@ export async function previsualizarEdicionValorCuenta(supabase: any, params: Edi
 }
 
 export async function editarValorCuenta(
-  supabase: any,
+  supabase: DbClient,
   actor: ActorErp,
   params: EditarValorCuentaParams
 ) {
@@ -88,20 +92,19 @@ export async function editarValorCuenta(
     .eq("id", params.cuentaId)
   if (error) throw new OperacionError("No se pudo actualizar el valor de la cuenta.")
 
-  const { error: auditError } = await supabase.from("auditoria_financiera").insert([
+  await registrarAuditoria(
+    supabase,
     {
-      tabla_afectada: "cuentas_por_cobrar",
-      registro_id: params.cuentaId,
-      usuario_id: actor.userId || "",
+      tabla: "cuentas_por_cobrar",
+      registroId: params.cuentaId,
+      usuarioId: actor.userId,
       accion: "edicion_valor",
-      valor_anterior: v.valorActual,
-      valor_nuevo: params.valorNuevo,
-      motivo: (params.motivo && String(params.motivo).trim()) || "Ajuste de valor de cuenta",
+      valorAnterior: v.valorActual,
+      valorNuevo: params.valorNuevo,
+      motivo: params.motivo,
     },
-  ])
-  if (auditError) {
-    console.error("[operaciones] no se pudo auditar la edicion de valor", { code: auditError.code })
-  }
+    "Ajuste de valor de cuenta"
+  )
 
   // El trigger de estado solo escucha pagos_abonos: al cambiar el valor hay que
   // recalcular a mano o la cuenta queda en un estado que no corresponde.
@@ -115,7 +118,7 @@ export async function editarValorCuenta(
 
 // ---------------------------------------------------------- eliminar
 
-async function validarEliminacionCuenta(supabase: any, cuentaId: string) {
+async function validarEliminacionCuenta(supabase: DbClient, cuentaId: string) {
   const cuenta = await leerCuenta(supabase, cuentaId)
 
   const periodoError = await assertFechaEditable(supabase, cuenta.fecha_emision, "Eliminar la cuenta")
@@ -135,7 +138,7 @@ async function validarEliminacionCuenta(supabase: any, cuentaId: string) {
 
   const pagosValidos = filtrarPagosValidosCuentas(cuenta.pagos_abonos || [])
   if (pagosValidos.length > 0) {
-    if (pagosValidos.some((p: any) => esSaldoAFavor(p))) {
+    if (pagosValidos.some((p) => esSaldoAFavor(p))) {
       throw new OperacionError(
         "No se puede eliminar la cuenta porque tiene pagos provenientes de saldo a favor. Reviértalos antes de borrar."
       )
@@ -167,7 +170,7 @@ async function validarEliminacionCuenta(supabase: any, cuentaId: string) {
   return cuenta
 }
 
-export async function previsualizarEliminacionCuenta(supabase: any, cuentaId: string) {
+export async function previsualizarEliminacionCuenta(supabase: DbClient, cuentaId: string) {
   const cuenta = await validarEliminacionCuenta(supabase, cuentaId)
   return {
     cuentaId,
@@ -179,26 +182,20 @@ export async function previsualizarEliminacionCuenta(supabase: any, cuentaId: st
   }
 }
 
-export async function eliminarCuenta(supabase: any, actor: ActorErp, cuentaId: string) {
+export async function eliminarCuenta(supabase: DbClient, actor: ActorErp, cuentaId: string) {
   const cuenta = await validarEliminacionCuenta(supabase, cuentaId)
 
   const { error } = await supabase.from("cuentas_por_cobrar").delete().eq("id", cuentaId)
   if (error) throw new OperacionError(error.message || "No se pudo eliminar la cuenta.")
 
-  const { error: auditError } = await supabase.from("auditoria_financiera").insert([
-    {
-      tabla_afectada: "cuentas_por_cobrar",
-      registro_id: cuentaId,
-      usuario_id: actor.userId || "",
-      accion: "eliminar_cuenta",
-      valor_anterior: toSafeNumber(cuenta.valor_total),
-      valor_nuevo: null,
-      motivo: "Eliminación definitiva de cuenta",
-    },
-  ])
-  if (auditError) {
-    console.error("[operaciones] no se pudo auditar la eliminacion de cuenta", { code: auditError.code })
-  }
+  await registrarAuditoria(supabase, {
+    tabla: "cuentas_por_cobrar",
+    registroId: cuentaId,
+    usuarioId: actor.userId,
+    accion: "eliminar_cuenta",
+    valorAnterior: toSafeNumber(cuenta.valor_total),
+    motivo: "Eliminación definitiva de cuenta",
+  })
 
   return { cuentaId, concepto: cuenta.concepto, valorTotal: toSafeNumber(cuenta.valor_total) }
 }

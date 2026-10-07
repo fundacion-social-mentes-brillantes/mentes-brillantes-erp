@@ -1,3 +1,4 @@
+import type { DbClient } from "@/lib/supabase/types"
 import { OperacionError } from "./errores"
 
 // Cuentas que no pueden cerrarse por un residuo de centavos.
@@ -23,7 +24,7 @@ export type CuentaConResiduo = {
   estado: string
 }
 
-export async function buscarCuentasConResiduo(admin: any): Promise<CuentaConResiduo[]> {
+export async function buscarCuentasConResiduo(admin: DbClient): Promise<CuentaConResiduo[]> {
   const { data, error } = await admin
     .from("cuentas_por_cobrar")
     .select(

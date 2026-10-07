@@ -1,5 +1,8 @@
+import type { DbClient } from "@/lib/supabase/types"
 import { assertFechaEditable } from "@/lib/utils/periodos"
-import { OperacionError, exigir, exigirFechaIso, exigirMontoPositivo } from "./errores"
+import type { Enums } from "@/types/database"
+import { registrarAuditoria } from "./auditoria"
+import { OperacionError, exigir, exigirFechaIso, exigirMetodoPago, exigirMontoPositivo } from "./errores"
 import { registrarAbono, type ActorErp, type ResultadoAbono } from "./abonos"
 import { registrarSesionCoach } from "./coach"
 
@@ -24,15 +27,9 @@ export const CATEGORIAS_EGRESO = [
 
 export const METODOS_PAGO = ["efectivo", "nequi", "daviplata", "otro"] as const
 
-/**
- * OJO: `auditoria_financiera.motivo` es NOT NULL. Pasar null (lo que ocurria
- * cuando el movimiento no traia notas) hacia fallar el insert en silencio, y
- * el movimiento quedaba SIN rastro. Por eso aqui el motivo siempre tiene un
- * texto por defecto y, si aun asi falla, se registra el error en el log en vez
- * de perderse.
- */
+/** Rastro de la creacion; el motivo por defecto evita el insert fallido (ver auditoria.ts). */
 async function auditar(
-  supabase: any,
+  supabase: DbClient,
   tabla: string,
   registroId: string,
   actor: ActorErp,
@@ -41,24 +38,14 @@ async function auditar(
   motivo: string | null | undefined,
   motivoPorDefecto: string
 ) {
-  const { error } = await supabase.from("auditoria_financiera").insert([
-    {
-      tabla_afectada: tabla,
-      registro_id: registroId,
-      usuario_id: actor.userId || "",
-      accion,
-      valor_anterior: null,
-      valor_nuevo: valorNuevo,
-      motivo: (motivo && motivo.trim()) || motivoPorDefecto,
-    },
-  ])
-
-  if (error) {
-    console.error("[operaciones] no se pudo auditar", { tabla, accion, registroId, code: error.code })
-  }
+  await registrarAuditoria(
+    supabase,
+    { tabla, registroId, usuarioId: actor.userId, accion, valorNuevo, motivo },
+    motivoPorDefecto
+  )
 }
 
-async function exigirPeriodoAbierto(supabase: any, fecha: string, accion: string) {
+async function exigirPeriodoAbierto(supabase: DbClient, fecha: string, accion: string) {
   const error = await assertFechaEditable(supabase, fecha, accion)
   if (error) throw new OperacionError(error)
 }
@@ -74,7 +61,7 @@ export type CrearEgresoParams = {
   notas?: string | null
 }
 
-export async function crearEgreso(supabase: any, actor: ActorErp, params: CrearEgresoParams) {
+export async function crearEgreso(supabase: DbClient, actor: ActorErp, params: CrearEgresoParams) {
   const concepto = String(params.concepto || "").trim()
   exigir(concepto, "El concepto del egreso es obligatorio.")
   const monto = exigirMontoPositivo(params.monto)
@@ -84,7 +71,7 @@ export async function crearEgreso(supabase: any, actor: ActorErp, params: CrearE
   // restringirlo aqui rechazaria altas que hoy funcionan desde la web. La
   // lista cerrada se aplica en el esquema del MCP, que si controla su entrada.
   exigir(String(params.categoria || "").trim(), "La categoria es obligatoria.")
-  exigir(String(params.metodoPago || "").trim(), "El metodo de pago es obligatorio.")
+  const metodoPago = exigirMetodoPago(params.metodoPago)
 
   await exigirPeriodoAbierto(supabase, fecha, "Crear el egreso")
 
@@ -96,7 +83,7 @@ export async function crearEgreso(supabase: any, actor: ActorErp, params: CrearE
         concepto,
         monto,
         categoria: params.categoria,
-        metodo_pago: params.metodoPago,
+        metodo_pago: metodoPago,
         fecha,
         notas,
         usuario_id: actor.userId || null,
@@ -108,7 +95,7 @@ export async function crearEgreso(supabase: any, actor: ActorErp, params: CrearE
   if (error || !data) throw new OperacionError(error?.message || "No se pudo registrar el egreso.")
 
   await auditar(supabase, "egresos", data.id, actor, "crear_egreso", monto, notas, "Creación de egreso")
-  return { id: data.id as string, monto, concepto, fecha }
+  return { id: data.id, monto, concepto, fecha }
 }
 
 // --------------------------------------------------------- ventas externas
@@ -122,12 +109,12 @@ export type CrearVentaExternaParams = {
   notas?: string | null
 }
 
-export async function crearVentaExterna(supabase: any, actor: ActorErp, params: CrearVentaExternaParams) {
+export async function crearVentaExterna(supabase: DbClient, actor: ActorErp, params: CrearVentaExternaParams) {
   const concepto = String(params.concepto || "").trim()
   exigir(concepto, "El concepto de la venta es obligatorio.")
   const monto = exigirMontoPositivo(params.monto)
   const fecha = exigirFechaIso(params.fecha)
-  exigir(String(params.metodoPago || "").trim(), "El metodo de pago es obligatorio.")
+  const metodoPago = exigirMetodoPago(params.metodoPago)
 
   await exigirPeriodoAbierto(supabase, fecha, "Crear la venta externa")
 
@@ -141,7 +128,7 @@ export async function crearVentaExterna(supabase: any, actor: ActorErp, params: 
         concepto,
         comprador_nombre: comprador,
         monto,
-        metodo_pago: params.metodoPago,
+        metodo_pago: metodoPago,
         fecha,
         notas,
         usuario_id: actor.userId || null,
@@ -153,7 +140,7 @@ export async function crearVentaExterna(supabase: any, actor: ActorErp, params: 
   if (error || !data) throw new OperacionError(error?.message || "No se pudo registrar la venta externa.")
 
   await auditar(supabase, "ventas_externas", data.id, actor, "crear_venta_externa", monto, notas, "Creación de venta externa")
-  return { id: data.id as string, monto, concepto, fecha, compradorNombre: comprador }
+  return { id: data.id, monto, concepto, fecha, compradorNombre: comprador }
 }
 
 // -------------------------------------------------------------- donaciones
@@ -166,11 +153,11 @@ export type CrearDonacionParams = {
   notas?: string | null
 }
 
-export async function crearDonacion(supabase: any, actor: ActorErp, params: CrearDonacionParams) {
+export async function crearDonacion(supabase: DbClient, actor: ActorErp, params: CrearDonacionParams) {
   exigir(params.asistenteId, "Falta la persona que dona.")
   const monto = exigirMontoPositivo(params.monto)
   const fecha = exigirFechaIso(params.fecha)
-  exigir(String(params.metodoPago || "").trim(), "El metodo de pago es obligatorio.")
+  const metodoPago = exigirMetodoPago(params.metodoPago)
 
   await exigirPeriodoAbierto(supabase, fecha, "Crear la donación")
 
@@ -181,7 +168,7 @@ export async function crearDonacion(supabase: any, actor: ActorErp, params: Crea
       {
         asistente_id: params.asistenteId,
         monto,
-        metodo_pago: params.metodoPago,
+        metodo_pago: metodoPago,
         fecha,
         notas,
         usuario_id: actor.userId || null,
@@ -193,7 +180,7 @@ export async function crearDonacion(supabase: any, actor: ActorErp, params: Crea
   if (error || !data) throw new OperacionError(error?.message || "No se pudo registrar la donación.")
 
   await auditar(supabase, "donaciones_asistentes", data.id, actor, "crear_donacion", monto, notas, "Registro de donación")
-  return { id: data.id as string, monto, fecha }
+  return { id: data.id, monto, fecha }
 }
 
 // ----------------------------------------------------------------- cuentas
@@ -265,6 +252,8 @@ export function validarCuentaNueva(params: CrearCuentaParams) {
 
   const valorTotal = modalidad === "normal" ? exigirMontoPositivo(valor, "El valor de la cuenta") : 0
   const concepto = valorTotal === 0 ? conceptoConModalidad(conceptoBase, modalidad) : conceptoBase
+  // Una cuenta en 0 no tiene nada que cobrar: nace pagada, como en la web.
+  const estadoInicial: Enums<"estado_cuenta"> = valorTotal === 0 ? "pagado" : "pendiente"
 
   return {
     asistenteId: params.asistenteId,
@@ -273,8 +262,7 @@ export function validarCuentaNueva(params: CrearCuentaParams) {
     fechaEmision,
     sesiones,
     modalidad,
-    // Una cuenta en 0 no tiene nada que cobrar: nace pagada, como en la web.
-    estadoInicial: valorTotal === 0 ? "pagado" : "pendiente",
+    estadoInicial,
   }
 }
 
@@ -283,7 +271,7 @@ export function validarCuentaNueva(params: CrearCuentaParams) {
  * lleva sesiones. Para crearla ya con abono o con la primera sesion dictada,
  * ver crearCuentaCompleta.
  */
-export async function crearCuenta(supabase: any, actor: ActorErp, params: CrearCuentaParams) {
+export async function crearCuenta(supabase: DbClient, actor: ActorErp, params: CrearCuentaParams) {
   const v = validarCuentaNueva(params)
 
   await exigirPeriodoAbierto(supabase, v.fechaEmision, "Crear la cuenta")
@@ -322,7 +310,7 @@ export async function crearCuenta(supabase: any, actor: ActorErp, params: CrearC
 
   await auditar(supabase, "cuentas_por_cobrar", data.id, actor, "crear_cuenta", v.valorTotal, v.concepto, "Creación de cuenta")
   return {
-    id: data.id as string,
+    id: data.id,
     concepto: v.concepto,
     valorTotal: v.valorTotal,
     fechaEmision: v.fechaEmision,
@@ -355,7 +343,7 @@ export type CrearCuentaCompletaParams = CrearCuentaParams & {
  * Valida el abono inicial y la primera sesion de una cuenta nueva. Va aparte
  * de crear para que el borrador pueda rechazar antes de escribir nada.
  */
-export async function validarCuentaCompleta(supabase: any, params: CrearCuentaCompletaParams) {
+export async function validarCuentaCompleta(supabase: DbClient, params: CrearCuentaCompletaParams) {
   const cuenta = validarCuentaNueva(params)
   await exigirPeriodoAbierto(supabase, cuenta.fechaEmision, "Crear la cuenta")
 
@@ -365,8 +353,7 @@ export async function validarCuentaCompleta(supabase: any, params: CrearCuentaCo
       throw new OperacionError("No se puede registrar un abono inicial en una cuenta de valor 0.")
     }
     const monto = exigirMontoPositivo(params.abonoInicial.monto, "El abono inicial")
-    const metodoPago = String(params.abonoInicial.metodoPago || "").trim()
-    exigir(metodoPago, "Indica el metodo de pago del abono inicial.")
+    const metodoPago = exigirMetodoPago(params.abonoInicial.metodoPago, "El metodo de pago del abono inicial")
     const fechaPago = exigirFechaIso(params.abonoInicial.fechaPago, "La fecha del abono inicial")
     await exigirPeriodoAbierto(supabase, fechaPago, "Registrar el abono inicial")
     const montoAplicado = Math.min(monto, cuenta.valorTotal)
@@ -408,7 +395,7 @@ export async function validarCuentaCompleta(supabase: any, params: CrearCuentaCo
  * Si algo falla a mitad de camino se deshace lo ya creado, para no dejar una
  * cuenta cobrada sin su pago o un paquete sin su sesion.
  */
-export async function crearCuentaCompleta(supabase: any, actor: ActorErp, params: CrearCuentaCompletaParams) {
+export async function crearCuentaCompleta(supabase: DbClient, actor: ActorErp, params: CrearCuentaCompletaParams) {
   const plan = await validarCuentaCompleta(supabase, params)
   const cuenta = await crearCuenta(supabase, actor, params)
 
@@ -458,11 +445,11 @@ export type CrearAnticipoParams = {
  * Anticipo = dinero que la persona entrega por adelantado y queda como saldo a
  * favor suyo, para aplicarlo despues a sus cuentas.
  */
-export async function crearAnticipo(supabase: any, actor: ActorErp, params: CrearAnticipoParams) {
+export async function crearAnticipo(supabase: DbClient, actor: ActorErp, params: CrearAnticipoParams) {
   exigir(params.asistenteId, "Falta la persona del anticipo.")
   const monto = exigirMontoPositivo(params.monto)
   const fecha = exigirFechaIso(params.fecha)
-  exigir(String(params.metodoPago || "").trim(), "El metodo de pago es obligatorio.")
+  const metodoPago = exigirMetodoPago(params.metodoPago)
 
   await exigirPeriodoAbierto(supabase, fecha, "Registrar el anticipo")
 
@@ -475,7 +462,7 @@ export async function crearAnticipo(supabase: any, actor: ActorErp, params: Crea
         tipo: "ingreso",
         monto,
         fecha,
-        metodo_pago: params.metodoPago,
+        metodo_pago: metodoPago,
         notas,
         usuario_id: actor.userId || null,
       },
@@ -495,5 +482,5 @@ export async function crearAnticipo(supabase: any, actor: ActorErp, params: Crea
     notas,
     "Registro de anticipo"
   )
-  return { id: data.id as string, monto, fecha }
+  return { id: data.id, monto, fecha }
 }

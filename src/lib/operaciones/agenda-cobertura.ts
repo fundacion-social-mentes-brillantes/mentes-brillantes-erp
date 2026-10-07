@@ -1,3 +1,4 @@
+import type { DbClient } from "@/lib/supabase/types"
 import { OperacionError } from "./errores"
 
 // Ante una sesión dictada que no está en el ERP hay que hacerse DOS preguntas,
@@ -72,7 +73,7 @@ const primera = (v: any) => (Array.isArray(v) ? v[0] : v)
 
 /** Cupo y deuda de cada persona, en tres consultas para toda la lista. */
 export async function cargarEstadoCupo(
-  admin: any,
+  admin: DbClient,
   asistenteIds: string[]
 ): Promise<Map<string, EstadoCupo>> {
   const ids = Array.from(new Set(asistenteIds.filter(Boolean)))

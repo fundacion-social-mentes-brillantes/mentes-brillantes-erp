@@ -1,3 +1,4 @@
+import type { DbClient, TablesUpdate } from "@/lib/supabase/types"
 import { paqueteConCupo, paqueteDestino, resumenCoach } from "@/lib/utils/coach"
 import { OperacionError, exigirFechaIso } from "./errores"
 import type { ActorErp } from "./abonos"
@@ -43,7 +44,7 @@ export type PrevisualizacionSesionCoach = {
   }
 }
 
-async function paquetesDe(supabase: any, asistenteId: string) {
+async function paquetesDe(supabase: DbClient, asistenteId: string) {
   const { data, error } = await supabase
     .from("coach_paquetes")
     .select(
@@ -68,7 +69,7 @@ function elegirPaquete(paquetes: any[], paqueteId?: string | null) {
 }
 
 export async function previsualizarSesionCoach(
-  supabase: any,
+  supabase: DbClient,
   params: RegistrarSesionCoachParams
 ): Promise<PrevisualizacionSesionCoach> {
   const fecha = exigirFechaIso(params.fecha)
@@ -102,7 +103,7 @@ export async function previsualizarSesionCoach(
 }
 
 export async function registrarSesionCoach(
-  supabase: any,
+  supabase: DbClient,
   _actor: ActorErp,
   params: RegistrarSesionCoachParams
 ) {
@@ -142,7 +143,7 @@ export async function registrarSesionCoach(
 
 // --------------------------------------------------- editar / eliminar sesion
 
-async function leerSesion(supabase: any, sesionId: string) {
+async function leerSesion(supabase: DbClient, sesionId: string) {
   const { data, error } = await supabase
     .from("coach_sesiones")
     .select("id, fecha, notas, paquete_id, asistente_id, asistentes(nombre)")
@@ -153,7 +154,7 @@ async function leerSesion(supabase: any, sesionId: string) {
 }
 
 export async function previsualizarEdicionSesion(
-  supabase: any,
+  supabase: DbClient,
   params: { sesionId: string; fecha?: string; notas?: string | null }
 ) {
   const sesion = await leerSesion(supabase, params.sesionId)
@@ -171,13 +172,13 @@ export async function previsualizarEdicionSesion(
 }
 
 export async function editarSesionCoach(
-  supabase: any,
+  supabase: DbClient,
   _actor: ActorErp,
   params: { sesionId: string; fecha?: string; notas?: string | null }
 ) {
   const v = await previsualizarEdicionSesion(supabase, params)
 
-  const payload: Record<string, unknown> = {}
+  const payload: TablesUpdate<"coach_sesiones"> = {}
   if (params.fecha !== undefined) payload.fecha = params.fecha
   if (params.notas !== undefined) payload.notas = params.notas
 
@@ -186,7 +187,7 @@ export async function editarSesionCoach(
   return { sesionId: params.sesionId, cambios: v.cambios }
 }
 
-export async function previsualizarEliminacionSesion(supabase: any, sesionId: string) {
+export async function previsualizarEliminacionSesion(supabase: DbClient, sesionId: string) {
   const sesion = await leerSesion(supabase, sesionId)
   const persona = Array.isArray(sesion.asistentes) ? sesion.asistentes[0] : sesion.asistentes
   return {
@@ -197,7 +198,7 @@ export async function previsualizarEliminacionSesion(supabase: any, sesionId: st
   }
 }
 
-export async function eliminarSesionCoach(supabase: any, _actor: ActorErp, sesionId: string) {
+export async function eliminarSesionCoach(supabase: DbClient, _actor: ActorErp, sesionId: string) {
   const v = await previsualizarEliminacionSesion(supabase, sesionId)
   const { error } = await supabase.from("coach_sesiones").delete().eq("id", sesionId)
   if (error) throw new OperacionError(error.message || "No se pudo eliminar la sesion coach.")

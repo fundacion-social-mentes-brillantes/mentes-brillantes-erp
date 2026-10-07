@@ -1,3 +1,4 @@
+import type { DbClient } from "@/lib/supabase/types"
 import { OperacionError } from "./errores"
 import { fechaHoyBogota } from "@/lib/utils/fechas"
 import { cargarEstadoCupo, repartirCupo, type Cobertura } from "./agenda-cobertura"
@@ -85,7 +86,7 @@ export type ResultadoSnapshot = {
  * cancelaron, y eso se responde una vez.
  */
 export async function guardarSnapshotAgenda(
-  admin: any,
+  admin: DbClient,
   params: {
     workspaceId: string
     desde: string
@@ -189,7 +190,7 @@ const DIAS_TOLERANCIA_REPORTE = 2
  * aunque falten sesiones. Esto lo dice en voz alta.
  */
 export async function resumenEspejoAgenda(
-  admin: any,
+  admin: DbClient,
   opciones: { desde: string; hasta: string; ahora?: number }
 ): Promise<EspejoAgenda> {
   const { desde, hasta } = opciones
@@ -255,7 +256,7 @@ export async function resumenEspejoAgenda(
  * escribe: solo describe.
  */
 export async function calcularDiferencias(
-  admin: any,
+  admin: DbClient,
   opciones: { desde: string; hasta: string; incluirResueltas?: boolean }
 ): Promise<Diferencia[]> {
   const { desde, hasta } = opciones
@@ -397,7 +398,7 @@ export async function calcularDiferencias(
  * Se reparte por persona y por fecha: el cupo es un saldo que se agota, no una
  * respuesta que valga igual para todas sus sesiones pendientes.
  */
-async function adjuntarCobertura(admin: any, diferencias: Diferencia[]) {
+async function adjuntarCobertura(admin: DbClient, diferencias: Diferencia[]) {
   const porPersona = new Map<string, Diferencia[]>()
   for (const d of diferencias) {
     if (d.tipo !== "sesion_sin_registrar") continue
@@ -431,7 +432,7 @@ async function adjuntarCobertura(admin: any, diferencias: Diferencia[]) {
 }
 
 export async function marcarDiferenciaResuelta(
-  admin: any,
+  admin: DbClient,
   params: { eventoId: string; tipo: TipoDiferencia; decision: string; usuarioId?: string; nota?: string }
 ) {
   const { error } = await admin.from("agenda_diferencias_resueltas").upsert(

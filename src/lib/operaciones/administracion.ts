@@ -1,6 +1,8 @@
+import type { DbClient } from "@/lib/supabase/types"
 import { assertNoPeriodOverlap, assertPeriodoAbierto } from "@/lib/utils/periodos"
 import { agruparAdelantosConDevoluciones } from "@/lib/utils/liquidaciones"
-import { OperacionError, exigir, exigirFechaIso, exigirMontoPositivo } from "./errores"
+import { registrarAuditoria } from "./auditoria"
+import { OperacionError, exigir, exigirFechaIso, exigirMetodoPago, exigirMontoPositivo } from "./errores"
 import type { ActorErp } from "./abonos"
 
 // Operaciones administrativas: socios, periodos contables, adelantos y el
@@ -24,18 +26,18 @@ function validarSocio(datos: DatosSocio) {
 }
 
 /** Suma de participaciones de los socios activos, para avisar si se pasa de 100. */
-export async function porcentajeTotalSocios(supabase: any, excluirId?: string): Promise<number> {
+export async function porcentajeTotalSocios(supabase: DbClient, excluirId?: string): Promise<number> {
   const { data, error } = await supabase
     .from("socios")
     .select("id, porcentaje_participacion")
     .eq("activo", true)
   if (error) throw new OperacionError("No se pudieron consultar los socios.")
   return (data || [])
-    .filter((s: any) => s.id !== excluirId)
-    .reduce((acc: number, s: any) => acc + Number(s.porcentaje_participacion || 0), 0)
+    .filter((s) => s.id !== excluirId)
+    .reduce((acc, s) => acc + Number(s.porcentaje_participacion || 0), 0)
 }
 
-export async function crearSocio(supabase: any, _actor: ActorErp, datos: DatosSocio) {
+export async function crearSocio(supabase: DbClient, _actor: ActorErp, datos: DatosSocio) {
   const v = validarSocio(datos)
   const { data, error } = await supabase
     .from("socios")
@@ -43,10 +45,10 @@ export async function crearSocio(supabase: any, _actor: ActorErp, datos: DatosSo
     .select("id")
     .single()
   if (error || !data) throw new OperacionError(error?.message || "No se pudo crear el socio.")
-  return { id: data.id as string, ...v }
+  return { id: data.id, ...v }
 }
 
-export async function editarSocio(supabase: any, _actor: ActorErp, socioId: string, datos: DatosSocio) {
+export async function editarSocio(supabase: DbClient, _actor: ActorErp, socioId: string, datos: DatosSocio) {
   exigir(socioId, "Falta indicar el socio.")
   const v = validarSocio(datos)
   const { error } = await supabase
@@ -57,14 +59,14 @@ export async function editarSocio(supabase: any, _actor: ActorErp, socioId: stri
   return { id: socioId, ...v }
 }
 
-export async function cambiarEstadoSocio(supabase: any, _actor: ActorErp, socioId: string, activo: boolean) {
+export async function cambiarEstadoSocio(supabase: DbClient, _actor: ActorErp, socioId: string, activo: boolean) {
   exigir(socioId, "Falta indicar el socio.")
   const { error } = await supabase.from("socios").update({ activo }).eq("id", socioId)
   if (error) throw new OperacionError(error.message || "No se pudo cambiar el estado del socio.")
   return { id: socioId, activo }
 }
 
-export async function buscarSocio(supabase: any, termino: string) {
+export async function buscarSocio(supabase: DbClient, termino: string) {
   const { data, error } = await supabase
     .from("socios")
     .select("id, nombre, porcentaje_participacion, activo")
@@ -75,7 +77,7 @@ export async function buscarSocio(supabase: any, termino: string) {
   if (!filas.length) throw new OperacionError(`No encontre al socio "${termino}".`)
   if (filas.length > 1) {
     throw new OperacionError(
-      `Hay varios socios que coinciden: ${filas.map((s: any) => s.nombre).join(", ")}. Se mas preciso.`
+      `Hay varios socios que coinciden: ${filas.map((s) => s.nombre).join(", ")}. Se mas preciso.`
     )
   }
   return filas[0]
@@ -85,7 +87,7 @@ export async function buscarSocio(supabase: any, termino: string) {
 
 export type DatosPeriodo = { nombre: string; fechaInicio: string; fechaFin: string }
 
-export async function validarPeriodoNuevo(supabase: any, datos: DatosPeriodo) {
+export async function validarPeriodoNuevo(supabase: DbClient, datos: DatosPeriodo) {
   const nombre = String(datos.nombre || "").trim()
   exigir(nombre, "El nombre del periodo es obligatorio.")
   const inicio = exigirFechaIso(datos.fechaInicio, "La fecha de inicio")
@@ -110,7 +112,7 @@ export async function validarPeriodoNuevo(supabase: any, datos: DatosPeriodo) {
   return { nombre, inicio, fin }
 }
 
-export async function crearPeriodo(supabase: any, _actor: ActorErp, datos: DatosPeriodo) {
+export async function crearPeriodo(supabase: DbClient, _actor: ActorErp, datos: DatosPeriodo) {
   const v = await validarPeriodoNuevo(supabase, datos)
   const { data, error } = await supabase
     .from("periodos")
@@ -118,10 +120,10 @@ export async function crearPeriodo(supabase: any, _actor: ActorErp, datos: Datos
     .select("id")
     .single()
   if (error || !data) throw new OperacionError(error?.message || "No se pudo crear el periodo.")
-  return { id: data.id as string, nombre: v.nombre, fechaInicio: v.inicio, fechaFin: v.fin }
+  return { id: data.id, nombre: v.nombre, fechaInicio: v.inicio, fechaFin: v.fin }
 }
 
-export async function validarCambioFechaFin(supabase: any, periodoId: string, nuevaFechaFin: string) {
+export async function validarCambioFechaFin(supabase: DbClient, periodoId: string, nuevaFechaFin: string) {
   const fin = exigirFechaIso(nuevaFechaFin, "La nueva fecha de fin")
 
   const { data: periodo, error } = await supabase
@@ -169,7 +171,7 @@ export async function validarCambioFechaFin(supabase: any, periodoId: string, nu
 }
 
 export async function cambiarFechaFinPeriodo(
-  supabase: any,
+  supabase: DbClient,
   actor: ActorErp,
   periodoId: string,
   nuevaFechaFin: string
@@ -183,17 +185,13 @@ export async function cambiarFechaFinPeriodo(
     .eq("estado", "abierto")
   if (error) throw new OperacionError(error.message || "No se pudo actualizar la fecha de fin.")
 
-  await supabase.from("auditoria_financiera").insert([
-    {
-      tabla_afectada: "periodos",
-      registro_id: periodoId,
-      usuario_id: actor.userId || "",
-      accion: "editar_fecha_fin_periodo",
-      valor_anterior: null,
-      valor_nuevo: null,
-      motivo: `Fecha de fin de ${v.periodo.nombre}: ${v.periodo.fecha_fin} -> ${v.fin}`,
-    },
-  ])
+  await registrarAuditoria(supabase, {
+    tabla: "periodos",
+    registroId: periodoId,
+    usuarioId: actor.userId,
+    accion: "editar_fecha_fin_periodo",
+    motivo: `Fecha de fin de ${v.periodo.nombre}: ${v.periodo.fecha_fin} -> ${v.fin}`,
+  })
 
   return { periodoId, nombre: v.periodo.nombre, fechaFinAntes: v.periodo.fecha_fin, fechaFinDespues: v.fin }
 }
@@ -209,10 +207,11 @@ export type DatosAdelanto = {
   notas?: string | null
 }
 
-export async function validarAdelanto(supabase: any, datos: DatosAdelanto) {
+export async function validarAdelanto(supabase: DbClient, datos: DatosAdelanto) {
   exigir(datos.socioId, "Falta indicar el socio.")
   const monto = exigirMontoPositivo(datos.monto)
   const fecha = exigirFechaIso(datos.fecha)
+  const metodoPago = exigirMetodoPago(datos.metodoPago || "otro")
 
   const { error, periodo } = await assertPeriodoAbierto(supabase, datos.periodoId, "Registrar el adelanto")
   if (error || !periodo) throw new OperacionError(error || "No se encontró el período contable.")
@@ -223,10 +222,10 @@ export async function validarAdelanto(supabase: any, datos: DatosAdelanto) {
     )
   }
 
-  return { monto, fecha, periodo }
+  return { monto, fecha, periodo, metodoPago }
 }
 
-export async function crearAdelanto(supabase: any, actor: ActorErp, datos: DatosAdelanto) {
+export async function crearAdelanto(supabase: DbClient, actor: ActorErp, datos: DatosAdelanto) {
   const v = await validarAdelanto(supabase, datos)
 
   const { data, error } = await supabase
@@ -237,7 +236,7 @@ export async function crearAdelanto(supabase: any, actor: ActorErp, datos: Datos
         socio_id: datos.socioId,
         monto: v.monto,
         fecha: v.fecha,
-        metodo_pago: datos.metodoPago || "otro",
+        metodo_pago: v.metodoPago,
         notas: datos.notas || null,
       },
     ])
@@ -245,19 +244,16 @@ export async function crearAdelanto(supabase: any, actor: ActorErp, datos: Datos
     .single()
   if (error || !data) throw new OperacionError(error?.message || "No se pudo registrar el adelanto.")
 
-  await supabase.from("auditoria_financiera").insert([
-    {
-      tabla_afectada: "adelantos_socios",
-      registro_id: data.id,
-      usuario_id: actor.userId || "",
-      accion: "crear_adelanto",
-      valor_anterior: null,
-      valor_nuevo: v.monto,
-      motivo: datos.notas || "Registro de adelanto a socio",
-    },
-  ])
+  await registrarAuditoria(supabase, {
+    tabla: "adelantos_socios",
+    registroId: data.id,
+    usuarioId: actor.userId,
+    accion: "crear_adelanto",
+    valorNuevo: v.monto,
+    motivo: datos.notas || "Registro de adelanto a socio",
+  })
 
-  return { id: data.id as string, monto: v.monto, fecha: v.fecha, periodo: v.periodo.nombre }
+  return { id: data.id, monto: v.monto, fecha: v.fecha, periodo: v.periodo.nombre }
 }
 
 // --------------------------------------------- devoluciones de adelantos
@@ -285,10 +281,11 @@ export type DatosDevolucionAdelanto = {
  * proyeccion por socio, los exportes—: asi la devolucion se descuenta sola en
  * todas partes y no hay que tocar el cierre.
  */
-export async function validarDevolucionAdelanto(supabase: any, datos: DatosDevolucionAdelanto) {
+export async function validarDevolucionAdelanto(supabase: DbClient, datos: DatosDevolucionAdelanto) {
   exigir(datos.adelantoId, "Falta indicar de cual adelanto es la devolucion.")
   const monto = exigirMontoPositivo(datos.monto, "El monto devuelto")
   const fecha = exigirFechaIso(datos.fecha)
+  const metodoPago = exigirMetodoPago(datos.metodoPago || "otro")
 
   const { data: adelanto, error: adelantoError } = await supabase
     .from("adelantos_socios")
@@ -299,10 +296,12 @@ export async function validarDevolucionAdelanto(supabase: any, datos: DatosDevol
   if (adelanto.tipo === "devolucion") {
     throw new OperacionError("Ese movimiento ya es una devolucion: no se devuelve una devolucion.")
   }
+  const { periodo_id: periodoId, socio_id: socioId } = adelanto
+  if (!periodoId || !socioId) throw new OperacionError("Ese adelanto no tiene periodo o socio; no se puede devolver.")
 
   const { error, periodo } = await assertPeriodoAbierto(
     supabase,
-    adelanto.periodo_id,
+    periodoId,
     "Registrar la devolucion del adelanto"
   )
   if (error || !periodo) throw new OperacionError(error || "No se encontró el período contable.")
@@ -321,7 +320,7 @@ export async function validarDevolucionAdelanto(supabase: any, datos: DatosDevol
 
   const entregado = Number(adelanto.monto)
   // Las devoluciones se guardan en negativo: lo devuelto es su valor absoluto.
-  const devuelto = (previas || []).reduce((t: number, d: any) => t + Math.abs(Number(d.monto) || 0), 0)
+  const devuelto = (previas || []).reduce((t, d) => t + Math.abs(Number(d.monto) || 0), 0)
   const pendiente = redondear(entregado - devuelto)
 
   if (pendiente <= 0) throw new OperacionError("Ese adelanto ya esta devuelto por completo.")
@@ -331,7 +330,7 @@ export async function validarDevolucionAdelanto(supabase: any, datos: DatosDevol
     )
   }
 
-  return { adelanto, monto, fecha, periodo, entregado, devuelto, pendiente }
+  return { adelanto, periodoId, socioId, metodoPago, monto, fecha, periodo, entregado, devuelto, pendiente }
 }
 
 /**
@@ -339,7 +338,7 @@ export async function validarDevolucionAdelanto(supabase: any, datos: DatosDevol
  * al mas nuevo. Ese orden importa: es el mismo criterio del cupo de las
  * sesiones coach —primero se salda lo mas antiguo—.
  */
-export async function cargarAdelantosPendientes(supabase: any, socioId: string) {
+export async function cargarAdelantosPendientes(supabase: DbClient, socioId: string) {
   const { data: periodos, error: periodosError } = await supabase
     .from("periodos")
     .select("id, nombre, fecha_inicio, fecha_fin")
@@ -366,7 +365,7 @@ export async function cargarAdelantosPendientes(supabase: any, socioId: string) 
 }
 
 /** Compatibilidad: el adelanto mas viejo con saldo. */
-export async function buscarAdelantoParaDevolver(supabase: any, socioId: string) {
+export async function buscarAdelantoParaDevolver(supabase: DbClient, socioId: string) {
   const { periodo, pendientes } = await cargarAdelantosPendientes(supabase, socioId)
   if (!pendientes.length) {
     throw new OperacionError(`Ese socio no tiene adelantos por devolver en ${periodo.nombre}.`)
@@ -390,10 +389,11 @@ export type DatosDevolucionSocio = {
  *
  * No escribe nada: solo calcula, para poder mostrarlo antes de guardar.
  */
-export async function planearDevolucionSocio(supabase: any, datos: DatosDevolucionSocio) {
+export async function planearDevolucionSocio(supabase: DbClient, datos: DatosDevolucionSocio) {
   exigir(datos.socioId, "Falta indicar el socio.")
   const monto = exigirMontoPositivo(datos.monto, "El monto devuelto")
   const fecha = exigirFechaIso(datos.fecha)
+  const metodoPago = exigirMetodoPago(datos.metodoPago || "otro")
 
   const { periodo, pendientes, totalPendiente } = await cargarAdelantosPendientes(supabase, datos.socioId)
 
@@ -431,6 +431,7 @@ export async function planearDevolucionSocio(supabase: any, datos: DatosDevoluci
     periodo,
     monto,
     fecha,
+    metodoPago,
     reparto,
     adelantosTocados: reparto.length,
     totalPendienteAntes: totalPendiente,
@@ -443,7 +444,7 @@ export async function planearDevolucionSocio(supabase: any, datos: DatosDevoluci
  * Guarda la devolucion repartida. Las filas entran en UN solo insert: si algo
  * falla no queda media devolucion aplicada.
  */
-export async function crearDevolucionSocio(supabase: any, actor: ActorErp, datos: DatosDevolucionSocio) {
+export async function crearDevolucionSocio(supabase: DbClient, actor: ActorErp, datos: DatosDevolucionSocio) {
   const plan = await planearDevolucionSocio(supabase, datos)
 
   const filas = plan.reparto.map((parte) => ({
@@ -451,7 +452,7 @@ export async function crearDevolucionSocio(supabase: any, actor: ActorErp, datos
     socio_id: datos.socioId,
     monto: -parte.seAplica,
     fecha: plan.fecha,
-    metodo_pago: datos.metodoPago || "otro",
+    metodo_pago: plan.metodoPago,
     notas: datos.notas || null,
     tipo: "devolucion",
     adelanto_id: parte.adelantoId,
@@ -460,14 +461,17 @@ export async function crearDevolucionSocio(supabase: any, actor: ActorErp, datos
   const { data, error } = await supabase.from("adelantos_socios").insert(filas).select("id")
   if (error || !data) throw new OperacionError(error?.message || "No se pudo registrar la devolucion.")
 
-  await supabase.from("auditoria_financiera").insert(
+  // Cada fila de auditoria apunta a SU devolucion; si faltara el id se usa el
+  // del adelanto original para no perder el rastro (registro_id es NOT NULL).
+  await registrarAuditoria(
+    supabase,
     plan.reparto.map((parte, i) => ({
-      tabla_afectada: "adelantos_socios",
-      registro_id: (data as any[])[i]?.id || null,
-      usuario_id: actor.userId || "",
+      tabla: "adelantos_socios",
+      registroId: data[i]?.id || parte.adelantoId,
+      usuarioId: actor.userId,
       accion: "devolver_adelanto",
-      valor_anterior: redondear(parte.seAplica + parte.quedaDespues),
-      valor_nuevo: parte.quedaDespues,
+      valorAnterior: redondear(parte.seAplica + parte.quedaDespues),
+      valorNuevo: parte.quedaDespues,
       motivo:
         `Devolucion de ${pesos(parte.seAplica)} aplicada al adelanto del ${parte.fechaAdelanto}` +
         (plan.reparto.length > 1 ? ` (parte de un pago de ${pesos(plan.monto)})` : "") +
@@ -476,7 +480,7 @@ export async function crearDevolucionSocio(supabase: any, actor: ActorErp, datos
   )
 
   return {
-    ids: (data as any[]).map((d) => d.id as string),
+    ids: data.map((d) => d.id),
     monto: plan.monto,
     fecha: plan.fecha,
     periodo: plan.periodo.nombre,
@@ -488,7 +492,7 @@ export async function crearDevolucionSocio(supabase: any, actor: ActorErp, datos
 }
 
 export async function crearDevolucionAdelanto(
-  supabase: any,
+  supabase: DbClient,
   actor: ActorErp,
   datos: DatosDevolucionAdelanto
 ) {
@@ -498,12 +502,12 @@ export async function crearDevolucionAdelanto(
     .from("adelantos_socios")
     .insert([
       {
-        periodo_id: v.adelanto.periodo_id,
-        socio_id: v.adelanto.socio_id,
+        periodo_id: v.periodoId,
+        socio_id: v.socioId,
         // Negativo a proposito: ver el comentario de validarDevolucionAdelanto.
         monto: -v.monto,
         fecha: v.fecha,
-        metodo_pago: datos.metodoPago || "otro",
+        metodo_pago: v.metodoPago,
         notas: datos.notas || null,
         tipo: "devolucion",
         adelanto_id: v.adelanto.id,
@@ -515,25 +519,23 @@ export async function crearDevolucionAdelanto(
 
   const pendienteDespues = redondear(v.pendiente - v.monto)
 
-  await supabase.from("auditoria_financiera").insert([
-    {
-      tabla_afectada: "adelantos_socios",
-      registro_id: data.id,
-      usuario_id: actor.userId || "",
-      accion: "devolver_adelanto",
-      valor_anterior: v.pendiente,
-      valor_nuevo: pendienteDespues,
-      motivo:
-        datos.notas ||
-        `Devolucion de ${pesos(v.monto)} del adelanto del ${v.adelanto.fecha} (quedan ${pesos(pendienteDespues)})`,
-    },
-  ])
+  await registrarAuditoria(supabase, {
+    tabla: "adelantos_socios",
+    registroId: data.id,
+    usuarioId: actor.userId,
+    accion: "devolver_adelanto",
+    valorAnterior: v.pendiente,
+    valorNuevo: pendienteDespues,
+    motivo:
+      datos.notas ||
+      `Devolucion de ${pesos(v.monto)} del adelanto del ${v.adelanto.fecha} (quedan ${pesos(pendienteDespues)})`,
+  })
 
   return {
-    id: data.id as string,
+    id: data.id,
     adelantoId: v.adelanto.id,
-    periodoId: v.adelanto.periodo_id as string,
-    socioId: v.adelanto.socio_id as string,
+    periodoId: v.periodoId,
+    socioId: v.socioId,
     monto: v.monto,
     fecha: v.fecha,
     entregado: v.entregado,
@@ -546,7 +548,7 @@ export async function crearDevolucionAdelanto(
 
 // ----------------------------------------------------------- liquidacion
 
-export async function validarCierreLiquidacion(supabase: any, periodoId: string) {
+export async function validarCierreLiquidacion(supabase: DbClient, periodoId: string) {
   const { error, periodo } = await assertPeriodoAbierto(supabase, periodoId, "Cerrar la liquidacion")
   if (error || !periodo) throw new OperacionError(error || "No se encontró el período contable.")
   return periodo
@@ -558,23 +560,19 @@ export async function validarCierreLiquidacion(supabase: any, periodoId: string)
  * fecha dentro del rango admite cambios, y la aplicacion NO tiene forma de
  * reabrirlo: es la operacion mas delicada del sistema.
  */
-export async function cerrarLiquidacion(supabase: any, actor: ActorErp, periodoId: string) {
+export async function cerrarLiquidacion(supabase: DbClient, actor: ActorErp, periodoId: string) {
   const periodo = await validarCierreLiquidacion(supabase, periodoId)
 
   const { error } = await supabase.rpc("fn_cerrar_liquidacion", { p_periodo_id: periodoId })
   if (error) throw new OperacionError(error.message || "No se pudo cerrar la liquidacion.")
 
-  await supabase.from("auditoria_financiera").insert([
-    {
-      tabla_afectada: "periodos",
-      registro_id: periodoId,
-      usuario_id: actor.userId || "",
-      accion: "cerrar_liquidacion",
-      valor_anterior: null,
-      valor_nuevo: null,
-      motivo: `Cierre de liquidacion del periodo ${periodo.nombre}`,
-    },
-  ])
+  await registrarAuditoria(supabase, {
+    tabla: "periodos",
+    registroId: periodoId,
+    usuarioId: actor.userId,
+    accion: "cerrar_liquidacion",
+    motivo: `Cierre de liquidacion del periodo ${periodo.nombre}`,
+  })
 
   return { periodoId, nombre: periodo.nombre, fechaInicio: periodo.fecha_inicio, fechaFin: periodo.fecha_fin }
 }

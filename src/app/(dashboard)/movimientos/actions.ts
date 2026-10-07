@@ -1,427 +1,133 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { requireAdmin } from '../../../lib/utils/authz'
-import { calcularEstadoCuenta, toSafeNumber, totalPagosValidos } from '@/lib/utils/contable'
-import { assertFechaEditable } from '@/lib/utils/periodos'
+import { AuthzError, requireAdmin } from '@/lib/utils/authz'
+import {
+  ANTICIPO_BLOQUEADO,
+  APLICACION_SALDO_BLOQUEADA,
+  anularMovimiento as anularMovimientoOp,
+  editarMovimiento as editarMovimientoOp,
+  eliminarMovimiento as eliminarMovimientoOp,
+} from '@/lib/operaciones/anulaciones'
+import { OperacionError } from '@/lib/operaciones/errores'
+import { esTipoMovimiento, type TipoMovimiento } from '@/lib/operaciones/registros-movimiento'
+import { mensajeDeError } from '@/lib/utils/errores'
+
+// Historial General: anular, editar y eliminar movimientos. Las reglas
+// contables viven en lib/operaciones/anulaciones.ts, las mismas que usa el
+// MCP; aqui solo se autentica, se traduce lo que manda el formulario y se
+// refrescan las pantallas.
 
 export type ActionState = {
   error?: string
   success?: boolean
 } | null
 
-const APLICACION_SALDO_BLOQUEADA =
-  'Las aplicaciones de saldo a favor no se pueden editar, anular ni eliminar desde Historial General. Deben gestionarse desde un flujo transaccional dedicado para no desbalancear la cuenta ni el saldo.'
-const ANTICIPO_BLOQUEADO =
-  'Los anticipos/saldo a favor no se pueden editar, anular ni eliminar desde Historial General. Deben gestionarse desde un flujo contable dedicado para no desbalancear períodos ni saldo a favor.'
-const EDICION_ABONO_BLOQUEADA =
-  'El monto de un abono no se puede editar desde Historial General. Usa el detalle de la cuenta para preservar correctamente sobrepagos y saldo a favor.'
-const ABONO_CON_SALDO_BLOQUEADO =
-  'Este abono genero movimientos de saldo a favor por sobrepago. Debe gestionarse desde el detalle de la cuenta para no duplicar ni perder dinero.'
-
-async function hasSaldoFavorAsociadoAbono(supabase: any, cuentaId: string | null | undefined, abonoId: string) {
-  if (!cuentaId) return false
-
-  const { data, error } = await supabase
-    .from('movimientos_saldo_favor')
-    .select('id')
-    .eq('cuenta_id', cuentaId)
-    .ilike('notas', `%[ABONO:${abonoId}]%`)
-
-  if (error) {
-    return false
-  }
-
-  return (data || []).length > 0
+/** Lo que el formulario puede cambiar. Solo llegan los campos que la persona toco. */
+export type CambiosEdicionMovimiento = {
+  monto?: number | string
+  fecha?: string
+  concepto?: string
+  metodo_pago?: string
+  asistente_id?: string
+  notas?: string
 }
 
-async function getMovimientoEditableMeta(supabase: any, tipoMovimiento: string, movimientoId: string) {
-  switch (tipoMovimiento) {
-    case 'abono': {
-      const { data, error } = await supabase
-        .from('pagos_abonos')
-        .select('cuenta_id, fecha_pago, notas, origen_fondos, metodo_pago')
-        .eq('id', movimientoId)
-        .single()
-      return { data, error, fecha: data?.fecha_pago, tabla: 'pagos_abonos' }
-    }
-    case 'egreso': {
-      const { data, error } = await supabase.from('egresos').select('fecha, notas, monto').eq('id', movimientoId).single()
-      return { data, error, fecha: data?.fecha, tabla: 'egresos' }
-    }
-    case 'anticipo': {
-      const { data, error } = await supabase
-        .from('movimientos_saldo_favor')
-        .select('fecha, notas, monto')
-        .eq('id', movimientoId)
-        .single()
-      return { data, error, fecha: data?.fecha, tabla: 'movimientos_saldo_favor' }
-    }
-    case 'donacion': {
-      const { data, error } = await supabase
-        .from('donaciones_asistentes')
-        .select('fecha, notas, monto')
-        .eq('id', movimientoId)
-        .single()
-      return { data, error, fecha: data?.fecha, tabla: 'donaciones_asistentes' }
-    }
-    case 'venta_externa': {
-      const { data, error } = await supabase
-        .from('ventas_externas')
-        .select('fecha, notas, monto')
-        .eq('id', movimientoId)
-        .single()
-      return { data, error, fecha: data?.fecha, tabla: 'ventas_externas' }
-    }
-    default:
-      return { data: null, error: null, fecha: null, tabla: null }
-  }
+type Resultado<T> = { ok: true; valor: T } | { ok: false; estado: ActionState }
+
+function validarTipo(tipo: string): Resultado<TipoMovimiento> {
+  if (tipo === 'aplicacion_saldo') return { ok: false, estado: { error: APLICACION_SALDO_BLOQUEADA } }
+  if (tipo === 'anticipo') return { ok: false, estado: { error: ANTICIPO_BLOQUEADO } }
+  if (!esTipoMovimiento(tipo)) return { ok: false, estado: { error: 'Tipo de movimiento no soportado.' } }
+  return { ok: true, valor: tipo }
 }
 
-async function recalcularEstadoCuenta(supabase: any, cuentaId: string | null | undefined) {
-  if (!cuentaId) return
-
-  const { data: cuentaData } = await supabase
-    .from('cuentas_por_cobrar')
-    .select('valor_total, pagos_abonos(id, monto, estado, notas, metodo_pago, origen_fondos, tipo)')
-    .eq('id', cuentaId)
-    .single()
-
-  if (!cuentaData) return
-
-  const total_abonado = totalPagosValidos(cuentaData.pagos_abonos || [])
-  const valor_total = toSafeNumber(cuentaData.valor_total)
-  const nuevo_estado = calcularEstadoCuenta(valor_total, total_abonado)
-  await supabase.from('cuentas_por_cobrar').update({ estado: nuevo_estado }).eq('id', cuentaId)
+async function actorAdmin() {
+  const { supabase, user } = await requireAdmin()
+  return { supabase, actor: { userId: user.id, role: 'admin' as const } }
 }
 
-export async function anularMovimiento(
-  movimiento_id: string,
-  tipo_movimiento: string,
-  valor_ingreso: number,
-  asistente_id: string | null
-): Promise<ActionState> {
-  let supabase, user
-  try {
-    ;({ supabase, user } = await requireAdmin())
-  } catch (e: any) {
-    return { error: e?.message || 'Acceso denegado' }
-  }
+function comoError(error: unknown, porDefecto: string): ActionState {
+  if (error instanceof OperacionError || error instanceof AuthzError) return { error: error.message }
+  console.error('[movimientos]', error)
+  return { error: mensajeDeError(error, porDefecto) }
+}
 
-  let tablaDestino = ''
-  switch (tipo_movimiento) {
-    case 'abono':
-      tablaDestino = 'pagos_abonos'
-      break
-    case 'aplicacion_saldo':
-      return { error: APLICACION_SALDO_BLOQUEADA }
-    case 'egreso':
-      tablaDestino = 'egresos'
-      break
-    case 'anticipo':
-      return { error: ANTICIPO_BLOQUEADO }
-    case 'donacion':
-      tablaDestino = 'donaciones_asistentes'
-      break
-    case 'venta_externa':
-      tablaDestino = 'ventas_externas'
-      break
-    default:
-      return { error: 'Tipo de movimiento no soportado para anulacion directa.' }
-  }
-
-  const { data: recordData, error: recordError, fecha } = await getMovimientoEditableMeta(supabase, tipo_movimiento, movimiento_id)
-  if (recordError || !recordData) {
-    return { error: 'No se pudo consultar el movimiento a anular.' }
-  }
-
-  const periodoError = await assertFechaEditable(supabase, fecha, 'Anular el movimiento')
-  if (periodoError) return { error: periodoError }
-
-  const currentNotas = recordData?.notas || ''
-  const newNotas = `[ANULADO] ${currentNotas}`.trim()
-
-  if (tablaDestino === 'pagos_abonos') {
-    const origenFondos = recordData?.origen_fondos?.toLowerCase?.()
-    const metodoPago = recordData?.metodo_pago?.toLowerCase?.()
-    const esSaldoFavor = origenFondos === 'saldo_a_favor' || metodoPago === 'saldo_a_favor'
-    if (esSaldoFavor) {
-      return {
-        error:
-          'No se puede anular este pago porque proviene de saldo a favor. Usa el flujo de devolucion de saldo cuando este disponible.',
-      }
-    }
-
-    const tieneSaldoAsociado = await hasSaldoFavorAsociadoAbono(supabase, recordData?.cuenta_id, movimiento_id)
-    if (tieneSaldoAsociado) {
-      return { error: ABONO_CON_SALDO_BLOQUEADO }
-    }
-  }
-
-  const { error: updateError } = await supabase.from(tablaDestino).update({ estado: 'anulado', notas: newNotas }).eq('id', movimiento_id)
-  if (updateError) {
-    return { error: updateError.message }
-  }
-
-  if (tipo_movimiento === 'abono' && tablaDestino === 'pagos_abonos') {
-    const { data: pago } = await supabase.from('pagos_abonos').select('cuenta_id').eq('id', movimiento_id).single()
-    await recalcularEstadoCuenta(supabase, pago?.cuenta_id)
-  }
-
-  await supabase.from('auditoria_financiera').insert([
-    {
-      tabla_afectada: tablaDestino,
-      registro_id: movimiento_id,
-      usuario_id: user.id,
-      accion: 'anulacion_movimiento',
-      valor_anterior: valor_ingreso,
-      valor_nuevo: 0,
-      motivo: 'Anulacion solicitada por el administrador via interfaz.',
-    },
-  ])
-
+function refrescar(tipo: TipoMovimiento) {
   revalidatePath('/movimientos')
   revalidatePath('/dashboard')
   revalidatePath('/asistentes')
   revalidatePath('/ventas-externas')
-  if (tipo_movimiento === 'abono') {
-    revalidatePath('/cuentas')
+  if (tipo === 'abono') revalidatePath('/cuentas')
+}
+
+export async function anularMovimiento(movimiento_id: string, tipo_movimiento: string): Promise<ActionState> {
+  const tipo = validarTipo(tipo_movimiento)
+  if (!tipo.ok) return tipo.estado
+
+  try {
+    const { supabase, actor } = await actorAdmin()
+    await anularMovimientoOp(supabase, actor, { tipo: tipo.valor, movimientoId: movimiento_id })
+  } catch (error) {
+    return comoError(error, 'No se pudo anular el movimiento.')
   }
 
+  refrescar(tipo.valor)
   return { success: true }
+}
+
+/** Convierte el texto del formulario en los parametros de la operacion, segun el tipo. */
+function parametrosEdicion(tipo: TipoMovimiento, cambios: CambiosEdicionMovimiento) {
+  const texto = (v: string | undefined) => (v === undefined ? undefined : String(v).trim())
+  const monto = cambios.monto === undefined || cambios.monto === '' ? undefined : Number(cambios.monto)
+
+  return {
+    monto,
+    fecha: texto(cambios.fecha) || undefined,
+    notas: cambios.notas === undefined ? undefined : texto(cambios.notas) || null,
+    // Un metodo vacio en el formulario significa "no lo toque".
+    metodoPago: texto(cambios.metodo_pago) || undefined,
+    // Cada campo solo existe en algunos tipos: lo demas se ignora, como siempre.
+    concepto: tipo === 'egreso' || tipo === 'venta_externa' ? texto(cambios.concepto) || undefined : undefined,
+    asistenteId: tipo === 'donacion' ? texto(cambios.asistente_id) || undefined : undefined,
+  }
 }
 
 export async function editarMovimiento(
   movimiento_id: string,
   tipo_movimiento: string,
-  newData: any
+  cambios: CambiosEdicionMovimiento
 ): Promise<ActionState> {
-  let supabase, user
+  const tipo = validarTipo(tipo_movimiento)
+  if (!tipo.ok) return tipo.estado
+
+  const params = parametrosEdicion(tipo.valor, cambios || {})
+  if (params.monto !== undefined && !Number.isFinite(params.monto)) {
+    return { error: 'El monto no es un numero valido.' }
+  }
+
   try {
-    ;({ supabase, user } = await requireAdmin())
-  } catch (e: any) {
-    return { error: e?.message || 'Acceso denegado' }
+    const { supabase, actor } = await actorAdmin()
+    await editarMovimientoOp(supabase, actor, { tipo: tipo.valor, movimientoId: movimiento_id, ...params })
+  } catch (error) {
+    return comoError(error, 'No se pudo editar el movimiento.')
   }
 
-  if (tipo_movimiento === 'aplicacion_saldo') {
-    return { error: APLICACION_SALDO_BLOQUEADA }
-  }
-
-  if (tipo_movimiento === 'anticipo') {
-    return { error: ANTICIPO_BLOQUEADO }
-  }
-
-  if (tipo_movimiento === 'abono' && newData.monto !== undefined) {
-    return { error: EDICION_ABONO_BLOQUEADA }
-  }
-
-  const { data: recordData, error: recordError, fecha } = await getMovimientoEditableMeta(supabase, tipo_movimiento, movimiento_id)
-  if (recordError || !recordData) {
-    return { error: 'No se pudo consultar el movimiento a editar.' }
-  }
-
-  if (tipo_movimiento === 'abono') {
-    const tieneSaldoAsociado = await hasSaldoFavorAsociadoAbono(supabase, recordData?.cuenta_id, movimiento_id)
-    if (tieneSaldoAsociado) {
-      return { error: ABONO_CON_SALDO_BLOQUEADO }
-    }
-  }
-
-  const periodoActualError = await assertFechaEditable(supabase, fecha, 'Editar el movimiento')
-  if (periodoActualError) return { error: periodoActualError }
-
-  let tablaDestino = ''
-  const updatePayload: any = {}
-
-  if (newData.monto !== undefined) updatePayload.monto = newData.monto
-  if (newData.notas !== undefined) updatePayload.notas = newData.notas
-  if (newData.concepto !== undefined) updatePayload.concepto = newData.concepto
-  if (newData.asistente_id !== undefined) updatePayload.asistente_id = newData.asistente_id
-  if (newData.categoria !== undefined) updatePayload.categoria = newData.categoria
-
-  switch (tipo_movimiento) {
-    case 'abono':
-      tablaDestino = 'pagos_abonos'
-      if (newData.fecha !== undefined) updatePayload.fecha_pago = newData.fecha
-      if (newData.metodo_pago !== undefined) updatePayload.metodo_pago = newData.metodo_pago
-      delete updatePayload.asistente_id
-      delete updatePayload.concepto
-      delete updatePayload.categoria
-      break
-    case 'egreso':
-      tablaDestino = 'egresos'
-      if (newData.fecha !== undefined) updatePayload.fecha = newData.fecha
-      if (newData.metodo_pago !== undefined) updatePayload.metodo_pago = newData.metodo_pago
-      delete updatePayload.asistente_id
-      break
-    case 'anticipo':
-      tablaDestino = 'movimientos_saldo_favor'
-      if (newData.fecha !== undefined) updatePayload.fecha = newData.fecha
-      if (newData.metodo_pago !== undefined) updatePayload.metodo_pago = newData.metodo_pago
-      delete updatePayload.concepto
-      delete updatePayload.categoria
-      break
-    case 'donacion':
-      tablaDestino = 'donaciones_asistentes'
-      if (newData.fecha !== undefined) updatePayload.fecha = newData.fecha
-      if (newData.metodo_pago !== undefined) updatePayload.metodo_pago = newData.metodo_pago
-      if (newData.asistente_id !== undefined) updatePayload.asistente_id = newData.asistente_id
-      delete updatePayload.concepto
-      delete updatePayload.categoria
-      break
-    case 'venta_externa':
-      tablaDestino = 'ventas_externas'
-      if (newData.fecha !== undefined) updatePayload.fecha = newData.fecha
-      if (newData.metodo_pago !== undefined) updatePayload.metodo_pago = newData.metodo_pago
-      if (newData.comprador_nombre !== undefined) updatePayload.comprador_nombre = newData.comprador_nombre
-      delete updatePayload.asistente_id
-      delete updatePayload.categoria
-      break
-    default:
-      return { error: 'Tipo de movimiento no soportado para edicion.' }
-  }
-
-  const nuevaFecha =
-    tipo_movimiento === 'abono'
-      ? updatePayload.fecha_pago
-      : tipo_movimiento === 'egreso' || tipo_movimiento === 'anticipo' || tipo_movimiento === 'donacion' || tipo_movimiento === 'venta_externa'
-        ? updatePayload.fecha
-        : null
-
-  if (nuevaFecha) {
-    const periodoNuevoError = await assertFechaEditable(supabase, nuevaFecha, 'Editar el movimiento')
-    if (periodoNuevoError) return { error: periodoNuevoError }
-  }
-
-  const { error: updateError } = await supabase.from(tablaDestino).update(updatePayload).eq('id', movimiento_id)
-  if (updateError) return { error: updateError.message }
-
-  if (tipo_movimiento === 'abono' && tablaDestino === 'pagos_abonos') {
-    const { data: pago } = await supabase.from('pagos_abonos').select('cuenta_id').eq('id', movimiento_id).single()
-    await recalcularEstadoCuenta(supabase, pago?.cuenta_id)
-  }
-
-  await supabase.from('auditoria_financiera').insert([
-    {
-      tabla_afectada: tablaDestino,
-      registro_id: movimiento_id,
-      usuario_id: user.id,
-      accion: 'edicion_movimiento',
-      valor_anterior: recordData?.monto != null ? toSafeNumber(recordData.monto) : null,
-      valor_nuevo: toSafeNumber(updatePayload.monto),
-      motivo: 'Edicion solicitada por el administrador via historial general.',
-    },
-  ])
-
-  revalidatePath('/movimientos')
-  revalidatePath('/dashboard')
-  revalidatePath('/asistentes')
-  revalidatePath('/ventas-externas')
-  if (tipo_movimiento === 'abono') {
-    revalidatePath('/cuentas')
-  }
-
+  refrescar(tipo.valor)
   return { success: true }
 }
 
-export async function eliminarMovimiento(
-  movimiento_id: string,
-  tipo_movimiento: string,
-  valor_ingreso: number,
-  asistente_id: string | null
-): Promise<ActionState> {
-  let supabase, user
+export async function eliminarMovimiento(movimiento_id: string, tipo_movimiento: string): Promise<ActionState> {
+  const tipo = validarTipo(tipo_movimiento)
+  if (!tipo.ok) return tipo.estado
+
   try {
-    ;({ supabase, user } = await requireAdmin())
-  } catch (e: any) {
-    return { error: e?.message || 'Acceso denegado' }
+    const { supabase, actor } = await actorAdmin()
+    await eliminarMovimientoOp(supabase, actor, { tipo: tipo.valor, movimientoId: movimiento_id })
+  } catch (error) {
+    return comoError(error, 'No se pudo eliminar el movimiento.')
   }
 
-  if (tipo_movimiento === 'aplicacion_saldo') {
-    return { error: APLICACION_SALDO_BLOQUEADA }
-  }
-
-  let tablaDestino = ''
-  switch (tipo_movimiento) {
-    case 'abono':
-      tablaDestino = 'pagos_abonos'
-      break
-    case 'egreso':
-      tablaDestino = 'egresos'
-      break
-    case 'anticipo':
-      return { error: ANTICIPO_BLOQUEADO }
-    case 'donacion':
-      tablaDestino = 'donaciones_asistentes'
-      break
-    case 'venta_externa':
-      tablaDestino = 'ventas_externas'
-      break
-    default:
-      return { error: 'Tipo de movimiento no soportado para el borrado duro.' }
-  }
-
-  const { data: recordData, error: recordError, fecha } = await getMovimientoEditableMeta(supabase, tipo_movimiento, movimiento_id)
-  if (recordError || !recordData) {
-    return { error: 'No se pudo consultar el movimiento a eliminar.' }
-  }
-
-  const periodoError = await assertFechaEditable(supabase, fecha, 'Eliminar el movimiento')
-  if (periodoError) return { error: periodoError }
-
-  if (tablaDestino === 'pagos_abonos') {
-    // Mismo bloqueo que en anularMovimiento: un pago hecho CON saldo a favor no
-    // puede borrarse en duro, porque dejaria el saldo consumido sin
-    // contrapartida y la deuda reabierta.
-    const origenFondos = recordData?.origen_fondos?.toLowerCase?.()
-    const metodoPago = recordData?.metodo_pago?.toLowerCase?.()
-    if (origenFondos === 'saldo_a_favor' || metodoPago === 'saldo_a_favor') {
-      return {
-        error:
-          'No se puede eliminar este pago porque proviene de saldo a favor. Usa el flujo de devolucion de saldo cuando este disponible.',
-      }
-    }
-
-    const tieneSaldoAsociado = await hasSaldoFavorAsociadoAbono(supabase, recordData?.cuenta_id, movimiento_id)
-    if (tieneSaldoAsociado) {
-      return { error: ABONO_CON_SALDO_BLOQUEADO }
-    }
-  }
-
-  let cuentaToRecalculate: string | null = null
-  if (tipo_movimiento === 'abono' && tablaDestino === 'pagos_abonos') {
-    const { data: pago } = await supabase.from('pagos_abonos').select('cuenta_id').eq('id', movimiento_id).single()
-    cuentaToRecalculate = pago?.cuenta_id || null
-  }
-
-  const { error: deleteError } = await supabase.from(tablaDestino).delete().eq('id', movimiento_id)
-  if (deleteError) {
-    return { error: deleteError.message }
-  }
-
-  if (cuentaToRecalculate) {
-    await recalcularEstadoCuenta(supabase, cuentaToRecalculate)
-  }
-
-  await supabase.from('auditoria_financiera').insert([
-    {
-      tabla_afectada: tablaDestino,
-      registro_id: movimiento_id,
-      usuario_id: user.id,
-      accion: 'eliminar_movimiento',
-      valor_anterior: valor_ingreso,
-      valor_nuevo: null,
-      motivo: 'Eliminacion definitiva solicitada por el administrador via historial general.',
-    },
-  ])
-
-  revalidatePath('/movimientos')
-  revalidatePath('/dashboard')
-  revalidatePath('/asistentes')
-  revalidatePath('/ventas-externas')
-  if (tipo_movimiento === 'abono') {
-    revalidatePath('/cuentas')
-  }
-
+  refrescar(tipo.valor)
   return { success: true }
 }

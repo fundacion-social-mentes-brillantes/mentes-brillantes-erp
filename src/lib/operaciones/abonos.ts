@@ -1,10 +1,12 @@
+import type { DbClient } from "@/lib/supabase/types"
 import {
   calcularEstadoCuentaDesdePagos,
   calcularPendienteCuenta,
   toSafeNumber,
 } from "@/lib/utils/contable"
 import { assertFechaEditable } from "@/lib/utils/periodos"
-import { OperacionError } from "./errores"
+import { registrarAuditoria } from "./auditoria"
+import { OperacionError, exigirMetodoPago, type MetodoPago } from "./errores"
 
 // Nucleo contable de "registrar abono", compartido por la web (server action)
 // y por el MCP. Vive aparte a proposito: si cada canal reimplementara estas
@@ -31,7 +33,7 @@ export type RegistrarAbonoParams = {
 
 export type PrevisualizacionAbono = {
   cuentaId: string
-  asistenteId: string
+  asistenteId: string | null
   concepto: string
   personaNombre: string | null
   valorTotal: number
@@ -54,24 +56,6 @@ export type ResultadoAbono = {
 const overflowMarker = (abonoId: string) => `[ABONO:${abonoId}]`
 const overflowNote = (abonoId: string, motivo: string) => `${overflowMarker(abonoId)} ${motivo}`
 
-const buildAudit = (
-  tabla: string,
-  registroId: string,
-  usuarioId: string,
-  accion: string,
-  valorAnterior?: number | null,
-  valorNuevo?: number | null,
-  motivo?: string
-) => ({
-  tabla_afectada: tabla,
-  registro_id: registroId,
-  usuario_id: usuarioId,
-  accion,
-  valor_anterior: valorAnterior,
-  valor_nuevo: valorNuevo,
-  motivo,
-})
-
 const CUENTA_SELECT =
   "valor_total, estado, asistente_id, concepto, asistentes(nombre), pagos_abonos(id, monto, notas, estado, metodo_pago, origen_fondos)"
 
@@ -84,14 +68,27 @@ function validarMonto(monto: number) {
 }
 
 /**
+ * El metodo es opcional en un abono (hay pagos viejos sin el), pero si viene
+ * debe existir. Se admite saldo_a_favor porque corregirMontoPago vuelve a
+ * registrar un pago con el metodo que ya tenia.
+ */
+function metodoOpcional(valor: string | null): MetodoPago | null {
+  return valor ? exigirMetodoPago(valor, "El metodo de pago", { permitirSaldoAFavor: true }) : null
+}
+
+const SIN_PERSONA_PARA_EXCEDENTE =
+  "Esa cuenta no tiene una persona asociada, asi que el excedente no puede quedar como saldo a favor. Registra solo lo pendiente."
+
+/**
  * Calcula que pasaria al registrar el abono, SIN escribir nada. Es lo que se le
  * muestra al usuario como borrador antes de confirmar desde el MCP.
  */
 export async function previsualizarAbono(
-  supabase: any,
+  supabase: DbClient,
   params: RegistrarAbonoParams
 ): Promise<PrevisualizacionAbono> {
   validarMonto(params.monto)
+  metodoOpcional(params.metodoPago)
 
   const periodoError = await assertFechaEditable(supabase, params.fechaPago, "Registrar el abono")
   if (periodoError) throw new OperacionError(periodoError)
@@ -108,6 +105,7 @@ export async function previsualizarAbono(
   const pendienteAntes = calcularPendienteCuenta(valorTotal, cuenta.pagos_abonos)
   const montoAplicado = Math.min(params.monto, pendienteAntes)
   const excedente = Math.max(0, params.monto - montoAplicado)
+  if (excedente > 0 && !cuenta.asistente_id) throw new OperacionError(SIN_PERSONA_PARA_EXCEDENTE)
 
   const pagosSimulados =
     montoAplicado > 0
@@ -143,11 +141,12 @@ export async function previsualizarAbono(
  *  - si algo falla a mitad, se revierte lo ya escrito.
  */
 export async function registrarAbono(
-  supabase: any,
+  supabase: DbClient,
   actor: ActorErp,
   params: RegistrarAbonoParams
 ): Promise<ResultadoAbono> {
   validarMonto(params.monto)
+  const metodoPago = metodoOpcional(params.metodoPago)
 
   const periodoError = await assertFechaEditable(supabase, params.fechaPago, "Registrar el abono")
   if (periodoError) throw new OperacionError(periodoError)
@@ -164,6 +163,8 @@ export async function registrarAbono(
   const pendiente = calcularPendienteCuenta(valorTotal, cuenta.pagos_abonos)
   const montoAplicado = Math.min(params.monto, pendiente)
   const excedente = Math.max(0, params.monto - montoAplicado)
+  const asistenteId = cuenta.asistente_id
+  if (excedente > 0 && !asistenteId) throw new OperacionError(SIN_PERSONA_PARA_EXCEDENTE)
 
   let pagoId: string | null = null
   let saldoFavorId: string | null = null
@@ -175,7 +176,7 @@ export async function registrarAbono(
         {
           cuenta_id: params.cuentaId,
           monto: montoAplicado,
-          metodo_pago: params.metodoPago,
+          metodo_pago: metodoPago,
           fecha_pago: params.fechaPago,
           notas: params.notas,
           origen_fondos: "pago_directo",
@@ -191,7 +192,7 @@ export async function registrarAbono(
     pagoId = pagoInsertado.id
   }
 
-  if (excedente > 0) {
+  if (excedente > 0 && asistenteId) {
     const notaSaldo = pagoId
       ? overflowNote(pagoId, "Saldo a favor generado por sobrepago del abono")
       : `Saldo a favor generado por pago adicional sobre la cuenta ${params.cuentaId}`
@@ -200,11 +201,11 @@ export async function registrarAbono(
       .from("movimientos_saldo_favor")
       .insert([
         {
-          asistente_id: cuenta.asistente_id,
+          asistente_id: asistenteId,
           cuenta_id: params.cuentaId,
           tipo: "ingreso",
           monto: excedente,
-          metodo_pago: params.metodoPago || "otro",
+          metodo_pago: metodoPago || "otro",
           fecha: params.fechaPago,
           notas: notaSaldo,
           usuario_id: actor.userId || null,
@@ -226,7 +227,7 @@ export async function registrarAbono(
     montoAplicado > 0
       ? [
           ...(cuenta.pagos_abonos || []),
-          { monto: montoAplicado, metodo_pago: params.metodoPago, origen_fondos: "pago_directo" },
+          { monto: montoAplicado, metodo_pago: metodoPago, origen_fondos: "pago_directo" },
         ]
       : cuenta.pagos_abonos || []
   const nuevoEstado = calcularEstadoCuentaDesdePagos(valorTotal, pagosActualizados)
@@ -244,36 +245,28 @@ export async function registrarAbono(
     )
   }
 
-  if (pagoId) {
-    await supabase
-      .from("auditoria_financiera")
-      .insert([
-        buildAudit(
-          "pagos_abonos",
-          pagoId,
-          actor.userId || "",
-          "crear_abono",
-          null,
-          montoAplicado,
-          params.notas || "Registro manual de abono"
-        ),
-      ])
-  }
-  if (saldoFavorId) {
-    await supabase
-      .from("auditoria_financiera")
-      .insert([
-        buildAudit(
-          "movimientos_saldo_favor",
-          saldoFavorId,
-          actor.userId || "",
-          "crear_saldo_favor_sobrepago",
-          null,
-          excedente,
-          "Excedente de abono enviado a saldo a favor"
-        ),
-      ])
-  }
+  await registrarAuditoria(supabase, [
+    ...(pagoId
+      ? [{
+          tabla: "pagos_abonos",
+          registroId: pagoId,
+          usuarioId: actor.userId,
+          accion: "crear_abono",
+          valorNuevo: montoAplicado,
+          motivo: params.notas || "Registro manual de abono",
+        }]
+      : []),
+    ...(saldoFavorId
+      ? [{
+          tabla: "movimientos_saldo_favor",
+          registroId: saldoFavorId,
+          usuarioId: actor.userId,
+          accion: "crear_saldo_favor_sobrepago",
+          valorNuevo: excedente,
+          motivo: "Excedente de abono enviado a saldo a favor",
+        }]
+      : []),
+  ])
 
   return {
     pagoId,

@@ -7,6 +7,7 @@ const redirectMock = vi.fn()
 const assertFechaEditableMock = vi.fn()
 
 vi.mock('../../../lib/utils/authz', () => ({
+  AuthzError: class AuthzError extends Error {},
   requireAdmin: (...args: unknown[]) => requireAdminMock(...args),
   requireRoles: (...args: unknown[]) => requireRolesMock(...args),
 }))
@@ -109,7 +110,7 @@ describe('cuentas/actions', () => {
       }),
     }
 
-    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
     const result = await saveCuenta(
       null,
@@ -148,7 +149,7 @@ describe('cuentas/actions', () => {
       }),
     }
 
-    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
     const result = await saveCuenta(
       null,
@@ -206,7 +207,7 @@ describe('cuentas/actions', () => {
     estadoEsperado,
   }) => {
     const { supabase, cuentaInsert, sesionInsert, asistentesUpdate, fechaInicioEq, fechaInicioIs } = buildCoachCuentaSupabase()
-    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
     const result = await saveCuenta(
       null,
@@ -245,7 +246,7 @@ describe('cuentas/actions', () => {
 
   it('saveCuenta no crea sesion coach inicial cuando la fecha de sesion viene vacia', async () => {
     const { supabase, sesionInsert, asistentesUpdate } = buildCoachCuentaSupabase()
-    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
     const result = await saveCuenta(
       null,
@@ -267,7 +268,7 @@ describe('cuentas/actions', () => {
 
   it('saveCuenta revierte cuenta y paquete si falla la sesion coach inicial', async () => {
     const { supabase, sesionInsert, paqueteDeleteEq, cuentaDeleteEq, asistentesUpdate } = buildCoachCuentaSupabase({ message: 'fallo sesion' })
-    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
     const result = await saveCuenta(
       null,
@@ -303,7 +304,7 @@ describe('cuentas/actions', () => {
       }),
     }
 
-    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
     const result = await saveCuenta(
       null,
@@ -338,7 +339,7 @@ describe('cuentas/actions', () => {
 
   it('saveCuenta rechaza valor 0 cuando la modalidad es normal', async () => {
     const supabase = { from: vi.fn() }
-    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
     const result = await saveCuenta(
       null,
@@ -359,7 +360,7 @@ describe('cuentas/actions', () => {
 
   it('saveCuenta rechaza abono inicial en una cuenta coach de valor 0', async () => {
     const supabase = { from: vi.fn() }
-    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
     const result = await saveCuenta(
       null,
@@ -382,7 +383,7 @@ describe('cuentas/actions', () => {
 
   it('saveCuenta rechaza valores negativos', async () => {
     const supabase = { from: vi.fn() }
-    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
     const result = await saveCuenta(
       null,
@@ -418,7 +419,7 @@ describe('cuentas/actions', () => {
       }),
     }
 
-    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
     const result = await saveCuenta(
       null,
@@ -477,7 +478,7 @@ describe('cuentas/actions', () => {
       }),
     }
 
-    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
     const result = await saveCuenta(
       null,
@@ -529,7 +530,7 @@ describe('cuentas/actions', () => {
       }),
     }
 
-    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
     const result = await saveCuenta(
       null,
@@ -583,7 +584,7 @@ describe('cuentas/actions', () => {
       }),
     }
 
-    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
     const result = await saveCuenta(
       null,
@@ -622,7 +623,7 @@ describe('cuentas/actions', () => {
       }),
     }
 
-    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
     await expect(
       saveCuenta(
@@ -667,7 +668,7 @@ describe('cuentas/actions', () => {
       }),
     }
 
-    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
     const result = await saveAbono(
       'cuenta-1',
@@ -708,7 +709,8 @@ describe('cuentas/actions', () => {
               eq: vi.fn(() =>
                 selectSingle({
                   fecha_emision: '2026-04-02',
-                  valor_total: 0,
+                  // El valor anterior ahora se lee de la base (antes venia del formulario).
+                  valor_total: 1000,
                   pagos_abonos: [],
                 })
               ),
@@ -790,6 +792,7 @@ describe('cuentas/actions', () => {
             select: vi.fn(() => ({
               eq: vi.fn(() =>
                 selectSingle({
+                  cuenta_id: 'cuenta-1',
                   monto: 100,
                   origen_fondos: 'pago_directo',
                   metodo_pago: 'efectivo',
@@ -870,6 +873,7 @@ describe('cuentas/actions', () => {
             select: vi.fn(() => ({
               eq: vi.fn(() =>
                 selectSingle({
+                  cuenta_id: 'cuenta-1',
                   monto: 300,
                   origen_fondos: 'saldo_a_favor',
                   metodo_pago: 'saldo_a_favor',
@@ -953,7 +957,7 @@ describe('cuentas/actions', () => {
       rpc,
     }
 
-    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
     const result = await aplicarSaldoFavor('cuenta-1', 'asis-1', '300', null, buildFormData({ monto: '200' }))
 
@@ -1000,7 +1004,7 @@ describe('cuentas/actions', () => {
       }),
     }
 
-    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
     const result = await aplicarSaldoFavor(
       'cuenta-1',
@@ -1043,7 +1047,7 @@ describe('cuentas/actions', () => {
       }),
     }
 
-    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
     const result = await aplicarSaldoFavor(
       'cuenta-1',
@@ -1079,7 +1083,7 @@ describe('cuentas/actions', () => {
       rpc,
     }
 
-    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
     const result = await aplicarSaldoFavor('cuenta-1', 'asis-1', '500', null, buildFormData({ monto: '300' }))
 
@@ -1115,7 +1119,7 @@ describe('cuentas/actions', () => {
       rpc,
     }
 
-    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' } })
+    requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
     const result = await aplicarSaldoFavor('cuenta-1', 'asis-1', '1000', null, buildFormData({ monto: '500' }))
 
@@ -1166,7 +1170,8 @@ const buildDeleteSupabase = (config: DeleteConfig = {}) => {
         case 'cuentas_por_cobrar':
           return {
             select: vi.fn(() => ({
-              eq: vi.fn(() => selectSingle(cuentaBase, cuentaBaseError)),
+              // Los pagos llegan embebidos en la cuenta (asi los lee lib/operaciones/cuentas).
+              eq: vi.fn(() => selectSingle(cuentaBase ? { ...cuentaBase, pagos_abonos: pagos } : cuentaBase, cuentaBaseError)),
             })),
             delete: vi.fn(() => ({ eq: deleteEq })),
           }
@@ -1369,9 +1374,12 @@ describe('cuentas/actions revertirAbonoConSaldo', () => {
     const result = await revertirAbonoConSaldo('cuenta-1', 'abono-1')
 
     expect(result?.success).toBe(true)
+    // Va la version con usuario: la base solo lo respeta si llama el servicio;
+    // con la sesion de la persona usa auth.uid() igual que antes.
     expect(rpc).toHaveBeenCalledWith('revertir_abono_con_saldo_trx', {
       p_abono_id: 'abono-1',
       p_cuenta_id: 'cuenta-1',
+      p_usuario_id: 'admin-1',
     })
     expect(cuentaUpdate).toHaveBeenCalledWith({ estado: 'pendiente' })
   })

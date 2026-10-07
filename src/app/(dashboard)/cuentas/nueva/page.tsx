@@ -1,5 +1,6 @@
 import { CuentaForm } from './CuentaForm'
 import { requireRoles } from '@/lib/utils/authz'
+import { rutaInternaSegura } from '@/lib/utils/rutas'
 
 type SearchParams = { asistente?: string | string[]; returnTo?: string | string[] }
 
@@ -12,9 +13,10 @@ export default async function NuevaCuentaPage({ searchParams }: { searchParams?:
     ? resolvedParams.asistente[0]
     : resolvedParams.asistente || undefined
 
-  const returnTo = Array.isArray(resolvedParams.returnTo)
-    ? resolvedParams.returnTo[0]
-    : resolvedParams.returnTo || undefined
+  // Solo rutas del propio ERP: un ?returnTo=//otro-sitio llevaria a la persona afuera.
+  const returnTo =
+    rutaInternaSegura(Array.isArray(resolvedParams.returnTo) ? resolvedParams.returnTo[0] : resolvedParams.returnTo) ??
+    undefined
 
   const { supabase } = await requireRoles(['admin', 'caja'])
   const { data: asistentes } = await supabase

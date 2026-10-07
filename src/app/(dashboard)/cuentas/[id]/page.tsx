@@ -1,4 +1,5 @@
 import { requireRoles } from '@/lib/utils/authz'
+import { rutaInternaSegura } from '@/lib/utils/rutas'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, CreditCard, Wallet, HeartHandshake } from 'lucide-react'
@@ -22,7 +23,7 @@ export default async function DetalleCuentaPage({
 }) {
   const { id } = await params
   const resolvedSearch = await searchParams
-  const backTo = resolvedSearch?.backTo && resolvedSearch.backTo.startsWith('/') ? resolvedSearch.backTo : '/cuentas'
+  const backTo = rutaInternaSegura(resolvedSearch?.backTo) ?? '/cuentas'
   const { supabase } = await requireRoles(['admin', 'caja'])
 
   const { data: cuenta, error } = await supabase

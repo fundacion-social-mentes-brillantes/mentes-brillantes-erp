@@ -1,3 +1,4 @@
+import type { DbClient } from "@/lib/supabase/types"
 import { OperacionError } from "./errores"
 
 // Sesiones coach pagadas que llevan mucho sin marcarse como dictadas.
@@ -28,7 +29,7 @@ export type PrepagadaSinUsar = {
 }
 
 export async function buscarPrepagadasSinUsar(
-  admin: any,
+  admin: DbClient,
   opciones: { diasMinimos?: number; soloSospechosas?: boolean } = {}
 ): Promise<PrepagadaSinUsar[]> {
   const dias = Math.max(1, Math.floor(opciones.diasMinimos ?? DIAS_SOSPECHA))

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import type { DbClient } from "@/lib/supabase/types"
 import { cargarEstadoCupo, repartirCupo, type EstadoCupo } from "../agenda-cobertura"
 
 const paquete = (over: Partial<EstadoCupo["paquetes"][number]> = {}) => ({
@@ -87,8 +88,8 @@ describe("repartirCupo", () => {
 })
 
 /** Supabase falso para la carga: responde según la tabla que se consulte. */
-function fakeAdmin(datos: { paquetes?: any[]; sesiones?: any[]; cuentas?: any[] }) {
-  return {
+function fakeAdmin(datos: { paquetes?: any[]; sesiones?: any[]; cuentas?: any[] }): DbClient {
+  const cliente = {
     from(tabla: string) {
       const resolver = async () => {
         if (tabla === "coach_paquetes") return { data: datos.paquetes ?? [], error: null }
@@ -104,6 +105,8 @@ function fakeAdmin(datos: { paquetes?: any[]; sesiones?: any[]; cuentas?: any[] 
       return q
     },
   }
+  // Doble de prueba: solo implementa lo que usa cargarEstadoCupo.
+  return cliente as unknown as DbClient
 }
 
 describe("cargarEstadoCupo", () => {

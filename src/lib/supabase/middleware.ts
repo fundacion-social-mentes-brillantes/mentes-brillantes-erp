@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { hasEnvVars } from '../env'
+import type { Database } from '@/types/database'
 
 export async function updateSession(request: NextRequest) {
   if (!hasEnvVars()) {
@@ -12,7 +13,7 @@ export async function updateSession(request: NextRequest) {
     request,
   })
 
-  const supabase = createServerClient(
+  const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -20,11 +21,9 @@ export async function updateSession(request: NextRequest) {
         getAll() {
           return request.cookies.getAll()
         },
-        setAll(cookiesToSet: { name: string; value: string; options: any }[]) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            const cookieOptions = { ...options, sameSite: 'none' as const, secure: true }
-            request.cookies.set(name, value)
-          })
+        setAll(cookiesToSet) {
+          // En la peticion solo viajan nombre y valor; las opciones van en la respuesta.
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({
             request,
           })

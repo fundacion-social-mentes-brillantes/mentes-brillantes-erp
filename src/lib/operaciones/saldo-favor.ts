@@ -1,3 +1,4 @@
+import type { DbClient } from "@/lib/supabase/types"
 import {
   calcularPendienteCuenta,
   calcularSaldoFavorDisponibleRaw,
@@ -6,6 +7,7 @@ import {
 import { assertFechaEditable } from "@/lib/utils/periodos"
 import { OperacionError, exigirMontoPositivo } from "./errores"
 import type { ActorErp } from "./abonos"
+import { recalcularEstadoCuenta } from "./estado-cuenta"
 
 // Aplicar saldo a favor de una persona a una de sus deudas.
 //
@@ -37,7 +39,7 @@ export type PrevisualizacionSaldo = {
  * compensatoria, asi que descartarlos contaria dos veces el reverso y el saldo
  * saldria negativo.
  */
-export async function saldoFavorDisponible(supabase: any, asistenteId: string): Promise<number> {
+export async function saldoFavorDisponible(supabase: DbClient, asistenteId: string): Promise<number> {
   const { data, error } = await supabase
     .from("movimientos_saldo_favor")
     .select("tipo, monto")
@@ -47,7 +49,7 @@ export async function saldoFavorDisponible(supabase: any, asistenteId: string): 
   return calcularSaldoFavorDisponibleRaw(data || [])
 }
 
-async function validar(supabase: any, params: AplicarSaldoParams) {
+async function validar(supabase: DbClient, params: AplicarSaldoParams) {
   const monto = exigirMontoPositivo(params.monto)
 
   const { data: cuenta, error } = await supabase
@@ -83,7 +85,7 @@ async function validar(supabase: any, params: AplicarSaldoParams) {
 }
 
 export async function previsualizarAplicarSaldo(
-  supabase: any,
+  supabase: DbClient,
   params: AplicarSaldoParams
 ): Promise<PrevisualizacionSaldo> {
   const v = await validar(supabase, params)
@@ -99,7 +101,7 @@ export async function previsualizarAplicarSaldo(
   }
 }
 
-export async function aplicarSaldoAFavor(supabase: any, actor: ActorErp, params: AplicarSaldoParams) {
+export async function aplicarSaldoAFavor(supabase: DbClient, actor: ActorErp, params: AplicarSaldoParams) {
   const v = await validar(supabase, params)
 
   if (!actor.userId) {
@@ -139,7 +141,7 @@ function normalizarCop(valor: number): number {
 
 export type RevertirAbonoParams = { cuentaId: string; abonoId: string }
 
-async function validarReversoAbono(supabase: any, params: RevertirAbonoParams) {
+async function validarReversoAbono(supabase: DbClient, params: RevertirAbonoParams) {
   const { data: abono, error } = await supabase
     .from("pagos_abonos")
     .select("cuenta_id, monto, estado, notas, origen_fondos, fecha_pago, cuentas_por_cobrar(concepto, asistentes(nombre))")
@@ -169,7 +171,7 @@ async function validarReversoAbono(supabase: any, params: RevertirAbonoParams) {
   }
 }
 
-export async function previsualizarReversoAbono(supabase: any, params: RevertirAbonoParams) {
+export async function previsualizarReversoAbono(supabase: DbClient, params: RevertirAbonoParams) {
   const v = await validarReversoAbono(supabase, params)
   return {
     ...v,
@@ -185,7 +187,7 @@ export async function previsualizarReversoAbono(supabase: any, params: RevertirA
  * compensatorio) ocurre dentro de una transaccion en Postgres.
  */
 export async function revertirAbonoConSaldo(
-  supabase: any,
+  supabase: DbClient,
   actor: ActorErp,
   params: RevertirAbonoParams
 ) {
@@ -201,12 +203,16 @@ export async function revertirAbonoConSaldo(
     throw new OperacionError(error.message || "No se pudo revertir el abono. La operacion se revirtio por completo.")
   }
 
-  return { abonoId: params.abonoId, montoRevertido: v.monto }
+  // Con el abono anulado, la cuenta debe reflejar solo los pagos vigentes
+  // (p. ej. volver a "pendiente" si no queda ninguno).
+  const estadoCuenta = await recalcularEstadoCuenta(supabase, params.cuentaId)
+
+  return { abonoId: params.abonoId, montoRevertido: v.monto, estadoCuenta }
 }
 
 export type RevertirAnticipoParams = { asistenteId: string; anticipoId: string }
 
-async function validarReversoAnticipo(supabase: any, params: RevertirAnticipoParams) {
+async function validarReversoAnticipo(supabase: DbClient, params: RevertirAnticipoParams) {
   const { data: anticipo, error } = await supabase
     .from("movimientos_saldo_favor")
     .select("asistente_id, tipo, monto, fecha, notas")
@@ -240,7 +246,7 @@ async function validarReversoAnticipo(supabase: any, params: RevertirAnticipoPar
   return { monto, montoNormalizado, disponible, fecha: anticipo.fecha as string }
 }
 
-export async function previsualizarReversoAnticipo(supabase: any, params: RevertirAnticipoParams) {
+export async function previsualizarReversoAnticipo(supabase: DbClient, params: RevertirAnticipoParams) {
   const v = await validarReversoAnticipo(supabase, params)
   return {
     ...v,
@@ -250,7 +256,7 @@ export async function previsualizarReversoAnticipo(supabase: any, params: Revert
 }
 
 export async function revertirAnticipo(
-  supabase: any,
+  supabase: DbClient,
   actor: ActorErp,
   params: RevertirAnticipoParams
 ) {
@@ -286,7 +292,7 @@ export type CorregirMontoPagoParams = {
   montoNuevo: number
 }
 
-export async function previsualizarCorreccionMonto(supabase: any, params: CorregirMontoPagoParams) {
+export async function previsualizarCorreccionMonto(supabase: DbClient, params: CorregirMontoPagoParams) {
   const montoNuevo = exigirMontoPositivo(params.montoNuevo, "El monto nuevo")
   const previo = await previsualizarReversoAbono(supabase, {
     cuentaId: params.cuentaId,
@@ -308,7 +314,7 @@ export async function previsualizarCorreccionMonto(supabase: any, params: Correg
 }
 
 export async function corregirMontoPago(
-  supabase: any,
+  supabase: DbClient,
   actor: ActorErp,
   params: CorregirMontoPagoParams
 ) {
@@ -325,18 +331,37 @@ export async function corregirMontoPago(
   const montoAntes = toSafeNumber(abono.monto)
   if (montoNuevo === montoAntes) throw new OperacionError("El monto nuevo es igual al actual.")
 
+  // Lo que pueda fallar en el paso 2 se comprueba ANTES de revertir: estos dos
+  // pasos no van en una sola transaccion y no debe quedar el pago revertido
+  // sin su reemplazo.
+  const periodoError = await assertFechaEditable(supabase, String(abono.fecha_pago), "Registrar el pago corregido")
+  if (periodoError) throw new OperacionError(periodoError)
+
   // 1) Revertir el pago actual (atomico, incluye su saldo a favor si lo hubo).
   await revertirAbonoConSaldo(supabase, actor, { cuentaId: params.cuentaId, abonoId: params.abonoId })
 
   // 2) Registrar el pago corregido con los mismos datos.
   const { registrarAbono } = await import("./abonos")
-  const nuevo = await registrarAbono(supabase, actor, {
-    cuentaId: params.cuentaId,
-    monto: montoNuevo,
-    metodoPago: abono.metodo_pago ?? null,
-    fechaPago: String(abono.fecha_pago),
-    notas: abono.notas ? `${abono.notas} (corregido)` : "Pago corregido",
-  })
+  let nuevo: Awaited<ReturnType<typeof registrarAbono>>
+  try {
+    nuevo = await registrarAbono(supabase, actor, {
+      cuentaId: params.cuentaId,
+      monto: montoNuevo,
+      metodoPago: abono.metodo_pago ?? null,
+      fechaPago: String(abono.fecha_pago),
+      notas: abono.notas ? `${abono.notas} (corregido)` : "Pago corregido",
+    })
+  } catch (error) {
+    console.error("[operaciones] el pago se revirtio pero no se pudo registrar el corregido", {
+      cuentaId: params.cuentaId,
+      abonoId: params.abonoId,
+    })
+    throw new OperacionError(
+      `El pago de ${montoAntes} se revirtio, pero no se pudo registrar el nuevo de ${montoNuevo}. ` +
+        "Registra ese abono a mano en la cuenta para que no quede la deuda abierta. " +
+        (error instanceof Error ? `Detalle: ${error.message}` : "")
+    )
+  }
 
   return {
     abonoAnulado: params.abonoId,
@@ -355,7 +380,7 @@ export async function corregirMontoPago(
  * antigua a la mas nueva. Igual que en la web, cada aplicacion se normaliza a
  * multiplos de 50 (la unidad operativa en pesos).
  */
-export async function previsualizarPagarDeudasConSaldo(supabase: any, asistenteId: string) {
+export async function previsualizarPagarDeudasConSaldo(supabase: DbClient, asistenteId: string) {
   const disponible = await saldoFavorDisponible(supabase, asistenteId)
   if (disponible <= 0) throw new OperacionError("No hay saldo a favor disponible para aplicar.")
 
@@ -387,7 +412,7 @@ export async function previsualizarPagarDeudasConSaldo(supabase: any, asistenteI
   return { disponible, plan, totalAplicado, saldoDespues: disponible - totalAplicado }
 }
 
-export async function pagarDeudasConSaldo(supabase: any, actor: ActorErp, asistenteId: string) {
+export async function pagarDeudasConSaldo(supabase: DbClient, actor: ActorErp, asistenteId: string) {
   const v = await previsualizarPagarDeudasConSaldo(supabase, asistenteId)
 
   const aplicadas: Array<{ cuentaId: string; concepto: string; monto: number }> = []

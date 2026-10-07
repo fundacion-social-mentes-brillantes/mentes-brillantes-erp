@@ -1,33 +1,39 @@
-import { calcularEstadoCuenta, toSafeNumber, totalPagosValidos } from "@/lib/utils/contable"
+import type { DbClient } from "@/lib/supabase/types"
 import { assertFechaEditable } from "@/lib/utils/periodos"
-import { OperacionError } from "./errores"
+import { OperacionError, exigirFechaIso, exigirMetodoPago } from "./errores"
+import { recalcularEstadoCuenta } from "./estado-cuenta"
 import type { ActorErp } from "./abonos"
+import {
+  TABLA_POR_TIPO,
+  TIPOS_MOVIMIENTO,
+  actualizarMovimiento,
+  borrarMovimiento,
+  leerMovimiento,
+  tieneConcepto,
+  type CambiosMovimiento,
+  type MovimientoLeido,
+  type TipoMovimiento,
+} from "./registros-movimiento"
 
 // Anular un movimiento = marcarlo como anulado SIN borrarlo (queda el rastro).
 // Es la forma correcta de corregir un registro equivocado.
 //
 // Los bloqueos de integridad de aqui NO son opcionales: saltarselos deja la
 // contabilidad descuadrada (saldo consumido sin contrapartida, dinero que
-// aparece o desaparece). Se replican tal cual los del Historial General.
+// aparece o desaparece). La web (Historial General) y el MCP usan estas mismas
+// funciones, asi que las reglas viven en un solo lugar.
 
-export const TIPOS_ANULABLES = ["abono", "egreso", "donacion", "venta_externa"] as const
-export type TipoMovimientoAnulable = (typeof TIPOS_ANULABLES)[number]
+export const TIPOS_ANULABLES = TIPOS_MOVIMIENTO
+export type TipoMovimientoAnulable = TipoMovimiento
 
-const TABLA_POR_TIPO: Record<TipoMovimientoAnulable, string> = {
-  abono: "pagos_abonos",
-  egreso: "egresos",
-  donacion: "donaciones_asistentes",
-  venta_externa: "ventas_externas",
-}
-
-const APLICACION_SALDO_BLOQUEADA =
-  "Las aplicaciones de saldo a favor no se pueden anular por aqui. Deben gestionarse desde un flujo contable dedicado para no desbalancear la cuenta ni el saldo."
-const ANTICIPO_BLOQUEADO =
-  "Los anticipos/saldo a favor no se pueden anular por aqui. Deben gestionarse desde un flujo contable dedicado."
-const ABONO_CON_SALDO_BLOQUEADO =
+export const APLICACION_SALDO_BLOQUEADA =
+  "Las aplicaciones de saldo a favor no se pueden editar, anular ni eliminar por aqui. Deben gestionarse desde un flujo contable dedicado para no desbalancear la cuenta ni el saldo."
+export const ANTICIPO_BLOQUEADO =
+  "Los anticipos/saldo a favor no se pueden editar, anular ni eliminar por aqui. Deben gestionarse desde el perfil de la persona, con su flujo contable dedicado."
+export const ABONO_CON_SALDO_BLOQUEADO =
   "Ese abono genero saldo a favor por sobrepago. Debe gestionarse desde el detalle de la cuenta para no duplicar ni perder dinero."
-const PAGO_DESDE_SALDO_BLOQUEADO =
-  "No se puede anular este pago porque proviene de saldo a favor. Requiere el flujo de devolucion de saldo."
+export const PAGO_DESDE_SALDO_BLOQUEADO =
+  "No se puede anular ni eliminar este pago porque proviene de saldo a favor. Requiere el flujo de devolucion de saldo."
 
 export type AnularMovimientoParams = {
   tipo: TipoMovimientoAnulable
@@ -44,46 +50,7 @@ export type PrevisualizacionAnulacion = {
   efecto: string
 }
 
-async function leerMovimiento(supabase: any, tipo: string, id: string) {
-  switch (tipo) {
-    case "abono": {
-      const { data, error } = await supabase
-        .from("pagos_abonos")
-        .select("cuenta_id, monto, fecha_pago, notas, estado, origen_fondos, metodo_pago, cuentas_por_cobrar(concepto, asistentes(nombre))")
-        .eq("id", id)
-        .single()
-      return { data, error, fecha: data?.fecha_pago, monto: toSafeNumber(data?.monto) }
-    }
-    case "egreso": {
-      const { data, error } = await supabase
-        .from("egresos")
-        .select("fecha, notas, monto, concepto, estado")
-        .eq("id", id)
-        .single()
-      return { data, error, fecha: data?.fecha, monto: toSafeNumber(data?.monto) }
-    }
-    case "donacion": {
-      const { data, error } = await supabase
-        .from("donaciones_asistentes")
-        .select("fecha, notas, monto, estado, asistentes(nombre)")
-        .eq("id", id)
-        .single()
-      return { data, error, fecha: data?.fecha, monto: toSafeNumber(data?.monto) }
-    }
-    case "venta_externa": {
-      const { data, error } = await supabase
-        .from("ventas_externas")
-        .select("fecha, notas, monto, concepto, comprador_nombre, estado")
-        .eq("id", id)
-        .single()
-      return { data, error, fecha: data?.fecha, monto: toSafeNumber(data?.monto) }
-    }
-    default:
-      return { data: null, error: null, fecha: null, monto: 0 }
-  }
-}
-
-async function tieneSaldoFavorAsociado(supabase: any, cuentaId: string | null | undefined, abonoId: string) {
+async function tieneSaldoFavorAsociado(supabase: DbClient, cuentaId: string | null | undefined, abonoId: string) {
   if (!cuentaId) return false
   const { data, error } = await supabase
     .from("movimientos_saldo_favor")
@@ -94,82 +61,91 @@ async function tieneSaldoFavorAsociado(supabase: any, cuentaId: string | null | 
   return (data || []).length > 0
 }
 
-async function recalcularEstadoCuenta(supabase: any, cuentaId: string | null | undefined) {
-  if (!cuentaId) return
-  const { data } = await supabase
-    .from("cuentas_por_cobrar")
-    .select("valor_total, pagos_abonos(id, monto, estado, notas, metodo_pago, origen_fondos, tipo)")
-    .eq("id", cuentaId)
-    .single()
-  if (!data) return
-  const nuevoEstado = calcularEstadoCuenta(toSafeNumber(data.valor_total), totalPagosValidos(data.pagos_abonos || []))
-  await supabase.from("cuentas_por_cobrar").update({ estado: nuevoEstado }).eq("id", cuentaId)
+function esAnulado(mov: MovimientoLeido) {
+  return mov.estado === "anulado" || String(mov.notas || "").toUpperCase().includes("[ANULADO]")
 }
 
-function esAnulado(registro: any) {
-  return registro?.estado === "anulado" || String(registro?.notas || "").toUpperCase().includes("[ANULADO]")
-}
-
-async function validar(supabase: any, params: AnularMovimientoParams) {
-  const tipo = params.tipo
-  if (tipo === ("aplicacion_saldo" as any)) throw new OperacionError(APLICACION_SALDO_BLOQUEADA)
-  if (tipo === ("anticipo" as any)) throw new OperacionError(ANTICIPO_BLOQUEADO)
-  if (!TIPOS_ANULABLES.includes(tipo)) {
-    throw new OperacionError(`Tipo de movimiento no soportado para anulacion: ${tipo}.`)
+/** Rechaza los tipos que no se pueden tocar desde aqui y los que no existen. */
+function exigirTipoAnulable(tipo: string, accion: string): asserts tipo is TipoMovimientoAnulable {
+  if (tipo === "aplicacion_saldo") throw new OperacionError(APLICACION_SALDO_BLOQUEADA)
+  if (tipo === "anticipo") throw new OperacionError(ANTICIPO_BLOQUEADO)
+  if (!(TIPOS_ANULABLES as readonly string[]).includes(tipo)) {
+    throw new OperacionError(`Tipo de movimiento no soportado para ${accion}: ${tipo}.`)
   }
+}
 
-  const { data, error, fecha, monto } = await leerMovimiento(supabase, tipo, params.movimientoId)
-  if (error || !data) throw new OperacionError("No encontre ese movimiento.")
+async function exigirAbonoSinSaldo(supabase: DbClient, mov: MovimientoLeido, abonoId: string) {
+  if (mov.tipo !== "abono") return
+  const origen = String(mov.origenFondos || "").toLowerCase()
+  const metodo = String(mov.metodoPago || "").toLowerCase()
+  if (origen === "saldo_a_favor" || metodo === "saldo_a_favor") {
+    throw new OperacionError(PAGO_DESDE_SALDO_BLOQUEADO)
+  }
+  if (await tieneSaldoFavorAsociado(supabase, mov.cuentaId, abonoId)) {
+    throw new OperacionError(ABONO_CON_SALDO_BLOQUEADO)
+  }
+}
 
-  if (esAnulado(data)) throw new OperacionError("Ese movimiento ya estaba anulado.")
+async function validar(supabase: DbClient, params: AnularMovimientoParams) {
+  exigirTipoAnulable(params.tipo, "anulacion")
 
-  const periodoError = await assertFechaEditable(supabase, fecha, "Anular el movimiento")
+  const mov = await leerMovimiento(supabase, params.tipo, params.movimientoId)
+  if (!mov) throw new OperacionError("No encontre ese movimiento.")
+
+  if (esAnulado(mov)) throw new OperacionError("Ese movimiento ya estaba anulado.")
+
+  const periodoError = await assertFechaEditable(supabase, mov.fecha, "Anular el movimiento")
   if (periodoError) throw new OperacionError(periodoError)
 
-  if (tipo === "abono") {
-    const origen = String(data.origen_fondos || "").toLowerCase()
-    const metodo = String(data.metodo_pago || "").toLowerCase()
-    if (origen === "saldo_a_favor" || metodo === "saldo_a_favor") {
-      throw new OperacionError(PAGO_DESDE_SALDO_BLOQUEADO)
-    }
-    if (await tieneSaldoFavorAsociado(supabase, data.cuenta_id, params.movimientoId)) {
-      throw new OperacionError(ABONO_CON_SALDO_BLOQUEADO)
-    }
-  }
-
-  return { data, fecha: String(fecha), monto }
+  await exigirAbonoSinSaldo(supabase, mov, params.movimientoId)
+  return mov
 }
 
-function describir(tipo: TipoMovimientoAnulable, d: any): string {
-  const persona = (x: any) => {
-    const a = Array.isArray(x) ? x[0] : x
-    return a?.nombre || null
-  }
-  switch (tipo) {
-    case "abono": {
-      const cuenta = Array.isArray(d.cuentas_por_cobrar) ? d.cuentas_por_cobrar[0] : d.cuentas_por_cobrar
-      return `Pago de ${persona(cuenta?.asistentes) || "?"} en "${cuenta?.concepto || "?"}"`
-    }
+function describir(mov: MovimientoLeido): string {
+  switch (mov.tipo) {
+    case "abono":
+      return `Pago de ${mov.personaNombre || "?"} en "${mov.concepto || "?"}"`
     case "egreso":
-      return `Egreso "${d.concepto}"`
+      return `Egreso "${mov.concepto}"`
     case "donacion":
-      return `Donacion de ${persona(d.asistentes) || "?"}`
+      return `Donacion de ${mov.personaNombre || "?"}`
     case "venta_externa":
-      return `Venta externa "${d.concepto}"${d.comprador_nombre ? ` a ${d.comprador_nombre}` : ""}`
+      return `Venta externa "${mov.concepto}"${mov.compradorNombre ? ` a ${mov.compradorNombre}` : ""}`
+  }
+}
+
+async function auditar(
+  supabase: DbClient,
+  actor: ActorErp,
+  fila: { tabla: string; registroId: string; accion: string; antes: number; despues: number | null; motivo: string }
+) {
+  const { error } = await supabase.from("auditoria_financiera").insert([
+    {
+      tabla_afectada: fila.tabla,
+      registro_id: fila.registroId,
+      usuario_id: actor.userId || "",
+      accion: fila.accion,
+      valor_anterior: fila.antes,
+      valor_nuevo: fila.despues,
+      motivo: fila.motivo,
+    },
+  ])
+  if (error) {
+    console.error(`[operaciones] no se pudo auditar: ${fila.accion}`, { tabla: fila.tabla, code: error.code })
   }
 }
 
 export async function previsualizarAnulacion(
-  supabase: any,
+  supabase: DbClient,
   params: AnularMovimientoParams
 ): Promise<PrevisualizacionAnulacion> {
-  const v = await validar(supabase, params)
+  const mov = await validar(supabase, params)
   return {
     tipo: params.tipo,
     movimientoId: params.movimientoId,
-    descripcion: describir(params.tipo, v.data),
-    monto: v.monto,
-    fecha: v.fecha,
+    descripcion: describir(mov),
+    monto: mov.monto,
+    fecha: mov.fecha,
     yaAnulado: false,
     efecto:
       params.tipo === "abono"
@@ -179,41 +155,31 @@ export async function previsualizarAnulacion(
 }
 
 export async function anularMovimiento(
-  supabase: any,
+  supabase: DbClient,
   actor: ActorErp,
   params: AnularMovimientoParams
 ) {
-  const v = await validar(supabase, params)
-  const tabla = TABLA_POR_TIPO[params.tipo]
+  const mov = await validar(supabase, params)
 
-  const notasNuevas = `[ANULADO] ${v.data?.notas || ""}`.trim()
-  const { error } = await supabase
-    .from(tabla)
-    .update({ estado: "anulado", notas: notasNuevas })
-    .eq("id", params.movimientoId)
-
+  const notasNuevas = `[ANULADO] ${mov.notas || ""}`.trim()
+  const { error } = await actualizarMovimiento(supabase, params.tipo, params.movimientoId, {
+    estado: "anulado",
+    notas: notasNuevas,
+  })
   if (error) throw new OperacionError(error.message || "No se pudo anular el movimiento.")
 
-  if (params.tipo === "abono") {
-    await recalcularEstadoCuenta(supabase, v.data?.cuenta_id)
-  }
+  if (params.tipo === "abono") await recalcularEstadoCuenta(supabase, mov.cuentaId)
 
-  const { error: auditError } = await supabase.from("auditoria_financiera").insert([
-    {
-      tabla_afectada: tabla,
-      registro_id: params.movimientoId,
-      usuario_id: actor.userId || "",
-      accion: "anulacion_movimiento",
-      valor_anterior: v.monto,
-      valor_nuevo: 0,
-      motivo: "Anulacion solicitada por el usuario.",
-    },
-  ])
-  if (auditError) {
-    console.error("[operaciones] no se pudo auditar la anulacion", { tabla, code: auditError.code })
-  }
+  await auditar(supabase, actor, {
+    tabla: TABLA_POR_TIPO[params.tipo],
+    registroId: params.movimientoId,
+    accion: "anulacion_movimiento",
+    antes: mov.monto,
+    despues: 0,
+    motivo: "Anulacion solicitada por el usuario.",
+  })
 
-  return { tipo: params.tipo, movimientoId: params.movimientoId, montoAnulado: v.monto }
+  return { tipo: params.tipo, movimientoId: params.movimientoId, montoAnulado: mov.monto }
 }
 
 // ---------------------------------------------------------------------------
@@ -230,103 +196,133 @@ export type EliminarMovimientoParams = {
  * usarse para deshacer algo creado por error hace un momento; para corregir
  * historia lo correcto es anular.
  */
-export async function previsualizarEliminacion(supabase: any, params: EliminarMovimientoParams) {
-  const tipo = params.tipo
-  if (!TIPOS_ANULABLES.includes(tipo)) {
-    throw new OperacionError(`Tipo de movimiento no soportado para eliminar: ${tipo}.`)
-  }
+export async function previsualizarEliminacion(supabase: DbClient, params: EliminarMovimientoParams) {
+  exigirTipoAnulable(params.tipo, "eliminar")
 
-  const { data, error, fecha, monto } = await leerMovimiento(supabase, tipo, params.movimientoId)
-  if (error || !data) throw new OperacionError("No encontre ese movimiento.")
+  const mov = await leerMovimiento(supabase, params.tipo, params.movimientoId)
+  if (!mov) throw new OperacionError("No encontre ese movimiento.")
 
-  const periodoError = await assertFechaEditable(supabase, fecha, "Eliminar el movimiento")
+  const periodoError = await assertFechaEditable(supabase, mov.fecha, "Eliminar el movimiento")
   if (periodoError) throw new OperacionError(periodoError)
 
-  if (tipo === "abono") {
-    const origen = String(data.origen_fondos || "").toLowerCase()
-    const metodo = String(data.metodo_pago || "").toLowerCase()
-    if (origen === "saldo_a_favor" || metodo === "saldo_a_favor") {
-      throw new OperacionError(PAGO_DESDE_SALDO_BLOQUEADO)
-    }
-    if (await tieneSaldoFavorAsociado(supabase, data.cuenta_id, params.movimientoId)) {
-      throw new OperacionError(ABONO_CON_SALDO_BLOQUEADO)
-    }
-  }
+  await exigirAbonoSinSaldo(supabase, mov, params.movimientoId)
 
   return {
-    tipo,
+    tipo: params.tipo,
     movimientoId: params.movimientoId,
-    descripcion: describir(tipo, data),
-    monto,
-    fecha: String(fecha),
-    cuentaId: (data as any).cuenta_id ?? null,
+    descripcion: describir(mov),
+    monto: mov.monto,
+    fecha: mov.fecha,
+    cuentaId: mov.cuentaId,
     efecto: "El registro se borra por completo y no se puede recuperar.",
   }
 }
 
 export async function eliminarMovimiento(
-  supabase: any,
+  supabase: DbClient,
   actor: ActorErp,
   params: EliminarMovimientoParams
 ) {
   const v = await previsualizarEliminacion(supabase, params)
-  const tabla = TABLA_POR_TIPO[params.tipo]
 
-  const { error } = await supabase.from(tabla).delete().eq("id", params.movimientoId)
+  const { error } = await borrarMovimiento(supabase, params.tipo, params.movimientoId)
   if (error) throw new OperacionError(error.message || "No se pudo eliminar el movimiento.")
 
   if (params.tipo === "abono") await recalcularEstadoCuenta(supabase, v.cuentaId)
 
-  const { error: auditError } = await supabase.from("auditoria_financiera").insert([
-    {
-      tabla_afectada: tabla,
-      registro_id: params.movimientoId,
-      usuario_id: actor.userId || "",
-      accion: "eliminar_movimiento",
-      valor_anterior: v.monto,
-      valor_nuevo: null,
-      motivo: "Eliminacion solicitada por el usuario.",
-    },
-  ])
-  if (auditError) {
-    console.error("[operaciones] no se pudo auditar la eliminacion", { tabla, code: auditError.code })
-  }
+  await auditar(supabase, actor, {
+    tabla: TABLA_POR_TIPO[params.tipo],
+    registroId: params.movimientoId,
+    accion: "eliminar_movimiento",
+    antes: v.monto,
+    despues: null,
+    motivo: "Eliminacion solicitada por el usuario.",
+  })
 
   return { tipo: params.tipo, movimientoId: params.movimientoId, montoEliminado: v.monto }
 }
 
 // --------------------------------------------------------------------- editar
 
-/** Tipos cuyo monto SI se puede corregir desde aqui. El de un abono no: */
-/** hay que hacerlo en el detalle de la cuenta para no romper el sobrepago. */
+/** Tipos cuyo monto SI se puede corregir desde aqui (lo que ofrece el MCP). */
+/** El de un abono no: hay que hacerlo en el detalle de la cuenta para no romper el sobrepago. */
 export const TIPOS_EDITABLES = ["egreso", "donacion", "venta_externa"] as const
 export type TipoMovimientoEditable = (typeof TIPOS_EDITABLES)[number]
 
+/**
+ * Tipos que admiten alguna correccion. El abono entra solo para fecha, metodo
+ * de pago y notas (asi lo permite el Historial General de la web).
+ */
+export const TIPOS_CON_EDICION = ["abono", ...TIPOS_EDITABLES] as const
+
+export const EDICION_ABONO_BLOQUEADA =
+  "El monto de un abono no se puede editar desde aqui. Usa el detalle de la cuenta para preservar correctamente sobrepagos y saldo a favor."
+
 export type EditarMovimientoParams = {
-  tipo: TipoMovimientoEditable
+  tipo: TipoMovimiento
   movimientoId: string
   monto?: number
   fecha?: string
   notas?: string | null
   concepto?: string
+  metodoPago?: string
+  /** Solo egresos. */
+  categoria?: string
+  /** Solo donaciones: a quien se le atribuye. */
+  asistenteId?: string
+  /** Solo ventas externas. */
+  compradorNombre?: string | null
 }
 
-export async function previsualizarEdicion(supabase: any, params: EditarMovimientoParams) {
-  if (!TIPOS_EDITABLES.includes(params.tipo)) {
+type Cambio = { antes: unknown; despues: unknown }
+
+function exigirCampoAplicable(params: EditarMovimientoParams) {
+  const { tipo } = params
+  if (params.concepto !== undefined && !tieneConcepto(tipo)) {
     throw new OperacionError(
-      `Solo se pueden editar egresos, donaciones y ventas externas. El monto de un abono se corrige desde el detalle de la cuenta.`
+      tipo === "abono"
+        ? "El concepto de un abono es el de su cuenta; se cambia desde el detalle de la cuenta."
+        : "Las donaciones no tienen concepto; edita las notas."
     )
   }
+  if (params.categoria !== undefined && tipo !== "egreso") {
+    throw new OperacionError("Solo los egresos tienen categoria.")
+  }
+  if (params.asistenteId !== undefined && tipo !== "donacion") {
+    throw new OperacionError("Solo en una donacion se puede cambiar la persona.")
+  }
+  if (params.compradorNombre !== undefined && tipo !== "venta_externa") {
+    throw new OperacionError("Solo una venta externa tiene comprador.")
+  }
+}
 
-  const { data, error, fecha, monto } = await leerMovimiento(supabase, params.tipo, params.movimientoId)
-  if (error || !data) throw new OperacionError("No encontre ese movimiento.")
-  if (esAnulado(data)) throw new OperacionError("Ese movimiento esta anulado; no se puede editar.")
+export async function previsualizarEdicion(supabase: DbClient, params: EditarMovimientoParams) {
+  exigirTipoAnulable(params.tipo, "edicion")
+  if (!(TIPOS_CON_EDICION as readonly string[]).includes(params.tipo)) {
+    throw new OperacionError(`Tipo de movimiento no soportado para edicion: ${params.tipo}.`)
+  }
+  exigirCampoAplicable(params)
+  const metodoPago = params.metodoPago !== undefined ? exigirMetodoPago(params.metodoPago) : undefined
+
+  const mov = await leerMovimiento(supabase, params.tipo, params.movimientoId)
+  if (!mov) throw new OperacionError("No encontre ese movimiento.")
+  if (esAnulado(mov)) throw new OperacionError("Ese movimiento esta anulado; no se puede editar.")
+
+  if (params.tipo === "abono") {
+    if (params.monto !== undefined && params.monto !== mov.monto) {
+      throw new OperacionError(EDICION_ABONO_BLOQUEADA)
+    }
+    if (await tieneSaldoFavorAsociado(supabase, mov.cuentaId, params.movimientoId)) {
+      throw new OperacionError(ABONO_CON_SALDO_BLOQUEADO)
+    }
+  }
 
   // El periodo debe estar abierto tanto para la fecha actual como para la nueva.
-  const periodoActual = await assertFechaEditable(supabase, fecha, "Editar el movimiento")
+  const periodoActual = await assertFechaEditable(supabase, mov.fecha, "Editar el movimiento")
   if (periodoActual) throw new OperacionError(periodoActual)
 
-  if (params.fecha && params.fecha !== fecha) {
+  if (params.fecha && params.fecha !== mov.fecha) {
+    exigirFechaIso(params.fecha)
     const periodoNuevo = await assertFechaEditable(supabase, params.fecha, "Mover el movimiento a esa fecha")
     if (periodoNuevo) throw new OperacionError(periodoNuevo)
   }
@@ -335,58 +331,57 @@ export async function previsualizarEdicion(supabase: any, params: EditarMovimien
     throw new OperacionError("El monto debe ser mayor a 0.")
   }
 
-  const cambios: Record<string, { antes: unknown; despues: unknown }> = {}
-  if (params.monto !== undefined && params.monto !== monto) cambios.monto = { antes: monto, despues: params.monto }
-  if (params.fecha && params.fecha !== fecha) cambios.fecha = { antes: fecha, despues: params.fecha }
-  if (params.concepto !== undefined && params.concepto !== (data as any).concepto) {
-    cambios.concepto = { antes: (data as any).concepto, despues: params.concepto }
+  // `cambios` es lo que se muestra; `nuevos` es exactamente lo que se escribira.
+  const cambios: Record<string, Cambio> = {}
+  const nuevos: CambiosMovimiento = {}
+  const anotar = <K extends keyof CambiosMovimiento>(campo: K, antes: unknown, despues: CambiosMovimiento[K] | undefined) => {
+    if (despues === undefined || despues === antes) return
+    nuevos[campo] = despues
+    cambios[campo] = { antes, despues }
   }
-  if (params.notas !== undefined && params.notas !== (data as any).notas) {
-    cambios.notas = { antes: (data as any).notas, despues: params.notas }
-  }
+  if (params.tipo !== "abono") anotar("monto", mov.monto, params.monto)
+  if (params.fecha) anotar("fecha", mov.fecha, params.fecha)
+  anotar("concepto", mov.concepto, params.concepto)
+  anotar("notas", mov.notas, params.notas)
+  anotar("metodoPago", mov.metodoPago, metodoPago)
+  anotar("categoria", mov.categoria, params.categoria)
+  anotar("asistenteId", mov.asistenteId, params.asistenteId)
+  anotar("compradorNombre", mov.compradorNombre, params.compradorNombre)
 
   if (Object.keys(cambios).length === 0) throw new OperacionError("No indicaste ningun cambio.")
 
   return {
     tipo: params.tipo,
     movimientoId: params.movimientoId,
-    descripcion: describir(params.tipo, data),
-    montoActual: monto,
+    descripcion: describir(mov),
+    montoActual: mov.monto,
+    cuentaId: mov.cuentaId,
     cambios,
+    nuevos,
   }
 }
 
 export async function editarMovimiento(
-  supabase: any,
+  supabase: DbClient,
   actor: ActorErp,
   params: EditarMovimientoParams
 ) {
   const v = await previsualizarEdicion(supabase, params)
-  const tabla = TABLA_POR_TIPO[params.tipo]
 
-  const payload: Record<string, unknown> = {}
-  if (params.monto !== undefined) payload.monto = params.monto
-  if (params.fecha !== undefined) payload.fecha = params.fecha
-  if (params.notas !== undefined) payload.notas = params.notas
-  if (params.concepto !== undefined) payload.concepto = params.concepto
-
-  const { error } = await supabase.from(tabla).update(payload).eq("id", params.movimientoId)
+  const { error } = await actualizarMovimiento(supabase, params.tipo, params.movimientoId, v.nuevos)
   if (error) throw new OperacionError(error.message || "No se pudo editar el movimiento.")
 
-  const { error: auditError } = await supabase.from("auditoria_financiera").insert([
-    {
-      tabla_afectada: tabla,
-      registro_id: params.movimientoId,
-      usuario_id: actor.userId || "",
-      accion: "edicion_movimiento",
-      valor_anterior: v.montoActual,
-      valor_nuevo: params.monto ?? v.montoActual,
-      motivo: "Edicion solicitada por el usuario.",
-    },
-  ])
-  if (auditError) {
-    console.error("[operaciones] no se pudo auditar la edicion", { tabla, code: auditError.code })
-  }
+  if (params.tipo === "abono") await recalcularEstadoCuenta(supabase, v.cuentaId)
+
+  const montoNuevo = v.nuevos.monto
+  await auditar(supabase, actor, {
+    tabla: TABLA_POR_TIPO[params.tipo],
+    registroId: params.movimientoId,
+    accion: "edicion_movimiento",
+    antes: v.montoActual,
+    despues: montoNuevo ?? v.montoActual,
+    motivo: `Edicion solicitada por el usuario (${Object.keys(v.cambios).join(", ")}).`,
+  })
 
   return { tipo: params.tipo, movimientoId: params.movimientoId, cambios: v.cambios }
 }

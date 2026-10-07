@@ -1,3 +1,4 @@
+import type { DbClient, TablesInsert, TablesUpdate } from "@/lib/supabase/types"
 import { fechaHoyBogota } from "@/lib/utils/fechas"
 import { OperacionError, exigir, exigirFechaIso } from "./errores"
 import type { ActorErp } from "./abonos"
@@ -29,7 +30,7 @@ export type CambiosPersona = Partial<DatosPersona>
 const CAMPOS_TEXTO = ["nombre", "cedula", "correo", "telefono", "codigo"] as const
 const CAMPOS_FECHA = ["fechaRegistro", "fechaInicioProceso"] as const
 
-const COLUMNA: Record<keyof DatosPersona, string> = {
+const COLUMNA = {
   nombre: "nombre",
   cedula: "cedula",
   correo: "correo",
@@ -37,7 +38,10 @@ const COLUMNA: Record<keyof DatosPersona, string> = {
   codigo: "codigo",
   fechaRegistro: "fecha_registro",
   fechaInicioProceso: "fecha_inicio_proceso",
-}
+} as const satisfies Record<keyof DatosPersona, keyof TablesUpdate<"asistentes">>
+
+const esCampoFecha = (campo: keyof DatosPersona): campo is (typeof CAMPOS_FECHA)[number] =>
+  (CAMPOS_FECHA as readonly string[]).includes(campo)
 
 function limpiar(v: unknown): string | null {
   const s = String(v ?? "").trim()
@@ -49,7 +53,7 @@ function fechaOpcional(v: unknown, etiqueta: string): string | null {
   return s ? exigirFechaIso(s, etiqueta) : null
 }
 
-function traducirError(error: any): OperacionError {
+function traducirError(error: { code?: string; message?: string } | null): OperacionError {
   if (error?.code === "23505") {
     return new OperacionError("Ya existe una persona con esa cedula o codigo.")
   }
@@ -61,12 +65,12 @@ function traducirError(error: any): OperacionError {
  * formulario. El codigo es lo que comparten el ERP y la agenda: una persona sin
  * codigo no se puede cruzar con sus sesiones.
  */
-export async function siguienteCodigoPersona(supabase: any): Promise<string> {
+export async function siguienteCodigoPersona(supabase: DbClient): Promise<string> {
   const { data, error } = await supabase.from("asistentes").select("codigo")
   if (error) throw new OperacionError("No se pudo calcular el siguiente codigo.")
   const numeros = (data || [])
-    .map((fila: any) => Number.parseInt(String(fila.codigo ?? ""), 10))
-    .filter((n: number) => Number.isFinite(n))
+    .map((fila) => Number.parseInt(String(fila.codigo ?? ""), 10))
+    .filter((n) => Number.isFinite(n))
   return String((numeros.length ? Math.max(...numeros) : 0) + 1)
 }
 
@@ -75,7 +79,7 @@ export async function siguienteCodigoPersona(supabase: any): Promise<string> {
  * web). La fecha de registro, si nadie la indica, es la de hoy: dejarla vacia
  * escondia a la persona de los reportes de altas.
  */
-export async function crearPersona(supabase: any, actor: ActorErp, datos: DatosPersona) {
+export async function crearPersona(supabase: DbClient, actor: ActorErp, datos: DatosPersona) {
   const nombre = String(datos.nombre || "").trim()
   exigir(nombre, "El nombre es obligatorio.")
 
@@ -84,7 +88,7 @@ export async function crearPersona(supabase: any, actor: ActorErp, datos: DatosP
     throw new OperacionError("Solo un administrador puede fijar las fechas de registro o de inicio de proceso.")
   }
 
-  const fila: Record<string, string | null> = {
+  const fila: TablesInsert<"asistentes"> = {
     nombre,
     cedula: limpiar(datos.cedula),
     correo: limpiar(datos.correo),
@@ -102,14 +106,14 @@ export async function crearPersona(supabase: any, actor: ActorErp, datos: DatosP
 
   if (error || !data) throw traducirError(error)
   return {
-    id: data.id as string,
-    nombre: data.nombre as string,
-    codigo: data.codigo as string | null,
-    fechaRegistro: data.fecha_registro as string | null,
+    id: data.id,
+    nombre: data.nombre,
+    codigo: data.codigo,
+    fechaRegistro: data.fecha_registro,
   }
 }
 
-async function leerPersonaCompleta(supabase: any, asistenteId: string) {
+async function leerPersonaCompleta(supabase: DbClient, asistenteId: string) {
   const { data, error } = await supabase
     .from("asistentes")
     .select("id, nombre, codigo, cedula, correo, telefono, fecha_registro, fecha_inicio_proceso, activo")
@@ -126,7 +130,7 @@ export type CambioCampo = { antes: string | null; despues: string | null }
  * cambian; si no cambia nada, se avisa en vez de "guardar" en vacio.
  */
 export async function previsualizarEdicionPersona(
-  supabase: any,
+  supabase: DbClient,
   actor: ActorErp,
   asistenteId: string,
   cambios: CambiosPersona
@@ -142,10 +146,8 @@ export async function previsualizarEdicionPersona(
   const resultado: Partial<Record<keyof DatosPersona, CambioCampo>> = {}
   for (const campo of [...CAMPOS_TEXTO, ...CAMPOS_FECHA]) {
     if (cambios[campo] === undefined) continue
-    const despues = CAMPOS_FECHA.includes(campo as any)
-      ? fechaOpcional(cambios[campo], "La fecha")
-      : limpiar(cambios[campo])
-    const antes = (actual[COLUMNA[campo]] ?? null) as string | null
+    const despues = esCampoFecha(campo) ? fechaOpcional(cambios[campo], "La fecha") : limpiar(cambios[campo])
+    const antes = actual[COLUMNA[campo]] ?? null
     if (campo === "nombre" && !despues) throw new OperacionError("El nombre no puede quedar vacio.")
     if ((antes ?? null) !== (despues ?? null)) resultado[campo] = { antes, despues }
   }
@@ -154,11 +156,11 @@ export async function previsualizarEdicionPersona(
     throw new OperacionError(`No hay nada que cambiar: los datos de ${actual.nombre} ya son esos.`)
   }
 
-  return { asistenteId, nombreActual: actual.nombre as string, codigoActual: actual.codigo as string | null, cambios: resultado }
+  return { asistenteId, nombreActual: actual.nombre, codigoActual: actual.codigo, cambios: resultado }
 }
 
 export async function editarPersona(
-  supabase: any,
+  supabase: DbClient,
   actor: ActorErp,
   asistenteId: string,
   cambios: CambiosPersona
@@ -166,21 +168,27 @@ export async function editarPersona(
   const previa = await previsualizarEdicionPersona(supabase, actor, asistenteId, cambios)
 
   // Solo se escriben las columnas que cambian: lo demas queda como estaba.
-  const payload: Record<string, string | null> = {}
-  for (const [campo, cambio] of Object.entries(previa.cambios) as Array<[keyof DatosPersona, CambioCampo]>) {
-    payload[COLUMNA[campo]] = cambio.despues
+  const payload: TablesUpdate<"asistentes"> = {}
+  for (const campo of Object.keys(previa.cambios) as Array<keyof DatosPersona>) {
+    const despues = previa.cambios[campo]?.despues ?? null
+    if (campo === "nombre") {
+      // El nombre ya se valido como no vacio en la previsualizacion.
+      if (despues) payload.nombre = despues
+    } else {
+      payload[COLUMNA[campo]] = despues
+    }
   }
 
   const { error } = await supabase.from("asistentes").update(payload).eq("id", asistenteId)
   if (error) throw traducirError(error)
   return {
     id: asistenteId,
-    nombre: (previa.cambios.nombre?.despues ?? previa.nombreActual) as string,
+    nombre: previa.cambios.nombre?.despues ?? previa.nombreActual,
     camposCambiados: Object.keys(previa.cambios),
   }
 }
 
-export async function buscarPersonaPorId(supabase: any, asistenteId: string) {
+export async function buscarPersonaPorId(supabase: DbClient, asistenteId: string) {
   const { data, error } = await supabase
     .from("asistentes")
     .select("id, nombre, codigo, cedula, correo, telefono, activo")
@@ -191,7 +199,7 @@ export async function buscarPersonaPorId(supabase: any, asistenteId: string) {
 }
 
 /** Activar o desactivar una persona (no borra nada; deja de aparecer activa). */
-export async function cambiarEstadoPersona(supabase: any, _actor: ActorErp, asistenteId: string, activo: boolean) {
+export async function cambiarEstadoPersona(supabase: DbClient, _actor: ActorErp, asistenteId: string, activo: boolean) {
   exigir(asistenteId, "Falta indicar la persona.")
   const { error } = await supabase.from("asistentes").update({ activo }).eq("id", asistenteId)
   if (error) throw new OperacionError(error.message || "No se pudo cambiar el estado de la persona.")
@@ -202,7 +210,7 @@ export async function cambiarEstadoPersona(supabase: any, _actor: ActorErp, asis
  * Borrado de persona. Solo procede si NO tiene cuentas: si las tuviera, la
  * cascada arrastraria pagos y sesiones y desapareceria dinero del historial.
  */
-export async function previsualizarEliminacionPersona(supabase: any, asistenteId: string) {
+export async function previsualizarEliminacionPersona(supabase: DbClient, asistenteId: string) {
   const persona = await buscarPersonaPorId(supabase, asistenteId)
 
   const { count, error } = await supabase
@@ -220,7 +228,7 @@ export async function previsualizarEliminacionPersona(supabase: any, asistenteId
   return { asistenteId, nombre: persona.nombre, codigo: persona.codigo }
 }
 
-export async function eliminarPersona(supabase: any, _actor: ActorErp, asistenteId: string) {
+export async function eliminarPersona(supabase: DbClient, _actor: ActorErp, asistenteId: string) {
   const v = await previsualizarEliminacionPersona(supabase, asistenteId)
 
   const { error } = await supabase.from("asistentes").delete().eq("id", asistenteId)
