@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useRef } from 'react'
+import { useActionState, useEffect, useRef } from 'react'
 import { saveAnticipo } from '../actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,9 +16,11 @@ export function AnticipoForm({ asistenteId, disabled = false }: AnticipoFormProp
   const [state, formAction, isPending] = useActionState(actionWithId, null)
   const formRef = useRef<HTMLFormElement>(null)
 
-  if (state?.success && formRef.current) {
-    formRef.current.reset()
-  }
+  // Limpiar el formulario despues de guardar. Va en un efecto: hacerlo
+  // durante el render lo repetia en cada render mientras durara el exito.
+  useEffect(() => {
+    if (state?.success) formRef.current?.reset()
+  }, [state])
 
   const isLocked = disabled || isPending
 

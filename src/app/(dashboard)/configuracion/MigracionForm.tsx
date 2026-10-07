@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { AlertCircle, CheckCircle2, Upload, FileText, Info } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Upload, Info } from 'lucide-react'
 import { procesarMigracion } from './actions'
 import Papa from 'papaparse'
 

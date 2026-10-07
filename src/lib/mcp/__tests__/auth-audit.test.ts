@@ -10,7 +10,7 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: createAdminClientMock,
 }))
 
-import { McpAuditError, auditMcpToolCall } from "../audit"
+import { auditMcpToolCall } from "../audit"
 import { executeTool, registerErpTools } from "../erp-tools"
 import { resolveCurrentMcpIdentity } from "../identity"
 

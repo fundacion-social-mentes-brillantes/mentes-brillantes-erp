@@ -61,7 +61,7 @@ export default async function ConfiguracionPage() {
           <h2 className="text-lg font-semibold text-zinc-900">Migracion de Datos (AppSheet / CSV)</h2>
           <p className="text-sm text-zinc-500 mt-1">
             Sube archivos CSV exportados desde AppSheet para importar los datos al nuevo sistema. El sistema evitara
-            duplicados basandose en el "Row ID" original.
+            duplicados basandose en el &ldquo;Row ID&rdquo; original.
           </p>
         </div>
         <div className="p-6">

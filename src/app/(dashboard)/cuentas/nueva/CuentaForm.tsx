@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useEffect, useMemo, useState } from 'react'
+import { useActionState, useState } from 'react'
 import { saveCuenta, ActionState } from '../actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,6 +12,18 @@ type ModalidadCobro = 'normal' | 'cortesia' | 'cubierto_por_otro_proceso'
 
 const selectClassName =
   'flex h-10 w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] px-3 py-2 text-sm text-[rgb(var(--text-primary))] ring-offset-[rgb(var(--surface-1))] file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-[rgb(var(--text-muted))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--accent))] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50'
+
+const PREFIJO_MODALIDAD: Record<ModalidadCobro, string> = {
+  normal: '',
+  cortesia: '[Cortesia]',
+  cubierto_por_otro_proceso: '[Cubierto por otro proceso/familiar]',
+}
+
+/** El concepto que se propone para un paquete coach. */
+const conceptoCoachPara = (sesiones: number, modalidad: ModalidadCobro) => {
+  const base = `Sesión guía coach - ${sesiones || 1} sesiones`
+  return PREFIJO_MODALIDAD[modalidad] ? `${PREFIJO_MODALIDAD[modalidad]} ${base}` : base
+}
 
 const parsePositiveMoney = (value: string) => {
   const cleaned = value.trim().replace(/\s+/g, '').replace(/\$/g, '')
@@ -31,43 +43,11 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
   const [abonoInicial, setAbonoInicial] = useState('')
   const modalidadValorCero = tipo === 'coach' && modalidadCobro !== 'normal'
   const abonoInicialMayorACero = parsePositiveMoney(abonoInicial) > 0
-  const prefijoModalidad = tipo === 'coach'
-    ? modalidadCobro === 'cortesia'
-      ? '[Cortesia]'
-      : modalidadCobro === 'cubierto_por_otro_proceso'
-        ? '[Cubierto por otro proceso/familiar]'
-        : ''
-    : ''
-  const conceptoCoachBase = useMemo(() => `Sesión guía coach - ${sesiones || 1} sesiones`, [sesiones])
-  const conceptoCoach = useMemo(
-    () => prefijoModalidad ? `${prefijoModalidad} ${conceptoCoachBase}` : conceptoCoachBase,
-    [conceptoCoachBase, prefijoModalidad]
-  )
   const asistenteInicialLimpio = asistenteInicial || ''
 
-  useEffect(() => {
-    if (tipo === 'coach') {
-      setConcepto(conceptoCoach)
-    } else {
-      setConcepto('')
-    }
-  }, [tipo, conceptoCoach])
-
-  useEffect(() => {
-    if (tipo !== 'coach') {
-      setModalidadCobro('normal')
-      setConcepto('')
-      setValorTotal('')
-      setAbonoInicial('')
-    }
-  }, [tipo])
-
-  useEffect(() => {
-    if (modalidadValorCero) {
-      setValorTotal('0')
-      setAbonoInicial('')
-    }
-  }, [modalidadValorCero])
+  // Los campos que dependen del tipo, la modalidad o las sesiones se ajustan en
+  // el mismo cambio que los provoca (antes eran efectos encadenados que
+  // re-dibujaban el formulario varias veces por cada clic).
 
   const seleccionarGeneral = () => {
     setTipo('general')
@@ -79,6 +59,25 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
 
   const seleccionarCoach = () => {
     setTipo('coach')
+    setConcepto(conceptoCoachPara(sesiones, modalidadCobro))
+  }
+
+  const cambiarModalidad = (next: ModalidadCobro) => {
+    setModalidadCobro(next)
+    setConcepto(conceptoCoachPara(sesiones, next))
+    if (next === 'normal') {
+      if (valorTotal === '0') setValorTotal('')
+    } else {
+      // Cortesia o cubierto por otro: va en 0 y sin abono.
+      setValorTotal('0')
+      setAbonoInicial('')
+    }
+  }
+
+  const cambiarSesiones = (valor: string) => {
+    const n = Math.max(1, Number(valor) || 1)
+    setSesiones(n)
+    setConcepto(conceptoCoachPara(n, modalidadCobro))
   }
 
   return (
@@ -132,11 +131,7 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
             <select
               name="modalidad_cobro"
               value={modalidadCobro}
-              onChange={(e) => {
-                const next = e.target.value as ModalidadCobro
-                setModalidadCobro(next)
-                if (next === 'normal' && valorTotal === '0') setValorTotal('')
-              }}
+              onChange={(e) => cambiarModalidad(e.target.value as ModalidadCobro)}
               disabled={isPending}
               className={selectClassName}
             >
@@ -168,7 +163,7 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
           />
           {tipo === 'coach' && (
             <p className="text-xs text-zinc-500">
-              Se autogenera como "{conceptoCoach}", puedes ajustarlo si lo necesitas.
+              Se autogenera como &ldquo;{conceptoCoachPara(sesiones, modalidadCobro)}&rdquo;, puedes ajustarlo si lo necesitas.
             </p>
           )}
         </div>
@@ -203,7 +198,7 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
                 min="1"
                 required
                 value={sesiones}
-                onChange={(e) => setSesiones(Math.max(1, Number(e.target.value) || 1))}
+                onChange={(e) => cambiarSesiones(e.target.value)}
                 disabled={isPending}
               />
             </div>

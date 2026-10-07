@@ -35,7 +35,7 @@ export async function loginAction(prevState: LoginState, formData: FormData): Pr
 
       return { error: errorMessage, email }
     }
-  } catch (err: any) {
+  } catch {
     return { error: 'Ocurrió un error inesperado al intentar iniciar sesión.', email }
   }
 

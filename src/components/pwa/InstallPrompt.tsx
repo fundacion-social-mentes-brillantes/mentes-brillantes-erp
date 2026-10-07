@@ -50,6 +50,8 @@ export function InstallPrompt() {
     window.addEventListener("appinstalled", onInstalled);
 
     // iOS no dispara beforeinstallprompt: mostramos instrucciones manuales.
+    // Solo en el navegador se sabe si es iOS (no hay evento de instalacion alli).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (isIOS()) setVisible(true);
 
     return () => {

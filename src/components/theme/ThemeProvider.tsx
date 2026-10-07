@@ -1,7 +1,8 @@
 'use client';
 
 import { Moon, Sparkles } from "lucide-react";
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useEstaMontado } from "@/lib/hooks/use-esta-montado";
 
 type Theme = "pink" | "dark";
 
@@ -37,16 +38,18 @@ function applyTheme(theme: Theme) {
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>('pink');
-  const [mounted, setMounted] = useState(false);
+  const mounted = useEstaMontado();
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const stored = normalize(localStorage.getItem(STORAGE_KEY));
     const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
     const initial: Theme = stored ?? (prefersDark ? 'dark' : 'pink');
+    // El tema guardado solo existe en el navegador: se lee despues de hidratar
+    // para que el HTML del servidor y el primer render coincidan.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setThemeState(initial);
     applyTheme(initial);
-    setMounted(true);
   }, []);
 
   useEffect(() => {
@@ -63,16 +66,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return () => media.removeEventListener('change', listener);
   }, []);
 
-  const setTheme = (next: Theme) => {
+  const setTheme = useCallback((next: Theme) => {
     setThemeState(next);
     applyTheme(next);
-  };
+  }, []);
 
-  const toggleTheme = () => setTheme(theme === 'dark' ? 'pink' : 'dark');
+  const toggleTheme = useCallback(() => setTheme(theme === 'dark' ? 'pink' : 'dark'), [theme, setTheme]);
 
   const value = useMemo(
     () => ({ theme, toggleTheme, setTheme, mounted }),
-    [theme, mounted]
+    [theme, toggleTheme, setTheme, mounted]
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

@@ -542,37 +542,6 @@ export function shouldUseContabilidadContext(question: string) {
   ].some((term) => q.includes(term))
 }
 
-async function buildContabilidadContextLegacy(supabase: SupabaseClient, question: string) {
-  const rango = parseDateRange(question)
-  const q = question.toLowerCase()
-  const [movimientos, cartera, saldos] = await Promise.all([
-    consultarMovimientosRango(supabase, rango.fechaInicio, rango.fechaFin),
-    q.includes("deudor") || q.includes("cuentas pendientes") || q.includes("cartera")
-      ? obtenerCartera(supabase)
-      : Promise.resolve(null),
-    q.includes("saldos a favor") || q.includes("saldo a favor existen")
-      ? obtenerSaldosAFavor(supabase)
-      : Promise.resolve(null),
-  ])
-
-  const liquidacion =
-    q.includes("liquidacion") || q.includes("liquidación") || q.includes("periodo") || q.includes("período")
-      ? await obtenerUltimaLiquidacion(supabase)
-      : null
-
-  return {
-    consulta: question,
-    modo: "solo_lectura_contable",
-    rango_consultado: rango,
-    movimientos,
-    cartera,
-    saldos_a_favor: saldos,
-    liquidacion,
-    instrucciones:
-      "Explica solo estos datos. No generes SQL, no registres pagos, no crees cuentas y no modifiques informacion.",
-  }
-}
-
 export async function buildContabilidadContext(supabase: SupabaseClient, question: string) {
   const rango = parseDateRange(question)
   const q = question.toLowerCase()

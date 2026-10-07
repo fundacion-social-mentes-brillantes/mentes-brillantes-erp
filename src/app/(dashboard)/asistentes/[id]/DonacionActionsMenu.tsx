@@ -1,9 +1,8 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useActionState, useState } from 'react'
 import { EllipsisVertical, Pencil, Ban, Trash2 } from 'lucide-react'
 import { anularDonacionForm, editarDonacionForm, eliminarDonacionForm } from '../donacionesActions'
-import { useFormState } from 'react-dom'
 
 type Props = {
   donacion: {
@@ -18,14 +17,18 @@ type Props = {
 }
 
 export function DonacionActionsMenu({ donacion, isAdmin = true }: Props) {
+  // Los hooks no pueden ir despues de un return condicional (React los cuenta
+  // por orden): por eso el menu real vive en su propio componente.
   if (!isAdmin) return null
+  return <MenuDonacion donacion={donacion} />
+}
 
+function MenuDonacion({ donacion }: { donacion: Props['donacion'] }) {
   const [open, setOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
-  const [editState, editAction] = useFormState(editarDonacionForm, null)
-  const [anularState, anularAction] = useFormState(anularDonacionForm, null)
-  const [eliminarState, eliminarAction] = useFormState(eliminarDonacionForm, null)
-  const [pending, startTransition] = useTransition()
+  const [editState, editAction] = useActionState(editarDonacionForm, null)
+  const [anularState, anularAction] = useActionState(anularDonacionForm, null)
+  const [eliminarState, eliminarAction] = useActionState(eliminarDonacionForm, null)
 
   return (
     <div className="relative">
@@ -123,8 +126,6 @@ export function DonacionActionsMenu({ donacion, isAdmin = true }: Props) {
                   className="w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--input-bg))] px-2 py-1 text-sm text-[rgb(var(--text-primary))] focus:border-[rgb(var(--accent))] focus:ring-1 focus:ring-[rgb(var(--accent))]"
                 />
               </div>
-              {editState?.error && <p className="text-xs text-red-500">{editState.error}</p>}
-              {editState?.success && <p className="text-xs text-emerald-600">Donación actualizada.</p>}
               <div className="flex gap-2 pt-1">
                 <button
                   type="submit"
@@ -142,6 +143,9 @@ export function DonacionActionsMenu({ donacion, isAdmin = true }: Props) {
               </div>
             </form>
           )}
+          {/* Fuera del formulario: al guardar este se cierra y el resultado debe seguir a la vista. */}
+          {editState?.error && <p className="text-xs text-red-500">{editState.error}</p>}
+          {editState?.success && <p className="text-xs text-emerald-600">Donación actualizada.</p>}
         </div>
       )}
     </div>

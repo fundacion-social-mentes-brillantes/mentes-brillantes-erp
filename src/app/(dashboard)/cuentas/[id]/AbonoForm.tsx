@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useRef } from 'react'
+import { useActionState, useEffect, useRef } from 'react'
 import { saveAbono } from '../actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,9 +13,11 @@ export function AbonoForm({ cuentaId, maxMonto }: { cuentaId: string; maxMonto: 
   const [state, formAction, isPending] = useActionState<AbonoActionState, FormData>(actionWithId, null)
   const formRef = useRef<HTMLFormElement>(null)
 
-  if (state?.success && formRef.current) {
-    formRef.current.reset()
-  }
+  // Limpiar el formulario despues de guardar. Va en un efecto: hacerlo
+  // durante el render lo repetia en cada render mientras durara el exito.
+  useEffect(() => {
+    if (state?.success) formRef.current?.reset()
+  }, [state])
 
   return (
     <form ref={formRef} action={formAction} className="space-y-4">

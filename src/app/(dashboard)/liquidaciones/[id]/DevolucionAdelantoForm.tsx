@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useRef } from 'react'
+import { useActionState, useEffect, useRef } from 'react'
 import { saveDevolucionSocio } from '../actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -35,9 +35,11 @@ export function DevolucionAdelantoForm({
   const selectClass =
     "flex h-10 w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--input-bg))] px-3 py-2 text-sm text-[rgb(var(--text-primary))] ring-offset-[rgb(var(--surface-1))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--accent))] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:[color-scheme:dark]"
 
-  if (state?.success && formRef.current) {
-    formRef.current.reset()
-  }
+  // Limpiar el formulario despues de guardar. Va en un efecto: hacerlo
+  // durante el render lo repetia en cada render mientras durara el exito.
+  useEffect(() => {
+    if (state?.success) formRef.current?.reset()
+  }, [state])
 
   const conSaldo = socios.filter((s) => s.pendiente > 0)
 

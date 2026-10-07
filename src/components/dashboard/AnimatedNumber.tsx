@@ -29,6 +29,8 @@ export function AnimatedNumber({
     // Pestaña oculta: el navegador pausa requestAnimationFrame y el conteo se
     // quedaría a medias. En ese caso mostramos el valor final directo.
     if (reduced || document.visibilityState === 'hidden') {
+      // Arranque de la animacion: el valor se mueve cuadro a cuadro con requestAnimationFrame.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDisplay(value)
       return
     }

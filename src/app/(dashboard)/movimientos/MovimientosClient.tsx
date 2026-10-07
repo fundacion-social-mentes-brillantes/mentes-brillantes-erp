@@ -1,21 +1,19 @@
 'use client'
 
 import { formatearFechaIso } from '@/lib/utils/fechas'
+import { fechasDeRango, type RangoFecha } from './rangos'
 import type { Database } from '@/types/database'
 import { leerTodas } from '@/lib/supabase/paginar'
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import {
-  Search,
   Filter,
   ArrowDownRight,
   ArrowUpRight,
   Wallet,
   Receipt,
   ArrowRightLeft,
-  Calendar,
-  XCircle,
   Trash2,
   Pencil,
   Ban,
@@ -90,9 +88,9 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
   const [topeAlcanzado, setTopeAlcanzado] = useState(false)
 
   // Filters
-  const [rangoFecha, setRangoFecha] = useState<'este_mes' | 'mes_pasado' | 'todos' | 'custom'>('este_mes')
-  const [fechaInicio, setFechaInicio] = useState('')
-  const [fechaFin, setFechaFin] = useState('')
+  const [rangoFecha, setRangoFecha] = useState<RangoFecha>('este_mes')
+  const [fechaInicio, setFechaInicio] = useState(() => fechasDeRango('este_mes')?.inicio ?? '')
+  const [fechaFin, setFechaFin] = useState(() => fechasDeRango('este_mes')?.fin ?? '')
   const [tipoFiltro, setTipoFiltro] = useState('todos')
   const [asistenteFiltro, setAsistenteFiltro] = useState('todos')
   const [metodoFiltro, setMetodoFiltro] = useState('todos')
@@ -110,44 +108,27 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
   const [isAnulando, setIsAnulando] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
-  const supabase = createClient()
+  // Un solo cliente por montaje (crearlo en cada render rompia las dependencias).
+  const supabase = useMemo(() => createClient(), [])
+
+  // El rango se resuelve en el mismo cambio (antes era un efecto que corria
+  // despues y obligaba a una guarda para no consultar sin fechas).
+  const cambiarRango = (rango: RangoFecha) => {
+    setRangoFecha(rango)
+    const fechas = fechasDeRango(rango)
+    if (fechas) {
+      setFechaInicio(fechas.inicio)
+      setFechaFin(fechas.fin)
+    }
+  }
+
   const movimientoBloqueado = isMovimientoBloqueadoEnHistorial(selectedMov?.tipo_movimiento)
   const mensajeBloqueoMovimiento =
     selectedMov?.tipo_movimiento === 'anticipo'
       ? 'Los anticipos/saldo a favor no se gestionan desde Historial General. Usa el perfil del asistente para revertirlos de forma segura.'
       : 'Las aplicaciones de saldo a favor no se editan, anulan ni eliminan desde Historial General para evitar descuadres contables.'
 
-  useEffect(() => {
-    if (rangoFecha === 'este_mes') {
-      const now = new Date()
-      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
-      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-      setFechaInicio(firstDay.toISOString().split('T')[0])
-      setFechaFin(lastDay.toISOString().split('T')[0])
-    } else if (rangoFecha === 'mes_pasado') {
-      const now = new Date()
-      const firstDay = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-      const lastDay = new Date(now.getFullYear(), now.getMonth(), 0)
-      setFechaInicio(firstDay.toISOString().split('T')[0])
-      setFechaFin(lastDay.toISOString().split('T')[0])
-    } else if (rangoFecha === 'todos') {
-      setFechaInicio('')
-      setFechaFin('')
-    }
-  }, [rangoFecha])
-
-  useEffect(() => {
-    // Al arrancar, el rango ya es "este mes" pero las fechas todavia estan
-    // vacias (las calcula el efecto de arriba, que corre despues). Sin esta
-    // guarda se lanzaba una primera consulta SIN filtro que bajaba el historial
-    // entero —anos de movimientos— y acto seguido otra con el mes: el trabajo
-    // pesado se hacia para nada. Con rango "todos" si se consulta sin fechas,
-    // porque ahi es lo que la persona pidio.
-    if (rangoFecha !== 'todos' && (!fechaInicio || !fechaFin)) return
-    fetchMovimientos()
-  }, [rangoFecha, fechaInicio, fechaFin, tipoFiltro, asistenteFiltro, metodoFiltro, mostrarAplicaciones])
-
-  async function fetchMovimientos() {
+  const fetchMovimientos = useCallback(async () => {
     if (!supabase) return
     setLoading(true)
     setLoadError(null)
@@ -200,7 +181,16 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
       setMovimientos(result)
     }
     setLoading(false)
-  }
+  }, [supabase, fechaInicio, fechaFin, tipoFiltro, asistenteFiltro, metodoFiltro, mostrarAplicaciones])
+
+  useEffect(() => {
+    // Con un rango personalizado a medio escribir no se consulta: sin fechas
+    // bajaria el historial entero. Con "todos" si, porque es lo que se pidio.
+    if (rangoFecha !== 'todos' && (!fechaInicio || !fechaFin)) return
+    // Consulta a la base cuando cambian los filtros (sincroniza con un sistema externo).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchMovimientos()
+  }, [rangoFecha, fechaInicio, fechaFin, fetchMovimientos])
 
   const formatCurrency = (amount: number) => {
     if (!amount) return '$0'
@@ -287,7 +277,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
         setIsSheetOpen(false)
         await fetchMovimientos()
       }
-    } catch (e) {
+    } catch {
       alert("Error al guardar cambios")
     } finally {
       setIsSaving(false)
@@ -308,7 +298,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
         setIsSheetOpen(false)
         await fetchMovimientos()
       }
-    } catch (error) {
+    } catch {
       alert('Error inesperado al anular')
     } finally {
       setIsAnulando(false)
@@ -330,7 +320,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
         setIsSheetOpen(false)
         await fetchMovimientos()
       }
-    } catch (error) {
+    } catch {
       alert('Error inesperado al eliminar')
     } finally {
       setIsDeleting(false)
@@ -371,7 +361,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
             <label className="text-xs font-medium text-[rgb(var(--text-muted))]">Periodo</label>
             <select
               value={rangoFecha}
-              onChange={(e) => setRangoFecha(e.target.value as any)}
+              onChange={(e) => cambiarRango(e.target.value as RangoFecha)}
               className="w-full h-9 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] px-3 py-1 text-sm text-[rgb(var(--text-primary))] focus:border-[rgb(var(--accent))] focus:outline-none focus:ring-2 focus:ring-[rgba(var(--accent),0.35)]"
             >
               <option className="bg-[rgb(var(--surface-2))] text-[rgb(var(--text-primary))]" value="este_mes">Este mes</option>

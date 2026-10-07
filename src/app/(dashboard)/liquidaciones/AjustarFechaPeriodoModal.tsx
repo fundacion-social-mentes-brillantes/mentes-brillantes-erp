@@ -1,6 +1,7 @@
 'use client'
 
 import { FormEvent, useEffect, useState, useTransition } from 'react'
+import { useEstaMontado } from '@/lib/hooks/use-esta-montado'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { AlertCircle, CalendarDays, CheckCircle2, X } from 'lucide-react'
@@ -16,15 +17,11 @@ type AjustarFechaPeriodoModalProps = {
 
 export function AjustarFechaPeriodoModal({ periodoId, fechaInicio, fechaFin }: AjustarFechaPeriodoModalProps) {
   const router = useRouter()
-  const [mounted, setMounted] = useState(false)
+  const mounted = useEstaMontado()
   const [isOpen, setIsOpen] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [isPending, startTransition] = useTransition()
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {

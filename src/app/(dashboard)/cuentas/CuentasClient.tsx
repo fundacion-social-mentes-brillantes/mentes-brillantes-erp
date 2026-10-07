@@ -55,8 +55,6 @@ const estadoBadge = (estado: string) => {
 }
 
 const cardBase = 'rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] shadow-sm'
-const cardHeader =
-  'px-5 py-4 flex items-center justify-between bg-[rgb(var(--surface-2))] border-b border-[rgb(var(--border))]'
 const cardTitle = 'text-sm font-semibold tracking-tight text-[rgb(var(--text-primary))]'
 const headerAccent = 'inline-block w-1.5 h-6 rounded-full bg-[rgb(var(--accent))] mr-2'
 

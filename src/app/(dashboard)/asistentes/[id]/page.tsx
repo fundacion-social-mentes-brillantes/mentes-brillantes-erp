@@ -133,23 +133,16 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
       actividad.ultima_actividad.toLocaleDateString("es-CO", { timeZone: "UTC" })
     : "Sin actividad"
 
-  let totalFacturado = 0
-  let totalAbonado = 0
-
   const cuentasProcesadas = (cuentas || []).map((cuenta) => {
     const pagosValidos = filtrarPagosValidos(cuenta.pagos_abonos || [])
     const abonado = Math.round(toSafeNumber(sumarMontos(pagosValidos)))
     const valorCuenta = toSafeNumber(cuenta.valor_total)
     const pendiente = Math.max(0, Math.round(valorCuenta - abonado))
-
-    totalFacturado += valorCuenta
-    totalAbonado += abonado
-
     return { ...cuenta, abonado, pendiente, valorCuenta }
   })
 
-  totalFacturado = Math.round(toSafeNumber(totalFacturado))
-  totalAbonado = Math.round(toSafeNumber(totalAbonado))
+  const totalFacturado = Math.round(toSafeNumber(cuentasProcesadas.reduce((acc, c) => acc + c.valorCuenta, 0)))
+  const totalAbonado = Math.round(toSafeNumber(cuentasProcesadas.reduce((acc, c) => acc + c.abonado, 0)))
   const saldoPendiente = Math.max(0, Math.round(toSafeNumber(totalFacturado - totalAbonado)))
 
   const todosLosAbonos = (cuentas || [])
@@ -161,9 +154,6 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
       }))
     )
     .sort((a, b) => new Date(b.fecha_pago).getTime() - new Date(a.fecha_pago).getTime())
-
-  const hasMovements =
-    cuentasProcesadas.length > 0 || donaciones.length > 0 || movimientos.length > 0 || todosLosAbonos.length > 0
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-10">

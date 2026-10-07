@@ -53,6 +53,8 @@ export function AsistenteIAClient() {
   }
 
   useEffect(() => {
+    // Carga inicial del historial desde el servidor al abrir la pantalla.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadConversations().catch((err) => setError(err instanceof Error ? err.message : "No se pudo cargar el historial."))
   }, [])
 

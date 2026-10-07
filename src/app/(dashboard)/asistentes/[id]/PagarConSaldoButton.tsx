@@ -20,7 +20,7 @@ export function PagarConSaldoButton({ asistenteId, disabled }: { asistenteId: st
         if (result?.success) {
           router.refresh()
         }
-      } catch (err) {
+      } catch {
         setState({ error: 'Ocurrió un error inesperado' })
       }
     })

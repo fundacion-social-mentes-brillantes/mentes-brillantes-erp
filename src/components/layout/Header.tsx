@@ -96,6 +96,8 @@ export function Header({ userEmail, userRole = 'user' }: { userEmail?: string, u
     if (!canUseGlobalSearch || !supabase) return;
     const term = query.trim();
     if (term.length < 2) {
+      // Busqueda en vivo con retardo: limpiar al borrar es parte de la sincronizacion con la base.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setResults({ asistentes: [], cuentas: [], movimientos: [] });
       setSearching(false);
       return;

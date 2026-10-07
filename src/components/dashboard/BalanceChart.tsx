@@ -13,14 +13,45 @@ import {
   Legend,
 } from 'recharts';
 
+type EntradaTooltip = { name?: string; value?: number; color?: string }
+
+const formatCurrency = (value: number) => value.toLocaleString('es-CO');
+
+/**
+ * Va fuera de BalanceChart: definido adentro se creaba un componente nuevo en
+ * cada render y React lo desmontaba y montaba otra vez.
+ */
+function TooltipBalance({ active, payload, label }: { active?: boolean; payload?: EntradaTooltip[]; label?: string | number }) {
+  if (!active || !payload || !payload.length) return null;
+  return (
+    <div className="bg-[rgb(var(--surface-1))] backdrop-blur-md border border-[rgba(var(--border),0.7)] p-4 rounded-2xl shadow-strong flex flex-col gap-2 min-w-[210px]">
+      <p className="text-[rgb(var(--text-muted))] font-medium text-xs mb-1 uppercase tracking-wider">Día {label}</p>
+      {payload
+        .filter((e) => e.name !== 'balanceArea')
+        .map((entry, index) => (
+          <div key={index} className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }}></div>
+              <span className="text-sm text-[rgb(var(--text-primary))]">{entry.name}</span>
+            </div>
+            <span
+              className={`font-semibold ${entry.name === 'Utilidad acumulada' ? 'text-[rgb(var(--warning))]' : entry.name === 'Ingresos' ? 'text-[rgb(var(--success))]' : 'text-[rgb(var(--danger))]'}`}
+            >
+              ${formatCurrency(Number(entry.value ?? 0))}
+            </span>
+          </div>
+        ))}
+    </div>
+  );
+}
+
 interface BalanceChartProps {
   data: { date: string; ingresos: number; egresos: number; balance: number }[];
   utilidadMes: number;
   displayMonthName: string;
 }
 
-export function BalanceChart({ data, displayMonthName }: BalanceChartProps) {
-  const formatCurrency = (value: number) => value.toLocaleString('es-CO');
+export function BalanceChart({ data }: BalanceChartProps) {
   const abreviar = (v: number) => {
     const abs = Math.abs(v);
     if (abs >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
@@ -40,32 +71,6 @@ export function BalanceChart({ data, displayMonthName }: BalanceChartProps) {
 
   // Etiquetas de eje X espaciadas para no saturar cuando hay muchos días
   const step = data.length > 16 ? Math.ceil(data.length / 8) : 1;
-
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-[rgb(var(--surface-1))] backdrop-blur-md border border-[rgba(var(--border),0.7)] p-4 rounded-2xl shadow-strong flex flex-col gap-2 min-w-[210px]">
-          <p className="text-[rgb(var(--text-muted))] font-medium text-xs mb-1 uppercase tracking-wider">Día {label}</p>
-          {payload
-            .filter((e: any) => e.name !== 'balanceArea')
-            .map((entry: any, index: number) => (
-              <div key={index} className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }}></div>
-                  <span className="text-sm text-[rgb(var(--text-primary))]">{entry.name}</span>
-                </div>
-                <span
-                  className={`font-semibold ${entry.name === 'Utilidad acumulada' ? 'text-[rgb(var(--warning))]' : entry.name === 'Ingresos' ? 'text-[rgb(var(--success))]' : 'text-[rgb(var(--danger))]'}`}
-                >
-                  ${formatCurrency(entry.value)}
-                </span>
-              </div>
-            ))}
-        </div>
-      );
-    }
-    return null;
-  };
 
   return (
     <div className="flex flex-col">
@@ -115,7 +120,7 @@ export function BalanceChart({ data, displayMonthName }: BalanceChartProps) {
               tickFormatter={abreviar}
               width={58}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: colors.cursor }} />
+            <Tooltip content={<TooltipBalance />} cursor={{ fill: colors.cursor }} />
             <Legend verticalAlign="top" height={0} content={() => null} />
 
             {/* Área suave bajo la utilidad acumulada (oculta en tooltip y leyenda) */}

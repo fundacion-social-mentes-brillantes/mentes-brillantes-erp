@@ -10,7 +10,6 @@ import {
 } from "@/lib/utils/contable"
 import type {
   TelegramUser,
-  TelegramChat,
   TelegramMessage,
   TelegramUpdate,
   TelegramConfig,
@@ -290,7 +289,7 @@ function referencesLastAsistente(text: string) {
   )
 }
 
-function inferFollowUpIntentFromContext(text: string, ctx: CajeroConversationContext): PendingAction | null {
+function inferFollowUpIntentFromContext(text: string, _ctx: CajeroConversationContext): PendingAction | null {
   const normalized = normalizeText(text)
 
   if (/\b(ultimo pago|último pago|pago mas reciente|pago más reciente|cuando pago|cuándo pago)\b/.test(normalized)) {
@@ -321,9 +320,6 @@ function inferFollowUpIntentFromContext(text: string, ctx: CajeroConversationCon
 }
 
 const PREGUNTAR_PERSONA = "Claro, ¿de qué persona quieres que revise pagos, deuda o saldo?"
-const NO_ENTENDIDO =
-  "Puedo revisar una persona, cartera pendiente, pagos, ingresos/egresos, liquidaciones o el ultimo resultado. Dame un nombre, codigo, concepto o dime que quieres analizar."
-
 const AYUDA = [
   "Bot cajero Mentes Brillantes (solo lectura).",
   "",
@@ -477,25 +473,6 @@ function isSlashCommand(text: string) {
 
 function isReplyToBot(message: TelegramMessage) {
   return message.reply_to_message?.from?.username?.toLowerCase() === BOT_USERNAME
-}
-
-function looksLikeCajeroRequest(text: string) {
-  const normalized = normalizeText(text)
-
-  if (!normalized) return false
-
-  const keywords = [
-    "estado", "deuda", "debe", "deben", "saldo", "pagos", "pago", "abono", "abonos",
-    "pendiente", "pendientes", "cuenta", "cuentas", "comprobante", "consignacion",
-    "transferencia", "nequi", "daviplata", "efectivo", "coach", "sesion", "sesiones",
-    "venta", "ventas", "egreso", "egresos", "resumen", "periodo", "mes",
-  ]
-
-  if (keywords.some((word) => normalized.includes(word))) return true
-  if (/(como|cómo)\s+esta\b/.test(normalized)) return true
-  if (/^(revisa|consulta|mira|verifica|busca)\b/.test(normalized)) return true
-
-  return false
 }
 
 function shouldBotRespond(message: TelegramMessage, memory?: LoadedMemory | null) {

@@ -1,6 +1,5 @@
 'use server'
 
-import Papa from 'papaparse'
 import { textoParaFiltro } from '@/lib/supabase/filtros'
 import type { MetodoPago } from '@/lib/operaciones/errores'
 import { revalidatePath } from 'next/cache'
@@ -229,7 +228,7 @@ export async function procesarMigracion(tipo: string, rows: any[]) {
                 fecha = `${year}-${month}-${day}`
               }
             }
-          } catch (e) {}
+          } catch { /* se ignora: fila sin fecha valida */ }
         }
 
         if (!fecha) {

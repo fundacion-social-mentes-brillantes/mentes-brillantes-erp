@@ -140,6 +140,8 @@ export function ExportarLiquidacion({ empresa: initialEmpresa, periodo, financie
         >
           {/* Header */}
           <div className="pb-6 mb-8 text-center" style={{ borderBottom: '2px solid #374151' }}>
+            {/* <img> a proposito: html2canvas copia la imagen tal cual para el PDF; next/image no sirve ahi. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/logo-mentes-brillantes.png"
               alt="Gimnasio Emocional Mentes Brillantes"

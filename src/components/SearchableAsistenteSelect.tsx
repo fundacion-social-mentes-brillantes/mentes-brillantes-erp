@@ -19,11 +19,12 @@ export function SearchableAsistenteSelect({
   const [selectedId, setSelectedId] = useState<string>(initialSelectedId || '')
   const wrapperRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (initialSelectedId) {
-      setSelectedId(initialSelectedId)
-    }
-  }, [initialSelectedId])
+  // Si cambia el valor inicial (otra persona preseleccionada), se adopta.
+  const [inicialAnterior, setInicialAnterior] = useState(initialSelectedId)
+  if (initialSelectedId !== inicialAnterior) {
+    setInicialAnterior(initialSelectedId)
+    if (initialSelectedId) setSelectedId(initialSelectedId)
+  }
 
   // Cerrar al hacer click afuera
   useEffect(() => {

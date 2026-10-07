@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Bot,
   Calculator,
@@ -58,10 +58,13 @@ const cajaNav = [
 export function Sidebar({ role = "consulta" }: SidebarProps) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
-
-  useEffect(() => {
+  // Al cambiar de pagina se cierra el menu. Se ajusta durante el render (patron
+  // recomendado por React) en vez de un efecto que dibujaba dos veces.
+  const [rutaAnterior, setRutaAnterior] = useState(pathname);
+  if (pathname !== rutaAnterior) {
+    setRutaAnterior(pathname);
     setIsOpen(false);
-  }, [pathname]);
+  }
 
   const navItems = role === "consulta" ? consultaNav : role === "admin" ? adminNav : cajaNav;
   const showConfig = role === "admin";
