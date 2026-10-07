@@ -5,7 +5,7 @@ import {
   toSafeNumber,
 } from "@/lib/utils/contable"
 import { assertFechaEditable } from "@/lib/utils/periodos"
-import { OperacionError, exigirMontoPositivo } from "./errores"
+import { OperacionError, OperacionParcialError, exigirMontoPositivo } from "./errores"
 import type { ActorErp } from "./abonos"
 import { recalcularEstadoCuenta } from "./estado-cuenta"
 
@@ -356,7 +356,7 @@ export async function corregirMontoPago(
       cuentaId: params.cuentaId,
       abonoId: params.abonoId,
     })
-    throw new OperacionError(
+    throw new OperacionParcialError(
       `El pago de ${montoAntes} se revirtio, pero no se pudo registrar el nuevo de ${montoNuevo}. ` +
         "Registra ese abono a mano en la cuenta para que no quede la deuda abierta. " +
         (error instanceof Error ? `Detalle: ${error.message}` : "")

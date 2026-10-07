@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto"
+import type { DbClient } from "@/lib/supabase/types"
+import { aJson, esObjetoJson } from "@/lib/supabase/json"
 
 // Borrador -> confirmacion para las operaciones de ESCRITURA del MCP.
 //
@@ -55,7 +57,8 @@ export type BorradorOperacion = {
 
 export type BorradorReclamado = {
   id: string
-  operacion: OperacionEscritura
+  /** Texto tal como esta en la base; el registro decide si es una operacion conocida. */
+  operacion: string
   params: Record<string, unknown>
   resumen: string
 }
@@ -92,7 +95,7 @@ export function huellaOperacion(
  * duplicado tambien puede ser legitimo (dos abonos iguales el mismo dia).
  */
 export async function buscarEjecucionReciente(
-  admin: any,
+  admin: DbClient,
   userId: string,
   huella: string
 ): Promise<{ id: string; creadoEn: string } | null> {
@@ -112,7 +115,7 @@ export async function buscarEjecucionReciente(
 }
 
 export async function crearBorrador(
-  admin: any,
+  admin: DbClient,
   params: {
     userId: string
     operacion: OperacionEscritura
@@ -129,7 +132,7 @@ export async function crearBorrador(
     operacion: params.operacion,
     huella: huellaOperacion(params.userId, params.operacion, params.datos),
     resumen: params.resumen,
-    params: params.datos,
+    params: aJson(params.datos),
     estado: "emitido",
     expira_en: expiraEn,
   })
@@ -144,7 +147,7 @@ export async function crearBorrador(
  * pertenece a otra persona, no devuelve nada y la operacion no se ejecuta.
  */
 export async function reclamarBorrador(
-  admin: any,
+  admin: DbClient,
   params: { id: string; userId: string }
 ): Promise<BorradorReclamado> {
   const { data, error } = await admin
@@ -168,26 +171,26 @@ export async function reclamarBorrador(
   return {
     id: data.id,
     operacion: data.operacion,
-    params: data.params || {},
+    params: esObjetoJson(data.params) ? data.params : {},
     resumen: data.resumen,
   }
 }
 
-export async function marcarEjecutado(admin: any, id: string, resultado: unknown) {
+export async function marcarEjecutado(admin: DbClient, id: string, resultado: unknown) {
   await admin
     .from("mcp_operaciones")
-    .update({ estado: "ejecutado", resultado, ejecutado_en: new Date().toISOString() })
+    .update({ estado: "ejecutado", resultado: aJson(resultado), ejecutado_en: new Date().toISOString() })
     .eq("id", id)
 }
 
-export async function marcarFallido(admin: any, id: string, mensaje: string) {
+export async function marcarFallido(admin: DbClient, id: string, mensaje: string) {
   await admin
     .from("mcp_operaciones")
     .update({ estado: "fallido", error: mensaje.slice(0, 500), ejecutado_en: new Date().toISOString() })
     .eq("id", id)
 }
 
-export async function cancelarBorrador(admin: any, params: { id: string; userId: string }): Promise<boolean> {
+export async function cancelarBorrador(admin: DbClient, params: { id: string; userId: string }): Promise<boolean> {
   const { data } = await admin
     .from("mcp_operaciones")
     .update({ estado: "cancelado" })

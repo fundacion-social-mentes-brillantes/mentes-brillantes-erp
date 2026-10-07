@@ -1,7 +1,9 @@
 import { z } from "zod"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js"
+import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js"
 import { createAdminClient } from "@/lib/supabase/admin"
+import type { DbClient } from "@/lib/supabase/types"
 import { resolveNaturalDateRange } from "@/lib/telegram-cajero/dates"
 import {
   getBusinessAlerts,
@@ -93,8 +95,8 @@ function protectedResourceMetadataUrl() {
   return new URL("/.well-known/oauth-protected-resource/api/mcp/mcp", mcpPublicOrigin()).toString()
 }
 
-function reader(): SupabaseReader | null {
-  return createAdminClient() as unknown as SupabaseReader | null
+function reader(): DbClient | null {
+  return createAdminClient()
 }
 
 function isToolResult(value: unknown): value is ToolResult {
@@ -133,10 +135,13 @@ function failure(message: string): ToolOutput {
   return output({ status: "error", message }, true)
 }
 
+/** Lo unico que se usa del contexto que el SDK pasa a cada herramienta. */
+export type ExtraHerramienta = { authInfo?: AuthInfo }
+
 export async function executeTool(
   name: string,
   args: unknown,
-  extra: any,
+  extra: ExtraHerramienta | undefined,
   run: () => Promise<unknown>
 ): Promise<ToolOutput> {
   if (!extra?.authInfo) return authenticationRequiredOutput()
@@ -212,19 +217,22 @@ async function registrarAuditoria(params: Parameters<typeof auditMcpToolCall>[0]
   return false
 }
 
-function register(
+function register<S extends z.ZodRawShape>(
   server: McpServer,
   name: string,
   title: string,
   description: string,
-  inputSchema: Record<string, z.ZodTypeAny>,
-  run: (supabase: SupabaseReader, args: any) => Promise<unknown>,
+  inputSchema: S,
+  run: (supabase: DbClient, args: z.infer<z.ZodObject<S>>) => Promise<unknown>,
   outputSchema?: z.ZodTypeAny
 ) {
+  // Ensanchar a ZodRawShape (sin cast) evita que el SDK intente razonar con el
+  // generico S; los tipos finos de `args` se recuperan abajo.
+  const esquema: z.ZodRawShape = inputSchema
   const descriptor = {
     title,
     description,
-    inputSchema,
+    inputSchema: esquema,
     ...(outputSchema ? { outputSchema } : {}),
     annotations: READ_ONLY_ANNOTATIONS,
     securitySchemes: SECURITY_SCHEMES,
@@ -233,30 +241,38 @@ function register(
   server.registerTool(
     name,
     descriptor,
-    async (args: any, extra: any) =>
+    // El SDK ya valido `args` contra inputSchema antes de llamar: el cast solo
+    // recupera el tipo que el schema garantiza.
+    async (args: Record<string, unknown>, extra: ExtraHerramienta) =>
       executeTool(name, args, extra, async () => {
         const supabase = reader()
         if (!supabase) throw new Error("Supabase service role no configurado")
-        return run(supabase, args)
+        return run(supabase, args as z.infer<z.ZodObject<S>>)
       })
   )
 }
 
+type HerramientaListada = { _meta?: { securitySchemes?: unknown } & Record<string, unknown> } & Record<string, unknown>
+type ManejadorLista = (request: unknown, extra: unknown) => Promise<{ tools?: HerramientaListada[] } & Record<string, unknown>>
+
 function installToolListSecurityCompatibility(server: McpServer) {
-  const lowLevelServer = (server as any)?.server
+  const lowLevelServer = server.server
   if (!lowLevelServer?.setRequestHandler) return
   if (TOOL_LIST_COMPAT_INSTALLED.has(lowLevelServer)) return
 
-  const handlers = lowLevelServer._requestHandlers
-  const sdkListHandler = handlers instanceof Map ? handlers.get("tools/list") : null
+  // _requestHandlers es interno del SDK: se lee para envolver su tools/list
+  // original sin reimplementarlo. Si una version futura lo cambia, se falla
+  // en voz alta en vez de publicar herramientas sin su esquema de seguridad.
+  const handlers = (lowLevelServer as unknown as { _requestHandlers?: unknown })._requestHandlers
+  const sdkListHandler = handlers instanceof Map ? (handlers.get("tools/list") as ManejadorLista | undefined) : null
   if (typeof sdkListHandler !== "function") {
     throw new Error("El SDK MCP no expuso el handler tools/list esperado.")
   }
 
-  lowLevelServer.setRequestHandler(ListToolsRequestSchema, async (request: any, extra: any) => {
+  lowLevelServer.setRequestHandler(ListToolsRequestSchema, async (request, extra) => {
     const result = await sdkListHandler(request, extra)
     const tools = Array.isArray(result?.tools)
-      ? result.tools.map((tool: any) => {
+      ? result.tools.map((tool) => {
         const schemes = Array.isArray(tool?._meta?.securitySchemes)
           ? tool._meta.securitySchemes
           : SECURITY_SCHEMES
@@ -275,16 +291,18 @@ function installToolListSecurityCompatibility(server: McpServer) {
   TOOL_LIST_COMPAT_INSTALLED.add(lowLevelServer)
 }
 
+type PersonaEncontrada = { id: string; nombre: string | null; codigo: string | null }
+
 type ResolvedPerson =
   | { kind: "error"; message: string }
   | { kind: "none" }
-  | { kind: "ambiguous"; matches: any[] }
-  | { kind: "person"; person: any }
+  | { kind: "ambiguous"; matches: PersonaEncontrada[] }
+  | { kind: "person"; person: PersonaEncontrada }
 
 async function resolvePerson(supabase: SupabaseReader, person: string): Promise<ResolvedPerson> {
   const result = await searchPerson(supabase, person, 6)
   if (result.status === "error") return { kind: "error", message: "No se pudo buscar la persona." }
-  const matches = Array.isArray(result.data) ? (result.data as any[]) : []
+  const matches = Array.isArray(result.data) ? (result.data as PersonaEncontrada[]) : []
   if (!matches.length) return { kind: "none" }
   if (matches.length > 1) return { kind: "ambiguous", matches }
   return { kind: "person", person: matches[0] }
@@ -295,7 +313,7 @@ function registerPersonTool(
   name: string,
   title: string,
   description: string,
-  run: (supabase: SupabaseReader, personId: string, args: any) => Promise<unknown>
+  run: (supabase: DbClient, personId: string, args: { persona: string; limite?: number }) => Promise<unknown>
 ) {
   register(
     server,
@@ -319,7 +337,7 @@ function registerPersonTool(
         return {
           status: "ambiguous",
           message: "Hay varias coincidencias; especifica el código para no mezclar datos.",
-          coincidencias: resolved.matches.map((match: any) => ({ nombre: match.nombre, codigo: match.codigo })),
+          coincidencias: resolved.matches.map((match) => ({ nombre: match.nombre, codigo: match.codigo })),
         }
       }
       const result = await run(supabase, resolved.person.id, args)
@@ -351,7 +369,7 @@ function registerRangeTool(
   name: string,
   title: string,
   description: string,
-  run: (supabase: SupabaseReader, from: string, to: string) => Promise<unknown>
+  run: (supabase: DbClient, from: string, to: string) => Promise<unknown>
 ) {
   register(
     server,
@@ -372,15 +390,24 @@ function registerRangeTool(
   )
 }
 
-function nestedName(row: any): string {
-  const assistant =
-    row?.asistentes ||
-    row?.cuentas_por_cobrar?.asistentes ||
-    row?.cuentas_por_cobrar?.[0]?.asistentes
-  return assistant?.nombre ? String(assistant.nombre) : ""
+/** Una fila cualquiera de la busqueda global, tal como sale (ya filtrada por privacidad). */
+type FilaBuscada = Record<string, unknown>
+
+function campo(fila: unknown, clave: string): unknown {
+  return fila && typeof fila === "object" ? (fila as FilaBuscada)[clave] : undefined
 }
 
-function searchTitle(category: string, row: any): string {
+function nestedName(row: FilaBuscada): string {
+  const cuenta = campo(row, "cuentas_por_cobrar")
+  const assistant =
+    campo(row, "asistentes") ||
+    campo(cuenta, "asistentes") ||
+    (Array.isArray(cuenta) ? campo(cuenta[0], "asistentes") : undefined)
+  const nombre = campo(assistant, "nombre")
+  return nombre ? String(nombre) : ""
+}
+
+function searchTitle(category: string, row: FilaBuscada): string {
   const person = nestedName(row)
   const main =
     row?.nombre ||
@@ -431,12 +458,13 @@ async function companySearch(supabase: SupabaseReader, query: string) {
     if (!Array.isArray(value)) continue
     for (const row of value) {
       if (!row || typeof row !== "object" || !("id" in row)) continue
-      const safeRow = sanitizeMcpData(row)
+      const safeRow = sanitizeMcpData(row) as FilaBuscada
+      const rowId = String(row.id)
       results.push({
-        id: `${category}:${String((row as any).id)}`,
+        id: `${category}:${rowId}`,
         title: searchTitle(category, safeRow),
         text: JSON.stringify(safeRow),
-        url: canonicalRecordUrl(category, String((row as any).id)),
+        url: canonicalRecordUrl(category, rowId),
       })
       if (results.length >= 40) break
     }
@@ -486,7 +514,7 @@ async function companyFetch(supabase: SupabaseReader, id: string) {
   const { data, error } = await supabase.from(source.table).select(source.select).eq("id", rowId).maybeSingle()
   if (error) throw new Error(`No se pudo consultar ${source.table}`)
   if (!data) throw new Error("Registro no encontrado.")
-  const safe = sanitizeMcpData(data)
+  const safe = sanitizeMcpData(data) as FilaBuscada
   return {
     id,
     title: searchTitle(category, safe),
@@ -531,7 +559,7 @@ export function registerErpTools(server: McpServer) {
     "Cuentas que no pueden cerrarse porque les falta menos de un peso (residuos de la migracion). Ademas de no quedar pagadas, descuadran los conteos: aparecen como pendientes pero sin saldo real. Solo informa.",
     {},
     async (s) => {
-      const cuentas = await buscarCuentasConResiduo(s as any)
+      const cuentas = await buscarCuentasConResiduo(s)
       return {
         total: cuentas.length,
         residuo_total: Number(cuentas.reduce((t, c) => t + c.residuo, 0).toFixed(2)),
@@ -554,7 +582,7 @@ export function registerErpTools(server: McpServer) {
       solo_sospechosas: z.boolean().optional(),
     },
     async (s, args) => {
-      const lista = await buscarPrepagadasSinUsar(s as any, {
+      const lista = await buscarPrepagadasSinUsar(s, {
         diasMinimos: args.dias_minimos,
         soloSospechosas: args.solo_sospechosas,
       })
@@ -588,8 +616,8 @@ export function registerErpTools(server: McpServer) {
       const hasta = fecha(adelante)
 
       const [diferencias, espejo] = await Promise.all([
-        calcularDiferencias(s as any, { desde, hasta }),
-        resumenEspejoAgenda(s as any, { desde, hasta }),
+        calcularDiferencias(s, { desde, hasta }),
+        resumenEspejoAgenda(s, { desde, hasta }),
       ])
       const porTipo = diferencias.reduce((acc: Record<string, number>, d) => {
         acc[d.tipo] = (acc[d.tipo] || 0) + 1
@@ -660,7 +688,7 @@ export function registerErpTools(server: McpServer) {
     "Nombre, NIT, correo, teléfono y ciudad de la fundación, los que salen en las liquidaciones exportadas.",
     {},
     async (s) => {
-      const empresa = await leerConfiguracionEmpresa(s as any)
+      const empresa = await leerConfiguracionEmpresa(s)
       // Son datos de la fundacion, no de una persona: se renombran para que el
       // filtro de privacidad (que actua por nombre de campo) no los oculte.
       return {

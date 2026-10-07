@@ -16,6 +16,13 @@ export class OperacionError extends Error {
  */
 export class SinCambiosError extends OperacionError {}
 
+/**
+ * La operacion alcanzo a escribir una parte antes de fallar. Su mensaje dice
+ * que quedo hecho y que falta: nadie debe decirle a la persona "no se
+ * registro nada" cuando si se registro algo.
+ */
+export class OperacionParcialError extends OperacionError {}
+
 export function exigir(condicion: unknown, mensaje: string): asserts condicion {
   if (!condicion) throw new OperacionError(mensaje)
 }

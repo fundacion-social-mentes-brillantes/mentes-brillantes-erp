@@ -67,7 +67,7 @@ describe("permisos de escritura del MCP", () => {
   })
 
   it("no hay operaciones esperadas que se hayan quedado sin implementar", () => {
-    const implementadas = new Set(OPERACIONES_ESCRITURA.map((o) => o.nombre))
+    const implementadas = new Set<string>(OPERACIONES_ESCRITURA.map((o) => o.nombre))
     for (const nombre of Object.keys(PERMISOS_ESPERADOS)) {
       expect(implementadas.has(nombre), `falta la operación "${nombre}"`).toBe(true)
     }
