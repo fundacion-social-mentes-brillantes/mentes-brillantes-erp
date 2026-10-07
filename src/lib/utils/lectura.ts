@@ -1,5 +1,5 @@
-// Los datos de cada herramienta del bot llegan como unknown (el ejecutor los
-// junta de muchas fuentes). Se leen con estos ayudantes en vez de `any`: si
+// Datos que llegan como unknown (herramientas del bot, cuerpos JSON de otras
+// apps). Se leen con estos ayudantes en vez de `any`: si
 // falta un campo, sale vacio en lugar de romper la respuesta.
 
 export type Fila = Record<string, unknown>

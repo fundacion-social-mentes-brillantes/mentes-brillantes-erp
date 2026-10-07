@@ -2,6 +2,8 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { CABECERAS_SIN_CACHE, respuestaNoAutorizada, secretoAgendaValido } from "@/lib/integraciones/agenda-auth"
 import { calcularDiferencias, guardarSnapshotAgenda, type EventoAgenda } from "@/lib/operaciones/agenda-sync"
 import { OperacionError } from "@/lib/operaciones/errores"
+import { mensajeDeError } from "@/lib/utils/errores"
+import { objeto, textoONulo } from "@/lib/utils/lectura"
 
 // La agenda reporta aqui sus sesiones coach de una ventana de fechas.
 //
@@ -24,23 +26,39 @@ const MAX_ENTRADA = 5_000
  * por borradas. Tambien avisa si el reporte quedo recortado, porque entonces no
  * se puede dar por borrado nada.
  */
+/**
+ * Codigo de persona: solo un entero positivo. Antes un codigo vacio ("") pasaba
+ * como 0 (Number("") es 0) y aparecia como "persona que no esta en el ERP".
+ */
+function codigoValido(valor: unknown): number | null {
+  if (typeof valor === "number") return Number.isInteger(valor) && valor > 0 ? valor : null
+  if (typeof valor === "string" && /^\d{1,9}$/.test(valor.trim())) {
+    const n = Number(valor.trim())
+    return n > 0 ? n : null
+  }
+  return null
+}
+
+const texto = (valor: unknown, maximo: number) => textoONulo(valor)?.slice(0, maximo) ?? null
+
 function normalizarEventos(valor: unknown): { eventos: EventoAgenda[]; completo: boolean } {
   if (!Array.isArray(valor)) return { eventos: [], completo: false }
   const coach = valor
     .slice(0, MAX_ENTRADA)
-    .map((e: any) => ({
-      id: String(e?.id || "").slice(0, 128),
-      workspaceId: String(e?.workspaceId || "").slice(0, 128),
-      codigoPersona: Number.isFinite(Number(e?.clientCode ?? e?.codigoPersona))
-        ? Number(e?.clientCode ?? e?.codigoPersona)
-        : null,
-      nombrePersona: e?.clientName ?? e?.nombrePersona ?? null,
-      fecha: String(e?.date ?? e?.fecha ?? "").slice(0, 10),
-      inicio: e?.startAt ?? e?.inicio ?? null,
-      titulo: typeof e?.title === "string" ? e.title.slice(0, 300) : (e?.titulo ?? null),
-      modalidad: e?.modality ?? e?.modalidad ?? null,
-      hecho: Boolean(e?.done ?? e?.hecho),
-    }))
+    .map((crudo): EventoAgenda => {
+      const e = objeto(crudo)
+      return {
+        id: String(e.id || "").slice(0, 128),
+        workspaceId: String(e.workspaceId || "").slice(0, 128),
+        codigoPersona: codigoValido(e.clientCode ?? e.codigoPersona),
+        nombrePersona: texto(e.clientName ?? e.nombrePersona, 200),
+        fecha: String(e.date ?? e.fecha ?? "").slice(0, 10),
+        inicio: texto(e.startAt ?? e.inicio, 40),
+        titulo: texto(e.title ?? e.titulo, 300),
+        modalidad: texto(e.modality ?? e.modalidad, 60),
+        hecho: Boolean(e.done ?? e.hecho),
+      }
+    })
     // Solo sesiones coach: el resto del calendario (reuniones, festivos) no
     // tiene nada que ver con la contabilidad.
     .filter((e) => e.id && e.codigoPersona !== null && /^\d{4}-\d{2}-\d{2}$/.test(e.fecha))
@@ -89,11 +107,11 @@ export async function POST(req: Request) {
       },
       { headers: CABECERAS_SIN_CACHE }
     )
-  } catch (error: any) {
+  } catch (error) {
     if (error instanceof OperacionError) {
       return Response.json({ error: error.message }, { status: 400, headers: CABECERAS_SIN_CACHE })
     }
-    console.error("[integraciones/agenda/sincronizar] fallo", { message: error?.message })
+    console.error("[integraciones/agenda/sincronizar] fallo", { message: mensajeDeError(error, "desconocido") })
     return Response.json({ error: "error_interno" }, { status: 500, headers: CABECERAS_SIN_CACHE })
   }
 }

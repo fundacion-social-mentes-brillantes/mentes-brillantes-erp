@@ -2,6 +2,8 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { CABECERAS_SIN_CACHE, respuestaNoAutorizada, secretoAgendaValido } from "@/lib/integraciones/agenda-auth"
 import { getPersonFinancialStatus, type SupabaseReader } from "@/lib/telegram-cajero/tools"
 import { getCoachSessions } from "@/lib/telegram-cajero/tools/coach"
+import type { DbClient } from "@/lib/supabase/types"
+import { mensajeDeError } from "@/lib/utils/errores"
 
 // Estado real de una o varias personas para la AGENDA (agenda-mentes-brillantes).
 //
@@ -18,8 +20,8 @@ export const dynamic = "force-dynamic"
 
 const MAX_CODIGOS = 50
 
-async function estadoDeCodigo(supabase: SupabaseReader, admin: any, codigo: string) {
-  const { data: persona, error } = await admin
+async function estadoDeCodigo(supabase: SupabaseReader, codigo: string) {
+  const { data: persona, error } = await supabase
     .from("asistentes")
     .select("id, nombre, codigo, activo")
     .eq("codigo", codigo)
@@ -28,13 +30,13 @@ async function estadoDeCodigo(supabase: SupabaseReader, admin: any, codigo: stri
   if (error) throw new Error("No se pudo consultar la persona.")
   if (!persona) return { codigo, existe: false as const }
 
-  const [financiero, coach]: any[] = await Promise.all([
+  const [financiero, coach] = await Promise.all([
     getPersonFinancialStatus(supabase, persona.id),
     getCoachSessions(supabase, persona.id),
   ])
 
-  const f = financiero?.data || {}
-  const c = coach?.data || {}
+  const f = financiero.data
+  const c = coach.data
 
   return {
     codigo,
@@ -43,22 +45,23 @@ async function estadoDeCodigo(supabase: SupabaseReader, admin: any, codigo: stri
     activo: persona.activo,
     // Cifras globales; null cuando la lectura quedo incompleta, para que la
     // agenda no muestre un numero a medias como si fuera definitivo.
-    deuda_total: f.total_pendiente ?? null,
-    total_facturado: f.total_facturado ?? null,
-    total_abonado: f.total_abonado ?? null,
-    saldo_a_favor: f.saldo_a_favor ?? null,
-    cuentas_pendientes: Array.isArray(f.cuentas)
-      ? f.cuentas.filter((x: any) => Number(x.pendiente) > 0).length
+    deuda_total: f?.total_pendiente ?? null,
+    total_facturado: f?.total_facturado ?? null,
+    total_abonado: f?.total_abonado ?? null,
+    saldo_a_favor: f?.saldo_a_favor ?? null,
+    cuentas_pendientes: f && Array.isArray(f.cuentas)
+      ? f.cuentas.filter((x) => Number(x.pendiente) > 0).length
       : null,
     coach: {
-      sesiones_compradas: c.sesiones_compradas ?? 0,
-      sesiones_realizadas: c.sesiones_realizadas ?? 0,
-      sesiones_restantes: c.sesiones_restantes ?? 0,
+      sesiones_compradas: c?.sesiones_compradas ?? 0,
+      sesiones_realizadas: c?.sesiones_realizadas ?? 0,
+      sesiones_restantes: c?.sesiones_restantes ?? 0,
       // Sesiones que vienen de la migracion y no estan en el modulo nuevo.
-      sesiones_migradas: c.sesiones_migradas ?? 0,
-      sesiones_tomadas_total: c.sesiones_tomadas_total ?? c.sesiones_realizadas ?? 0,
+      sesiones_migradas: c?.sesiones_migradas ?? 0,
+      sesiones_tomadas_total: c?.sesiones_tomadas_total ?? c?.sesiones_realizadas ?? 0,
     },
-    completo: financiero?.data?.pagination?.complete !== false,
+    // Si la lectura financiera fallo o quedo a medias, la agenda lo sabe.
+    completo: Boolean(f) && f?.pagination?.complete !== false,
   }
 }
 
@@ -83,16 +86,16 @@ export async function GET(req: Request) {
   if (!admin) {
     return Response.json({ error: "servidor_no_configurado" }, { status: 500, headers: CABECERAS_SIN_CACHE })
   }
-  const supabase = admin as unknown as SupabaseReader
+  const supabase: DbClient = admin
 
   try {
-    const personas = await Promise.all(codigos.map((c) => estadoDeCodigo(supabase, admin, c)))
+    const personas = await Promise.all(codigos.map((c) => estadoDeCodigo(supabase, c)))
     return Response.json(
       { consultadas: personas.length, asOf: new Date().toISOString(), personas },
       { headers: CABECERAS_SIN_CACHE }
     )
-  } catch (error: any) {
-    console.error("[integraciones/agenda] fallo", { message: error?.message })
+  } catch (error) {
+    console.error("[integraciones/agenda] fallo", { message: mensajeDeError(error, "desconocido") })
     return Response.json({ error: "error_interno" }, { status: 500, headers: CABECERAS_SIN_CACHE })
   }
 }

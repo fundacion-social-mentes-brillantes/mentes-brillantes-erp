@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server"
 import { AuthzError, requireRoles } from "@/lib/utils/authz"
 
-function mapMessage(message: any) {
+type MensajeGuardado = { id: string; rol: string; contenido: string; creado_en: string | null }
+
+function mapMessage(message: MensajeGuardado) {
   return {
     id: message.id,
     role: message.rol,
@@ -28,8 +30,19 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "No se pudo cargar el historial." }, { status: 500 })
     }
 
-    const activeId = requestedId || conversaciones?.[0]?.id || null
-    let messages: any[] = []
+    // Un chat pedido por id solo se abre si es de quien lo pide. La base ya lo
+    // impide con sus reglas por fila; esto es la segunda capa.
+    let activeId: string | null = conversaciones?.[0]?.id || null
+    if (requestedId) {
+      const { data: propia } = await supabase
+        .from("asistente_ia_conversaciones")
+        .select("id")
+        .eq("id", requestedId)
+        .eq("usuario_id", user.id)
+        .maybeSingle()
+      activeId = propia?.id ?? null
+    }
+    let messages: MensajeGuardado[] = []
 
     if (activeId) {
       const { data: mensajes, error: mensajesError } = await supabase

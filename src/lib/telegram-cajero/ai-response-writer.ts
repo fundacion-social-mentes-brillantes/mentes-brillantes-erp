@@ -5,7 +5,7 @@ import type { TelegramConfig } from "./types"
 import { minimizeAiProviderPayload } from "./ai-provider-payload"
 import { toSafeNumber } from "@/lib/utils/contable"
 import { mensajeDeError } from "@/lib/utils/errores"
-import { filas, lista, objeto } from "./lectura"
+import { filas, lista, objeto } from "@/lib/utils/lectura"
 import { PENSAR_DEEPSEEK } from "@/lib/deepseek-modelo"
 
 function formatCop(value: unknown) {

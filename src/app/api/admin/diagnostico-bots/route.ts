@@ -38,8 +38,9 @@ async function pingDeepSeek(apiKey?: string, baseUrl?: string, model?: string) {
       modelo: model,
       error: texto.slice(0, 300),
     }
-  } catch (error: any) {
-    return { configurado: true as const, ok: false as const, error: error?.name === "AbortError" ? "timeout" : "fallo de red" }
+  } catch (error) {
+    const esTimeout = error instanceof Error && error.name === "AbortError"
+    return { configurado: true as const, ok: false as const, error: esTimeout ? "timeout" : "fallo de red" }
   }
 }
 

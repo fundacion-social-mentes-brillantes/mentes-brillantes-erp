@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { filas, objeto, textoONulo } from "@/lib/utils/lectura"
 import {
   type AsistenteIaOption,
   buildAsistenteIaContext,
@@ -92,20 +93,19 @@ function parseCodigo(message: string) {
   return null
 }
 
-function extractSelectionOptions(context: any): AsistenteIaOption[] {
-  if (!context?.requiere_seleccion || !Array.isArray(context.coincidencias)) return []
+function extractSelectionOptions(context: unknown): AsistenteIaOption[] {
+  const ctx = objeto(context)
+  if (!ctx.requiere_seleccion) return []
 
-  return context.coincidencias
-    .map((coincidencia: any) => coincidencia?.asistente)
-    .filter((asistente: any): asistente is AsistenteIaOption => {
-      return asistente && typeof asistente.id === "string" && typeof asistente.nombre === "string"
-    })
+  return filas(ctx.coincidencias)
+    .map((coincidencia) => objeto(coincidencia.asistente))
+    .filter((asistente) => typeof asistente.id === "string" && typeof asistente.nombre === "string")
     .slice(0, 5)
-    .map((asistente: any) => ({
-      id: asistente.id,
-      nombre: asistente.nombre,
-      codigo: asistente.codigo ?? null,
-      cedula: asistente.cedula ?? null,
+    .map((asistente) => ({
+      id: String(asistente.id),
+      nombre: String(asistente.nombre),
+      codigo: textoONulo(asistente.codigo),
+      cedula: textoONulo(asistente.cedula),
     }))
 }
 

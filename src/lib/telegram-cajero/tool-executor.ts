@@ -1,4 +1,4 @@
-import { filas, objeto, textoONulo } from "./lectura"
+import { filas, objeto, textoONulo } from "@/lib/utils/lectura"
 import { resolveNaturalDateRange } from "./dates"
 import type { TelegramSessionState } from "./memory"
 import type { PendingAction } from "./types"
