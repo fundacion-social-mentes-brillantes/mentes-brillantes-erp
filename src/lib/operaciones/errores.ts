@@ -10,6 +10,12 @@ export class OperacionError extends Error {
   readonly esParaUsuario = true
 }
 
+/**
+ * La operacion era valida pero no cambiaba nada (los datos ya eran esos). El
+ * MCP lo muestra como cualquier otro aviso; la web lo trata como "guardado".
+ */
+export class SinCambiosError extends OperacionError {}
+
 export function exigir(condicion: unknown, mensaje: string): asserts condicion {
   if (!condicion) throw new OperacionError(mensaje)
 }

@@ -1,3 +1,4 @@
+import { formatearFechaIso } from '@/lib/utils/fechas'
 import Link from 'next/link'
 import { Edit2, Plus } from 'lucide-react'
 import { requireRoles } from '@/lib/utils/authz'
@@ -42,7 +43,7 @@ export default async function VentasExternasPage() {
             <tbody className="divide-y divide-zinc-200">
               {ventas?.map((venta) => (
                 <tr key={venta.id} className={venta.estado === 'anulado' ? 'opacity-60' : 'hover:bg-zinc-50/50'}>
-                  <td className="px-6 py-4 text-zinc-500">{new Date(venta.fecha).toLocaleDateString('es-CO', { timeZone: 'UTC' })}</td>
+                  <td className="px-6 py-4 text-zinc-500">{formatearFechaIso(venta.fecha)}</td>
                   <td className="px-6 py-4 font-medium text-zinc-900">{venta.concepto}</td>
                   <td className="px-6 py-4 text-zinc-500">{venta.comprador_nombre || 'Sin comprador'}</td>
                   <td className="px-6 py-4 text-zinc-500 capitalize">{venta.metodo_pago}</td>
@@ -92,7 +93,7 @@ export default async function VentasExternasPage() {
                 <div className="min-w-0 space-y-1">
                   <p className="font-semibold text-zinc-900 leading-snug">{venta.concepto}</p>
                   <p className="text-xs text-zinc-500">
-                    {new Date(venta.fecha).toLocaleDateString('es-CO', { timeZone: 'UTC' })} · {venta.comprador_nombre || 'Sin comprador'}
+                    {formatearFechaIso(venta.fecha)} · {venta.comprador_nombre || 'Sin comprador'}
                   </p>
                 </div>
                 <p className="shrink-0 text-base font-bold text-emerald-600">

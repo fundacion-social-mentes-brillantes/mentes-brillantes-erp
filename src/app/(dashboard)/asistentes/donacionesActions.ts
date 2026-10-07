@@ -3,202 +3,139 @@
 import { revalidatePath } from 'next/cache'
 import { requireAdmin, requireRoles } from '@/lib/utils/authz'
 import { parseMoneyInput } from '@/lib/utils/contable'
-import { assertFechaEditable } from '@/lib/utils/periodos'
 import { fechaHoyBogota } from '@/lib/utils/fechas'
+import { errorDeAccion } from '@/lib/utils/acciones'
+import type { DbClient } from '@/lib/supabase/types'
+import { anularMovimiento, editarMovimiento, eliminarMovimiento } from '@/lib/operaciones/anulaciones'
+import { OperacionError, SinCambiosError } from '@/lib/operaciones/errores'
 import { crearDonacion as crearDonacionCore } from '@/lib/operaciones/movimientos'
+import { leerMovimiento } from '@/lib/operaciones/registros-movimiento'
+
+// Donaciones desde el perfil de la persona. Crear, corregir, anular y borrar
+// pasan por lib/operaciones, igual que en el Historial General y el MCP.
+// Antes la auditoria de estas tres ultimas mandaba el motivo en null, la base
+// la rechazaba (motivo es NOT NULL) y el cambio quedaba sin rastro.
 
 export type DonacionState = { error?: string; success?: boolean } | null
 
-const TABLE = 'donaciones_asistentes'
+const textoDe = (formData: FormData, campo: string) => {
+  const valor = formData.get(campo)
+  return typeof valor === 'string' ? valor.trim() : ''
+}
 
-async function audit(
-  supabase: any,
-  userId: string,
-  accion: string,
-  registroId: string,
-  valorAnterior: number | null,
-  valorNuevo: number | null,
-  motivo?: string
-) {
-  try {
-    await supabase.from('auditoria_financiera').insert([
-      {
-        tabla_afectada: TABLE,
-        registro_id: registroId,
-        usuario_id: userId,
-        accion,
-        valor_anterior: valorAnterior,
-        valor_nuevo: valorNuevo,
-        motivo: motivo || null,
-      },
-    ])
-  } catch (_) {
-    // auditoría best-effort
-  }
+function refrescar(asistente_id: string) {
+  revalidatePath(`/asistentes/${asistente_id}`)
+  revalidatePath('/movimientos')
+  revalidatePath('/dashboard')
+}
+
+/** La donacion debe ser de la persona cuyo perfil se esta viendo. */
+async function exigirDonacionDe(supabase: DbClient, id: string, asistente_id: string) {
+  const donacion = await leerMovimiento(supabase, 'donacion', id)
+  if (!donacion) throw new OperacionError('No se encontró la donación.')
+  if (donacion.asistenteId !== asistente_id) throw new OperacionError('Esa donación no es de esta persona.')
 }
 
 export async function crearDonacion(asistente_id: string, formData: FormData): Promise<DonacionState> {
-  let supabase, user
-  try {
-    ;({ supabase, user } = await requireRoles(['admin', 'caja']))
-  } catch (e: any) {
-    return { error: e?.message || 'Acceso denegado' }
-  }
-
   const monto = parseMoneyInput(formData.get('monto'))
-  const metodo_pago = (formData.get('metodo_pago') as string) || ''
-  const fecha = (formData.get('fecha') as string) || fechaHoyBogota()
-  const notas = (formData.get('notas') as string) || null
+  const metodo_pago = textoDe(formData, 'metodo_pago')
+  const fecha = textoDe(formData, 'fecha') || fechaHoyBogota()
+  const notas = textoDe(formData, 'notas') || null
 
   if (!asistente_id || monto === null || monto <= 0 || !metodo_pago) {
     return { error: 'Monto y método de pago son obligatorios y el monto debe ser mayor a 0.' }
   }
 
-  // Nucleo compartido con el MCP: mismas reglas y misma auditoria.
   try {
+    const { supabase, user, perfil } = await requireRoles(['admin', 'caja'])
+    // Nucleo compartido con el MCP: mismas reglas y misma auditoria.
     await crearDonacionCore(
       supabase,
-      { userId: user?.id || '', role: 'admin' },
-      { asistenteId: asistente_id, monto: monto as number, metodoPago: metodo_pago, fecha, notas }
+      { userId: user.id, role: perfil.rol === 'admin' ? 'admin' : 'caja' },
+      { asistenteId: asistente_id, monto, metodoPago: metodo_pago, fecha, notas }
     )
-  } catch (e: any) {
-    return { error: e?.message || 'No se pudo registrar la donación.' }
+  } catch (e) {
+    return errorDeAccion(e, 'No se pudo registrar la donación.', 'donaciones')
   }
 
-  revalidatePath(`/asistentes/${asistente_id}`)
-  revalidatePath('/movimientos')
-  revalidatePath('/dashboard')
+  refrescar(asistente_id)
   return { success: true }
 }
 
 export async function editarDonacion(
   id: string,
   asistente_id: string,
-  payload: { monto?: number; metodo_pago?: string; fecha?: string; notas?: string }
+  payload: { monto?: number; metodo_pago?: string; fecha?: string; notas?: string; motivo?: string }
 ): Promise<DonacionState> {
-  let supabase, user
+  if (payload.monto !== undefined && (!Number.isFinite(payload.monto) || payload.monto <= 0)) {
+    return { error: 'El monto debe ser mayor a 0.' }
+  }
+
   try {
-    ;({ supabase, user } = await requireAdmin())
-  } catch (e: any) {
-    return { error: e?.message || 'Acceso denegado' }
+    const { supabase, user } = await requireAdmin()
+    await exigirDonacionDe(supabase, id, asistente_id)
+    await editarMovimiento(supabase, { userId: user.id, role: 'admin' }, {
+      tipo: 'donacion',
+      movimientoId: id,
+      monto: payload.monto,
+      metodoPago: payload.metodo_pago || undefined,
+      fecha: payload.fecha || undefined,
+      notas: payload.notas,
+      motivo: payload.motivo,
+    })
+  } catch (e) {
+    if (!(e instanceof SinCambiosError)) return errorDeAccion(e, 'No se pudo editar la donación.', 'donaciones')
   }
 
-  const updatePayload: any = {}
-  const { data: registroActual, error: registroActualError } = await supabase.from(TABLE).select('fecha').eq('id', id).single()
-  if (registroActualError || !registroActual) return { error: 'No se encontró la donación.' }
-
-  const periodoActualError = await assertFechaEditable(supabase, registroActual.fecha, 'Editar la donación')
-  if (periodoActualError) return { error: periodoActualError }
-
-  if (payload.monto !== undefined) {
-    if (isNaN(payload.monto) || payload.monto <= 0) return { error: 'El monto debe ser mayor a 0.' }
-    updatePayload.monto = payload.monto
-  }
-  if (payload.metodo_pago) updatePayload.metodo_pago = payload.metodo_pago
-  if (payload.fecha) updatePayload.fecha = payload.fecha
-  if (payload.notas !== undefined) updatePayload.notas = payload.notas
-  updatePayload.usuario_id = user?.id || null
-
-  if (payload.fecha) {
-    const periodoNuevoError = await assertFechaEditable(supabase, payload.fecha, 'Editar la donación')
-    if (periodoNuevoError) return { error: periodoNuevoError }
-  }
-
-  const { error } = await supabase.from(TABLE).update(updatePayload).eq('id', id)
-  if (error) return { error: error.message }
-
-  await audit(supabase, user.id, 'editar_donacion', id, null, updatePayload.monto ?? null, payload.notas)
-
-  revalidatePath(`/asistentes/${asistente_id}`)
-  revalidatePath('/movimientos')
-  revalidatePath('/dashboard')
+  refrescar(asistente_id)
   return { success: true }
 }
 
 export async function anularDonacion(id: string, asistente_id: string, motivo?: string): Promise<DonacionState> {
-  let supabase, user
   try {
-    ;({ supabase, user } = await requireAdmin())
-  } catch (e: any) {
-    return { error: e?.message || 'Acceso denegado' }
+    const { supabase, user } = await requireAdmin()
+    await exigirDonacionDe(supabase, id, asistente_id)
+    await anularMovimiento(supabase, { userId: user.id, role: 'admin' }, { tipo: 'donacion', movimientoId: id, motivo })
+  } catch (e) {
+    return errorDeAccion(e, 'No se pudo anular la donación.', 'donaciones')
   }
 
-  const { data: registro } = await supabase.from(TABLE).select('monto, notas, fecha').eq('id', id).single()
-  const periodoError = await assertFechaEditable(supabase, registro?.fecha, 'Anular la donación')
-  if (periodoError) return { error: periodoError }
-
-  const { error } = await supabase
-    .from(TABLE)
-    .update({
-      estado: 'anulado',
-      notas: registro?.notas ? `[ANULADO] ${registro.notas}` : '[ANULADO]',
-    })
-    .eq('id', id)
-
-  if (error) return { error: error.message }
-
-  await audit(supabase, user.id, 'anular_donacion', id, registro?.monto ?? null, 0, motivo)
-
-  revalidatePath(`/asistentes/${asistente_id}`)
-  revalidatePath('/movimientos')
-  revalidatePath('/dashboard')
+  refrescar(asistente_id)
   return { success: true }
 }
 
 export async function eliminarDonacion(id: string, asistente_id: string, motivo?: string): Promise<DonacionState> {
-  let supabase, user
   try {
-    ;({ supabase, user } = await requireAdmin())
-  } catch (e: any) {
-    return { error: e?.message || 'Acceso denegado' }
+    const { supabase, user } = await requireAdmin()
+    await exigirDonacionDe(supabase, id, asistente_id)
+    await eliminarMovimiento(supabase, { userId: user.id, role: 'admin' }, { tipo: 'donacion', movimientoId: id, motivo })
+  } catch (e) {
+    return errorDeAccion(e, 'No se pudo eliminar la donación.', 'donaciones')
   }
 
-  const { data: registro } = await supabase.from(TABLE).select('monto, fecha').eq('id', id).single()
-  const periodoError = await assertFechaEditable(supabase, registro?.fecha, 'Eliminar la donación')
-  if (periodoError) return { error: periodoError }
-  const { error } = await supabase.from(TABLE).delete().eq('id', id)
-  if (error) return { error: error.message }
-
-  await audit(supabase, user.id, 'eliminar_donacion', id, registro?.monto ?? null, null, motivo)
-
-  revalidatePath(`/asistentes/${asistente_id}`)
-  revalidatePath('/movimientos')
-  revalidatePath('/dashboard')
+  refrescar(asistente_id)
   return { success: true }
 }
 
 // Wrappers para formularios (FormData)
-export async function editarDonacionForm(prev: DonacionState, formData: FormData): Promise<DonacionState> {
-  const id = formData.get('id') as string
-  const asistente_id = formData.get('asistente_id') as string
-  const monto = formData.get('monto')
-  const metodo_pago = formData.get('metodo_pago') as string | null
-  const fecha = formData.get('fecha') as string | null
-  const notas = formData.get('notas') as string | null
-  const montoValue = monto ? parseMoneyInput(monto as string) : undefined
+export async function editarDonacionForm(_prev: DonacionState, formData: FormData): Promise<DonacionState> {
+  const montoTexto = textoDe(formData, 'monto')
+  const montoValue = montoTexto ? parseMoneyInput(montoTexto) : undefined
+  if (montoTexto && montoValue === null) return { error: 'El monto debe ser mayor a 0.' }
 
-  if (monto && montoValue === null) {
-    return { error: 'El monto debe ser mayor a 0.' }
-  }
-
-  return editarDonacion(id, asistente_id, {
+  const notas = formData.get('notas')
+  return editarDonacion(textoDe(formData, 'id'), textoDe(formData, 'asistente_id'), {
     monto: montoValue ?? undefined,
-    metodo_pago: metodo_pago || undefined,
-    fecha: fecha || undefined,
-    notas: notas ?? undefined,
+    metodo_pago: textoDe(formData, 'metodo_pago') || undefined,
+    fecha: textoDe(formData, 'fecha') || undefined,
+    notas: typeof notas === 'string' ? notas.trim() : undefined,
   })
 }
 
-export async function anularDonacionForm(prev: DonacionState, formData: FormData): Promise<DonacionState> {
-  const id = formData.get('id') as string
-  const asistente_id = formData.get('asistente_id') as string
-  const motivo = formData.get('motivo') as string | undefined
-  return anularDonacion(id, asistente_id, motivo)
+export async function anularDonacionForm(_prev: DonacionState, formData: FormData): Promise<DonacionState> {
+  return anularDonacion(textoDe(formData, 'id'), textoDe(formData, 'asistente_id'), textoDe(formData, 'motivo') || undefined)
 }
 
-export async function eliminarDonacionForm(prev: DonacionState, formData: FormData): Promise<DonacionState> {
-  const id = formData.get('id') as string
-  const asistente_id = formData.get('asistente_id') as string
-  const motivo = formData.get('motivo') as string | undefined
-  return eliminarDonacion(id, asistente_id, motivo)
+export async function eliminarDonacionForm(_prev: DonacionState, formData: FormData): Promise<DonacionState> {
+  return eliminarDonacion(textoDe(formData, 'id'), textoDe(formData, 'asistente_id'), textoDe(formData, 'motivo') || undefined)
 }

@@ -1,5 +1,6 @@
 'use client'
 
+import { formatearFechaIso } from '@/lib/utils/fechas'
 import { useState } from 'react'
 import Link from 'next/link'
 import { ExternalLink, Receipt, AlertTriangle } from 'lucide-react'
@@ -175,7 +176,7 @@ export function CuentasClient({
                       {cuenta.concepto}
                     </td>
                     <td className="px-6 py-4 text-[rgb(var(--text-muted))] whitespace-nowrap">
-                      {new Date(cuenta.fecha_emision).toLocaleDateString('es-CO', { timeZone: 'UTC' })}
+                      {formatearFechaIso(cuenta.fecha_emision)}
                     </td>
                     <td className="px-6 py-4 text-right text-[rgb(var(--text-primary))] font-medium whitespace-nowrap">
                       {formatCurrency(cuenta.saldos.valor_total)}
@@ -242,7 +243,7 @@ export function CuentasClient({
               </div>
               <div className="flex items-center justify-between pt-2 border-t border-[rgb(var(--border))] text-sm">
                 <span className="text-[rgb(var(--text-muted))]">
-                  {new Date(cuenta.fecha_emision).toLocaleDateString('es-CO', { timeZone: 'UTC' })}
+                  {formatearFechaIso(cuenta.fecha_emision)}
                 </span>
                 <div className="text-right">
                   <div className="font-medium text-[rgb(var(--text-primary))]">{formatCurrency(cuenta.saldos.valor_total)}</div>
@@ -272,7 +273,7 @@ export function CuentasClient({
                 </div>
                 <SheetTitle className="text-xl leading-snug text-[rgb(var(--text-primary))]">{selectedCuenta.concepto}</SheetTitle>
                 <SheetDescription className="text-[rgb(var(--text-muted))]">
-                  Emitida el {new Date(selectedCuenta.fecha_emision).toLocaleDateString('es-CO', { timeZone: 'UTC' })}
+                  Emitida el {formatearFechaIso(selectedCuenta.fecha_emision)}
                 </SheetDescription>
               </SheetHeader>
 
@@ -319,7 +320,7 @@ export function CuentasClient({
                 <div>
                   <p className="text-xs text-[rgb(var(--text-muted))] font-medium">Fecha de Emisión</p>
                   <p className="font-medium text-[rgb(var(--text-primary))]">
-                    {new Date(selectedCuenta.fecha_emision).toLocaleDateString('es-CO', { timeZone: 'UTC' })}
+                    {formatearFechaIso(selectedCuenta.fecha_emision)}
                   </p>
                 </div>
                 <div>
@@ -364,7 +365,7 @@ export function CuentasClient({
                       >
                         <div className="text-[rgb(var(--text-primary))]">
                           <p className="text-xs text-[rgb(var(--success))] font-medium">
-                            {new Date(abono.fecha_pago).toLocaleDateString('es-CO', { timeZone: 'UTC' })}
+                            {formatearFechaIso(abono.fecha_pago)}
                           </p>
                           {abono.metodo_pago && (
                             <p className="text-xs text-[rgb(var(--text-muted))] capitalize">{abono.metodo_pago.replace('_', ' ')}</p>

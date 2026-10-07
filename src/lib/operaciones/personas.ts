@@ -1,6 +1,6 @@
 import type { DbClient, TablesInsert, TablesUpdate } from "@/lib/supabase/types"
 import { fechaHoyBogota } from "@/lib/utils/fechas"
-import { OperacionError, exigir, exigirFechaIso } from "./errores"
+import { OperacionError, SinCambiosError, exigir, exigirFechaIso } from "./errores"
 import type { ActorErp } from "./abonos"
 
 // Alta y edicion de personas (asistentes). Sin dinero de por medio, pero es la
@@ -153,7 +153,7 @@ export async function previsualizarEdicionPersona(
   }
 
   if (Object.keys(resultado).length === 0) {
-    throw new OperacionError(`No hay nada que cambiar: los datos de ${actual.nombre} ya son esos.`)
+    throw new SinCambiosError(`No hay nada que cambiar: los datos de ${actual.nombre} ya son esos.`)
   }
 
   return { asistenteId, nombreActual: actual.nombre, codigoActual: actual.codigo, cambios: resultado }

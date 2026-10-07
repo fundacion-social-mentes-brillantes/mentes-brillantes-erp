@@ -238,6 +238,7 @@ export async function crearAdelanto(supabase: DbClient, actor: ActorErp, datos: 
         fecha: v.fecha,
         metodo_pago: v.metodoPago,
         notas: datos.notas || null,
+        usuario_id: actor.userId || null,
       },
     ])
     .select("id")
@@ -456,6 +457,7 @@ export async function crearDevolucionSocio(supabase: DbClient, actor: ActorErp, 
     notas: datos.notas || null,
     tipo: "devolucion",
     adelanto_id: parte.adelantoId,
+    usuario_id: actor.userId || null,
   }))
 
   const { data, error } = await supabase.from("adelantos_socios").insert(filas).select("id")
@@ -511,6 +513,7 @@ export async function crearDevolucionAdelanto(
         notas: datos.notas || null,
         tipo: "devolucion",
         adelanto_id: v.adelanto.id,
+        usuario_id: actor.userId || null,
       },
     ])
     .select("id")

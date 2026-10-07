@@ -1,6 +1,7 @@
 import type { DbClient } from "@/lib/supabase/types"
 import { assertFechaEditable } from "@/lib/utils/periodos"
-import { OperacionError, exigirFechaIso, exigirMetodoPago } from "./errores"
+import { OperacionError, SinCambiosError, exigirFechaIso, exigirMetodoPago } from "./errores"
+import { registrarAuditoria } from "./auditoria"
 import { recalcularEstadoCuenta } from "./estado-cuenta"
 import type { ActorErp } from "./abonos"
 import {
@@ -38,6 +39,8 @@ export const PAGO_DESDE_SALDO_BLOQUEADO =
 export type AnularMovimientoParams = {
   tipo: TipoMovimientoAnulable
   movimientoId: string
+  /** Por que se anula; queda en la auditoria. */
+  motivo?: string | null
 }
 
 export type PrevisualizacionAnulacion = {
@@ -119,20 +122,15 @@ async function auditar(
   actor: ActorErp,
   fila: { tabla: string; registroId: string; accion: string; antes: number; despues: number | null; motivo: string }
 ) {
-  const { error } = await supabase.from("auditoria_financiera").insert([
-    {
-      tabla_afectada: fila.tabla,
-      registro_id: fila.registroId,
-      usuario_id: actor.userId || "",
-      accion: fila.accion,
-      valor_anterior: fila.antes,
-      valor_nuevo: fila.despues,
-      motivo: fila.motivo,
-    },
-  ])
-  if (error) {
-    console.error(`[operaciones] no se pudo auditar: ${fila.accion}`, { tabla: fila.tabla, code: error.code })
-  }
+  await registrarAuditoria(supabase, {
+    tabla: fila.tabla,
+    registroId: fila.registroId,
+    usuarioId: actor.userId,
+    accion: fila.accion,
+    valorAnterior: fila.antes,
+    valorNuevo: fila.despues,
+    motivo: fila.motivo,
+  })
 }
 
 export async function previsualizarAnulacion(
@@ -176,7 +174,7 @@ export async function anularMovimiento(
     accion: "anulacion_movimiento",
     antes: mov.monto,
     despues: 0,
-    motivo: "Anulacion solicitada por el usuario.",
+    motivo: params.motivo?.trim() || "Anulacion solicitada por el usuario.",
   })
 
   return { tipo: params.tipo, movimientoId: params.movimientoId, montoAnulado: mov.monto }
@@ -189,6 +187,8 @@ export async function anularMovimiento(
 export type EliminarMovimientoParams = {
   tipo: TipoMovimientoAnulable
   movimientoId: string
+  /** Por que se borra; queda en la auditoria. */
+  motivo?: string | null
 }
 
 /**
@@ -236,7 +236,7 @@ export async function eliminarMovimiento(
     accion: "eliminar_movimiento",
     antes: v.monto,
     despues: null,
-    motivo: "Eliminacion solicitada por el usuario.",
+    motivo: params.motivo?.trim() || "Eliminacion solicitada por el usuario.",
   })
 
   return { tipo: params.tipo, movimientoId: params.movimientoId, montoEliminado: v.monto }
@@ -272,6 +272,8 @@ export type EditarMovimientoParams = {
   asistenteId?: string
   /** Solo ventas externas. */
   compradorNombre?: string | null
+  /** Por que se corrige; queda en la auditoria. */
+  motivo?: string | null
 }
 
 type Cambio = { antes: unknown; despues: unknown }
@@ -348,7 +350,7 @@ export async function previsualizarEdicion(supabase: DbClient, params: EditarMov
   anotar("asistenteId", mov.asistenteId, params.asistenteId)
   anotar("compradorNombre", mov.compradorNombre, params.compradorNombre)
 
-  if (Object.keys(cambios).length === 0) throw new OperacionError("No indicaste ningun cambio.")
+  if (Object.keys(cambios).length === 0) throw new SinCambiosError("No indicaste ningun cambio.")
 
   return {
     tipo: params.tipo,
@@ -380,7 +382,7 @@ export async function editarMovimiento(
     accion: "edicion_movimiento",
     antes: v.montoActual,
     despues: montoNuevo ?? v.montoActual,
-    motivo: `Edicion solicitada por el usuario (${Object.keys(v.cambios).join(", ")}).`,
+    motivo: params.motivo?.trim() || `Edicion solicitada por el usuario (${Object.keys(v.cambios).join(", ")}).`,
   })
 
   return { tipo: params.tipo, movimientoId: params.movimientoId, cambios: v.cambios }

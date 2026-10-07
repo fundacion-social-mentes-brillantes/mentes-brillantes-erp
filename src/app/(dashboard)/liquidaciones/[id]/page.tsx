@@ -1,4 +1,5 @@
 ﻿import { requireRoles } from '@/lib/utils/authz'
+import { formatearFechaIso } from '@/lib/utils/fechas'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Wallet, Lock, Calculator, Undo2 } from 'lucide-react'
@@ -309,7 +310,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
               </span>
             </div>
             <p className="text-zinc-500 text-sm mt-1">
-              {new Date(periodo.fecha_inicio).toLocaleDateString()} - {new Date(periodo.fecha_fin).toLocaleDateString()}
+              {formatearFechaIso(periodo.fecha_inicio)} - {formatearFechaIso(periodo.fecha_fin)}
             </p>
           </div>
         </div>
@@ -445,7 +446,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                     <p className="font-semibold text-amber-600 text-sm">${entregado.toLocaleString()}</p>
                   </div>
                   <div className="flex justify-between items-center text-xs text-zinc-500">
-                    <p>{new Date(adelanto.fecha).toLocaleDateString()}</p>
+                    <p>{formatearFechaIso(adelanto.fecha)}</p>
                     <div className="flex items-center gap-2">
                       <span className="px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600 border border-zinc-200">
                         {adelanto.metodo_pago || 'otro'}
@@ -463,7 +464,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                       {devoluciones.map((devolucion: any) => (
                         <div key={devolucion.id} className="flex justify-between text-[11px] text-emerald-700/80">
                           <span>
-                            {new Date(devolucion.fecha).toLocaleDateString()} · {devolucion.metodo_pago || 'otro'}
+                            {formatearFechaIso(devolucion.fecha)} · {devolucion.metodo_pago || 'otro'}
                             {devolucion.notas ? ` · ${devolucion.notas}` : ''}
                           </span>
                           <span>${Math.abs(Number(devolucion.monto)).toLocaleString()}</span>
@@ -491,7 +492,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                     </p>
                   </div>
                   <p className="text-xs text-zinc-500">
-                    Devolución del {new Date(devolucion.fecha).toLocaleDateString()} — su adelanto quedó en otro período.
+                    Devolución del {formatearFechaIso(devolucion.fecha)} — su adelanto quedó en otro período.
                   </p>
                 </div>
               ))}

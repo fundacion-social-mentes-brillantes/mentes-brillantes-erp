@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const requireRolesMock = vi.fn()
 
 vi.mock('@/lib/utils/authz', () => ({
-  requireRoles: (...args: unknown[]) => requireRolesMock(...args),
   AuthzError: class AuthzError extends Error {},
+  requireRoles: (...args: unknown[]) => requireRolesMock(...args),
 }))
 
 const { POST } = await import('./route')

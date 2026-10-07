@@ -1,6 +1,7 @@
 'use server'
 
 import Papa from 'papaparse'
+import type { MetodoPago } from '@/lib/operaciones/errores'
 import { revalidatePath } from 'next/cache'
 import { requireAdmin } from '@/lib/utils/authz'
 
@@ -241,7 +242,7 @@ export async function procesarMigracion(tipo: string, rows: any[]) {
         }
 
         const metodoRaw = (row.metodo_pago || 'efectivo').toLowerCase()
-        let metodo = 'otro'
+        let metodo: MetodoPago = 'otro'
         if (metodoRaw.includes('efectivo')) metodo = 'efectivo'
         else if (metodoRaw.includes('nequi')) metodo = 'nequi'
         else if (metodoRaw.includes('daviplata')) metodo = 'daviplata'

@@ -1,3 +1,4 @@
+import { formatearFechaIso } from '@/lib/utils/fechas'
 import Link from 'next/link'
 import { Plus, Eye, Lock } from 'lucide-react'
 import { requireRoles } from '@/lib/utils/authz'
@@ -39,8 +40,8 @@ export default async function LiquidacionesPage() {
               {periodos?.map((periodo) => (
                 <tr key={periodo.id} className="hover:bg-zinc-50/50 transition-colors">
                   <td className="px-6 py-4 font-medium text-zinc-900">{periodo.nombre}</td>
-                  <td className="px-6 py-4 text-zinc-500">{new Date(periodo.fecha_inicio).toLocaleDateString()}</td>
-                  <td className="px-6 py-4 text-zinc-500">{new Date(periodo.fecha_fin).toLocaleDateString()}</td>
+                  <td className="px-6 py-4 text-zinc-500">{formatearFechaIso(periodo.fecha_inicio)}</td>
+                  <td className="px-6 py-4 text-zinc-500">{formatearFechaIso(periodo.fecha_fin)}</td>
                   <td className="px-6 py-4">
                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium 
                       ${periodo.estado === 'abierto' ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-700'}`}>
@@ -89,7 +90,7 @@ export default async function LiquidacionesPage() {
                 <div className="min-w-0 space-y-1">
                   <p className="font-semibold text-zinc-900 leading-snug">{periodo.nombre}</p>
                   <p className="text-xs text-zinc-500">
-                    {new Date(periodo.fecha_inicio).toLocaleDateString()} — {new Date(periodo.fecha_fin).toLocaleDateString()}
+                    {formatearFechaIso(periodo.fecha_inicio)} — {formatearFechaIso(periodo.fecha_fin)}
                   </p>
                 </div>
                 <span className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${periodo.estado === 'abierto' ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-700'}`}>

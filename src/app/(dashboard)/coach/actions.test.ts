@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const requireRolesMock = vi.fn()
 
 vi.mock('@/lib/utils/authz', () => ({
+  AuthzError: class AuthzError extends Error {},
   requireRoles: (...args: unknown[]) => requireRolesMock(...args),
   requireAdmin: (...args: unknown[]) => requireRolesMock(...args),
 }))

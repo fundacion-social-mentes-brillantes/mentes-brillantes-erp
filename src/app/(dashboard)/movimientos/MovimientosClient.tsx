@@ -1,5 +1,6 @@
 'use client'
 
+import { formatearFechaIso } from '@/lib/utils/fechas'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
@@ -439,7 +440,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                     className={`hover:bg-zinc-50 cursor-pointer transition-colors ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'opacity-50 grayscale hover:opacity-75' : ''}`}
                   >
                     <td className={`px-4 py-3 whitespace-nowrap ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'line-through text-zinc-400' : 'text-zinc-600'}`}>
-                      {new Date(mov.fecha).toLocaleDateString('es-CO', { timeZone: 'UTC' })}
+                      {formatearFechaIso(mov.fecha)}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border ${getTipoBadgeColor(mov.tipo_movimiento)}`}>
@@ -520,7 +521,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                   {getTipoIcon(mov.tipo_movimiento)} {getTipoLabel(mov.tipo_movimiento)}
                 </span>
                 <span className={`text-xs font-medium px-2 py-1 rounded-md ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'text-red-500 bg-red-50' : 'text-zinc-500 bg-zinc-100'}`}>
-                  {mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'Anulado' : new Date(mov.fecha).toLocaleDateString('es-CO', { timeZone: 'UTC' })}
+                  {mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'Anulado' : formatearFechaIso(mov.fecha)}
                 </span>
               </div>
 
@@ -602,7 +603,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                     </div>
                     <div>
                       <p className="text-xs text-zinc-500 font-medium">Fecha de Movimiento</p>
-                      <p className="font-medium text-zinc-900">{new Date(selectedMov.fecha).toLocaleDateString('es-CO', { timeZone: 'UTC' })}</p>
+                      <p className="font-medium text-zinc-900">{formatearFechaIso(selectedMov.fecha)}</p>
                     </div>
                     <div>
                       <p className="text-xs text-zinc-500 font-medium">Valor</p>

@@ -1,115 +1,102 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { requireAdmin, requireRoles } from '@/lib/utils/authz'
-import {
-  calcularPendienteCuenta,
-  calcularSaldoFavorDisponible,
-  normalizarCopEntero,
-  normalizarCopUsable,
-  parseMoneyInput,
-} from '@/lib/utils/contable'
-import { assertFechaEditable } from '@/lib/utils/periodos'
+import { parseMoneyInput } from '@/lib/utils/contable'
+import { errorDeAccion, type ActionState } from '@/lib/utils/acciones'
+import { SinCambiosError } from '@/lib/operaciones/errores'
 import { crearAnticipo } from '@/lib/operaciones/movimientos'
+import {
+  cambiarEstadoPersona,
+  crearPersona,
+  editarPersona,
+  eliminarPersona,
+  siguienteCodigoPersona,
+  type DatosPersona,
+} from '@/lib/operaciones/personas'
+import { pagarDeudasConSaldo as pagarDeudasConSaldoOp, revertirAnticipo as revertirAnticipoOp } from '@/lib/operaciones/saldo-favor'
 
-export type ActionState = {
-  error?: string
-  success?: boolean
-} | null
+// Personas (asistentes) y su saldo a favor. Las reglas viven en
+// lib/operaciones (las mismas que usa el MCP); aqui solo se autentica, se lee
+// el formulario y se refrescan las pantallas.
 
-const calcularSaldoDisponible = (
-  movimientos: Array<{ tipo?: string | null; monto?: number | string | null }> = []
-) => calcularSaldoFavorDisponible(movimientos)
+export type { ActionState }
 
-export async function saveAsistente(id: string | null, prevState: ActionState, formData: FormData): Promise<ActionState> {
-  let supabase, perfil
+const textoDe = (formData: FormData, campo: string) => {
+  const valor = formData.get(campo)
+  return typeof valor === 'string' ? valor.trim() : ''
+}
+
+export async function saveAsistente(id: string | null, _prevState: ActionState, formData: FormData): Promise<ActionState> {
   try {
-    ;({ supabase, perfil } = await requireRoles(['admin', 'caja']))
-  } catch (e: any) {
-    return { error: e?.message || 'Acceso denegado' }
-  }
+    const { supabase, user, perfil } = await requireRoles(['admin', 'caja'])
+    const actor = { userId: user.id, role: perfil.rol === 'admin' ? ('admin' as const) : ('caja' as const) }
 
-  const nombre = formData.get('nombre') as string
-  const cedula = formData.get('cedula') as string
-  const correo = formData.get('correo') as string
-  const telefono = formData.get('telefono') as string
-  const codigo = formData.get('codigo') as string
-  const fecha_registro = (formData.get('fecha_registro') as string) || null
-  const fecha_inicio_proceso = (formData.get('fecha_inicio_proceso') as string) || null
-
-  if (!nombre) {
-    return { error: 'El nombre es obligatorio' }
-  }
-
-  const data: Record<string, string | null> = {
-    nombre,
-    cedula: cedula || null,
-    correo: correo || null,
-    telefono: telefono || null,
-    codigo: codigo || null,
-  }
-
-  if (perfil.rol === 'admin') {
-    data.fecha_registro = fecha_registro || null
-    data.fecha_inicio_proceso = fecha_inicio_proceso || null
-  }
-
-  if (id) {
-    const { error } = await supabase.from('asistentes').update(data).eq('id', id)
-    if (error) {
-      if (error.code === '23505') return { error: 'Ya existe un asistente con esa cédula o código' }
-      return { error: error.message }
+    const datos: DatosPersona = {
+      nombre: textoDe(formData, 'nombre'),
+      cedula: textoDe(formData, 'cedula'),
+      correo: textoDe(formData, 'correo'),
+      telefono: textoDe(formData, 'telefono'),
+      codigo: textoDe(formData, 'codigo'),
     }
-  } else {
-    const { error } = await supabase.from('asistentes').insert([data])
-    if (error) {
-      if (error.code === '23505') return { error: 'Ya existe un asistente con esa cédula o código' }
-      return { error: error.message }
+    if (!datos.nombre) return { error: 'El nombre es obligatorio' }
+
+    // Solo admin maneja las fechas; para caja el formulario las muestra
+    // bloqueadas y aqui ni se tocan (asi no se borran al editar otra cosa).
+    if (actor.role === 'admin') {
+      datos.fechaRegistro = textoDe(formData, 'fecha_registro')
+      datos.fechaInicioProceso = textoDe(formData, 'fecha_inicio_proceso')
     }
+
+    if (id) {
+      try {
+        await editarPersona(supabase, actor, id, datos)
+      } catch (e) {
+        if (!(e instanceof SinCambiosError)) throw e
+      }
+    } else {
+      await crearPersona(supabase, actor, datos)
+    }
+  } catch (e) {
+    return errorDeAccion(e, 'No se pudo guardar la persona.', 'asistentes')
   }
 
   revalidatePath('/asistentes')
   redirect('/asistentes')
 }
 
-export async function toggleAsistenteEstado(id: string, activo: boolean) {
-  let supabase
+export async function toggleAsistenteEstado(id: string, activo: boolean): Promise<void> {
   try {
-    ;({ supabase } = await requireAdmin())
-  } catch {
+    const { supabase, user } = await requireAdmin()
+    await cambiarEstadoPersona(supabase, { userId: user.id, role: 'admin' }, id, activo)
+  } catch (e) {
+    // El boton es un <form action>: no hay donde mostrar el error, queda en el log.
+    console.error('[asistentes] no se pudo cambiar el estado', e)
     return
   }
-  await supabase.from('asistentes').update({ activo }).eq('id', id)
   revalidatePath('/asistentes')
 }
 
-export async function saveAnticipo(asistente_id: string, prevState: ActionState, formData: FormData): Promise<ActionState> {
-  let supabase, user
-  try {
-    ;({ supabase, user } = await requireRoles(['admin', 'caja']))
-  } catch (e: any) {
-    return { error: e?.message || 'Acceso denegado' }
-  }
-
+export async function saveAnticipo(asistente_id: string, _prevState: ActionState, formData: FormData): Promise<ActionState> {
   const monto = parseMoneyInput(formData.get('monto'))
-  const metodo_pago = formData.get('metodo_pago') as string
-  const fecha = formData.get('fecha') as string
-  const notas = formData.get('notas') as string
+  const metodo_pago = textoDe(formData, 'metodo_pago')
+  const fecha = textoDe(formData, 'fecha')
+  const notas = textoDe(formData, 'notas') || null
 
   if (monto === null || monto <= 0) return { error: 'El monto debe ser mayor a 0' }
   if (!metodo_pago || !fecha) return { error: 'Método y fecha son obligatorios' }
 
-  // Nucleo compartido con el MCP: mismas reglas y misma auditoria.
   try {
+    const { supabase, user, perfil } = await requireRoles(['admin', 'caja'])
+    // Nucleo compartido con el MCP: mismas reglas y misma auditoria.
     await crearAnticipo(
       supabase,
-      { userId: user?.id || '', role: 'admin' },
-      { asistenteId: asistente_id, monto: monto as number, metodoPago: metodo_pago, fecha, notas }
+      { userId: user.id, role: perfil.rol === 'admin' ? 'admin' : 'caja' },
+      { asistenteId: asistente_id, monto, metodoPago: metodo_pago, fecha, notas }
     )
-  } catch (e: any) {
-    return { error: e?.message || 'No se pudo registrar el anticipo.' }
+  } catch (e) {
+    return errorDeAccion(e, 'No se pudo registrar el anticipo.', 'asistentes')
   }
 
   revalidatePath(`/asistentes/${asistente_id}`)
@@ -117,67 +104,13 @@ export async function saveAnticipo(asistente_id: string, prevState: ActionState,
 }
 
 export async function revertirAnticipo(asistente_id: string, anticipo_id: string): Promise<ActionState> {
-  let supabase
   try {
-    ;({ supabase } = await requireAdmin())
-  } catch (e: any) {
-    return { error: e?.message || 'Acceso denegado' }
-  }
-
-  const { data: anticipo, error: anticipoError } = await supabase
-    .from('movimientos_saldo_favor')
-    .select('id, asistente_id, tipo, monto, fecha, metodo_pago, notas')
-    .eq('id', anticipo_id)
-    .single()
-
-  if (anticipoError || !anticipo) {
-    return { error: 'No se pudo encontrar el anticipo a revertir.' }
-  }
-
-  if (anticipo.asistente_id !== asistente_id) {
-    return { error: 'El anticipo no pertenece a este asistente.' }
-  }
-
-  if (anticipo.tipo !== 'ingreso') {
-    return { error: 'Solo se pueden revertir anticipos que representen ingreso real a saldo a favor.' }
-  }
-
-  if ((anticipo.notas || '').includes('[ANULADO]')) {
-    return { error: 'Este anticipo ya fue revertido anteriormente.' }
-  }
-
-  const periodoError = await assertFechaEditable(supabase, anticipo.fecha, 'Revertir el anticipo')
-  if (periodoError) return { error: periodoError }
-
-  const { data: movimientosSaldo, error: saldoError } = await supabase
-    .from('movimientos_saldo_favor')
-    .select('tipo, monto')
-    .eq('asistente_id', asistente_id)
-
-  if (saldoError) {
-    return { error: 'No se pudo verificar el saldo disponible del asistente.' }
-  }
-
-  const saldoDisponible = calcularSaldoDisponible(movimientosSaldo || [])
-  const montoAnticipo = normalizarCopUsable(anticipo.monto)
-
-  if (saldoDisponible < montoAnticipo) {
-    return {
-      error:
-        'No se puede revertir este anticipo porque el saldo a favor disponible ya no alcanza. Parte o todo del anticipo ya fue consumido.',
-    }
-  }
-
-  // Reversion atomica en una sola transaccion (RPC): marca el ingreso como
-  // [ANULADO], inserta la aplicacion compensatoria y la auditoria juntos, con
-  // lock por asistente y revalidacion del disponible. Evita dejar el anticipo
-  // anulado sin compensacion (o viceversa) ante fallas parciales.
-  const { error: rpcError } = await supabase.rpc('revertir_anticipo_trx', {
-    p_anticipo_id: anticipo_id,
-    p_asistente_id: asistente_id,
-  })
-  if (rpcError) {
-    return { error: rpcError.message || 'No se pudo revertir el anticipo. La operacion se revirtio por completo.' }
+    const { supabase, user } = await requireAdmin()
+    // Reversion atomica (RPC): anula el ingreso e inserta la compensacion juntos,
+    // con bloqueo por persona y revalidacion del saldo disponible.
+    await revertirAnticipoOp(supabase, { userId: user.id, role: 'admin' }, { asistenteId: asistente_id, anticipoId: anticipo_id })
+  } catch (e) {
+    return errorDeAccion(e, 'No se pudo revertir el anticipo.', 'asistentes')
   }
 
   revalidatePath(`/asistentes/${asistente_id}`)
@@ -187,131 +120,42 @@ export async function revertirAnticipo(asistente_id: string, anticipo_id: string
   return { success: true }
 }
 
-export async function deleteAsistente(id: string) {
-  let supabase
+export async function deleteAsistente(id: string): Promise<ActionState> {
   try {
-    ;({ supabase } = await requireAdmin())
-  } catch (e: any) {
-    return { error: e?.message || 'Acceso denegado' }
-  }
-
-  const { count: cuentasCount, error: cuentasError } = await supabase
-    .from('cuentas_por_cobrar')
-    .select('*', { count: 'exact', head: true })
-    .eq('asistente_id', id)
-
-  if (cuentasError) {
-    return { error: 'Error al verificar relaciones del asistente.' }
-  }
-
-  if (cuentasCount && cuentasCount > 0) {
-    return {
-      error:
-        'No se puede eliminar este asistente porque tiene cuentas por cobrar asociadas. Se recomienda desactivarlo en su lugar para mantener el historial.',
-    }
-  }
-
-  const { error } = await supabase.from('asistentes').delete().eq('id', id)
-
-  if (error) {
-    if (error.code === '23503') {
-      return { error: 'No se puede eliminar el asistente porque tiene registros financieros o históricos asociados.' }
-    }
-    return { error: 'Error al eliminar: ' + error.message }
+    const { supabase, user } = await requireAdmin()
+    // Solo se borra si no tiene cuentas: si las tuviera, la cascada se llevaria pagos y sesiones.
+    await eliminarPersona(supabase, { userId: user.id, role: 'admin' }, id)
+  } catch (e) {
+    return errorDeAccion(e, 'No se pudo eliminar la persona.', 'asistentes')
   }
 
   revalidatePath('/asistentes')
+  return { success: true }
 }
 
 export async function pagarDeudasConSaldo(asistente_id: string): Promise<ActionState> {
-  let supabase
   try {
-    ;({ supabase } = await requireAdmin())
-  } catch (e: any) {
-    return { error: e?.message || 'Acceso denegado' }
-  }
-
-  const { data: movimientosSaldo } = await supabase
-    .from('movimientos_saldo_favor')
-    .select('tipo, monto')
-    .eq('asistente_id', asistente_id)
-  let saldoDisponible = calcularSaldoDisponible(movimientosSaldo || [])
-
-  if (saldoDisponible <= 0) {
-    return { error: 'No hay saldo a favor disponible para aplicar' }
-  }
-
-  const fechaHoy = new Date().toISOString().split('T')[0]
-  const periodoError = await assertFechaEditable(supabase, fechaHoy, 'Aplicar saldo a favor')
-  if (periodoError) {
-    return { error: periodoError }
-  }
-
-  const { data: cuentas } = await supabase
-    .from('cuentas_por_cobrar')
-    .select(
-      `
-      id,
-      valor_total,
-      fecha_emision,
-      pagos_abonos (monto, estado, notas, metodo_pago, origen_fondos)
-    `
-    )
-    .eq('asistente_id', asistente_id)
-    .neq('estado', 'pagado')
-    .order('fecha_emision', { ascending: true })
-
-  if (!cuentas || cuentas.length === 0) {
-    return { error: 'No hay deudas pendientes para pagar' }
-  }
-
-  let pagosRealizados = 0
-
-  for (const cuenta of cuentas) {
-    if (saldoDisponible <= 0) break
-
-    const pendiente = normalizarCopUsable(
-      calcularPendienteCuenta(normalizarCopEntero(cuenta.valor_total), cuenta.pagos_abonos || [])
-    )
-
-    if (pendiente <= 0) continue
-
-    const montoAPagar = normalizarCopUsable(Math.min(saldoDisponible, pendiente))
-    if (montoAPagar <= 0) continue
-
-    const { error } = await supabase.rpc('aplicar_saldo_favor_trx', {
-      p_cuenta_id: cuenta.id,
-      p_asistente_id: asistente_id,
-      p_monto: montoAPagar,
-    })
-
-    if (error) {
-      return { error: `Error al pagar cuenta: ${error.message}` }
+    const { supabase, user } = await requireAdmin()
+    const resultado = await pagarDeudasConSaldoOp(supabase, { userId: user.id, role: 'admin' }, asistente_id)
+    revalidatePath(`/asistentes/${asistente_id}`)
+    revalidatePath('/cuentas')
+    if (resultado.parcial) {
+      return {
+        error: `Se aplicaron ${resultado.aplicadas.length} cuenta(s), pero se detuvo en la siguiente: ${resultado.motivo}`,
+      }
     }
-
-    saldoDisponible = normalizarCopUsable(saldoDisponible - montoAPagar)
-    pagosRealizados++
+  } catch (e) {
+    return errorDeAccion(e, 'No se pudo aplicar el saldo a favor.', 'asistentes')
   }
 
-  if (pagosRealizados === 0) {
-    return { error: 'No se procesó ningún pago. Verifica el saldo y las deudas.' }
-  }
-
-  revalidatePath(`/asistentes/${asistente_id}`)
-  revalidatePath('/cuentas')
   return { success: true }
 }
 
 export async function obtenerSiguienteCodigoAsistente(): Promise<number> {
-  const supabase = await createClient()
-  if (!supabase) return 1
-
-  const { data } = await supabase.from('asistentes').select('codigo')
-
-  if (!data || data.length === 0) return 1
-
-  const codigos = data.map((item) => parseInt(item.codigo)).filter((n) => !isNaN(n))
-
-  const maxCodigo = codigos.length > 0 ? Math.max(...codigos) : 0
-  return maxCodigo + 1
+  try {
+    const { supabase } = await requireRoles(['admin', 'caja'])
+    return Number(await siguienteCodigoPersona(supabase))
+  } catch {
+    return 1
+  }
 }

@@ -53,11 +53,11 @@ export default async function DetalleCuentaPage({
   const monto_pendiente = valor_total - total_abonado
   const saldos = { valor_total, total_abonado, monto_pendiente }
 
-  // Fetch saldo a favor
-  const { data: movimientosSaldo } = await supabase
-    .from('movimientos_saldo_favor')
-    .select('tipo, monto, notas')
-    .eq('asistente_id', cuenta.asistente_id)
+  // Saldo a favor de la persona (una cuenta sin persona no tiene de donde sacarlo).
+  const asistenteId = cuenta.asistente_id
+  const { data: movimientosSaldo } = asistenteId
+    ? await supabase.from('movimientos_saldo_favor').select('tipo, monto, notas').eq('asistente_id', asistenteId)
+    : { data: [] }
 
   const saldoAFavor = calcularSaldoFavorDisponibleRaw(movimientosSaldo || [])
 
@@ -146,7 +146,7 @@ export default async function DetalleCuentaPage({
               </div>
             </div>
             <div className="mt-4 text-sm text-[rgb(var(--text-muted))]">
-              Fecha de emisión: {new Date(cuenta.fecha_emision).toLocaleDateString()}
+              Fecha de emisión: {formatearFechaIso(cuenta.fecha_emision)}
             </div>
           </div>
 
@@ -229,7 +229,7 @@ export default async function DetalleCuentaPage({
                 <tbody className="divide-y divide-[rgb(var(--border))]">
                   {abonos.map((abono: any) => (
                     <tr key={abono.id} className="hover:bg-[rgb(var(--surface-2))]">
-                      <td className="px-4 py-3 text-[rgb(var(--text-primary))]">{new Date(abono.fecha_pago).toLocaleDateString()}</td>
+                      <td className="px-4 py-3 text-[rgb(var(--text-primary))]">{formatearFechaIso(abono.fecha_pago)}</td>
                       <td className="px-4 py-3 text-[rgb(var(--text-muted))] capitalize">
                         {abono.origen_fondos === 'saldo_a_favor' ? 'Saldo a favor' : abono.metodo_pago}
                       </td>
@@ -285,7 +285,7 @@ export default async function DetalleCuentaPage({
 
           {cuenta.estado !== 'pagado' ? (
             <>
-              {saldoAFavor > 0 && (
+              {saldoAFavor > 0 && asistenteId && (
                 <div className="bg-[rgba(var(--success),0.12)] p-6 rounded-xl border border-[rgba(var(--success),0.3)] shadow-sm">
                   <div className="flex items-center gap-2 mb-2">
                     <Wallet className="w-5 h-5 text-emerald-600" />
@@ -294,7 +294,7 @@ export default async function DetalleCuentaPage({
                   <p className="text-2xl font-bold text-[rgb(var(--success))] mb-4">${saldoAFavor.toLocaleString('es-CO')}</p>
                   <AplicarSaldoForm 
                     cuentaId={cuenta.id} 
-                    asistenteId={cuenta.asistente_id} 
+                    asistenteId={asistenteId}
                     maxMonto={Math.min(saldoAFavor, saldos.monto_pendiente)} 
                   />
                 </div>

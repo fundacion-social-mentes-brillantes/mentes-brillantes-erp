@@ -1,3 +1,4 @@
+import { formatearFechaIso } from '@/lib/utils/fechas'
 import Link from 'next/link'
 import { Plus, Edit2 } from 'lucide-react'
 import { DeleteEgresoButton } from './DeleteEgresoButton'
@@ -60,7 +61,7 @@ export default async function EgresosPage({ searchParams }: Params) {
             <tbody className="divide-y divide-zinc-200">
               {egresos?.map((egreso) => (
                 <tr key={egreso.id} className="hover:bg-zinc-50/50 transition-colors">
-                  <td className="px-6 py-4 text-zinc-500">{new Date(egreso.fecha).toLocaleDateString()}</td>
+                  <td className="px-6 py-4 text-zinc-500">{formatearFechaIso(egreso.fecha)}</td>
                   <td className="px-6 py-4 font-medium text-zinc-900">{egreso.concepto}</td>
                   <td className="px-6 py-4 text-zinc-500">
                     <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-zinc-100 text-zinc-700">
@@ -102,7 +103,7 @@ export default async function EgresosPage({ searchParams }: Params) {
             <div key={egreso.id} className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm space-y-3">
               <div className="flex justify-between items-start">
                 <div className="space-y-0.5">
-                  <p className="text-sm text-zinc-500">{new Date(egreso.fecha).toLocaleDateString()}</p>
+                  <p className="text-sm text-zinc-500">{formatearFechaIso(egreso.fecha)}</p>
                   <p className="font-semibold text-zinc-900 leading-snug">{egreso.concepto}</p>
                   <span className="inline-flex items-center px-2 py-1 rounded-md text-[11px] font-medium bg-zinc-100 text-zinc-700">
                     {egreso.categoria}

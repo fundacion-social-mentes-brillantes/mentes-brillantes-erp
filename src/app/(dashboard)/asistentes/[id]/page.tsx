@@ -10,7 +10,7 @@ import {
   HeartHandshake,
 } from "lucide-react"
 import { notFound } from "next/navigation"
-import { formatearFechaIso } from "@/lib/utils/fechas"
+import { formatearFechaIso, fechaLocalISO } from "@/lib/utils/fechas"
 import { AnticipoForm } from "./AnticipoForm"
 import { PagarConSaldoButton } from "./PagarConSaldoButton"
 import { calcularSaldoFavorDisponible, esAnuladoCompleto, filtrarPagosValidos, sumarMontos, toSafeNumber } from "@/lib/utils/contable"
@@ -129,7 +129,8 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
     coach_sesiones: sesionesCoach || [],
   })
   const ultimaActividadTexto = actividad.ultima_actividad
-    ? new Date(actividad.ultima_actividad).toLocaleDateString("es-CO")
+    ? // Viene de fechas 'AAAA-MM-DD' (medianoche UTC): se muestra en UTC para no correr un dia.
+      actividad.ultima_actividad.toLocaleDateString("es-CO", { timeZone: "UTC" })
     : "Sin actividad"
 
   let totalFacturado = 0
@@ -230,7 +231,11 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                 <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Fecha de registro</p>
                 <p className="text-sm text-zinc-900 flex items-center gap-1.5">
                   <Calendar className="w-3.5 h-3.5 text-zinc-400" />
-                  {new Date(asistente.fecha_registro || asistente.creado_en).toLocaleDateString("es-CO")}
+                  {asistente.fecha_registro
+                    ? formatearFechaIso(asistente.fecha_registro)
+                    : asistente.creado_en
+                      ? formatearFechaIso(fechaLocalISO(new Date(asistente.creado_en)))
+                      : '—'}
                 </p>
               </div>
               <div>
@@ -238,7 +243,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                 <p className="text-sm text-zinc-900 flex items-center gap-1.5">
                   <Calendar className="w-3.5 h-3.5 text-zinc-400" />
                   {asistente.fecha_inicio_proceso
-                    ? new Date(asistente.fecha_inicio_proceso).toLocaleDateString("es-CO")
+                    ? formatearFechaIso(asistente.fecha_inicio_proceso)
                     : "No registrado"}
                 </p>
               </div>
@@ -302,7 +307,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                             ${toSafeNumber(donacion.monto).toLocaleString("es-CO")} · {donacion.metodo_pago}
                           </p>
                           <p className="text-[11px] text-[rgb(var(--text-muted))]">
-                            {new Date(donacion.fecha).toLocaleDateString("es-CO")}
+                            {formatearFechaIso(donacion.fecha)}
                             {donacion.notas ? ` · ${donacion.notas}` : ""}
                           </p>
                         </div>
@@ -442,7 +447,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                         <div>
                           <p className="font-medium text-zinc-900">{cuenta.concepto}</p>
                           <p className="text-xs text-zinc-500">
-                            Emisión: {new Date(cuenta.fecha_emision).toLocaleDateString("es-CO")}
+                            Emisión: {formatearFechaIso(cuenta.fecha_emision)}
                           </p>
                         </div>
                         <div className="text-right text-sm">
@@ -478,7 +483,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                       <div>
                         <p className="font-medium text-zinc-900 text-sm">${toSafeNumber(pago.monto).toLocaleString("es-CO")}</p>
                         <p className="text-xs text-zinc-500">
-                          {new Date(pago.fecha_pago).toLocaleDateString("es-CO")} · {pago.concepto_cuenta}
+                          {formatearFechaIso(pago.fecha_pago)} · {pago.concepto_cuenta}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-zinc-500">
@@ -508,7 +513,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                       key={mov.id}
                       className="flex items-center justify-between gap-3 border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white"
                     >
-                      <span>{new Date(mov.fecha).toLocaleDateString("es-CO")}</span>
+                      <span>{formatearFechaIso(mov.fecha)}</span>
                       <span className={mov.tipo === "ingreso" ? "text-emerald-600" : "text-amber-600"}>
                         {mov.tipo === "ingreso" ? "+" : "-"}${toSafeNumber(mov.monto).toLocaleString("es-CO")}
                       </span>
