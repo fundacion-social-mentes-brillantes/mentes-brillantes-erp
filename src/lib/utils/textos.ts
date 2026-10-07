@@ -40,10 +40,26 @@ const TILDES: Array<[RegExp, string]> = [
   [/\bdevolucion\b/g, "devolución"],
 ]
 
+// Una "ó" guardada como dos letras raras -> "ó": textos viejos con las tildes partidas
+// (UTF-8 leido como Latin-1; ver memoria erp-tildes-rotas-filtro-contable). Solo
+// se arregla lo que se muestra; si el texto no se puede reparar, queda igual.
+const TILDE_PARTIDA = new RegExp(`[${String.fromCharCode(0xc2, 0xc3)}][${String.fromCharCode(0x80)}-${String.fromCharCode(0xbf)}]`)
+
+export function repararTildes(texto: string): string {
+  if (!TILDE_PARTIDA.test(texto)) return texto
+  if ([...texto].some((c) => c.charCodeAt(0) > 0xff)) return texto
+  try {
+    const bytes = Uint8Array.from([...texto].map((c) => c.charCodeAt(0)))
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes)
+  } catch {
+    return texto
+  }
+}
+
 /** Nota sin marcas tecnicas ni ids. Vacia si no queda nada que leer. */
 export function notaLegible(nota: string | null | undefined): string {
   if (!nota) return ""
-  let texto = String(nota).replace(MARCA_INTERNA, "").replace(A_LA_CUENTA, "").replace(UUID_SUELTO, "")
+  let texto = repararTildes(String(nota)).replace(MARCA_INTERNA, "").replace(A_LA_CUENTA, "").replace(UUID_SUELTO, "")
   for (const [patron, reemplazo] of TILDES) texto = texto.replace(patron, reemplazo)
   return texto.replace(/\s{2,}/g, " ").trim()
 }

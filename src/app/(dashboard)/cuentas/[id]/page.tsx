@@ -353,7 +353,7 @@ export default async function DetalleCuentaPage({
                       </>
                     )}
                   </div>
-                  {aud.motivo && <div className="text-zinc-500 italic">Motivo: {aud.motivo}</div>}
+                  {aud.motivo && <div className="text-zinc-500 italic">Motivo: {notaLegible(aud.motivo)}</div>}
                 </div>
               )
             })}

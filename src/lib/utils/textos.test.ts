@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { estadoLegible, metodoPagoLegible, notaLegible } from "./textos"
+import { estadoLegible, metodoPagoLegible, notaLegible, repararTildes } from "./textos"
 
 describe("metodoPagoLegible", () => {
   it("nombres como los dice la gente", () => {
@@ -40,5 +40,20 @@ describe("notaLegible", () => {
   it("las notas que escribio una persona no cambian", () => {
     expect(notaLegible("Abono a proceso - Bre-B 1 sep")).toBe("Abono a proceso - Bre-B 1 sep")
     expect(notaLegible(null)).toBe("")
+  })
+})
+
+// La "ó" partida tal como quedo guardada en textos viejos (bytes C3 B3 leidos como Latin-1).
+const O_PARTIDA = String.fromCharCode(0xc3, 0xb3)
+
+describe("repararTildes", () => {
+  it("arregla las tildes partidas de textos viejos", () => {
+    expect(repararTildes(`Creaci${O_PARTIDA}n de cuenta por cobrar`)).toBe("Creación de cuenta por cobrar")
+    expect(notaLegible(`Correcci${O_PARTIDA}n de abono`)).toBe("Corrección de abono")
+  })
+
+  it("no toca un texto que ya esta bien ni uno que no se puede reparar", () => {
+    expect(repararTildes("Creación de cuenta")).toBe("Creación de cuenta")
+    expect(repararTildes("Ã sola")).toBe("Ã sola")
   })
 })
