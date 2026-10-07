@@ -55,11 +55,11 @@ export async function updateSession(request: NextRequest) {
   return supabaseResponse
 }
 
-// Paginas que se ven sin haber iniciado sesion. /registro estaba por fuera y el
-// enlace "Registrate" del login devolvia al login: nadie podia registrarse.
-const RUTAS_PUBLICAS = ['/login', '/auth', '/registro']
-// Con sesion abierta no tiene sentido volver a entrar ni registrarse.
-const RUTAS_SOLO_SIN_SESION = ['/login', '/registro']
+// Paginas que se ven sin haber iniciado sesion. No hay auto-registro: lo cerro
+// Sebastian el 7 oct 2026 y las cuentas se crean en Configuracion > Usuarios.
+const RUTAS_PUBLICAS = ['/login', '/auth']
+// Con sesion abierta no tiene sentido volver a entrar.
+const RUTAS_SOLO_SIN_SESION = ['/login']
 
 const empiezaCon = (ruta: string, base: string) => ruta === base || ruta.startsWith(`${base}/`)
 

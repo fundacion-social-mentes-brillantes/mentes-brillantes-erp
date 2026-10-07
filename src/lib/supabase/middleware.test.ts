@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest"
 import { esRutaPublica, esRutaSoloSinSesion } from "./middleware"
 
 describe("rutas publicas del middleware", () => {
-  it("login, auth y registro se ven sin sesion", () => {
-    for (const ruta of ["/login", "/auth/callback", "/auth/signout", "/registro"]) {
+  it("login y auth se ven sin sesion", () => {
+    for (const ruta of ["/login", "/auth/callback", "/auth/signout"]) {
       expect(esRutaPublica(ruta)).toBe(true)
     }
   })
@@ -14,9 +14,12 @@ describe("rutas publicas del middleware", () => {
     }
   })
 
-  it("con sesion abierta, login y registro mandan al inicio", () => {
+  it("el auto-registro esta cerrado: /registro no es publico", () => {
+    expect(esRutaPublica("/registro")).toBe(false)
+  })
+
+  it("con sesion abierta, login manda al inicio", () => {
     expect(esRutaSoloSinSesion("/login")).toBe(true)
-    expect(esRutaSoloSinSesion("/registro")).toBe(true)
     expect(esRutaSoloSinSesion("/auth/callback")).toBe(false)
   })
 })

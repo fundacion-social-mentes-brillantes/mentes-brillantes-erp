@@ -1,11 +1,12 @@
 import type { DbClient } from "@/lib/supabase/types"
 
-// Limite de intentos para formularios publicos (el auto-registro).
+// Limite de intentos para formularios publicos (hoy, los dos inicios de sesion:
+// el del ERP y el del conector MCP; ver limite-login.ts).
 //
-// Se cuenta por CLAVE (p. ej. "codigo:42" e "ip:1.2.3.4"): si cualquiera de las
-// claves ya llego al tope dentro de la ventana, se rechaza. Asi no sirve cambiar
-// el correo para seguir probando cedulas contra el mismo codigo, ni cambiar el
-// codigo desde la misma IP.
+// Se cuenta por CLAVE (p. ej. la huella de la cuenta y "login-ip:1.2.3.4"): si
+// cualquiera de las claves ya llego al tope dentro de la ventana, se rechaza.
+// Asi no sirve cambiar de conexion para seguir probando contra la misma cuenta,
+// ni cambiar de cuenta desde la misma conexion.
 //
 // Los intentos viven en la tabla registro_intentos (solo service_role), porque
 // en Vercel cada instancia tiene su propia memoria y se reinicia sola. Si la

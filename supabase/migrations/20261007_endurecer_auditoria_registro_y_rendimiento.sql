@@ -3,10 +3,9 @@
 -- 1. La auditoria financiera queda INALTERABLE: nadie (ni un admin desde la
 --    app, ni el servicio) puede editar ni borrar filas. Antes un admin podia
 --    borrar su propio rastro por la API.
--- 2. Tabla registro_intentos: limite de intentos del auto-registro que no se
---    pierde al reiniciarse el servidor y que cuenta por codigo de persona y por
---    IP (antes se contaba por correo+codigo+cedula y cambiando el correo se
---    podia intentar sin limite).
+-- 2. Tabla registro_intentos: limite de intentos de los inicios de sesion (ERP
+--    y conector MCP) que no se pierde al reiniciarse el servidor y que cuenta
+--    por cuenta y por IP. (El auto-registro se cerro el mismo dia.)
 -- 3. search_path fijo en la funcion del trigger de telegram (aviso de seguridad
 --    de Supabase).
 -- 4. Indices para las 14 llaves foraneas sin indice (aviso de rendimiento).
@@ -56,7 +55,7 @@ alter table public.registro_intentos enable row level security;
 revoke all on public.registro_intentos from anon, authenticated;
 
 comment on table public.registro_intentos is
-  'Intentos de auto-registro (limite anti fuerza bruta por codigo e IP). Solo service_role.';
+  'Intentos de inicio de sesion (limite anti fuerza bruta por cuenta e IP). Solo service_role.';
 
 -- 3. search_path fijo -----------------------------------------------------------
 

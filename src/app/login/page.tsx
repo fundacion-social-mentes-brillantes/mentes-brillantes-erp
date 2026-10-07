@@ -1,6 +1,5 @@
 import { LoginForm } from './LoginForm'
 import { GoogleButton } from './GoogleButton'
-import Link from 'next/link'
 import Image from 'next/image'
 
 export default function LoginPage() {
@@ -36,12 +35,6 @@ export default function LoginPage() {
         </div>
 
         <GoogleButton />
-
-        <div className="text-center mt-6">
-          <Link href="/registro" className="text-sm font-semibold text-[rgb(var(--accent-strong))] hover:text-[rgb(var(--accent))]">
-            Registrarse
-          </Link>
-        </div>
       </div>
     </div>
   )
