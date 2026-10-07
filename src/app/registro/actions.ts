@@ -53,15 +53,15 @@ export async function registroAction(prevState: RegistroState, formData: FormDat
   }
 
   if (password.length < 8) {
-    return { error: 'La contrase\u00f1a debe tener al menos 8 caracteres.', email, codigo, cedula }
+    return { error: 'La contraseña debe tener al menos 8 caracteres.', email, codigo, cedula }
   }
 
   if (password !== confirm) {
-    return { error: 'Las contrase\u00f1as no coinciden.', email, codigo, cedula }
+    return { error: 'Las contraseñas no coinciden.', email, codigo, cedula }
   }
 
   if (!admin) {
-    return { error: 'Configuraci\u00f3n de Supabase pendiente.', email, codigo, cedula }
+    return { error: 'Configuración de Supabase pendiente.', email, codigo, cedula }
   }
 
   // 1) Validar asistente por codigo y cedula
@@ -120,15 +120,15 @@ export async function registroAction(prevState: RegistroState, formData: FormDat
 
   await limpiarIntentos(admin, [claveCodigo])
 
-  // 5) Iniciar sesi\u00f3n autom\u00e1ticamente
+  // 5) Iniciar sesión automáticamente
   const supabase = await createClient()
   if (!supabase) {
-    return { error: 'Cuenta creada. Inicia sesi\u00f3n manualmente.', email, codigo, cedula }
+    return { error: 'Cuenta creada. Inicia sesión manualmente.', email, codigo, cedula }
   }
 
   const { error: loginError } = await supabase.auth.signInWithPassword({ email, password })
   if (loginError) {
-    return { error: 'Cuenta creada. Inicia sesi\u00f3n manualmente.', email, codigo, cedula }
+    return { error: 'Cuenta creada. Inicia sesión manualmente.', email, codigo, cedula }
   }
 
   revalidatePath('/', 'layout')

@@ -13,7 +13,7 @@ export function RegistroForm() {
     <form action={formAction} className="space-y-4">
       <div className="space-y-2">
         <label className="text-sm font-medium text-zinc-900" htmlFor="email">
-          Correo electr\u00f3nico
+          Correo electrónico
         </label>
         <Input
           id="email"
@@ -28,7 +28,7 @@ export function RegistroForm() {
 
       <div className="space-y-2">
         <label className="text-sm font-medium text-zinc-900" htmlFor="password">
-          Contrase\u00f1a
+          Contraseña
         </label>
         <Input
           id="password"
@@ -42,7 +42,7 @@ export function RegistroForm() {
 
       <div className="space-y-2">
         <label className="text-sm font-medium text-zinc-900" htmlFor="confirm">
-          Confirmar contrase\u00f1a
+          Confirmar contraseña
         </label>
         <Input
           id="confirm"
@@ -56,13 +56,13 @@ export function RegistroForm() {
 
       <div className="space-y-2">
         <label className="text-sm font-medium text-zinc-900" htmlFor="codigo">
-          C\u00f3digo del asistente
+          Código del asistente
         </label>
         <Input
           id="codigo"
           name="codigo"
           type="text"
-          placeholder="Ej: A-102"
+          placeholder="Ej: 211"
           defaultValue={state?.codigo || ''}
           required
           disabled={isPending}
@@ -71,7 +71,7 @@ export function RegistroForm() {
 
       <div className="space-y-2">
         <label className="text-sm font-medium text-zinc-900" htmlFor="cedula">
-          N\u00famero de c\u00e9dula
+          Número de cédula
         </label>
         <Input
           id="cedula"

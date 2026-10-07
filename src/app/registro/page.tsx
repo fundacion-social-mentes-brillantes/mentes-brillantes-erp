@@ -8,7 +8,7 @@ export default function RegistroPage() {
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Registro de consultante</h1>
           <p className="text-sm text-zinc-500 mt-2">
-            Registro disponible solo para consultantes. Administradores y caja son creados por la administraci\u00f3n.
+            Registro disponible solo para consultantes. Administradores y caja son creados por la administración.
           </p>
         </div>
 

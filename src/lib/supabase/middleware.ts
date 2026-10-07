@@ -40,21 +40,33 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (
-    !user &&
-    !request.nextUrl.pathname.startsWith('/login') &&
-    !request.nextUrl.pathname.startsWith('/auth')
-  ) {
+  if (!user && !esRutaPublica(request.nextUrl.pathname)) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  if (user && request.nextUrl.pathname.startsWith('/login')) {
+  if (user && esRutaSoloSinSesion(request.nextUrl.pathname)) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
     return NextResponse.redirect(url)
   }
 
   return supabaseResponse
+}
+
+// Paginas que se ven sin haber iniciado sesion. /registro estaba por fuera y el
+// enlace "Registrate" del login devolvia al login: nadie podia registrarse.
+const RUTAS_PUBLICAS = ['/login', '/auth', '/registro']
+// Con sesion abierta no tiene sentido volver a entrar ni registrarse.
+const RUTAS_SOLO_SIN_SESION = ['/login', '/registro']
+
+const empiezaCon = (ruta: string, base: string) => ruta === base || ruta.startsWith(`${base}/`)
+
+export function esRutaPublica(ruta: string): boolean {
+  return RUTAS_PUBLICAS.some((base) => empiezaCon(ruta, base))
+}
+
+export function esRutaSoloSinSesion(ruta: string): boolean {
+  return RUTAS_SOLO_SIN_SESION.some((base) => empiezaCon(ruta, base))
 }
