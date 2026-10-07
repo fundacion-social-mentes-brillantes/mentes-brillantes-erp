@@ -1,3 +1,4 @@
+import { secretoCoincide } from "@/lib/seguridad/secretos"
 import type { TelegramConfig } from "./types"
 import { modeloDeepSeekTelegram } from "@/lib/deepseek-modelo"
 
@@ -31,7 +32,7 @@ export function getTelegramCajeroConfig(): TelegramConfig | null {
   }
 }
 
+/** Telegram manda el secreto del webhook en cada llamada; se compara en tiempo constante. */
 export function assertWebhookSecret(request: Request, config: TelegramConfig) {
-  const secret = request.headers.get("x-telegram-bot-api-secret-token")
-  return secret === config.webhookSecret
+  return secretoCoincide(request.headers.get("x-telegram-bot-api-secret-token"), config.webhookSecret)
 }

@@ -23,6 +23,7 @@ import {
   type TelegramSessionState,
 } from "@/lib/telegram-cajero/memory/index"
 import { routeTelegramMessage } from "@/lib/telegram-cajero/router"
+import { assertWebhookSecret } from "@/lib/telegram-cajero/config"
 import { resolveNaturalDateRange } from "@/lib/telegram-cajero/dates"
 import {
   getAlerts,
@@ -446,11 +447,6 @@ export function buildPartialResultNotice(scope: string, warnings: unknown[] = []
 function visibleName(user?: TelegramUser) {
   if (!user) return "No disponible"
   return [user.first_name, user.last_name].filter(Boolean).join(" ") || user.username || String(user.id)
-}
-
-function assertWebhookSecret(request: Request, config: TelegramConfig) {
-  const secret = request.headers.get("x-telegram-bot-api-secret-token")
-  return secret === config.webhookSecret
 }
 
 export function isAuthorized(message: TelegramMessage, config: TelegramConfig) {

@@ -18,6 +18,8 @@ const TOKEN_TTL = 60 * 15
 const REFRESH_TTL = 60 * 60 * 24 * 30
 const CODE_TTL = 60 * 5
 const CLIENT_TTL = 60 * 60 * 24 * 365
+/** Solo se aceptan tokens firmados como los firma este servidor. */
+const ALGORITMOS = ["HS256"]
 
 function signingKey(): Uint8Array {
   const base = process.env.MCP_OAUTH_SIGNING_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || ""
@@ -143,7 +145,7 @@ export async function issueClientId(redirectUris: string[], clientName?: string)
 
 export async function readClientId(clientId: string): Promise<RegisteredMcpClient | null> {
   try {
-    const { payload } = await jwtVerify(clientId, signingKey(), { clockTolerance: 30 })
+    const { payload } = await jwtVerify(clientId, signingKey(), { algorithms: ALGORITMOS, clockTolerance: 30 })
     if (payload.typ !== "client") return null
     const uris = validateRedirectUris(payload.redirect_uris)
     if (!uris) return null
@@ -221,6 +223,7 @@ export async function readAuthCode(
   opts: { issuer: string; resource: string }
 ): Promise<AuthorizationCodeClaims> {
   const { payload } = await jwtVerify(code, signingKey(), {
+    algorithms: ALGORITMOS,
     issuer: opts.issuer,
     audience: opts.resource,
     clockTolerance: 30,
@@ -285,6 +288,7 @@ export async function issueTokens(params: {
 
 export async function verifyAccessToken(token: string, opts: { audience: string; issuer: string }) {
   const { payload } = await jwtVerify(token, signingKey(), {
+    algorithms: ALGORITMOS,
     issuer: opts.issuer,
     audience: opts.audience,
     clockTolerance: 30,
@@ -358,7 +362,7 @@ export async function issueOAuthContext(ctx: OAuthContext): Promise<string> {
 }
 
 export async function readOAuthContext(token: string): Promise<OAuthContext> {
-  const { payload } = await jwtVerify(token, signingKey(), { clockTolerance: 30 })
+  const { payload } = await jwtVerify(token, signingKey(), { algorithms: ALGORITMOS, clockTolerance: 30 })
   if (payload.typ !== "ctx") throw new Error("contexto inválido")
   return {
     clientId: String(payload.clientId || ""),

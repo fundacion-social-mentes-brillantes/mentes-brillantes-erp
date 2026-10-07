@@ -2,7 +2,9 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
+import { loginBloqueado, MENSAJE_DEMASIADOS_INTENTOS, olvidarIntentosDeLogin } from '@/lib/seguridad/limite-login'
 
 export type LoginState = {
   error?: string;
@@ -17,6 +19,10 @@ export async function loginAction(prevState: LoginState, formData: FormData): Pr
 
   if (!supabase) {
     return { error: 'Configuración de Supabase pendiente', email }
+  }
+
+  if (await loginBloqueado(String(email || ''), await headers())) {
+    return { error: MENSAJE_DEMASIADOS_INTENTOS, email }
   }
 
   try {
@@ -38,6 +44,8 @@ export async function loginAction(prevState: LoginState, formData: FormData): Pr
   } catch {
     return { error: 'Ocurrió un error inesperado al intentar iniciar sesión.', email }
   }
+
+  await olvidarIntentosDeLogin(String(email || ''))
 
   // Obtener rol para redirigir correctamente
   const { data: userData } = await supabase.auth.getUser()

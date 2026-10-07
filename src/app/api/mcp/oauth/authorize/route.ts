@@ -9,8 +9,9 @@ import {
   type ValidAuthorizationRequest,
 } from "@/lib/mcp/authorize-request"
 import { resolveMcpIdentity } from "@/lib/mcp/identity"
-import { oauthNoStoreHeaders } from "@/lib/mcp/constants"
+import { getMcpIssuer, oauthNoStoreHeaders } from "@/lib/mcp/constants"
 import { isMcpGoogleAuthEnabled } from "@/lib/mcp/google-auth"
+import { loginBloqueado, MENSAJE_DEMASIADOS_INTENTOS, olvidarIntentosDeLogin } from "@/lib/seguridad/limite-login"
 
 export const dynamic = "force-dynamic"
 
@@ -171,7 +172,23 @@ async function completeAuthorization(
   }
 }
 
+/**
+ * El formulario solo se acepta enviado desde esta misma pagina. Los navegadores
+ * mandan Origin en todo POST; si viene de otro sitio, se rechaza (segunda capa
+ * sobre las cookies SameSite y el consentimiento firmado).
+ */
+function vieneDeOtroSitio(req: Request): boolean {
+  const origen = req.headers.get("origin")
+  if (!origen || origen === "null") return false
+  try {
+    return origen !== new URL(req.url).origin && origen !== new URL(getMcpIssuer(req)).origin
+  } catch {
+    return true
+  }
+}
+
 export async function POST(req: Request) {
+  if (vieneDeOtroSitio(req)) return page("<h1>Solicitud rechazada</h1><p class=\"sub\">El formulario no salió de esta página.</p>", 403)
   const declaredLength = Number(req.headers.get("content-length") || "0")
   if (declaredLength > 32_768) return page("<h1>Solicitud demasiado grande</h1>", 413)
   const form = await req.formData().catch(() => null)
@@ -205,6 +222,7 @@ export async function POST(req: Request) {
   const email = String(form.get("email") || "").trim()
   const password = String(form.get("password") || "")
   if (!email || !password) return loginForm(validation.value, "Escribe tu correo y contraseña.")
+  if (await loginBloqueado(email, req.headers)) return loginForm(validation.value, MENSAJE_DEMASIADOS_INTENTOS)
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -213,6 +231,7 @@ export async function POST(req: Request) {
   const anon = createPasswordClient(supabaseUrl, anonKey, { auth: { persistSession: false, autoRefreshToken: false } })
   const { data, error } = await anon.auth.signInWithPassword({ email, password })
   if (error || !data?.user) return loginForm(validation.value, "Correo o contraseña incorrectos.")
+  await olvidarIntentosDeLogin(email)
 
   const admin = createAdminClient()
   if (!admin) return page("<h1>Servidor no configurado</h1>", 500)
