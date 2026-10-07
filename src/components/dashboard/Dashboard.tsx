@@ -1,4 +1,5 @@
 import { AlertCircle, Receipt, History, Banknote, ShoppingCart, TrendingUp, TrendingDown, Minus, Lock, Gift, Landmark, Sparkles } from "lucide-react";
+import { leerTodas } from "@/lib/supabase/paginar";
 import { createClient } from "@/lib/supabase/server";
 import Image from "next/image";
 import dynamic from "next/dynamic";
@@ -236,7 +237,16 @@ export async function Dashboard({ periodo: periodoId }: { periodo?: string }) {
     prevPeriodo
       ? getTotales(prevPeriodo.fecha_inicio, prevPeriodo.fecha_fin, prevPeriodo.estado, prevPeriodo.id, { conGrafica: false })
       : Promise.resolve(null as Totales | null),
-    supabase.from("cuentas_por_cobrar").select("valor_total, fecha_emision, pagos_abonos(monto, estado, notas)").in("estado", ["pendiente", "parcial"]),
+    // Toda la cartera abierta, por paginas: la API corta en 1000 filas y la
+    // cartera total del tablero saldria incompleta en cuanto se pasara de ahi.
+    leerTodas((desde, hasta) =>
+      supabase
+        .from("cuentas_por_cobrar")
+        .select("valor_total, fecha_emision, pagos_abonos(monto, estado, notas)")
+        .in("estado", ["pendiente", "parcial"])
+        .order("id")
+        .range(desde, hasta)
+    ).then((data) => ({ data })),
   ]);
 
   const ingresosMes = cur.ingresosCartera;

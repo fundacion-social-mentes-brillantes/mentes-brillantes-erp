@@ -1,7 +1,12 @@
 import { withSentryConfig } from "@sentry/nextjs/config";
 
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = {
+  // El respaldo completo incluye schema.sql: hay que empaquetarlo con esa ruta.
+  outputFileTracingIncludes: {
+    "/api/backup/[resource]": ["./supabase/schema.sql"],
+  },
+};
 
 export default withSentryConfig(nextConfig, {
   org: "gimnasioemocionalmb",

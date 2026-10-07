@@ -1,4 +1,5 @@
 import type { DbClient } from "@/lib/supabase/types"
+import { leerTodas } from "@/lib/supabase/paginar"
 import { OperacionError } from "./errores"
 
 // Sesiones coach pagadas que llevan mucho sin marcarse como dictadas.
@@ -46,7 +47,9 @@ export async function buscarPrepagadasSinUsar(
   if (!paquetes.length) return []
 
   // Sesiones usadas por paquete, en una sola consulta.
-  const { data: sesiones } = await admin.from("coach_sesiones").select("paquete_id")
+  const sesiones = await leerTodas((desde, hasta) =>
+    admin.from("coach_sesiones").select("paquete_id").order("id").range(desde, hasta)
+  )
   const usadasPorPaquete = new Map<string, number>()
   for (const s of sesiones || []) {
     if (!s.paquete_id) continue

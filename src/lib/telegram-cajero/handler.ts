@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { textoParaFiltro } from "@/lib/supabase/filtros"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { modeloDeepSeekTelegram, PENSAR_DEEPSEEK } from "@/lib/deepseek-modelo"
 import {
@@ -1515,8 +1516,8 @@ async function buildBusquedaGlobalResponse(supabase: any, term: string) {
     supabase.from("asistentes").select("nombre, codigo, cedula").ilike("nombre", `%${normalized}%`).limit(3),
     supabase.from("cuentas_por_cobrar").select("concepto").ilike("concepto", `%${normalized}%`).limit(3),
     supabase.from("pagos_abonos").select("notas").ilike("notas", `%${normalized}%`).limit(3),
-    supabase.from("egresos").select("concepto, notas").or(`concepto.ilike.%${normalized}%,notas.ilike.%${normalized}%`).limit(3),
-    supabase.from("ventas_externas").select("comprador_nombre, concepto, notas").or(`comprador_nombre.ilike.%${normalized}%,concepto.ilike.%${normalized}%,notas.ilike.%${normalized}%`).limit(3)
+    supabase.from("egresos").select("concepto, notas").or(`concepto.ilike.%${textoParaFiltro(normalized)}%,notas.ilike.%${textoParaFiltro(normalized)}%`).limit(3),
+    supabase.from("ventas_externas").select("comprador_nombre, concepto, notas").or(`comprador_nombre.ilike.%${textoParaFiltro(normalized)}%,concepto.ilike.%${textoParaFiltro(normalized)}%,notas.ilike.%${textoParaFiltro(normalized)}%`).limit(3)
   ])
   
   const results = []

@@ -1,4 +1,5 @@
 import { requireRoles } from '@/lib/utils/authz'
+import { textoParaFiltro } from '@/lib/supabase/filtros'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import { CuentasClient } from './CuentasClient'
@@ -62,11 +63,14 @@ export default async function CuentasPage({ searchParams }: Params) {
     const porAsistente = asistentesCoincidentes?.length
       ? `,asistente_id.in.(${asistentesCoincidentes.join(',')})`
       : ''
-    query = query.or(`concepto.ilike.%${busqueda}%${porAsistente}`)
+    query = query.or(`concepto.ilike.%${textoParaFiltro(busqueda)}%${porAsistente}`)
   }
 
   const { data: cuentasData, count } = await query
+    // El id desempata: muchas cuentas comparten fecha y sin un orden unico una
+    // fila podia salir en dos paginas o en ninguna.
     .order('fecha_emision', { ascending: false })
+    .order('id', { ascending: false })
     .range(desde, desde + POR_PAGINA - 1)
 
   const cuentas = (cuentasData ?? []).map((cuenta: any) => {

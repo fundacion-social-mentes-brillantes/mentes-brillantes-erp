@@ -1,4 +1,5 @@
 import { agruparPorMetodo } from "@/lib/utils/liquidaciones"
+import { leerTodas } from "@/lib/supabase/paginar"
 import {
   calcularSaldoFavorDisponible,
   esAnuladoCompleto,
@@ -256,11 +257,19 @@ async function consultarMovimientosRango(supabase: SupabaseClient, fechaInicio: 
 }
 
 async function obtenerCartera(supabase: SupabaseClient) {
-  const { data, error } = await supabase
-    .from("cuentas_por_cobrar")
-    .select("id, concepto, valor_total, fecha_emision, estado, asistentes(id, nombre, codigo, cedula), pagos_abonos(monto, estado, notas)")
-    .in("estado", ["pendiente", "parcial"])
-    .order("fecha_emision", { ascending: true })
+  // Por paginas: la cartera abierta tiene cientos de cuentas y la API corta en 1000.
+  const { data, error } = await leerTodas((desde, hasta) =>
+    supabase
+      .from("cuentas_por_cobrar")
+      .select("id, concepto, valor_total, fecha_emision, estado, asistentes(id, nombre, codigo, cedula), pagos_abonos(monto, estado, notas)")
+      .in("estado", ["pendiente", "parcial"])
+      .order("fecha_emision", { ascending: true })
+      .order("id", { ascending: true })
+      .range(desde, hasta)
+  ).then(
+    (filas) => ({ data: filas, error: null }),
+    (e: unknown) => ({ data: null, error: { message: e instanceof Error ? e.message : String(e) } })
+  )
 
   const err = queryError("cartera_pendiente", error)
   if (err) return { error_consulta: err.mensaje }
@@ -309,10 +318,17 @@ async function obtenerCartera(supabase: SupabaseClient) {
 }
 
 async function obtenerSaldosAFavor(supabase: SupabaseClient) {
-  const { data, error } = await supabase
-    .from("movimientos_saldo_favor")
-    .select("id, asistente_id, tipo, monto, fecha, metodo_pago, notas, asistentes(nombre, codigo, cedula)")
-    .order("fecha", { ascending: false })
+  const { data, error } = await leerTodas((desde, hasta) =>
+    supabase
+      .from("movimientos_saldo_favor")
+      .select("id, asistente_id, tipo, monto, fecha, metodo_pago, notas, asistentes(nombre, codigo, cedula)")
+      .order("fecha", { ascending: false })
+      .order("id", { ascending: false })
+      .range(desde, hasta)
+  ).then(
+    (filas) => ({ data: filas, error: null }),
+    (e: unknown) => ({ data: null, error: { message: e instanceof Error ? e.message : String(e) } })
+  )
 
   const err = queryError("saldos_a_favor", error)
   if (err) return { error_consulta: err.mensaje }

@@ -1,4 +1,5 @@
 import type { DbClient, TablesInsert, TablesUpdate } from "@/lib/supabase/types"
+import { leerTodas } from "@/lib/supabase/paginar"
 import { fechaHoyBogota } from "@/lib/utils/fechas"
 import { OperacionError, SinCambiosError, exigir, exigirFechaIso } from "./errores"
 import type { ActorErp } from "./abonos"
@@ -66,9 +67,15 @@ function traducirError(error: { code?: string; message?: string } | null): Opera
  * codigo no se puede cruzar con sus sesiones.
  */
 export async function siguienteCodigoPersona(supabase: DbClient): Promise<string> {
-  const { data, error } = await supabase.from("asistentes").select("codigo")
-  if (error) throw new OperacionError("No se pudo calcular el siguiente codigo.")
-  const numeros = (data || [])
+  let data
+  try {
+    // Todas las personas (por paginas): con mas de 1000 el maximo saldria mal y
+    // el codigo nuevo chocaria con uno existente.
+    data = await leerTodas((desde, hasta) => supabase.from("asistentes").select("codigo").order("id").range(desde, hasta))
+  } catch {
+    throw new OperacionError("No se pudo calcular el siguiente codigo.")
+  }
+  const numeros = data
     .map((fila) => Number.parseInt(String(fila.codigo ?? ""), 10))
     .filter((n) => Number.isFinite(n))
   return String((numeros.length ? Math.max(...numeros) : 0) + 1)

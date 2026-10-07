@@ -1,4 +1,5 @@
 import type { DbClient } from "@/lib/supabase/types"
+import { leerTodas } from "@/lib/supabase/paginar"
 import { OperacionError } from "./errores"
 
 // Cuentas que no pueden cerrarse por un residuo de centavos.
@@ -25,14 +26,20 @@ export type CuentaConResiduo = {
 }
 
 export async function buscarCuentasConResiduo(admin: DbClient): Promise<CuentaConResiduo[]> {
-  const { data, error } = await admin
-    .from("cuentas_por_cobrar")
-    .select(
-      "id, concepto, valor_total, estado, asistentes(codigo, nombre), pagos_abonos(monto, estado, notas)"
+  // Por paginas: hay cientos de cuentas abiertas y la API corta en 1000.
+  let data
+  try {
+    data = await leerTodas((desde, hasta) =>
+      admin
+        .from("cuentas_por_cobrar")
+        .select("id, concepto, valor_total, estado, asistentes(codigo, nombre), pagos_abonos(monto, estado, notas)")
+        .in("estado", ["pendiente", "parcial"])
+        .order("id")
+        .range(desde, hasta)
     )
-    .in("estado", ["pendiente", "parcial"])
-
-  if (error) throw new OperacionError("No se pudieron leer las cuentas.")
+  } catch {
+    throw new OperacionError("No se pudieron leer las cuentas.")
+  }
 
   const resultado: CuentaConResiduo[] = []
 

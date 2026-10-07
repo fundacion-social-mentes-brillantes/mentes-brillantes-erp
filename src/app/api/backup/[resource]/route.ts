@@ -1,9 +1,18 @@
-﻿import { NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import Papa from "papaparse"
 import JSZip from "jszip"
-import { requireAdmin } from "@/lib/utils/authz"
 import { readFile } from "fs/promises"
 import path from "path"
+import { AuthzError, requireAdmin } from "@/lib/utils/authz"
+import { leerTodas } from "@/lib/supabase/paginar"
+import { mensajeDeError } from "@/lib/utils/errores"
+import type { DbClient } from "@/lib/supabase/types"
+import { fechaHoyBogota } from "@/lib/utils/fechas"
+
+// Respaldo en CSV (solo admin). Cada tabla se lee POR PAGINAS: la API de
+// Supabase corta en 1000 filas, y antes el "respaldo completo" traia 1000 de
+// 2286 cuentas y 1000 de 1929 pagos sin avisar. Ahora ademas se compara lo
+// leido con el conteo real de la tabla y cualquier diferencia queda escrita.
 
 const TABLES = [
   "configuracion_empresa",
@@ -22,49 +31,67 @@ const TABLES = [
   "perfiles",
   "liquidaciones_socios",
   "liquidaciones_resumen_cuentas",
-]
+] as const
 
-const isTableAllowed = (table: string) => TABLES.includes(table)
+type TablaRespaldo = (typeof TABLES)[number]
 
-async function fetchCsv(supabase: any, table: string) {
-  const { data, error } = await supabase.from(table).select("*")
-  if (error) throw new Error(`Error al consultar ${table}: ${error.message}`)
-  const csv = Papa.unparse(data ?? [])
-  return "\uFEFF" + csv
+const isTableAllowed = (table: string): table is TablaRespaldo => (TABLES as readonly string[]).includes(table)
+
+async function leerTabla(supabase: DbClient, table: TablaRespaldo) {
+  const filas = await leerTodas((desde, hasta) =>
+    supabase.from(table).select("*").order("id", { ascending: true }).range(desde, hasta)
+  )
+  const { count, error } = await supabase.from(table).select("id", { count: "exact", head: true })
+  if (error) throw new Error(`No se pudo contar ${table}: ${error.message}`)
+  return { filas, total: count ?? filas.length }
 }
+
+const aCsv = (filas: unknown[]) => "﻿" + Papa.unparse(filas as object[])
 
 export async function GET(_req: NextRequest, context: { params: Promise<{ resource: string }> }) {
   const { resource } = await context.params
-  const { supabase } = await requireAdmin()
-  if (!supabase) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
 
-  const today = new Date().toISOString().slice(0, 10)
+  let supabase: DbClient
+  try {
+    ;({ supabase } = await requireAdmin())
+  } catch (error) {
+    const status = error instanceof AuthzError ? 403 : 500
+    return NextResponse.json({ error: "No autorizado" }, { status })
+  }
+
+  const today = fechaHoyBogota()
 
   try {
     if (resource === "full") {
       const zip = new JSZip()
-
       const warnings: string[] = []
+      const resumen: string[] = []
 
       for (const table of TABLES) {
         try {
-          const csv = await fetchCsv(supabase, table)
-          zip.file(`${table}_${today}.csv`, csv)
-        } catch (err: any) {
-          const msg = err?.message?.toString() || "desconocido"
-          warnings.push(`- Tabla omitida: ${table} (error al consultar: ${msg})`)
+          const { filas, total } = await leerTabla(supabase, table)
+          zip.file(`${table}_${today}.csv`, aCsv(filas))
+          resumen.push(`- ${table}: ${filas.length} filas`)
+          if (filas.length !== total) {
+            warnings.push(`- ${table}: se leyeron ${filas.length} filas pero la tabla tiene ${total}. Revisar.`)
+          }
+        } catch (err) {
+          warnings.push(`- Tabla omitida: ${table} (error al consultar: ${mensajeDeError(err, "desconocido")})`)
         }
       }
 
-      const schemaPath = path.join(process.cwd(), "supabase", "schema.sql")
-      const schema = await readFile(schemaPath, "utf-8")
-      zip.file(`schema_${today}.sql`, schema)
+      try {
+        const schema = await readFile(path.join(process.cwd(), "supabase", "schema.sql"), "utf-8")
+        zip.file(`schema_${today}.sql`, schema)
+      } catch {
+        warnings.push("- No se incluyo schema.sql (el archivo no esta disponible en el servidor).")
+      }
 
       const readme = [
         `Backup completo - ${today}`,
         "",
         "Contenido:",
-        ...TABLES.map((t) => `- ${t}_${today}.csv`),
+        ...resumen,
         `- schema_${today}.sql`,
         "",
         "Orden sugerido de restauración:",
@@ -86,18 +113,19 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ resour
         "- Este respaldo cubre datos del sistema y schema.sql, no credenciales de Auth.",
         ...(warnings.length
           ? ["", "Advertencias:", ...warnings]
-          : ["", "Advertencias:", "- Ninguna (todas las tablas configuradas existen en este entorno)"]),
+          : ["", "Advertencias:", "- Ninguna: cada tabla trae todas sus filas."]),
         "",
         "Codificación: UTF-8 con BOM para CSV.",
       ].join("\n")
       zip.file(`README_${today}.txt`, readme)
 
       const buffer = await zip.generateAsync({ type: "nodebuffer" })
-      return new NextResponse(buffer, {
+      return new NextResponse(new Uint8Array(buffer), {
         status: 200,
         headers: {
           "Content-Type": "application/zip",
           "Content-Disposition": `attachment; filename="backup_completo_${today}.zip"`,
+          "Cache-Control": "no-store",
         },
       })
     }
@@ -106,23 +134,17 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ resour
       return NextResponse.json({ error: "Tabla no permitida" }, { status: 400 })
     }
 
-    try {
-      const csv = await fetchCsv(supabase, resource)
-      return new NextResponse(csv, {
-        status: 200,
-        headers: {
-          "Content-Type": "text/csv; charset=utf-8",
-          "Content-Disposition": `attachment; filename="${resource}_${today}.csv"`,
-        },
-      })
-    } catch (error: any) {
-      const message = error?.message || "Error al consultar tabla"
-      if (message.includes("does not exist") || (message.includes("relation") && message.includes("does not exist"))) {
-        return NextResponse.json({ error: "Tabla no existe en este entorno" }, { status: 404 })
-      }
-      return NextResponse.json({ error: message }, { status: 500 })
-    }
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Error al generar respaldo" }, { status: 500 })
+    const { filas } = await leerTabla(supabase, resource)
+    return new NextResponse(aCsv(filas), {
+      status: 200,
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${resource}_${today}.csv"`,
+        "Cache-Control": "no-store",
+      },
+    })
+  } catch (error) {
+    console.error("[backup]", error)
+    return NextResponse.json({ error: mensajeDeError(error, "Error al generar respaldo") }, { status: 500 })
   }
 }

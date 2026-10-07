@@ -1,6 +1,7 @@
 'use server'
 
 import Papa from 'papaparse'
+import { textoParaFiltro } from '@/lib/supabase/filtros'
 import type { MetodoPago } from '@/lib/operaciones/errores'
 import { revalidatePath } from 'next/cache'
 import { requireAdmin } from '@/lib/utils/authz'
@@ -56,15 +57,10 @@ export async function procesarMigracion(tipo: string, rows: any[]) {
   const errorMsgs: string[] = []
 
   // Helpers para buscar IDs
-  const getAsistenteId = async (nombreOrId: string) => {
-    if (!nombreOrId) return null;
-    const { data } = await supabase.from('asistentes').select('id').or(`nombre.ilike.%${nombreOrId}%,legacy_row_id.eq.${nombreOrId},legacy_asistente_id.eq.${nombreOrId}`).limit(1).single()
-    return data?.id || null
-  }
-
   const getSocioId = async (nombreOrId: string) => {
     if (!nombreOrId) return null;
-    const { data } = await supabase.from('socios').select('id').or(`nombre.ilike.%${nombreOrId}%,legacy_row_id.eq.${nombreOrId}`).limit(1).single()
+    const limpio = textoParaFiltro(nombreOrId)
+    const { data } = await supabase.from('socios').select('id').or(`nombre.ilike.%${limpio}%,legacy_row_id.eq.${limpio}`).limit(1).single()
     return data?.id || null
   }
 

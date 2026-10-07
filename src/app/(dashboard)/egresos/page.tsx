@@ -22,6 +22,7 @@ export default async function EgresosPage({ searchParams }: Params) {
       ?.from('egresos')
       .select('id, fecha, concepto, categoria, metodo_pago, monto, notas', { count: 'exact' })
       .order('fecha', { ascending: false })
+      .order('id', { ascending: false }) // desempate: sin el, filas de la misma fecha se repetian o se perdian entre paginas
       .range(desde, desde + POR_PAGINA - 1)) || { data: [], count: 0 }
 
   const total = count ?? 0

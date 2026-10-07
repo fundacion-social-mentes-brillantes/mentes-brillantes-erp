@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { textoParaFiltro } from '@/lib/supabase/filtros'
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Bell, Search, AlertCircle, Clock, Users, Receipt, History, X, Loader2 } from "lucide-react";
@@ -102,7 +103,7 @@ export function Header({ userEmail, userRole = 'user' }: { userEmail?: string, u
 
     setSearching(true);
     const handle = setTimeout(async () => {
-      const like = `%${term}%`;
+      const like = `%${textoParaFiltro(term)}%`;
       const isAdmin = userRole === "admin";
       const aFields = isAdmin ? "id, nombre, codigo, cedula" : "id, nombre, codigo";
       const aFilter = isAdmin

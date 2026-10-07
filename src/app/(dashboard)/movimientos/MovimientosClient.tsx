@@ -1,6 +1,8 @@
 'use client'
 
 import { formatearFechaIso } from '@/lib/utils/fechas'
+import type { Database } from '@/types/database'
+import { leerTodas } from '@/lib/supabase/paginar'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
@@ -51,6 +53,28 @@ type Movimiento = {
   notas: string | null
   creado_en: string
   categoria?: string
+}
+
+type FilaVista = Database['public']['Views']['vw_movimientos_generales']['Row']
+
+/** La vista permite nulos en todo; la pantalla trabaja con valores ya resueltos. */
+function aMovimiento(fila: FilaVista): Movimiento {
+  return {
+    movimiento_id: fila.movimiento_id ?? '',
+    fecha: fila.fecha ?? '',
+    tipo_movimiento: (fila.tipo_movimiento ?? 'cuenta_cobrar') as Movimiento['tipo_movimiento'],
+    asistente_id: fila.asistente_id,
+    asistente_nombre: fila.asistente_nombre,
+    concepto: fila.concepto ?? '',
+    metodo_pago: fila.metodo_pago,
+    valor_deuda: Number(fila.valor_deuda ?? 0),
+    valor_ingreso: Number(fila.valor_ingreso ?? 0),
+    valor_egreso: Number(fila.valor_egreso ?? 0),
+    estado_o_saldo: fila.estado_o_saldo,
+    notas: fila.notas,
+    creado_en: fila.creado_en ?? '',
+    categoria: fila.categoria ?? undefined,
+  }
 }
 
 export const isMovimientoBloqueadoEnHistorial = (tipo: Movimiento['tipo_movimiento'] | string | null | undefined) =>
@@ -128,32 +152,45 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
     setLoading(true)
     setLoadError(null)
 
-    let query = supabase
-      .from('vw_movimientos_generales')
-      .select('*')
+    const armarConsulta = () => {
+      let query = supabase
+        .from('vw_movimientos_generales')
+        .select('*')
 
-    if (fechaInicio) query = query.gte('fecha', fechaInicio)
-    if (fechaFin) query = query.lte('fecha', fechaFin)
-    if (tipoFiltro !== 'todos') query = query.eq('tipo_movimiento', tipoFiltro)
-    if (asistenteFiltro !== 'todos') query = query.eq('asistente_id', asistenteFiltro)
-    if (metodoFiltro !== 'todos') query = query.eq('metodo_pago', metodoFiltro)
+      if (fechaInicio) query = query.gte('fecha', fechaInicio)
+      if (fechaFin) query = query.lte('fecha', fechaFin)
+      if (tipoFiltro !== 'todos') query = query.eq('tipo_movimiento', tipoFiltro)
+      if (asistenteFiltro !== 'todos') query = query.eq('asistente_id', asistenteFiltro)
+      if (metodoFiltro !== 'todos') query = query.eq('metodo_pago', metodoFiltro)
+
+      // movimiento_id desempata: sin un orden unico las paginas repiten o saltan filas.
+      return query
+        .order('fecha', { ascending: false })
+        .order('creado_en', { ascending: false })
+        .order('movimiento_id', { ascending: false })
+    }
 
     // Tope de seguridad: con rango "todos" esto baja anos de movimientos al
-    // navegador. Se piden los mas recientes y, si se alcanza el tope, se avisa
-    // en pantalla para que nadie crea que esta viendo el historial completo.
-    query = query
-      .order('fecha', { ascending: false })
-      .order('creado_en', { ascending: false })
-      .limit(TOPE_MOVIMIENTOS)
-
-    const { data, error } = await query
+    // navegador. Se piden los mas recientes por paginas (Supabase entrega
+    // maximo 1000 por consulta, asi que antes el tope de 2000 nunca se
+    // alcanzaba y el aviso de "historial incompleto" no salia nunca).
+    let data: Movimiento[] | null = null
+    let error: unknown = null
+    try {
+      const filas = await leerTodas((desde, hasta) => armarConsulta().range(desde, hasta), {
+        maximo: TOPE_MOVIMIENTOS,
+      })
+      data = filas.map(aMovimiento)
+    } catch (e) {
+      error = e
+    }
 
     if (error) {
       console.error('Error cargando movimientos:', error)
       setLoadError('No se pudo cargar el historial porque falta la vista de movimientos o hay un problema de conexión. Contacta al administrador.')
     } else if (data) {
       setTopeAlcanzado(data.length >= TOPE_MOVIMIENTOS)
-      let result = data as Movimiento[]
+      let result = data
       if (!mostrarAplicaciones) {
         result = result.filter(m =>
           m.tipo_movimiento !== 'aplicacion_saldo' &&

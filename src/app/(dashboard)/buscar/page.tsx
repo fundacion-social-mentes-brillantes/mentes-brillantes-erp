@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { textoParaFiltro } from "@/lib/supabase/filtros";
 import { redirect } from "next/navigation";
 import { AuthzError, requireRoles, type Role } from "@/lib/utils/authz";
 
@@ -13,7 +14,8 @@ type SearchResult = {
 async function runSearch(q: string, role: Role, supabase: any): Promise<SearchResult> {
   if (!supabase) return { asistentes: [], cuentas: [], movimientos: [] };
 
-  const term = `%${q}%`;
+  // Limpio: ver lib/supabase/filtros.ts (las comas y parentesis abrian filtros nuevos).
+  const term = `%${textoParaFiltro(q)}%`;
   const isAdmin = role === "admin";
   const asistentesFields = isAdmin ? "id, nombre, codigo, cedula" : "id, nombre, codigo";
   const asistentesFilter = isAdmin

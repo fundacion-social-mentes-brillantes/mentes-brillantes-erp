@@ -4,6 +4,8 @@ import { sendTelegramMessage } from "@/lib/telegram-cajero/telegram"
 import { calcularDiferencias, resumenEspejoAgenda } from "@/lib/operaciones/agenda-sync"
 import { armarMensaje } from "@/lib/operaciones/agenda-resumen-mensaje"
 import { fechaHoyBogota } from "@/lib/utils/fechas"
+import { mensajeDeError } from "@/lib/utils/errores"
+import { secretoCoincide, tokenBearer } from "@/lib/seguridad/secretos"
 
 // Resumen diario de diferencias entre la agenda y el ERP, por Telegram.
 //
@@ -13,13 +15,13 @@ import { fechaHoyBogota } from "@/lib/utils/fechas"
 export const dynamic = "force-dynamic"
 export const maxDuration = 60
 
-/** Vercel firma sus crons con este encabezado; tambien se acepta CRON_SECRET. */
+/**
+ * Vercel manda "Authorization: Bearer <CRON_SECRET>" en cada cron. Antes
+ * tambien bastaba el encabezado x-vercel-cron, que cualquiera puede escribir
+ * en una peticion: con eso se podia disparar el aviso de Telegram a voluntad.
+ */
 function llamadaAutorizada(req: Request): boolean {
-  const secreto = process.env.CRON_SECRET
-  const auth = req.headers.get("authorization") || ""
-  if (secreto && auth === `Bearer ${secreto}`) return true
-  // Vercel Cron añade este encabezado en produccion.
-  return req.headers.get("x-vercel-cron") !== null
+  return secretoCoincide(tokenBearer(req), process.env.CRON_SECRET)
 }
 
 export async function GET(req: Request) {
@@ -63,8 +65,8 @@ export async function GET(req: Request) {
       aviso: espejo.aviso ?? null,
       ventana,
     })
-  } catch (error: any) {
-    console.error("[cron/resumen-agenda] fallo", { message: error?.message })
+  } catch (error) {
+    console.error("[cron/resumen-agenda] fallo", { message: mensajeDeError(error) })
     return Response.json({ error: "error_interno" }, { status: 500 })
   }
 }

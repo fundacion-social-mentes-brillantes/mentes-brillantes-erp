@@ -29,6 +29,8 @@ export type OpcionesFalso = {
   fallaUpdate?: string[]
   /** Hace fallar el delete en estas tablas. */
   fallaDelete?: string[]
+  /** Como el "max rows" de la API de Supabase: ninguna respuesta trae mas filas que esto. */
+  maxFilas?: number
   /** Implementacion de las funciones de la base (supabase.rpc). */
   rpc?: Record<string, (args: Fila, tablas: Record<string, Fila[]>) => { data?: any; error?: any } | void>
 }
@@ -83,6 +85,7 @@ export function supabaseFalso(tablas: Record<string, Fila[]>, opciones: Opciones
     from(tabla: string) {
       const filtros: Filtro[] = []
       let limite: number | null = null
+      let rango: [number, number] | null = null
       let orden: { col: string; asc: boolean } | null = null
       let modo: "select" | "update" | "delete" = "select"
       let cambios: Fila = {}
@@ -95,7 +98,9 @@ export function supabaseFalso(tablas: Record<string, Fila[]>, opciones: Opciones
           const { col, asc } = orden
           filas = [...filas].sort((a, b) => (a[col] === b[col] ? 0 : (a[col] > b[col] ? 1 : -1) * (asc ? 1 : -1)))
         }
+        if (rango) filas = filas.slice(rango[0], rango[1] + 1)
         if (limite !== null) filas = filas.slice(0, limite)
+        if (opciones.maxFilas) filas = filas.slice(0, opciones.maxFilas)
         return filas.map((f) => (embebir ? embebir({ ...f }, tablas) : { ...f }))
       }
 
@@ -115,7 +120,10 @@ export function supabaseFalso(tablas: Record<string, Fila[]>, opciones: Opciones
           return { data: null, error: null }
         }
         const filas = leer()
-        if (conteo) return { data: conteo.head ? null : filas, count: filas.length, error: null }
+        if (conteo) {
+          const total = (tablas[tabla] || []).filter((f) => cumple(f, filtros)).length
+          return { data: conteo.head ? null : filas, count: total, error: null }
+        }
         return { data: filas, error: null }
       }
 
@@ -137,6 +145,7 @@ export function supabaseFalso(tablas: Record<string, Fila[]>, opciones: Opciones
         lte: filtro("lte"),
         ilike: filtro("ilike"),
         limit: (n: number) => ((limite = n), q),
+        range: (desde: number, hasta: number) => ((rango = [desde, hasta]), q),
         single: async () => {
           const filas = leer()
           if (filas.length === 1) return { data: filas[0], error: null }
