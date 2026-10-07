@@ -1,7 +1,8 @@
 // Supabase en memoria para probar las operaciones sin base de datos.
 //
 // Entiende lo que usa el ERP: select (con { count, head }), eq/neq/in/is,
-// gt/gte/lt/lte, ilike (con %), order, limit, single/maybeSingle,
+// gt/gte/lt/lte, ilike (con %), or("col.op.valor,..."), order (varias
+// columnas, en orden), limit, range, single/maybeSingle,
 // insert(...).select().single(), update(...).eq(...), delete().eq(...) y rpc.
 // Registra todo lo escrito para poder afirmar exactamente que cambio, y deja
 // simular fallos por tabla y operacion.
@@ -84,19 +85,25 @@ export function supabaseFalso(tablas: Record<string, Fila[]>, opciones: Opciones
     },
     from(tabla: string) {
       const filtros: Filtro[] = []
+      // Cada .or() agrega un grupo: la fila debe cumplir al menos una condicion de cada grupo.
+      const grupos: Filtro[][] = []
       let limite: number | null = null
       let rango: [number, number] | null = null
-      let orden: { col: string; asc: boolean } | null = null
+      const ordenes: Array<{ col: string; asc: boolean }> = []
       let modo: "select" | "update" | "delete" = "select"
       let cambios: Fila = {}
       let conteo: { head: boolean } | null = null
 
       const leer = () => {
         const embebir = opciones.embebidos?.[tabla]
-        let filas = (tablas[tabla] || []).filter((f) => cumple(f, filtros))
-        if (orden) {
-          const { col, asc } = orden
-          filas = [...filas].sort((a, b) => (a[col] === b[col] ? 0 : (a[col] > b[col] ? 1 : -1) * (asc ? 1 : -1)))
+        let filas = (tablas[tabla] || []).filter((f) => cumpleTodo(f))
+        if (ordenes.length) {
+          filas = [...filas].sort((a, b) => {
+            for (const { col, asc } of ordenes) {
+              if (a[col] !== b[col]) return (a[col] > b[col] ? 1 : -1) * (asc ? 1 : -1)
+            }
+            return 0
+          })
         }
         if (rango) filas = filas.slice(rango[0], rango[1] + 1)
         if (limite !== null) filas = filas.slice(0, limite)
@@ -104,24 +111,26 @@ export function supabaseFalso(tablas: Record<string, Fila[]>, opciones: Opciones
         return filas.map((f) => (embebir ? embebir({ ...f }, tablas) : { ...f }))
       }
 
+      const cumpleTodo = (fila: Fila) => cumple(fila, filtros) && grupos.every((g) => g.some((f) => cumpleUno(fila, f)))
+
       const filtrosSimples = () => filtros.map(([c, v]) => [c, v] as [string, any])
 
       const ejecutar = async () => {
         if (modo === "update") {
           if (opciones.fallaUpdate?.includes(tabla)) return { data: null, error: { message: `fallo update en ${tabla}` } }
           escrituras.push({ tipo: "update", tabla, cambios, filtros: filtrosSimples() })
-          for (const fila of tablas[tabla] || []) if (cumple(fila, filtros)) Object.assign(fila, cambios)
+          for (const fila of tablas[tabla] || []) if (cumpleTodo(fila)) Object.assign(fila, cambios)
           return { data: null, error: null }
         }
         if (modo === "delete") {
           if (opciones.fallaDelete?.includes(tabla)) return { data: null, error: { message: `fallo delete en ${tabla}` } }
           escrituras.push({ tipo: "delete", tabla, filtros: filtrosSimples() })
-          tablas[tabla] = (tablas[tabla] || []).filter((f) => !cumple(f, filtros))
+          tablas[tabla] = (tablas[tabla] || []).filter((f) => !cumpleTodo(f))
           return { data: null, error: null }
         }
         const filas = leer()
         if (conteo) {
-          const total = (tablas[tabla] || []).filter((f) => cumple(f, filtros)).length
+          const total = (tablas[tabla] || []).filter((f) => cumpleTodo(f)).length
           return { data: conteo.head ? null : filas, count: total, error: null }
         }
         return { data: filas, error: null }
@@ -134,7 +143,17 @@ export function supabaseFalso(tablas: Record<string, Fila[]>, opciones: Opciones
           if (opts?.count) conteo = { head: !!opts.head }
           return q
         },
-        order: (col: string, opts?: { ascending?: boolean }) => ((orden = { col, asc: opts?.ascending !== false }), q),
+        order: (col: string, opts?: { ascending?: boolean }) => (ordenes.push({ col, asc: opts?.ascending !== false }), q),
+        // "concepto.ilike.%x%,codigo.eq.5": condiciones separadas por coma, una basta.
+        or: (expr: string) => {
+          grupos.push(
+            expr.split(",").map((parte) => {
+              const [col, op, ...resto] = parte.split(".")
+              return [col, resto.join("."), op as Operador] as Filtro
+            })
+          )
+          return q
+        },
         eq: filtro("eq"),
         neq: filtro("neq"),
         in: filtro("in"),

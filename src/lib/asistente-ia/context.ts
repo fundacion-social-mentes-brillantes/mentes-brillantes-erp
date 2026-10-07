@@ -5,8 +5,10 @@ import {
   sumarMontos,
   toSafeNumber,
 } from "@/lib/utils/contable"
+import { leerTodasSinLanzar } from "@/lib/supabase/paginar"
+import type { DbClient } from "@/lib/supabase/types"
 
-type SupabaseClient = any
+type SupabaseClient = DbClient
 
 export type AsistenteIaOption = {
   id: string
@@ -74,7 +76,7 @@ function exactIdentityTokens(question: string) {
     .filter((token) => token.length >= 2)
 }
 
-function rankAsistente(asistente: any, tokens: string[], exactTokens: string[]) {
+function rankAsistente(asistente: AsistenteIaOption, tokens: string[], exactTokens: string[]) {
   const codigo = normalizeText(String(asistente.codigo || ""))
   const cedula = normalizeText(String(asistente.cedula || ""))
   const nombre = normalizeText(String(asistente.nombre || ""))
@@ -101,12 +103,12 @@ function formatMoney(value: unknown) {
   return Math.round(toSafeNumber(value))
 }
 
-function esCuentaRelacionadaConSesiones(cuenta: any) {
+function esCuentaRelacionadaConSesiones(cuenta: { concepto: string | null }) {
   const concepto = normalizeText(String(cuenta.concepto || ""))
   return concepto.includes("sesion") || concepto.includes("coach")
 }
 
-async function loadAsistenteContext(supabase: SupabaseClient, asistente: any, consulta?: string) {
+async function loadAsistenteContext(supabase: SupabaseClient, asistente: AsistenteIaOption, consulta?: string) {
   const asistenteId = asistente.id
 
   const [
@@ -179,7 +181,7 @@ async function loadAsistenteContext(supabase: SupabaseClient, asistente: any, co
   const paquetesCoach = paquetesCoachResult.data || []
   const sesionesCoach = sesionesCoachResult.data || []
 
-  const cuentasProcesadas = cuentas.map((cuenta: any) => {
+  const cuentasProcesadas = cuentas.map((cuenta) => {
     const pagosValidos = filtrarPagosValidos(cuenta.pagos_abonos || [])
     const valor = formatMoney(cuenta.valor_total)
     const abonado = formatMoney(sumarMontos(pagosValidos))
@@ -197,8 +199,8 @@ async function loadAsistenteContext(supabase: SupabaseClient, asistente: any, co
   })
 
   const abonos = cuentas
-    .flatMap((cuenta: any) =>
-      (cuenta.pagos_abonos || []).map((pago: any) => ({
+    .flatMap((cuenta) =>
+      (cuenta.pagos_abonos || []).map((pago) => ({
         id: pago.id,
         cuenta_id: cuenta.id,
         concepto_cuenta: cuenta.concepto,
@@ -210,9 +212,9 @@ async function loadAsistenteContext(supabase: SupabaseClient, asistente: any, co
         valido: esPagoValido(pago),
       }))
     )
-    .sort((a: any, b: any) => new Date(b.fecha_pago).getTime() - new Date(a.fecha_pago).getTime())
+    .sort((a, b) => new Date(b.fecha_pago).getTime() - new Date(a.fecha_pago).getTime())
 
-  const donacionesProcesadas = donaciones.map((donacion: any) => ({
+  const donacionesProcesadas = donaciones.map((donacion) => ({
     id: donacion.id,
     fecha: donacion.fecha,
     monto_cop: formatMoney(donacion.monto),
@@ -222,18 +224,18 @@ async function loadAsistenteContext(supabase: SupabaseClient, asistente: any, co
     valida: donacion.estado !== "anulado",
   }))
 
-  const totalFacturado = cuentasProcesadas.reduce((acc: number, cuenta: any) => acc + cuenta.valor_total_cop, 0)
-  const totalAbonado = cuentasProcesadas.reduce((acc: number, cuenta: any) => acc + cuenta.abonado_cop, 0)
+  const totalFacturado = cuentasProcesadas.reduce((acc: number, cuenta) => acc + cuenta.valor_total_cop, 0)
+  const totalAbonado = cuentasProcesadas.reduce((acc: number, cuenta) => acc + cuenta.abonado_cop, 0)
   const totalPendiente = Math.max(0, totalFacturado - totalAbonado)
   const sesionesCompradas = paquetesCoach.reduce(
-    (acc: number, paquete: any) => acc + formatMoney(paquete.sesiones_compradas),
+    (acc: number, paquete) => acc + formatMoney(paquete.sesiones_compradas),
     0
   )
   const sesionesRealizadas = sesionesCoach.length
-  const cuentasCoachConectadas = new Set(paquetesCoach.map((paquete: any) => paquete.cuenta_id).filter(Boolean))
+  const cuentasCoachConectadas = new Set(paquetesCoach.map((paquete) => paquete.cuenta_id).filter(Boolean))
   const cuentasSesionesNoConectadas = cuentasProcesadas
-    .filter((cuenta: any) => esCuentaRelacionadaConSesiones(cuenta) && !cuentasCoachConectadas.has(cuenta.id))
-    .map((cuenta: any) => ({
+    .filter((cuenta) => esCuentaRelacionadaConSesiones(cuenta) && !cuentasCoachConectadas.has(cuenta.id))
+    .map((cuenta) => ({
       id: cuenta.id,
       concepto: cuenta.concepto,
       fecha: cuenta.fecha_emision,
@@ -243,7 +245,7 @@ async function loadAsistenteContext(supabase: SupabaseClient, asistente: any, co
     }))
   const sesionesMigradas = cuentasSesionesNoConectadas.length
   const fechasMigradas = cuentasSesionesNoConectadas
-    .map((cuenta: any) => cuenta.fecha)
+    .map((cuenta) => cuenta.fecha)
     .filter(Boolean)
     .sort()
 
@@ -261,13 +263,13 @@ async function loadAsistenteContext(supabase: SupabaseClient, asistente: any, co
       total_pendiente_cop: totalPendiente,
       saldo_a_favor_usable_cop: calcularSaldoFavorDisponible(movimientosSaldo),
       total_donado_valido_cop: donacionesProcesadas
-        .filter((donacion: any) => donacion.valida)
-        .reduce((acc: number, donacion: any) => acc + donacion.monto_cop, 0),
+        .filter((donacion) => donacion.valida)
+        .reduce((acc: number, donacion) => acc + donacion.monto_cop, 0),
     },
-    cuentas_pendientes: cuentasProcesadas.filter((cuenta: any) => cuenta.pendiente_cop > 0),
+    cuentas_pendientes: cuentasProcesadas.filter((cuenta) => cuenta.pendiente_cop > 0),
     cuentas: cuentasProcesadas,
     abonos,
-    saldo_a_favor_movimientos: movimientosSaldo.map((mov: any) => ({
+    saldo_a_favor_movimientos: movimientosSaldo.map((mov) => ({
       id: mov.id,
       fecha: mov.fecha,
       tipo: mov.tipo,
@@ -291,7 +293,7 @@ async function loadAsistenteContext(supabase: SupabaseClient, asistente: any, co
       nota:
         "En el contador del modulo aparecen las sesiones registradas en coach_sesiones. Las sesiones migradas estan como cuentas de 'sesion coach'.",
       cuentas_relacionadas_no_conectadas_al_contador: cuentasSesionesNoConectadas,
-      historial: sesionesCoach.map((sesion: any) => ({
+      historial: sesionesCoach.map((sesion) => ({
         id: sesion.id,
         fecha: sesion.fecha,
         paquete_id: sesion.paquete_id,
@@ -366,7 +368,7 @@ export async function buildAsistenteIaContextByCodigo(supabase: SupabaseClient, 
       consulta,
       requiere_seleccion: true,
       aviso: "Hay varias coincidencias con ese codigo. Pide al usuario elegir una antes de responder cifras.",
-      coincidencias: asistentes.map((asistente: any) => ({
+      coincidencias: asistentes.map((asistente) => ({
         asistente,
         coincidencia: "codigo_repetido",
       })),
@@ -380,17 +382,19 @@ export async function buildAsistenteIaContext(supabase: SupabaseClient, question
   const tokens = searchTokens(question)
   const exactTokens = exactIdentityTokens(question)
 
-  const { data: asistentesData, error } = await supabase
-    .from("asistentes")
-    .select("id, nombre, codigo, cedula")
-    .order("nombre", { ascending: true })
-    .limit(500)
+  // La lista completa, por paginas: con un tope fijo, quien quedara despues del
+  // corte alfabetico no se podria encontrar por nombre.
+  const { filas: asistentesData, error } = await leerTodasSinLanzar((desde, hasta) =>
+    supabase
+      .from("asistentes")
+      .select("id, nombre, codigo, cedula")
+      .order("nombre", { ascending: true })
+      .order("id")
+      .range(desde, hasta)
+  )
 
   if (error) {
-    console.error("[asistente-ia] error consultando asistentes", {
-      mensaje: error.message,
-      codigo: error.code,
-    })
+    console.error("[asistente-ia] error consultando asistentes", { mensaje: error.message })
 
     return {
       consulta: question,
@@ -402,12 +406,12 @@ export async function buildAsistenteIaContext(supabase: SupabaseClient, question
 
   const asistentes = asistentesData || []
   const rankedMatches = asistentes
-    .map((asistente: any) => {
+    .map((asistente) => {
       const ranking = rankAsistente(asistente, tokens, exactTokens)
       return { asistente, ...ranking }
     })
-    .filter((match: any) => match.score > 0)
-    .sort((a: any, b: any) => b.score - a.score || String(a.asistente.nombre).localeCompare(String(b.asistente.nombre)))
+    .filter((match) => match.score > 0)
+    .sort((a, b) => b.score - a.score || String(a.asistente.nombre).localeCompare(String(b.asistente.nombre)))
 
   if (rankedMatches.length === 0) {
     return {
@@ -418,11 +422,11 @@ export async function buildAsistenteIaContext(supabase: SupabaseClient, question
   }
 
   const topScore = rankedMatches[0].score
-  const topMatches = rankedMatches.filter((match: any) => match.score === topScore)
+  const topMatches = rankedMatches.filter((match) => match.score === topScore)
   const matchesToLoad = topScore >= 100 || topMatches.length === 1 ? [rankedMatches[0]] : topMatches.slice(0, 5)
   const requiereSeleccion = matchesToLoad.length > 1
   const coincidencias = requiereSeleccion
-    ? matchesToLoad.map((match: any) => ({
+    ? matchesToLoad.map((match) => ({
         asistente: {
           id: match.asistente.id,
           nombre: match.asistente.nombre,
@@ -431,7 +435,7 @@ export async function buildAsistenteIaContext(supabase: SupabaseClient, question
         },
         coincidencia: match.reason,
       }))
-    : await Promise.all(matchesToLoad.map((match: any) => loadAsistenteContext(supabase, match.asistente, question)))
+    : await Promise.all(matchesToLoad.map((match) => loadAsistenteContext(supabase, match.asistente, question)))
 
   return {
     consulta: question,

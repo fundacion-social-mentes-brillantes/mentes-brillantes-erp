@@ -1,4 +1,7 @@
-type SupabaseClient = any
+import { leerTodasSinLanzar } from "@/lib/supabase/paginar"
+import type { DbClient } from "@/lib/supabase/types"
+
+type SupabaseClient = DbClient
 
 function normalizeText(value: string) {
   return value
@@ -55,18 +58,22 @@ export async function buildConceptBuyersContext(supabase: SupabaseClient, questi
   else patterns.add(base + "s")
   const orFilter = Array.from(patterns).map((pattern) => `concepto.ilike.%${pattern}%`).join(",")
 
-  const { data, error } = await supabase
-    .from("cuentas_por_cobrar")
-    .select("asistente_id, concepto, fecha_emision, asistentes(nombre, codigo)")
-    .or(orFilter)
-    .order("fecha_emision", { ascending: true })
-    .limit(2000)
+  // Todas las cuentas del concepto, por paginas: antes se pedian 2000 de una vez,
+  // pero la API entrega maximo 1000 y la lista salia corta sin avisar.
+  const { filas: data, error } = await leerTodasSinLanzar((desde, hasta) =>
+    supabase
+      .from("cuentas_por_cobrar")
+      .select("asistente_id, concepto, fecha_emision, asistentes(nombre, codigo)")
+      .or(orFilter)
+      .order("fecha_emision", { ascending: true })
+      .order("id")
+      .range(desde, hasta)
+  )
 
   if (error) {
     console.error("[asistente-ia] error consultando compradores de concepto", {
       concepto: raw,
       mensaje: error.message,
-      codigo: error.code,
     })
     return {
       consulta: question,
@@ -77,13 +84,13 @@ export async function buildConceptBuyersContext(supabase: SupabaseClient, questi
   }
 
   const byPerson = new Map<string, { nombre: string; codigo: string | null; veces: number }>()
-  for (const row of (data as any[]) || []) {
+  for (const row of data) {
     const id = row.asistente_id
     if (!id) continue
-    const asistente = row.asistentes || {}
+    const asistente = row.asistentes
     const existing = byPerson.get(id)
     if (existing) existing.veces += 1
-    else byPerson.set(id, { nombre: asistente.nombre || "Asistente", codigo: asistente.codigo ?? null, veces: 1 })
+    else byPerson.set(id, { nombre: asistente?.nombre || "Asistente", codigo: asistente?.codigo ?? null, veces: 1 })
   }
 
   const personas = Array.from(byPerson.values()).sort((a, b) => {

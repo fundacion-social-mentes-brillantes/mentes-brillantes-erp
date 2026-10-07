@@ -1,5 +1,6 @@
 import { agruparPorMetodo } from "@/lib/utils/liquidaciones"
-import { leerTodas } from "@/lib/supabase/paginar"
+import { leerTodas, leerTodasSinLanzar } from "@/lib/supabase/paginar"
+import type { DbClient } from "@/lib/supabase/types"
 import {
   calcularSaldoFavorDisponible,
   esAnuladoCompleto,
@@ -11,7 +12,16 @@ import {
   toSafeNumber,
 } from "@/lib/utils/contable"
 
-type SupabaseClient = any
+type SupabaseClient = DbClient
+
+/** Un periodo de liquidacion tal como lo lista listarPeriodosLiquidacion. */
+type PeriodoLiquidacion = {
+  id: string
+  nombre: string
+  fecha_inicio: string
+  fecha_fin: string
+  estado: "abierto" | "cerrado"
+}
 
 const MONTHS: Record<string, number> = {
   enero: 1,
@@ -87,7 +97,7 @@ function monthFromQuestion(question: string) {
   return Object.entries(MONTHS).find(([name]) => normalized.includes(name))?.[1] || null
 }
 
-function queryError(area: string, error: any) {
+function queryError(area: string, error: { message?: string; code?: string } | null | undefined) {
   if (!error) return null
   if (process.env.NODE_ENV === "production") {
     console.error("[asistente-ia] error consultando contabilidad", {
@@ -107,45 +117,67 @@ function queryError(area: string, error: any) {
   }
 }
 
-function dataOrEmpty(result: any, area: string) {
+function dataOrEmpty<T>(result: { filas: T[]; error: { message: string } | null }, area: string) {
   return {
-    data: result.error ? [] : result.data || [],
+    data: result.error ? [] : result.filas,
     error: queryError(area, result.error),
   }
 }
 
 async function consultarMovimientosRango(supabase: SupabaseClient, fechaInicio: string, fechaFin: string) {
+  // Todo el rango, por paginas: un periodo largo puede pasar de las 1000 filas
+  // que la API entrega por respuesta, y un total cortado seria una cifra falsa.
   const [abonosRes, saldoFavorRes, donacionesRes, ventasRes, egresosRes] = await Promise.all([
-    supabase
-      .from("pagos_abonos")
-      .select("id, monto, metodo_pago, fecha_pago, estado, notas, origen_fondos, cuentas_por_cobrar(concepto, asistentes(nombre, codigo, cedula))")
-      .gte("fecha_pago", fechaInicio)
-      .lte("fecha_pago", fechaFin)
-      .order("fecha_pago", { ascending: false }),
-    supabase
-      .from("movimientos_saldo_favor")
-      .select("id, monto, metodo_pago, fecha, tipo, notas, asistentes(nombre, codigo, cedula)")
-      .gte("fecha", fechaInicio)
-      .lte("fecha", fechaFin)
-      .order("fecha", { ascending: false }),
-    supabase
-      .from("donaciones_asistentes")
-      .select("id, monto, metodo_pago, fecha, estado, notas, asistentes(nombre, codigo, cedula)")
-      .gte("fecha", fechaInicio)
-      .lte("fecha", fechaFin)
-      .order("fecha", { ascending: false }),
-    supabase
-      .from("ventas_externas")
-      .select("id, comprador_nombre, concepto, monto, metodo_pago, fecha, estado, notas")
-      .gte("fecha", fechaInicio)
-      .lte("fecha", fechaFin)
-      .order("fecha", { ascending: false }),
-    supabase
-      .from("egresos")
-      .select("id, concepto, monto, metodo_pago, fecha, estado, notas")
-      .gte("fecha", fechaInicio)
-      .lte("fecha", fechaFin)
-      .order("fecha", { ascending: false }),
+    leerTodasSinLanzar((desde, hasta) =>
+      supabase
+        .from("pagos_abonos")
+        .select("id, monto, metodo_pago, fecha_pago, estado, notas, origen_fondos, cuentas_por_cobrar(concepto, asistentes(nombre, codigo, cedula))")
+        .gte("fecha_pago", fechaInicio)
+        .lte("fecha_pago", fechaFin)
+        .order("fecha_pago", { ascending: false })
+        .order("id")
+        .range(desde, hasta)
+    ),
+    leerTodasSinLanzar((desde, hasta) =>
+      supabase
+        .from("movimientos_saldo_favor")
+        .select("id, monto, metodo_pago, fecha, tipo, notas, asistentes(nombre, codigo, cedula)")
+        .gte("fecha", fechaInicio)
+        .lte("fecha", fechaFin)
+        .order("fecha", { ascending: false })
+        .order("id")
+        .range(desde, hasta)
+    ),
+    leerTodasSinLanzar((desde, hasta) =>
+      supabase
+        .from("donaciones_asistentes")
+        .select("id, monto, metodo_pago, fecha, estado, notas, asistentes(nombre, codigo, cedula)")
+        .gte("fecha", fechaInicio)
+        .lte("fecha", fechaFin)
+        .order("fecha", { ascending: false })
+        .order("id")
+        .range(desde, hasta)
+    ),
+    leerTodasSinLanzar((desde, hasta) =>
+      supabase
+        .from("ventas_externas")
+        .select("id, comprador_nombre, concepto, monto, metodo_pago, fecha, estado, notas")
+        .gte("fecha", fechaInicio)
+        .lte("fecha", fechaFin)
+        .order("fecha", { ascending: false })
+        .order("id")
+        .range(desde, hasta)
+    ),
+    leerTodasSinLanzar((desde, hasta) =>
+      supabase
+        .from("egresos")
+        .select("id, concepto, monto, metodo_pago, fecha, estado, notas")
+        .gte("fecha", fechaInicio)
+        .lte("fecha", fechaFin)
+        .order("fecha", { ascending: false })
+        .order("id")
+        .range(desde, hasta)
+    ),
   ])
 
   const abonosQuery = dataOrEmpty(abonosRes, "pagos_abonos")
@@ -159,7 +191,7 @@ async function consultarMovimientosRango(supabase: SupabaseClient, fechaInicio: 
     donacionesQuery.error,
     ventasQuery.error,
     egresosQuery.error,
-  ].filter(Boolean)
+  ].filter((error) => error !== null)
 
   const abonos = abonosQuery.data
   const saldoFavor = saldoFavorQuery.data
@@ -171,9 +203,9 @@ async function consultarMovimientosRango(supabase: SupabaseClient, fechaInicio: 
     excluirAplicacionSaldo: true,
   })
   const ingresosSaldoFavor = filtrarIngresosRealesSaldoAFavor(saldoFavor)
-  const donacionesValidas = donaciones.filter((item: any) => !esAnuladoCompleto(item))
-  const ventasValidas = ventasExternas.filter((item: any) => !esAnuladoCompleto(item))
-  const egresosValidos = egresos.filter((item: any) => !esAnuladoCompleto(item))
+  const donacionesValidas = donaciones.filter((item) => !esAnuladoCompleto(item))
+  const ventasValidas = ventasExternas.filter((item) => !esAnuladoCompleto(item))
+  const egresosValidos = egresos.filter((item) => !esAnuladoCompleto(item))
   const ingresosCartera = money(sumarMontos([...abonosOperativos, ...ingresosSaldoFavor]))
   const totalDonaciones = money(sumarMontos(donacionesValidas))
   const totalVentasExternas = money(sumarMontos(ventasValidas))
@@ -201,7 +233,7 @@ async function consultarMovimientosRango(supabase: SupabaseClient, fechaInicio: 
       utilidad_estimada_cop: ingresosOperativos - totalEgresos,
     },
     ingresos_por_metodo: resumenMetodo.resumen,
-    pagos: abonos.map((pago: any) => ({
+    pagos: abonos.map((pago) => ({
       id: pago.id,
       fecha: pago.fecha_pago,
       monto_cop: money(pago.monto),
@@ -213,7 +245,7 @@ async function consultarMovimientosRango(supabase: SupabaseClient, fechaInicio: 
       asistente: pago.cuentas_por_cobrar?.asistentes?.nombre,
       notas: pago.notas,
     })),
-    egresos: egresos.map((egreso: any) => ({
+    egresos: egresos.map((egreso) => ({
       id: egreso.id,
       fecha: egreso.fecha,
       concepto: egreso.concepto,
@@ -223,7 +255,7 @@ async function consultarMovimientosRango(supabase: SupabaseClient, fechaInicio: 
       valido: !esAnuladoCompleto(egreso),
       notas: egreso.notas,
     })),
-    donaciones: donaciones.map((donacion: any) => ({
+    donaciones: donaciones.map((donacion) => ({
       id: donacion.id,
       fecha: donacion.fecha,
       monto_cop: money(donacion.monto),
@@ -233,7 +265,7 @@ async function consultarMovimientosRango(supabase: SupabaseClient, fechaInicio: 
       asistente: donacion.asistentes?.nombre,
       notas: donacion.notas,
     })),
-    ventas_externas: ventasExternas.map((venta: any) => ({
+    ventas_externas: ventasExternas.map((venta) => ({
       id: venta.id,
       fecha: venta.fecha,
       concepto: venta.concepto,
@@ -245,13 +277,13 @@ async function consultarMovimientosRango(supabase: SupabaseClient, fechaInicio: 
       notas: venta.notas,
     })),
     alertas: [
-      ...abonos.filter((p: any) => !esPagoValido(p)).map((p: any) => ({ tipo: "pago_anulado", id: p.id, fecha: p.fecha_pago })),
+      ...abonos.filter((p) => !esPagoValido(p)).map((p) => ({ tipo: "pago_anulado", id: p.id, fecha: p.fecha_pago })),
       ...abonos
-        .filter((p: any) => String(p.metodo_pago || "").toLowerCase() === "otro")
-        .map((p: any) => ({ tipo: "metodo_pago_otro", id: p.id, monto_cop: money(p.monto) })),
+        .filter((p) => String(p.metodo_pago || "").toLowerCase() === "otro")
+        .map((p) => ({ tipo: "metodo_pago_otro", id: p.id, monto_cop: money(p.monto) })),
       ...egresosValidos
-        .filter((e: any) => money(e.monto) >= 1000000)
-        .map((e: any) => ({ tipo: "egreso_alto", id: e.id, concepto: e.concepto, monto_cop: money(e.monto) })),
+        .filter((e) => money(e.monto) >= 1000000)
+        .map((e) => ({ tipo: "egreso_alto", id: e.id, concepto: e.concepto, monto_cop: money(e.monto) })),
     ],
   }
 }
@@ -275,7 +307,7 @@ async function obtenerCartera(supabase: SupabaseClient) {
   if (err) return { error_consulta: err.mensaje }
 
   const cuentas = (data || [])
-    .map((cuenta: any) => {
+    .map((cuenta) => {
       const abonado = money(sumarMontos(filtrarPagosValidos(cuenta.pagos_abonos || [])))
       const valor = money(cuenta.valor_total)
       return {
@@ -289,10 +321,10 @@ async function obtenerCartera(supabase: SupabaseClient) {
         pendiente_cop: Math.max(0, valor - abonado),
       }
     })
-    .filter((cuenta: any) => cuenta.pendiente_cop > 0)
+    .filter((cuenta) => cuenta.pendiente_cop > 0)
 
-  const porAsistente = new Map<string, any>()
-  cuentas.forEach((cuenta: any) => {
+  const porAsistente = new Map<string, { asistente: string | undefined; codigo: string | null | undefined; pendiente_cop: number; cuentas: number }>()
+  cuentas.forEach((cuenta) => {
     const key = cuenta.codigo || cuenta.asistente || cuenta.id
     const current = porAsistente.get(key) || {
       asistente: cuenta.asistente,
@@ -306,13 +338,13 @@ async function obtenerCartera(supabase: SupabaseClient) {
   })
 
   return {
-    total_pendiente_cop: cuentas.reduce((acc: number, cuenta: any) => acc + cuenta.pendiente_cop, 0),
+    total_pendiente_cop: cuentas.reduce((acc: number, cuenta) => acc + cuenta.pendiente_cop, 0),
     cuentas_pendientes: cuentas.slice(0, 30),
     mayores_deudores: Array.from(porAsistente.values())
       .sort((a, b) => b.pendiente_cop - a.pendiente_cop)
       .slice(0, 10),
     cuentas_antiguas_pendientes: cuentas
-      .filter((cuenta: any) => new Date(cuenta.fecha_emision).getTime() < Date.now() - 30 * 24 * 60 * 60 * 1000)
+      .filter((cuenta) => new Date(cuenta.fecha_emision).getTime() < Date.now() - 30 * 24 * 60 * 60 * 1000)
       .slice(0, 20),
   }
 }
@@ -333,8 +365,9 @@ async function obtenerSaldosAFavor(supabase: SupabaseClient) {
   const err = queryError("saldos_a_favor", error)
   if (err) return { error_consulta: err.mensaje }
 
-  const porAsistente = new Map<string, any>()
-  ;(data || []).forEach((mov: any) => {
+  type SaldosDeUno = { asistente: string | undefined; codigo: string | null | undefined; movimientos: NonNullable<typeof data> }
+  const porAsistente = new Map<string, SaldosDeUno>()
+  ;(data || []).forEach((mov) => {
     const current = porAsistente.get(mov.asistente_id) || {
       asistente: mov.asistentes?.nombre,
       codigo: mov.asistentes?.codigo,
@@ -345,13 +378,13 @@ async function obtenerSaldosAFavor(supabase: SupabaseClient) {
   })
 
   const saldos = Array.from(porAsistente.values())
-    .map((item: any) => ({
+    .map((item) => ({
       asistente: item.asistente,
       codigo: item.codigo,
       saldo_a_favor_usable_cop: calcularSaldoFavorDisponible(item.movimientos),
     }))
-    .filter((item: any) => item.saldo_a_favor_usable_cop > 0)
-    .sort((a: any, b: any) => b.saldo_a_favor_usable_cop - a.saldo_a_favor_usable_cop)
+    .filter((item) => item.saldo_a_favor_usable_cop > 0)
+    .sort((a, b) => b.saldo_a_favor_usable_cop - a.saldo_a_favor_usable_cop)
 
   return { saldos_a_favor: saldos }
 }
@@ -384,7 +417,7 @@ export async function listarPeriodosLiquidacion(supabase: SupabaseClient) {
   if (err) return { error_consulta: err.mensaje }
 
   return {
-    periodos: (data || []).map((periodo: any) => ({
+    periodos: (data || []).map((periodo) => ({
       id: periodo.id,
       nombre: periodo.nombre,
       fecha_inicio: periodo.fecha_inicio,
@@ -399,7 +432,7 @@ async function listarLiquidacionesPorEstado(supabase: SupabaseClient, estado: "a
   if (result.error_consulta) return result
   return {
     estado,
-    periodos: (result.periodos || []).filter((periodo: any) => periodo.estado === estado),
+    periodos: (result.periodos || []).filter((periodo) => periodo.estado === estado),
   }
 }
 
@@ -409,7 +442,7 @@ async function obtenerLiquidacionPorNombre(supabase: SupabaseClient, question: s
 
   const normalized = normalizeText(question)
   const month = monthFromQuestion(question)
-  const matches = (result.periodos || []).filter((periodo: any) => {
+  const matches = (result.periodos || []).filter((periodo) => {
     const nombre = normalizeText(periodo.nombre || "")
     const inicio = new Date(`${periodo.fecha_inicio}T00:00:00`)
     const fin = new Date(`${periodo.fecha_fin}T00:00:00`)
@@ -451,7 +484,7 @@ async function compararLiquidaciones(supabase: SupabaseClient) {
   }
 }
 
-async function obtenerResumenLiquidacion(supabase: SupabaseClient, periodo: any) {
+async function obtenerResumenLiquidacion(supabase: SupabaseClient, periodo: PeriodoLiquidacion) {
   const [{ data: adelantos, error: adelantosError }, { data: liquidaciones, error: liquidacionesError }] =
     await Promise.all([
       supabase.from("adelantos_socios").select("monto, metodo_pago, fecha, notas, socios(nombre)").eq("periodo_id", periodo.id),
@@ -475,8 +508,8 @@ async function obtenerResumenLiquidacion(supabase: SupabaseClient, periodo: any)
     if (err) return { error_consulta: err.mensaje }
 
     const ingresosOperativos = money(liquidaciones[0].ingresos_operativos)
-    const egresos = money((resumen || []).reduce((acc: number, row: any) => acc + Number(row.salidas_egresos || 0), 0))
-    const adelantosTotal = money((resumen || []).reduce((acc: number, row: any) => acc + Number(row.salidas_adelantos || 0), 0))
+    const egresos = money((resumen || []).reduce((acc: number, row) => acc + Number(row.salidas_egresos || 0), 0))
+    const adelantosTotal = money((resumen || []).reduce((acc: number, row) => acc + Number(row.salidas_adelantos || 0), 0))
 
     return {
       periodo,
@@ -484,14 +517,14 @@ async function obtenerResumenLiquidacion(supabase: SupabaseClient, periodo: any)
       resumen_financiero: {
         ingresos_cobrados_cop: money(liquidaciones[0].ingresos_cobrados),
         donaciones_cop: money(liquidaciones[0].donaciones_periodo),
-        ventas_externas_cop: money((resumen || []).reduce((acc: number, row: any) => acc + Number(row.ingresos_ventas_externas || 0), 0)),
+        ventas_externas_cop: money((resumen || []).reduce((acc: number, row) => acc + Number(row.ingresos_ventas_externas || 0), 0)),
         ingresos_operativos_cop: ingresosOperativos,
         egresos_operativos_cop: egresos,
         utilidad_neta_cop: ingresosOperativos - egresos,
         adelantos_no_operativos_cop: adelantosTotal,
       },
       resumen_por_metodo: resumen || [],
-      socios: liquidaciones.map((liq: any) => ({
+      socios: liquidaciones.map((liq) => ({
         socio: liq.socios?.nombre,
         porcentaje: Number(liq.porcentaje_aplicado),
         corresponde_cop: money(liq.valor_correspondiente),
