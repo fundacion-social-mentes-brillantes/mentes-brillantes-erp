@@ -1,3 +1,4 @@
+import type { DraftAction } from "@/lib/telegram-cajero/actions/types"
 import type { PendingAction } from "../types"
 
 export type TelegramMemoryScope = {
@@ -14,12 +15,9 @@ export type TelegramPendingSelection = {
   matches: Array<{ nombre: string; codigo?: string | null; cedula?: string | null }>
 }
 
-export type TelegramPendingAction = {
-  createdAt: number
-  kind: string
-  summary: string
-  payload?: Record<string, unknown>
-}
+// El borrador que guarda el bot es exactamente el que arma prepareDraftAction.
+// Antes se declaraba otra forma (createdAt numerico) y un `any` lo tapaba.
+export type TelegramPendingAction = DraftAction
 
 export type TelegramSessionState = {
   lastIntent?: string | null

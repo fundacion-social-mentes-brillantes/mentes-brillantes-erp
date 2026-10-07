@@ -24,6 +24,24 @@ vi.mock('@/lib/utils/periodos', () => ({
   assertFechaEditable: (...args: unknown[]) => assertFechaEditableMock(...args),
 }))
 
+// Como en Next: redirect() lanza un error con digest NEXT_REDIRECT y corta la accion.
+const lanzarRedireccion = (destino: unknown) => {
+  throw { digest: `NEXT_REDIRECT;replace;${String(destino)};307;` }
+}
+
+/** Ejecuta una accion que termina redirigiendo: la redireccion cuenta como exito. */
+async function hastaRedirigir<T>(accion: Promise<T>): Promise<T | { success: true; redirigidoA: string }> {
+  try {
+    return await accion
+  } catch (error) {
+    const digest = (error as { digest?: unknown } | null)?.digest
+    if (typeof digest === 'string' && digest.startsWith('NEXT_REDIRECT')) {
+      return { success: true, redirigidoA: digest.split(';')[2] }
+    }
+    throw error
+  }
+}
+
 const { aplicarSaldoFavor, deleteCuenta, editMontoAbono, editValorCuenta, revertirAbonoConSaldo, saveAbono, saveCuenta } =
   await import('./actions')
 
@@ -92,7 +110,7 @@ describe('cuentas/actions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     assertFechaEditableMock.mockResolvedValue(null)
-    redirectMock.mockImplementation(() => undefined)
+    redirectMock.mockImplementation(lanzarRedireccion)
   })
 
   it('saveCuenta crea una cuenta sin abono inicial y no inserta usuario_id en cuentas_por_cobrar', async () => {
@@ -112,7 +130,7 @@ describe('cuentas/actions', () => {
 
     requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
-    const result = await saveCuenta(
+    const result = await hastaRedirigir(saveCuenta(
       null,
       buildFormData({
         asistente_id: 'asis-1',
@@ -122,7 +140,7 @@ describe('cuentas/actions', () => {
         tipo_cuenta: 'general',
         abono_inicial: '0',
       })
-    )
+    ))
 
     expect(result?.success).toBe(true)
     expect(cuentaInsert).toHaveBeenCalledWith([
@@ -151,7 +169,7 @@ describe('cuentas/actions', () => {
 
     requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
-    const result = await saveCuenta(
+    const result = await hastaRedirigir(saveCuenta(
       null,
       buildFormData({
         asistente_id: 'asis-1',
@@ -161,7 +179,7 @@ describe('cuentas/actions', () => {
         tipo_cuenta: 'coach',
         sesiones_coach: '4',
       })
-    )
+    ))
 
     expect(result?.success).toBe(true)
     expect(coachInsert).toHaveBeenCalledWith([
@@ -209,7 +227,7 @@ describe('cuentas/actions', () => {
     const { supabase, cuentaInsert, sesionInsert, asistentesUpdate, fechaInicioEq, fechaInicioIs } = buildCoachCuentaSupabase()
     requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
-    const result = await saveCuenta(
+    const result = await hastaRedirigir(saveCuenta(
       null,
       buildFormData({
         asistente_id: 'asis-1',
@@ -221,7 +239,7 @@ describe('cuentas/actions', () => {
         sesiones_coach: '1',
         fecha_sesion_coach: '2026-04-15',
       })
-    )
+    ))
 
     expect(result?.success).toBe(true)
     expect(cuentaInsert).toHaveBeenCalledWith([
@@ -248,7 +266,7 @@ describe('cuentas/actions', () => {
     const { supabase, sesionInsert, asistentesUpdate } = buildCoachCuentaSupabase()
     requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
-    const result = await saveCuenta(
+    const result = await hastaRedirigir(saveCuenta(
       null,
       buildFormData({
         asistente_id: 'asis-1',
@@ -259,7 +277,7 @@ describe('cuentas/actions', () => {
         sesiones_coach: '1',
         fecha_sesion_coach: '',
       })
-    )
+    ))
 
     expect(result?.success).toBe(true)
     expect(sesionInsert).not.toHaveBeenCalled()
@@ -270,7 +288,7 @@ describe('cuentas/actions', () => {
     const { supabase, sesionInsert, paqueteDeleteEq, cuentaDeleteEq, asistentesUpdate } = buildCoachCuentaSupabase({ message: 'fallo sesion' })
     requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
-    const result = await saveCuenta(
+    const result = await hastaRedirigir(saveCuenta(
       null,
       buildFormData({
         asistente_id: 'asis-1',
@@ -281,7 +299,7 @@ describe('cuentas/actions', () => {
         sesiones_coach: '1',
         fecha_sesion_coach: '2026-04-15',
       })
-    )
+    ))
 
     expect(result?.error).toMatch(/fallo sesion/i)
     expect(sesionInsert).toHaveBeenCalled()
@@ -306,7 +324,7 @@ describe('cuentas/actions', () => {
 
     requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
-    const result = await saveCuenta(
+    const result = await hastaRedirigir(saveCuenta(
       null,
       buildFormData({
         asistente_id: 'asis-1',
@@ -317,7 +335,7 @@ describe('cuentas/actions', () => {
         modalidad_cobro: 'cortesia',
         sesiones_coach: '2',
       })
-    )
+    ))
 
     expect(result?.success).toBe(true)
     expect(cuentaInsert).toHaveBeenCalledWith([
@@ -341,7 +359,7 @@ describe('cuentas/actions', () => {
     const supabase = { from: vi.fn() }
     requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
-    const result = await saveCuenta(
+    const result = await hastaRedirigir(saveCuenta(
       null,
       buildFormData({
         asistente_id: 'asis-1',
@@ -352,7 +370,7 @@ describe('cuentas/actions', () => {
         modalidad_cobro: 'normal',
         sesiones_coach: '4',
       })
-    )
+    ))
 
     expect(result?.error).toMatch(/valor 0 solo se permite/i)
     expect(supabase.from).not.toHaveBeenCalled()
@@ -362,7 +380,7 @@ describe('cuentas/actions', () => {
     const supabase = { from: vi.fn() }
     requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
-    const result = await saveCuenta(
+    const result = await hastaRedirigir(saveCuenta(
       null,
       buildFormData({
         asistente_id: 'asis-1',
@@ -375,7 +393,7 @@ describe('cuentas/actions', () => {
         abono_inicial: '1000',
         metodo_pago: 'efectivo',
       })
-    )
+    ))
 
     expect(result?.error).toMatch(/abono inicial/i)
     expect(supabase.from).not.toHaveBeenCalled()
@@ -385,7 +403,7 @@ describe('cuentas/actions', () => {
     const supabase = { from: vi.fn() }
     requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
-    const result = await saveCuenta(
+    const result = await hastaRedirigir(saveCuenta(
       null,
       buildFormData({
         asistente_id: 'asis-1',
@@ -394,7 +412,7 @@ describe('cuentas/actions', () => {
         fecha_emision: '2026-04-02',
         tipo_cuenta: 'general',
       })
-    )
+    ))
 
     expect(result?.error).toMatch(/negativo/i)
     expect(supabase.from).not.toHaveBeenCalled()
@@ -421,7 +439,7 @@ describe('cuentas/actions', () => {
 
     requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
-    const result = await saveCuenta(
+    const result = await hastaRedirigir(saveCuenta(
       null,
       buildFormData({
         asistente_id: 'asis-1',
@@ -433,7 +451,7 @@ describe('cuentas/actions', () => {
         fecha_pago_inicial: '2026-04-02',
         metodo_pago: 'daviplata',
       })
-    )
+    ))
 
     expect(result?.success).toBe(true)
     expect(pagoInsert).toHaveBeenCalledWith([
@@ -480,7 +498,7 @@ describe('cuentas/actions', () => {
 
     requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
-    const result = await saveCuenta(
+    const result = await hastaRedirigir(saveCuenta(
       null,
       buildFormData({
         asistente_id: 'asis-1',
@@ -493,7 +511,7 @@ describe('cuentas/actions', () => {
         fecha_pago_inicial: '2026-04-04',
         metodo_pago: 'nequi',
       })
-    )
+    ))
 
     expect(result?.success).toBe(true)
     expect(cuentaInsert).toHaveBeenCalledWith([
@@ -532,7 +550,7 @@ describe('cuentas/actions', () => {
 
     requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
-    const result = await saveCuenta(
+    const result = await hastaRedirigir(saveCuenta(
       null,
       buildFormData({
         asistente_id: 'asis-1',
@@ -544,7 +562,7 @@ describe('cuentas/actions', () => {
         fecha_pago_inicial: '2026-04-05',
         metodo_pago: 'efectivo',
       })
-    )
+    ))
 
     expect(result?.success).toBe(true)
     expect(pagoInsert).toHaveBeenCalledWith([
@@ -586,7 +604,7 @@ describe('cuentas/actions', () => {
 
     requireRolesMock.mockResolvedValue({ supabase, user: { id: 'user-1' }, perfil: { rol: 'caja' } })
 
-    const result = await saveCuenta(
+    const result = await hastaRedirigir(saveCuenta(
       null,
       buildFormData({
         asistente_id: 'asis-1',
@@ -598,7 +616,7 @@ describe('cuentas/actions', () => {
         fecha_pago_inicial: '2026-04-06',
         metodo_pago: 'nequi',
       })
-    )
+    ))
 
     expect(result?.success).toBe(true)
     expect(pagoInsert).toHaveBeenCalledWith([
@@ -1225,7 +1243,7 @@ const pagoActivo = (over: Record<string, any> = {}) => ({
 describe('cuentas/actions deleteCuenta', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    redirectMock.mockImplementation(() => undefined)
+    redirectMock.mockImplementation(lanzarRedireccion)
     assertFechaEditableMock.mockResolvedValue(null)
   })
 
@@ -1233,7 +1251,7 @@ describe('cuentas/actions deleteCuenta', () => {
     const { supabase, deleteEq } = buildDeleteSupabase({ pagos: [pagoActivo()] })
     requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
 
-    const result = await deleteCuenta('cuenta-1')
+    const result = await hastaRedirigir(deleteCuenta('cuenta-1'))
 
     expect(result?.error).toMatch(/pagos activos registrados/i)
     expect(deleteEq).not.toHaveBeenCalled()
@@ -1245,7 +1263,7 @@ describe('cuentas/actions deleteCuenta', () => {
     })
     requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
 
-    const result = await deleteCuenta('cuenta-1')
+    const result = await hastaRedirigir(deleteCuenta('cuenta-1'))
 
     expect(result?.success).toBe(true)
     expect(deleteEq).toHaveBeenCalledWith('id', 'cuenta-1')
@@ -1259,7 +1277,7 @@ describe('cuentas/actions deleteCuenta', () => {
     })
     requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
 
-    const result = await deleteCuenta('cuenta-1')
+    const result = await hastaRedirigir(deleteCuenta('cuenta-1'))
 
     expect(result?.success).toBe(true)
     expect(deleteEq).toHaveBeenCalledWith('id', 'cuenta-1')
@@ -1271,7 +1289,7 @@ describe('cuentas/actions deleteCuenta', () => {
     })
     requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
 
-    const result = await deleteCuenta('cuenta-1')
+    const result = await hastaRedirigir(deleteCuenta('cuenta-1'))
 
     expect(result?.error).toMatch(/saldo a favor/i)
     expect(deleteEq).not.toHaveBeenCalled()
@@ -1283,7 +1301,7 @@ describe('cuentas/actions deleteCuenta', () => {
     })
     requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
 
-    const result = await deleteCuenta('cuenta-1')
+    const result = await hastaRedirigir(deleteCuenta('cuenta-1'))
 
     expect(result?.error).toMatch(/aplicaciones de saldo a favor sin revertir/i)
     expect(deleteEq).not.toHaveBeenCalled()
@@ -1297,7 +1315,7 @@ describe('cuentas/actions deleteCuenta', () => {
     })
     requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
 
-    const result = await deleteCuenta('cuenta-1')
+    const result = await hastaRedirigir(deleteCuenta('cuenta-1'))
 
     expect(result?.error).toMatch(/sesiones registradas/i)
     expect(deleteEq).not.toHaveBeenCalled()
@@ -1312,7 +1330,7 @@ describe('cuentas/actions deleteCuenta', () => {
     })
     requireAdminMock.mockResolvedValue({ supabase, user: { id: 'admin-1' } })
 
-    const result = await deleteCuenta('cuenta-1')
+    const result = await hastaRedirigir(deleteCuenta('cuenta-1'))
 
     expect(result?.success).toBe(true)
     expect(deleteEq).toHaveBeenCalledWith('id', 'cuenta-1')
@@ -1322,7 +1340,7 @@ describe('cuentas/actions deleteCuenta', () => {
 describe('cuentas/actions revertirAbonoConSaldo', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    redirectMock.mockImplementation(() => undefined)
+    redirectMock.mockImplementation(lanzarRedireccion)
     assertFechaEditableMock.mockResolvedValue(null)
   })
 

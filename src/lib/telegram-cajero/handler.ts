@@ -1,13 +1,7 @@
 import { NextResponse } from "next/server"
-import { textoParaFiltro } from "@/lib/supabase/filtros"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { modeloDeepSeekTelegram, PENSAR_DEEPSEEK } from "@/lib/deepseek-modelo"
-import {
-  calcularSaldoFavorDisponible,
-  filtrarPagosValidos,
-  sumarMontos,
-  toSafeNumber,
-} from "@/lib/utils/contable"
+import { toSafeNumber } from "@/lib/utils/contable"
 import type {
   TelegramUser,
   TelegramMessage,
@@ -40,8 +34,10 @@ import {
   getPersonPurchasesOrConcepts,
   getSummary,
   searchGlobal,
+  type SupabaseReader,
 } from "@/lib/telegram-cajero/tools"
 import { cancelAction, confirmAction, detectDraftActionIntent, prepareDraftAction } from "@/lib/telegram-cajero/actions"
+import type { DraftAction } from "@/lib/telegram-cajero/actions/types"
 import {
   resolveTelegramContext,
   shouldUseLastAsistenteForText,
@@ -63,6 +59,13 @@ type CajeroConversationContext = TelegramSessionState & {
   lastMode?: DeepSeekIntent
   lastSearchTerm?: string | null
 }
+
+/** Lo que devuelve cada herramienta cuando responde bien; en error `data` es null. */
+type DatosDe<F extends (...args: never[]) => Promise<{ data: unknown }>> = NonNullable<Awaited<ReturnType<F>>["data"]>
+type EstadoFinanciero = DatosDe<typeof getPersonFinancialStatus>
+
+/** La persona ya identificada sobre la que se arma una respuesta. */
+type AsistenteResuelto = { id: string; nombre: string; codigo?: string | null; cedula?: string | null }
 
 type LoadedMemory = {
   store: TelegramMemoryStore
@@ -202,9 +205,9 @@ async function clearPendingSelection(memory: LoadedMemory | null | undefined) {
   memory.session = (await memory.store.get(memory.scope)) || memory.session
 }
 
-async function savePendingAction(memory: LoadedMemory | null | undefined, action: any) {
+async function savePendingAction(memory: LoadedMemory | null | undefined, action: DraftAction | undefined) {
   if (!memory) return
-  await memory.store.patch(memory.scope, { pendingAction: action, expiresAt: expiresAtFrom() })
+  await memory.store.patch(memory.scope, { pendingAction: action ?? null, expiresAt: expiresAtFrom() })
   memory.session = (await memory.store.get(memory.scope)) || memory.session
 }
 
@@ -393,15 +396,16 @@ function compactLine(value: unknown, fallback = "Sin dato") {
   return text || fallback
 }
 
-function safeErrorDetails(error: any) {
+function safeErrorDetails(error: unknown) {
+  const e = (error && typeof error === "object" ? error : {}) as { code?: unknown; status?: unknown }
   return {
     name: error instanceof Error ? error.name : "Error",
-    code: typeof error?.code === "string" ? error.code : undefined,
-    status: typeof error?.status === "number" ? error.status : undefined,
+    code: typeof e.code === "string" ? e.code : undefined,
+    status: typeof e.status === "number" ? e.status : undefined,
   }
 }
 
-function logTelegramError(scope: string, error?: any) {
+function logTelegramError(scope: string, error?: unknown) {
   if (process.env.NODE_ENV === "production") {
     console.error(`[telegram-cajero] ${scope}`)
     return
@@ -423,7 +427,7 @@ function buildContextualHelp(ctx: CajeroConversationContext | null) {
   return "Puedo revisar personas, pagos, deudas, saldos, cartera pendiente, ingresos, egresos o alertas. Por ejemplo: quien debe dinero?"
 }
 
-function summarizeToolError(prefix: string, result: any) {
+function summarizeToolError(prefix: string, result: { userSafeErrors?: unknown } | null | undefined) {
   const detail = Array.isArray(result?.userSafeErrors) ? result.userSafeErrors.join(" ") : ""
   return `${prefix}${detail ? ` ${detail}` : ""}`
 }
@@ -560,27 +564,31 @@ function parseJsonObject(value: string) {
   }
 }
 
-function sanitizeIntent(value: any): Intent | null {
-  const allowed = new Set([
+function sanitizeIntent(raw: unknown): Intent | null {
+  const allowed = new Set<string>([
     "estado_persona", "estado_completo_persona", "ultima_sesion_coach", "sesiones_coach_persona", "pagos_persona", 
     "ultimo_pago_persona", "cuentas_pendientes_persona", "saldo_favor_persona", 
     "donaciones_persona", "compras_persona", "ventas_externas", "egresos", "resumen_periodo", 
     "liquidacion_socio", "busqueda_global", "pregunta_general_erp", "saludo", 
     "ayuda", "id", "cartera_pendiente_global", "no_entendido"
   ])
-  if (!value || typeof value !== "object" || !allowed.has(value.intent)) return null
+  if (!raw || typeof raw !== "object") return null
+  // Lo que devolvio el modelo: un objeto cualquiera; cada campo se valida abajo.
+  const value = raw as Record<string, unknown>
+  if (typeof value.intent !== "string" || !allowed.has(value.intent)) return null
+  const texto = (campo: unknown) => (typeof campo === "string" && campo.trim() ? campo.trim() : null)
 
   return {
-    intent: value.intent,
-    persona_busqueda: typeof value.persona_busqueda === "string" && value.persona_busqueda.trim() ? value.persona_busqueda.trim() : null,
-    socio_busqueda: typeof value.socio_busqueda === "string" && value.socio_busqueda.trim() ? value.socio_busqueda.trim() : null,
-    termino_busqueda: typeof value.termino_busqueda === "string" && value.termino_busqueda.trim() ? value.termino_busqueda.trim() : null,
-    fecha_desde: typeof value.fecha_desde === "string" && value.fecha_desde.trim() ? value.fecha_desde.trim() : null,
-    fecha_hasta: typeof value.fecha_hasta === "string" && value.fecha_hasta.trim() ? value.fecha_hasta.trim() : null,
-    metodo_pago: typeof value.metodo_pago === "string" && value.metodo_pago.trim() ? value.metodo_pago.trim() : null,
-    concepto: typeof value.concepto === "string" && value.concepto.trim() ? value.concepto.trim() : null,
+    intent: value.intent as DeepSeekIntent,
+    persona_busqueda: texto(value.persona_busqueda),
+    socio_busqueda: texto(value.socio_busqueda),
+    termino_busqueda: texto(value.termino_busqueda),
+    fecha_desde: texto(value.fecha_desde),
+    fecha_hasta: texto(value.fecha_hasta),
+    metodo_pago: texto(value.metodo_pago),
+    concepto: texto(value.concepto),
     necesita_aclaracion: Boolean(value.necesita_aclaracion),
-    pregunta_aclaracion: typeof value.pregunta_aclaracion === "string" && value.pregunta_aclaracion.trim() ? value.pregunta_aclaracion.trim() : null,
+    pregunta_aclaracion: texto(value.pregunta_aclaracion),
   }
 }
 
@@ -713,7 +721,10 @@ function fallbackClassifyIntent(text: string): Intent {
   return defaultIntent
 }
 
-function findMatches(asistentes: any[], term: string) {
+/** Una persona candidata al buscar por nombre, codigo o cedula. */
+type PersonaCandidata = { id: string; nombre: string; codigo: string | null; cedula: string | null }
+
+function findMatches(asistentes: PersonaCandidata[], term: string) {
   const tokens = normalizeText(term)
     .split(/\s+/)
     .filter((token) => token.length >= 2)
@@ -735,7 +746,7 @@ function findMatches(asistentes: any[], term: string) {
 }
 
 async function searchAsistenteForAction(
-  supabase: any,
+  supabase: SupabaseReader,
   term: string,
   action: PendingAction,
   message?: TelegramMessage,
@@ -746,7 +757,7 @@ async function searchAsistenteForAction(
   const searchName = extractPersonSearchTerm(term) || term
   const normalized = normalizeText(searchName)
 
-  let matchesList: any[] = []
+  let matchesList: PersonaCandidata[] = []
 
   if (/^\d+$/.test(normalized)) {
      const { data: exact } = await supabase
@@ -777,7 +788,7 @@ async function searchAsistenteForAction(
          
        if (tokenMatches && tokenMatches.length > 0) {
           const ranked = findMatches(tokenMatches, searchName)
-          matchesList = ranked.map((r: any) => r.asistente)
+          matchesList = ranked.map((r) => r.asistente)
        }
     }
   }
@@ -789,7 +800,7 @@ async function searchAsistenteForAction(
 
   let matchedAsistente = matchesList[0]
   if (matchesList.length > 1) {
-    const exactMatch = matchesList.find((a: any) => normalizeText(a.nombre) === normalized)
+    const exactMatch = matchesList.find((a) => normalizeText(a.nombre) === normalized)
     if (exactMatch) {
        matchedAsistente = exactMatch
        matchesList = [exactMatch]
@@ -801,7 +812,7 @@ async function searchAsistenteForAction(
       await savePendingSelection(
         memory,
         action,
-        matchesList.map((a: any) => ({
+        matchesList.map((a) => ({
           nombre: a.nombre,
           codigo: a.codigo,
           cedula: a.cedula,
@@ -812,7 +823,7 @@ async function searchAsistenteForAction(
 
     return [
       `Encontré varias personas parecidas a "${searchName}". Para no equivocarme, dime cuál es:`,
-      ...matchesList.map((a: any, index: number) => {
+      ...matchesList.map((a, index: number) => {
         return `${index + 1}. ${a.nombre} | código ${a.codigo || "sin código"}`
       }),
       "Puedes responder con el número, el código o escribir el nombre más completo.",
@@ -822,8 +833,7 @@ async function searchAsistenteForAction(
   return matchedAsistente
 }
 
-export async function buildEstadoResponse(supabase: any, asistente: any) {
-  {
+export async function buildEstadoResponse(supabase: SupabaseReader, asistente: AsistenteResuelto) {
   const [statusResult, paymentsResult, paquetesCoachRes, sesionesCoachRes] = await Promise.all([
     getPersonFinancialStatus(supabase, asistente.id),
     getPersonPayments(supabase, asistente.id, 5),
@@ -831,12 +841,12 @@ export async function buildEstadoResponse(supabase: any, asistente: any) {
     supabase.from("coach_sesiones").select("id, fecha, notas, paquete_id").eq("asistente_id", asistente.id).order("fecha", { ascending: false }),
   ])
 
-  const financial: any = statusResult.data || {}
+  const financial: Partial<EstadoFinanciero> = statusResult.data ?? {}
   const cuentas = financial.cuentas || []
-  const pendientes = cuentas.filter((cuenta: any) => cuenta.pendiente > 0)
+  const pendientes = cuentas.filter((cuenta) => cuenta.pendiente > 0)
   const pagosRecientes = Array.isArray(paymentsResult.data) ? paymentsResult.data : []
   const sesionesCompradas = (paquetesCoachRes.data || []).reduce(
-    (acc: number, paquete: any) => acc + Math.round(toSafeNumber(paquete.sesiones_compradas)),
+    (acc: number, paquete) => acc + Math.round(toSafeNumber(paquete.sesiones_compradas)),
     0
   )
   const sesionesRealizadas = (sesionesCoachRes.data || []).length
@@ -883,13 +893,13 @@ export async function buildEstadoResponse(supabase: any, asistente: any) {
     pendientes.length
       ? pendientes
           .slice(0, 5)
-          .map((cuenta: any) => `- ${cuenta.concepto}: pendiente ${formatCop(cuenta.pendiente)} de ${formatCop(cuenta.valor)}`)
+          .map((cuenta) => `- ${cuenta.concepto}: pendiente ${formatCop(cuenta.pendiente)} de ${formatCop(cuenta.valor)}`)
           .join("\n")
       : "- No tiene cuentas pendientes.",
     "",
     "Pagos recientes:",
     pagosRecientes.length
-      ? pagosRecientes.map((pago: any) => `- ${pago.fecha_pago}: ${formatCop(pago.monto)} ${pago.metodo_pago || ""} | ${pago.concepto}`).join("\n")
+      ? pagosRecientes.map((pago) => `- ${pago.fecha_pago}: ${formatCop(pago.monto)} ${pago.metodo_pago || ""} | ${pago.concepto}`).join("\n")
       : "- No veo pagos recientes.",
     "",
     `Saldo a favor usable: ${formatCop(saldoFavor)}`,
@@ -899,111 +909,9 @@ export async function buildEstadoResponse(supabase: any, asistente: any) {
   ]
     .filter((line) => line !== null && line !== undefined && line !== "")
     .join("\n")
-  }
-
-  const [
-    { data: cuentas, error: cuentasError },
-    { data: movimientosSaldo, error: saldoError },
-    { data: paquetesCoach, error: paquetesError },
-    { data: sesionesCoach, error: sesionesError },
-  ] = await Promise.all([
-    supabase
-      .from("cuentas_por_cobrar")
-      .select("id, concepto, valor_total, estado, fecha_emision, pagos_abonos(id, monto, metodo_pago, fecha_pago, estado, notas, origen_fondos)")
-      .eq("asistente_id", asistente.id)
-      .order("fecha_emision", { ascending: false }),
-    supabase
-      .from("movimientos_saldo_favor")
-      .select("id, tipo, monto, fecha, metodo_pago, notas")
-      .eq("asistente_id", asistente.id)
-      .order("fecha", { ascending: false }),
-    supabase.from("coach_paquetes").select("id, cuenta_id, sesiones_compradas").eq("asistente_id", asistente.id),
-    supabase
-      .from("coach_sesiones")
-      .select("id, fecha, notas, paquete_id")
-      .eq("asistente_id", asistente.id)
-      .order("fecha", { ascending: false }),
-  ])
-
-  const errors = [
-    cuentasError && "cuentas",
-    saldoError && "saldo a favor",
-    paquetesError && "paquetes coach",
-    sesionesError && "sesiones coach",
-  ].filter(Boolean)
-
-  if (cuentasError || saldoError || paquetesError || sesionesError) {
-    logTelegramError("error consultando estado", cuentasError || saldoError || paquetesError || sesionesError)
-  }
-
-  const cuentasProcesadas = (cuentas || []).map((cuenta: any) => {
-    const pagosValidos = filtrarPagosValidos(cuenta.pagos_abonos || [])
-    const abonado = Math.round(sumarMontos(pagosValidos))
-    const valor = Math.round(toSafeNumber(cuenta.valor_total))
-    return {
-      concepto: cuenta.concepto,
-      valor,
-      abonado,
-      pendiente: Math.max(0, valor - abonado),
-      pagos: cuenta.pagos_abonos || [],
-    }
-  })
-
-  const pendientes = cuentasProcesadas.filter((cuenta: any) => cuenta.pendiente > 0)
-  const pagosRecientes = cuentasProcesadas
-    .flatMap((cuenta: any) => cuenta.pagos.map((pago: any) => ({ ...pago, concepto: cuenta.concepto })))
-    .sort((a: any, b: any) => new Date(b.fecha_pago).getTime() - new Date(a.fecha_pago).getTime())
-    .slice(0, 5)
-
-  const sesionesCompradas = (paquetesCoach || []).reduce(
-    (acc: number, paquete: any) => acc + Math.round(toSafeNumber(paquete.sesiones_compradas)),
-    0
-  )
-  const sesionesRealizadas = (sesionesCoach || []).length
-  const saldoFavor = calcularSaldoFavorDisponible(movimientosSaldo || [])
-
-  const lectura: string[] = ["\nMi lectura:"]
-  if (pendientes.length > 0) {
-    lectura.push("- Ojo: tiene cuentas pendientes. Yo revisaría primero estas cuentas antes de pedir o registrar otro pago.")
-  } else {
-    lectura.push("- Según lo que veo, está al día en cuentas pendientes.")
-  }
-  if (saldoFavor > 0) {
-    lectura.push("- Ojo: tiene saldo a favor disponible. Antes de pedir otro pago, conviene revisar si se puede aplicar.")
-  }
-  if (pagosRecientes.length > 0) {
-    lectura.push("- Veo pagos recientes. Si van a registrar otro comprobante, conviene confirmar que no sea duplicado.")
-  }
-
-  return [
-    `Listo. Revisé a ${asistente.nombre}.`,
-    `Código: ${asistente.codigo || "sin código"}`,
-    "",
-    `Cuentas pendientes: ${pendientes.length}`,
-    pendientes.length
-      ? pendientes
-          .slice(0, 5)
-          .map((cuenta: any) => `- ${cuenta.concepto}: pendiente ${formatCop(cuenta.pendiente)} de ${formatCop(cuenta.valor)}`)
-          .join("\n")
-      : "- No tiene cuentas pendientes.",
-    "",
-    "Pagos recientes:",
-    pagosRecientes.length
-      ? pagosRecientes
-          .map((pago: any) => `- ${pago.fecha_pago}: ${formatCop(pago.monto)} ${pago.metodo_pago || ""} | ${pago.concepto}`)
-          .join("\n")
-      : "- No veo pagos recientes.",
-    "",
-    `Saldo a favor usable: ${formatCop(saldoFavor)}`,
-    `Sesiones coach: ${sesionesRealizadas}/${sesionesCompradas} registradas, restantes ${Math.max(0, sesionesCompradas - sesionesRealizadas)}`,
-    ...lectura,
-    errors.length ? `\nOjo: no pude consultar completamente ${errors.join(", ")}.` : "",
-  ]
-    .filter((line) => line !== null && line !== undefined && line !== "")
-    .join("\n")
 }
 
-async function buildUltimaSesionCoachResponse(supabase: any, asistente: any) {
+async function buildUltimaSesionCoachResponse(supabase: SupabaseReader, asistente: AsistenteResuelto) {
   const [
     { data: sesionesCoach },
     { data: paquetesCoach }
@@ -1013,7 +921,7 @@ async function buildUltimaSesionCoachResponse(supabase: any, asistente: any) {
   ])
 
   const sesionesCompradas = (paquetesCoach || []).reduce(
-    (acc: number, paquete: any) => acc + Math.round(toSafeNumber(paquete.sesiones_compradas)),
+    (acc: number, paquete) => acc + Math.round(toSafeNumber(paquete.sesiones_compradas)),
     0
   )
   const { count } = await supabase.from("coach_sesiones").select("id", { count: "exact", head: true }).eq("asistente_id", asistente.id)
@@ -1031,7 +939,7 @@ async function buildUltimaSesionCoachResponse(supabase: any, asistente: any) {
   return text
 }
 
-async function buildSesionesCoachPersonaResponse(supabase: any, asistente: any) {
+async function buildSesionesCoachPersonaResponse(supabase: SupabaseReader, asistente: AsistenteResuelto) {
   const [
     { data: sesionesCoach },
     { data: paquetesCoach }
@@ -1041,7 +949,7 @@ async function buildSesionesCoachPersonaResponse(supabase: any, asistente: any) 
   ])
 
   const sesionesCompradas = (paquetesCoach || []).reduce(
-    (acc: number, paquete: any) => acc + Math.round(toSafeNumber(paquete.sesiones_compradas)),
+    (acc: number, paquete) => acc + Math.round(toSafeNumber(paquete.sesiones_compradas)),
     0
   )
   const { count } = await supabase.from("coach_sesiones").select("id", { count: "exact", head: true }).eq("asistente_id", asistente.id)
@@ -1058,17 +966,17 @@ async function buildSesionesCoachPersonaResponse(supabase: any, asistente: any) 
     response.push(`Compradas: ${sesionesCompradas}. Restantes: ${Math.max(0, sesionesCompradas - sesionesRealizadas)}.`)
   }
   response.push("\nÚltimas 5 sesiones:")
-  sesionesCoach.forEach((s: any) => {
+  sesionesCoach.forEach((s) => {
     response.push(`- ${s.fecha}${s.notas ? `: ${s.notas}` : ""}`)
   })
   return response.join("\n")
 }
 
-async function buildComprasPersonaResponse(supabase: any, asistente: any) {
+async function buildComprasPersonaResponse(supabase: SupabaseReader, asistente: AsistenteResuelto) {
   const result = await getPersonPurchasesOrConcepts(supabase, asistente.id, 12)
   if (result.status === "error") return summarizeToolError(`No pude consultar las compras/conceptos de ${asistente.nombre}.`, result)
 
-  const compras: any[] = Array.isArray(result.data) ? result.data : []
+  const compras = Array.isArray(result.data) ? result.data : []
   if (!compras.length) return `No veo cuentas o conceptos comprados para ${asistente.nombre}.`
 
   return [
@@ -1084,7 +992,7 @@ async function buildComprasPersonaResponse(supabase: any, asistente: any) {
     .join("\n")
 }
 
-export async function buildEstadoCompletoPersonaResponse(supabase: any, asistente: any, question = "") {
+export async function buildEstadoCompletoPersonaResponse(supabase: SupabaseReader, asistente: AsistenteResuelto, question = "") {
   const [internalContext, estado, compras, pagos, ultimoPago] = await Promise.all([
     buildTelegramInternalContext(supabase, question || `ficha completa de ${asistente.nombre}`, { asistenteId: asistente.id }),
     getPersonFinancialStatus(supabase, asistente.id),
@@ -1093,12 +1001,12 @@ export async function buildEstadoCompletoPersonaResponse(supabase: any, asistent
     getPersonLastPayment(supabase, asistente.id),
   ])
 
-  const data: any = estado.data || {}
+  const data: Partial<EstadoFinanciero> = estado.data ?? {}
   const cuentas = Array.isArray(data.cuentas) ? data.cuentas : []
-  const pendientes = cuentas.filter((cuenta: any) => cuenta.pendiente > 0)
-  const comprasData: any[] = Array.isArray(compras.data) ? compras.data : []
-  const pagosData: any[] = Array.isArray(pagos.data) ? pagos.data : []
-  const lastPayment: any = Array.isArray(ultimoPago.data) ? ultimoPago.data[0] : null
+  const pendientes = cuentas.filter((cuenta) => cuenta.pendiente > 0)
+  const comprasData = Array.isArray(compras.data) ? compras.data : []
+  const pagosData = Array.isArray(pagos.data) ? pagos.data : []
+  const lastPayment = Array.isArray(ultimoPago.data) ? (ultimoPago.data[0] ?? null) : null
   const errors = [
     ...estado.userSafeErrors,
     ...compras.userSafeErrors,
@@ -1124,7 +1032,7 @@ export async function buildEstadoCompletoPersonaResponse(supabase: any, asistent
     `Saldo a favor usable: ${formatCop(data.saldo_a_favor || 0)}`,
     "",
     pendientes.length
-      ? `Cuentas pendientes:\n${pendientes.slice(0, 5).map((c: any) => `- ${compactLine(c.concepto)}: ${formatCop(c.pendiente)}`).join("\n")}`
+      ? `Cuentas pendientes:\n${pendientes.slice(0, 5).map((c) => `- ${compactLine(c.concepto)}: ${formatCop(c.pendiente)}`).join("\n")}`
       : "Cuentas pendientes: no veo saldo pendiente.",
     "",
     lastPayment
@@ -1145,12 +1053,12 @@ export async function buildEstadoCompletoPersonaResponse(supabase: any, asistent
     .join("\n")
 }
 
-export async function buildCarteraPendienteGlobalResponse(supabase: any) {
+export async function buildCarteraPendienteGlobalResponse(supabase: SupabaseReader) {
   const result = await getOpenReceivablesSummary(supabase)
   if (result.status === "error") return summarizeToolError("No pude consultar cartera pendiente.", result)
   if (result.status === "partial") return buildPartialResultNotice("cartera pendiente", result.userSafeErrors)
 
-  const data: any = result.data || {}
+  const data: Partial<DatosDe<typeof getOpenReceivablesSummary>> = result.data ?? {}
   if (!data.cuentas_pendientes) return "No veo cartera pendiente en este momento. Si hay un error de consulta, te lo diria aparte."
 
   const top = Array.isArray(data.top_personas) ? data.top_personas : []
@@ -1159,7 +1067,7 @@ export async function buildCarteraPendienteGlobalResponse(supabase: any) {
     `Total cartera pendiente: ${formatCop(data.total_cartera)}`,
     "",
     "Mayores pendientes:",
-    ...top.slice(0, 10).map((item: any, index: number) => `${index + 1}. ${item.nombre}${item.codigo ? ` | código ${item.codigo}` : ""} - ${formatCop(item.pendiente)} (${item.cuentas} cuenta(s))`),
+    ...top.slice(0, 10).map((item, index: number) => `${index + 1}. ${item.nombre}${item.codigo ? ` | código ${item.codigo}` : ""} - ${formatCop(item.pendiente)} (${item.cuentas} cuenta(s))`),
     "",
     "Esto excluye pagos anulados y no cuenta saldo a favor como ingreso nuevo.",
   ].join("\n")
@@ -1211,16 +1119,16 @@ function extractBareFollowUpPerson(text: string) {
 }
 
 export async function buildStructuredResultForAsistente(
-  supabase: any,
-  asistente: any,
+  supabase: SupabaseReader,
+  asistente: AsistenteResuelto,
   action: PendingAction
 ): Promise<NonNullable<TelegramSessionState["lastStructuredResult"]> | null> {
   if (["cuentas_pendientes_persona", "estado_persona", "estado_completo_persona"].includes(action)) {
     const result = await getPersonFinancialStatus(supabase, asistente.id)
     if (result.status === "partial" || result.status === "error") return null
-    const financial: any = result.data || {}
+    const financial: Partial<EstadoFinanciero> = result.data ?? {}
     const cuentas = Array.isArray(financial.cuentas) ? financial.cuentas : []
-    const pendientes = cuentas.filter((cuenta: any) => Number(cuenta.pendiente || 0) > 0)
+    const pendientes = cuentas.filter((cuenta) => Number(cuenta.pendiente || 0) > 0)
     return {
       type: action,
       module: "asistentes",
@@ -1231,7 +1139,7 @@ export async function buildStructuredResultForAsistente(
         abonado: Math.round(toSafeNumber(financial.total_abonado || 0)),
         saldo_a_favor: Math.round(toSafeNumber(financial.saldo_a_favor || 0)),
       },
-      items: pendientes.map((cuenta: any) => ({
+      items: pendientes.map((cuenta) => ({
         concepto: cuenta.concepto,
         pendiente: Math.round(toSafeNumber(cuenta.pendiente)),
         valor: Math.round(toSafeNumber(cuenta.valor)),
@@ -1250,10 +1158,10 @@ export async function buildStructuredResultForAsistente(
       module: "cuentas_por_cobrar",
       asistente: { id: asistente.id, nombre: asistente.nombre, codigo: asistente.codigo || null },
       totals: {
-        total: items.reduce((acc: number, item: any) => acc + Math.round(toSafeNumber(item.valor_total)), 0),
-        pendiente: items.reduce((acc: number, item: any) => acc + Math.round(toSafeNumber(item.pendiente)), 0),
+        total: items.reduce((acc: number, item) => acc + Math.round(toSafeNumber(item.valor_total)), 0),
+        pendiente: items.reduce((acc: number, item) => acc + Math.round(toSafeNumber(item.pendiente)), 0),
       },
-      items: items.map((item: any) => ({
+      items: items.map((item) => ({
         concepto: item.concepto,
         valor_total: item.valor_total,
         pendiente: item.pendiente,
@@ -1266,133 +1174,48 @@ export async function buildStructuredResultForAsistente(
   return null
 }
 
-async function buildPagosPersonaResponse(supabase: any, asistente: any) {
-  {
+async function buildPagosPersonaResponse(supabase: SupabaseReader, asistente: AsistenteResuelto) {
   const result = await getPersonPayments(supabase, asistente.id, 10)
   const pagosRecientes = Array.isArray(result.data) ? result.data : []
   if (result.status === "error") return `No pude consultar pagos de ${asistente.nombre}. ${result.userSafeErrors.join(" ")}`
   if (pagosRecientes.length === 0) return `Listo. No veo pagos registrados para ${asistente.nombre}.`
   return [
     `Listo. Ultimos pagos de ${asistente.nombre}:`,
-    ...pagosRecientes.map((pago: any) => `- ${pago.fecha_pago}: ${formatCop(pago.monto)} via ${pago.metodo_pago || "desconocido"}. Concepto: ${pago.concepto}`),
+    ...pagosRecientes.map((pago) => `- ${pago.fecha_pago}: ${formatCop(pago.monto)} via ${pago.metodo_pago || "desconocido"}. Concepto: ${pago.concepto}`),
   ].join("\n")
-  }
-
-  const { data: cuentas } = await supabase
-    .from("cuentas_por_cobrar")
-    .select("concepto, pagos_abonos(id, monto, metodo_pago, fecha_pago, estado, notas)")
-    .eq("asistente_id", asistente.id)
-
-  const pagosRecientes = (cuentas || [])
-    .flatMap((cuenta: any) => cuenta.pagos_abonos.map((pago: any) => ({ ...pago, concepto: cuenta.concepto })))
-    .filter((pago: any) => pago.estado !== "anulado")
-    .sort((a: any, b: any) => new Date(b.fecha_pago).getTime() - new Date(a.fecha_pago).getTime())
-    .slice(0, 10)
-
-  if (pagosRecientes.length === 0) {
-    return `Listo. No veo pagos registrados para ${asistente.nombre}.`
-  }
-
-  const response = [`Listo. Últimos pagos de ${asistente.nombre}:`]
-  pagosRecientes.forEach((pago: any) => {
-    response.push(`- ${pago.fecha_pago}: ${formatCop(pago.monto)} vía ${pago.metodo_pago || "desconocido"}. Concepto: ${pago.concepto}`)
-  })
-  return response.join("\n")
 }
 
-async function buildUltimoPagoPersonaResponse(supabase: any, asistente: any) {
-  {
+async function buildUltimoPagoPersonaResponse(supabase: SupabaseReader, asistente: AsistenteResuelto) {
   const result = await getPersonLastPayment(supabase, asistente.id)
   const pagosRecientes = Array.isArray(result.data) ? result.data : []
   if (result.status === "error") return `No pude consultar pagos de ${asistente.nombre}. ${result.userSafeErrors.join(" ")}`
   if (pagosRecientes.length === 0) return `Listo. No veo pagos registrados para ${asistente.nombre}.`
   const ultimo = pagosRecientes[0]
   return `Listo. El ultimo pago que veo de ${asistente.nombre} fue el ${ultimo.fecha_pago} por ${formatCop(ultimo.monto)} via ${ultimo.metodo_pago || "desconocido"}, concepto: ${ultimo.concepto}.`
-  }
-
-  const { data: cuentas } = await supabase
-    .from("cuentas_por_cobrar")
-    .select("concepto, pagos_abonos(id, monto, metodo_pago, fecha_pago, estado, notas)")
-    .eq("asistente_id", asistente.id)
-
-  const pagosRecientes = (cuentas || [])
-    .flatMap((cuenta: any) => cuenta.pagos_abonos.map((pago: any) => ({ ...pago, concepto: cuenta.concepto })))
-    .filter((pago: any) => pago.estado !== "anulado")
-    .sort((a: any, b: any) => new Date(b.fecha_pago).getTime() - new Date(a.fecha_pago).getTime())
-
-  if (pagosRecientes.length === 0) {
-    return `Listo. No veo pagos registrados para ${asistente.nombre}.`
-  }
-
-  const ultimo = pagosRecientes[0]
-  return `Listo. El último pago que veo de ${asistente.nombre} fue el ${ultimo.fecha_pago} por ${formatCop(ultimo.monto)} vía ${ultimo.metodo_pago || "desconocido"}, concepto: ${ultimo.concepto}.`
 }
 
-export async function buildCuentasPendientesPersonaResponse(supabase: any, asistente: any) {
-  {
+export async function buildCuentasPendientesPersonaResponse(supabase: SupabaseReader, asistente: AsistenteResuelto) {
   const result = await getPersonFinancialStatus(supabase, asistente.id)
-  const financial: any = result.data || {}
+  const financial: Partial<EstadoFinanciero> = result.data ?? {}
   if (result.status === "error") return `No pude consultar cuentas de ${asistente.nombre}. ${result.userSafeErrors.join(" ")}`
   if (result.status === "partial") return buildPartialResultNotice(`cuentas pendientes de ${asistente.nombre}`, result.userSafeErrors)
-  const pendientes = (financial.cuentas || []).filter((cuenta: any) => cuenta.pendiente > 0)
+  const pendientes = (financial.cuentas || []).filter((cuenta) => cuenta.pendiente > 0)
   if (pendientes.length === 0) return `Listo. ${asistente.nombre} no tiene cuentas pendientes en este momento.`
   return [
     `Listo. Cuentas pendientes de ${asistente.nombre}:`,
-    ...pendientes.map((cuenta: any) => `- ${cuenta.concepto}: debe ${formatCop(cuenta.pendiente)} de ${formatCop(cuenta.valor)}`),
+    ...pendientes.map((cuenta) => `- ${cuenta.concepto}: debe ${formatCop(cuenta.pendiente)} de ${formatCop(cuenta.valor)}`),
   ].join("\n")
-  }
-
-  const { data: cuentas } = await supabase
-    .from("cuentas_por_cobrar")
-    .select("concepto, valor_total, pagos_abonos(monto, estado)")
-    .eq("asistente_id", asistente.id)
-    .order("fecha_emision", { ascending: false })
-
-  const cuentasProcesadas = (cuentas || []).map((cuenta: any) => {
-    const pagosValidos = filtrarPagosValidos(cuenta.pagos_abonos || [])
-    const abonado = Math.round(sumarMontos(pagosValidos))
-    const valor = Math.round(toSafeNumber(cuenta.valor_total))
-    return {
-      concepto: cuenta.concepto,
-      valor,
-      abonado,
-      pendiente: Math.max(0, valor - abonado),
-    }
-  })
-
-  const pendientes = cuentasProcesadas.filter((cuenta: any) => cuenta.pendiente > 0)
-
-  if (pendientes.length === 0) {
-    return `Listo. ${asistente.nombre} no tiene cuentas pendientes en este momento.`
-  }
-
-  const response = [`Listo. Cuentas pendientes de ${asistente.nombre}:`]
-  pendientes.forEach((cuenta: any) => {
-    response.push(`- ${cuenta.concepto}: debe ${formatCop(cuenta.pendiente)} de ${formatCop(cuenta.valor)}`)
-  })
-  return response.join("\n")
 }
 
-export async function buildSaldoFavorPersonaResponse(supabase: any, asistente: any) {
-  {
+export async function buildSaldoFavorPersonaResponse(supabase: SupabaseReader, asistente: AsistenteResuelto) {
   const result = await getPersonFinancialStatus(supabase, asistente.id)
-  const financial: any = result.data || {}
+  const financial: Partial<EstadoFinanciero> = result.data ?? {}
   if (result.status === "error") return `No pude consultar saldo a favor de ${asistente.nombre}. ${result.userSafeErrors.join(" ")}`
   if (result.status === "partial") return buildPartialResultNotice(`saldo a favor de ${asistente.nombre}`, result.userSafeErrors)
   return `Listo. El saldo a favor disponible de ${asistente.nombre} es de ${formatCop(financial.saldo_a_favor || 0)}.`
-  }
-
-  const { data: movimientosSaldo } = await supabase
-      .from("movimientos_saldo_favor")
-      .select("tipo, monto, fecha, metodo_pago, notas")
-      .eq("asistente_id", asistente.id)
-      .order("fecha", { ascending: false })
-      
-  const saldoFavor = calcularSaldoFavorDisponible(movimientosSaldo || [])
-  return `Listo. El saldo a favor disponible de ${asistente.nombre} es de ${formatCop(saldoFavor)}.`
 }
 
-async function buildVentasExternasResponse(supabase: any, intent: Intent) {
+async function buildVentasExternasResponse(supabase: SupabaseReader, intent: Intent) {
   let query = supabase.from("ventas_externas").select("*").order("fecha", { ascending: false }).limit(10)
   
   if (intent.fecha_desde) query = query.gte("fecha", intent.fecha_desde)
@@ -1404,17 +1227,17 @@ async function buildVentasExternasResponse(supabase: any, intent: Intent) {
     return "No encontré ventas externas registradas con esos filtros."
   }
   
-  const total = ventas.reduce((acc: number, v: any) => acc + toSafeNumber(v.monto), 0)
+  const total = ventas.reduce((acc: number, v) => acc + toSafeNumber(v.monto), 0)
   
   const response = [`Encontré ${ventas.length} ventas externas (mostrando más recientes):`]
-  ventas.forEach((v: any) => {
+  ventas.forEach((v) => {
     response.push(`- ${v.fecha}: ${formatCop(v.monto)} | ${v.comprador_nombre || "Anónimo"} | ${v.concepto}`)
   })
   response.push(`\nTotal de estas ventas: ${formatCop(total)}`)
   return response.join("\n")
 }
 
-async function buildEgresosResponse(supabase: any, intent: Intent) {
+async function buildEgresosResponse(supabase: SupabaseReader, intent: Intent) {
   let query = supabase.from("egresos").select("*").order("fecha", { ascending: false }).limit(10)
   
   if (intent.fecha_desde) query = query.gte("fecha", intent.fecha_desde)
@@ -1426,17 +1249,17 @@ async function buildEgresosResponse(supabase: any, intent: Intent) {
     return "No encontré egresos registrados con esos filtros."
   }
   
-  const total = egresos.reduce((acc: number, v: any) => acc + toSafeNumber(v.monto), 0)
+  const total = egresos.reduce((acc: number, v) => acc + toSafeNumber(v.monto), 0)
   
   const response = [`Encontré ${egresos.length} egresos (mostrando más recientes):`]
-  egresos.forEach((v: any) => {
+  egresos.forEach((v) => {
     response.push(`- ${v.fecha}: ${formatCop(v.monto)} | ${v.categoria || "Sin categoría"} | ${v.concepto}`)
   })
   response.push(`\nTotal de estos egresos: ${formatCop(total)}`)
   return response.join("\n")
 }
 
-export async function buildResumenPeriodoResponse(supabase: any, intent: Intent) {
+export async function buildResumenPeriodoResponse(supabase: SupabaseReader, intent: Intent) {
   const fallback = resolveNaturalDateRange("este mes")
   const from = intent.fecha_desde || fallback?.from
   const to = intent.fecha_hasta || fallback?.to
@@ -1445,7 +1268,7 @@ export async function buildResumenPeriodoResponse(supabase: any, intent: Intent)
   const result = await getSummary(supabase, from, to)
   if (result.status === "error") return summarizeToolError("No pude consultar el resumen del periodo.", result)
   if (result.status === "partial") return buildPartialResultNotice(`resumen de ${from} a ${to}`, result.userSafeErrors)
-  const data: any = result.data || {}
+  const data: Partial<DatosDe<typeof getSummary>> = result.data ?? {}
   const alerts = getAlerts([result])
 
   return [
@@ -1460,55 +1283,24 @@ export async function buildResumenPeriodoResponse(supabase: any, intent: Intent)
   ]
     .filter(Boolean)
     .join("\n")
-  return "El resumen de periodo requiere especificar el mes o revisar en el dashboard del ERP. Aún estoy aprendiendo a consolidar esa vista aquí."
 }
 
-async function buildBusquedaGlobalResponse(supabase: any, term: string) {
+async function buildBusquedaGlobalResponse(supabase: SupabaseReader, term: string) {
   const tool = await searchGlobal(supabase, term)
   if (tool.status === "empty") return `Busque "${term}" en el ERP y no encontre coincidencias. Si el termino es corto, dame mas detalle.`
   if (tool.status === "error") return `No pude hacer la busqueda global. ${tool.userSafeErrors.join(" ")}`
 
-  const data: any = tool.data || {}
-  const sections = Object.entries(data)
-    .filter(([, rows]: any) => Array.isArray(rows) && rows.length > 0)
-    .map(([module, rows]: any) => {
-      const lines = rows
-        .slice(0, 5)
-        .map((row: any) => `- ${row.nombre || row.concepto || row.notas || row.comprador_nombre || row.id}`)
+  // Cada fuente es una lista de filas distintas; para el resumen basta una etiqueta.
+  const etiqueta = (row: Record<string, unknown>) =>
+    String(row.nombre || row.concepto || row.notas || row.comprador_nombre || row.id)
+  const sections = Object.entries(tool.data ?? {})
+    .filter(([, rows]) => Array.isArray(rows) && rows.length > 0)
+    .map(([module, rows]) => {
+      const lines = (rows as Array<Record<string, unknown>>).slice(0, 5).map((row) => `- ${etiqueta(row)}`)
       return `${module}:\n${lines.join("\n")}`
     })
 
   return [`Resultados de busqueda para "${term}":`, "", ...sections, "", `Busque en: ${tool.provenance.sources.join(", ")}.`].join("\n")
-  if (!term || term.length < 3) return "Por favor dame un término más específico para la búsqueda global (al menos 3 letras)."
-  
-  const normalized = normalizeText(term)
-  
-  const [
-    { data: asistentes },
-    { data: cuentas },
-    { data: pagos },
-    { data: egresos },
-    { data: ventas }
-  ] = await Promise.all([
-    supabase.from("asistentes").select("nombre, codigo, cedula").ilike("nombre", `%${normalized}%`).limit(3),
-    supabase.from("cuentas_por_cobrar").select("concepto").ilike("concepto", `%${normalized}%`).limit(3),
-    supabase.from("pagos_abonos").select("notas").ilike("notas", `%${normalized}%`).limit(3),
-    supabase.from("egresos").select("concepto, notas").or(`concepto.ilike.%${textoParaFiltro(normalized)}%,notas.ilike.%${textoParaFiltro(normalized)}%`).limit(3),
-    supabase.from("ventas_externas").select("comprador_nombre, concepto, notas").or(`comprador_nombre.ilike.%${textoParaFiltro(normalized)}%,concepto.ilike.%${textoParaFiltro(normalized)}%,notas.ilike.%${textoParaFiltro(normalized)}%`).limit(3)
-  ])
-  
-  const results = []
-  if (asistentes?.length) results.push(`Asistentes:\n` + asistentes.map((a: any) => `- ${a.nombre}`).join("\n"))
-  if (cuentas?.length) results.push(`Cuentas:\n` + cuentas.map((c: any) => `- ${c.concepto}`).join("\n"))
-  if (pagos?.length) results.push(`Pagos/Notas:\n` + pagos.map((p: any) => `- ${p.notas}`).join("\n"))
-  if (egresos?.length) results.push(`Egresos:\n` + egresos.map((e: any) => `- ${e.concepto} ${e.notas ? `(${e.notas})` : ""}`).join("\n"))
-  if (ventas?.length) results.push(`Ventas:\n` + ventas.map((v: any) => `- ${v.concepto} a ${v.comprador_nombre || "Anónimo"}`).join("\n"))
-  
-  if (results.length === 0) {
-    return `Buscando "${term}" en todo el ERP... no encontré coincidencias.`
-  }
-  
-  return `Resultados de búsqueda para "${term}":\n\n` + results.join("\n\n")
 }
 
 async function executeActionForAsistente(
@@ -1615,13 +1407,13 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig, m
   }
 
   if (/\b(confirmo|confirmar|si confirmo|sí confirmo)\b/.test(normalizedText)) {
-    const result = confirmAction(memory?.session.pendingAction as any)
+    const result = confirmAction(memory?.session.pendingAction)
     await clearPendingAction(memory)
     return result.message
   }
 
   if (/\b(cancela|cancelar|cancela eso|olvida eso)\b/.test(normalizedText)) {
-    const result = cancelAction(memory?.session.pendingAction as any)
+    const result = cancelAction(memory?.session.pendingAction)
     await clearPendingAction(memory)
     return result.message
   }
@@ -1701,7 +1493,7 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig, m
     if (analyst.tool === "business_alerts") {
       const range = resolveNaturalDateRange("hoy")
       const result = await getBusinessAlerts(supabase, range!.from, range!.to)
-      const alerts: any[] = Array.isArray(result.data) ? result.data : []
+      const alerts = Array.isArray(result.data) ? result.data : []
       if (!alerts.length) return "No veo alertas claras para hoy. Si quieres, puedo revisar el mes completo."
       return ["Esto conviene revisar:", ...alerts.map((a) => `- ${a.type}: ${a.evidence?.[0] || "sin evidencia"}`)].join("\n")
     }
@@ -1821,7 +1613,7 @@ async function handleMessage(message: TelegramMessage, config: TelegramConfig, m
   if (/\b(alerta|alertas|raro|revisar hoy|debo revisar|algo raro)\b/.test(normalizedText)) {
     const range = resolveNaturalDateRange(naturalText || text) || resolveNaturalDateRange("hoy")
     const result = await getBusinessAlerts(supabase, range!.from, range!.to)
-    const alerts: any[] = Array.isArray(result.data) ? result.data : []
+    const alerts = Array.isArray(result.data) ? result.data : []
     if (!alerts.length) return `No veo alertas claras para ${range!.label}. Igual conviene revisar si hubo movimientos fuera del ERP.`
     return [
       `Esto conviene revisar para ${range!.label}:`,

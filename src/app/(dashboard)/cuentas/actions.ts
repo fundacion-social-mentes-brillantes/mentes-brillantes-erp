@@ -108,7 +108,6 @@ export async function deleteCuenta(cuentaId: string): Promise<ActionState> {
 
   revalidatePath("/cuentas")
   redirect("/cuentas")
-  return { success: true }
 }
 
 // --------------------------------------------
@@ -487,7 +486,6 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
       redirect(returnTo)
     }
     redirect("/cuentas")
-    return { success: true }
   } catch (e) {
     if (isNextRedirectError(e)) throw e
     return comoError(e, "Error al crear la cuenta.")
