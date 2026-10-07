@@ -209,7 +209,9 @@ async function executeTool(supabase: SupabaseReader, tool: AiPlannerTool): Promi
     return { requestedTool: tool.name, status: result.status, result }
   }
   if (tool.name === "getPeriods") {
-    const result = await getPeriods(supabase, stringArg(args, "estado"))
+    // Un estado que no existe haria fallar la consulta: se ignora y se listan todos.
+    const estado = stringArg(args, "estado")
+    const result = await getPeriods(supabase, estado === "abierto" || estado === "cerrado" ? estado : null)
     return { requestedTool: tool.name, status: result.status, result }
   }
   if (tool.name === "getPartnerSettlement") {

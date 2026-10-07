@@ -473,45 +473,79 @@ async function companySearch(supabase: SupabaseReader, query: string) {
   return { results }
 }
 
-const FETCH_SOURCES: Record<string, { table: string; select: string }> = {
-  asistentes: { table: "asistentes", select: "id,nombre,codigo,activo" },
+type LecturaFila = PromiseLike<{ data: unknown; error: unknown }>
+
+// Cada categoria con su consulta escrita entera: el compilador revisa tabla y
+// columnas, y el id solo entra como filtro de igualdad.
+const FETCH_SOURCES: Record<string, { table: string; leer: (supabase: DbClient, id: string) => LecturaFila }> = {
+  asistentes: {
+    table: "asistentes",
+    leer: (supabase, id) =>
+      supabase.from("asistentes").select("id,nombre,codigo,activo").eq("id", id).maybeSingle(),
+  },
   cuentas: {
     table: "cuentas_por_cobrar",
-    select: "id,concepto,valor_total,total_abonado,saldo_pendiente,estado,fecha_emision,asistentes(nombre,codigo)",
+    leer: (supabase, id) =>
+      supabase.from("cuentas_por_cobrar").select("id,concepto,valor_total,total_abonado,saldo_pendiente,estado,fecha_emision,asistentes(nombre,codigo)").eq("id", id).maybeSingle(),
   },
   pagos_abonos: {
     table: "pagos_abonos",
-    select: "id,monto,metodo_pago,fecha_pago,estado,cuentas_por_cobrar(concepto,asistentes(nombre,codigo))",
+    leer: (supabase, id) =>
+      supabase.from("pagos_abonos").select("id,monto,metodo_pago,fecha_pago,estado,cuentas_por_cobrar(concepto,asistentes(nombre,codigo))").eq("id", id).maybeSingle(),
   },
   movimientos_saldo_favor: {
     table: "movimientos_saldo_favor",
-    select: "id,tipo,monto,fecha,metodo_pago,asistentes(nombre,codigo)",
+    leer: (supabase, id) =>
+      supabase.from("movimientos_saldo_favor").select("id,tipo,monto,fecha,metodo_pago,asistentes(nombre,codigo)").eq("id", id).maybeSingle(),
   },
   donaciones_asistentes: {
     table: "donaciones_asistentes",
-    select: "id,monto,metodo_pago,fecha,estado,asistentes(nombre,codigo)",
+    leer: (supabase, id) =>
+      supabase.from("donaciones_asistentes").select("id,monto,metodo_pago,fecha,estado,asistentes(nombre,codigo)").eq("id", id).maybeSingle(),
   },
-  egresos: { table: "egresos", select: "id,concepto,monto,fecha,estado" },
-  ventas_externas: { table: "ventas_externas", select: "id,comprador_nombre,concepto,monto,fecha,estado" },
-  coach_sesiones: { table: "coach_sesiones", select: "id,fecha,paquete_id,asistentes(nombre,codigo)" },
+  egresos: {
+    table: "egresos",
+    leer: (supabase, id) =>
+      supabase.from("egresos").select("id,concepto,monto,fecha,estado").eq("id", id).maybeSingle(),
+  },
+  ventas_externas: {
+    table: "ventas_externas",
+    leer: (supabase, id) =>
+      supabase.from("ventas_externas").select("id,comprador_nombre,concepto,monto,fecha,estado").eq("id", id).maybeSingle(),
+  },
+  coach_sesiones: {
+    table: "coach_sesiones",
+    leer: (supabase, id) =>
+      supabase.from("coach_sesiones").select("id,fecha,paquete_id,asistentes(nombre,codigo)").eq("id", id).maybeSingle(),
+  },
   coach_paquetes: {
     table: "coach_paquetes",
-    select: "id,sesiones_compradas,creado_en,cuentas_por_cobrar(concepto,asistentes(nombre,codigo))",
+    leer: (supabase, id) =>
+      supabase.from("coach_paquetes").select("id,sesiones_compradas,creado_en,cuentas_por_cobrar(concepto,asistentes(nombre,codigo))").eq("id", id).maybeSingle(),
   },
-  socios: { table: "socios", select: "id,nombre,activo" },
-  periodos: { table: "periodos", select: "id,nombre,estado,fecha_inicio,fecha_fin" },
+  socios: {
+    table: "socios",
+    leer: (supabase, id) =>
+      supabase.from("socios").select("id,nombre,activo").eq("id", id).maybeSingle(),
+  },
+  periodos: {
+    table: "periodos",
+    leer: (supabase, id) =>
+      supabase.from("periodos").select("id,nombre,estado,fecha_inicio,fecha_fin").eq("id", id).maybeSingle(),
+  },
 }
 
-async function companyFetch(supabase: SupabaseReader, id: string) {
+async function companyFetch(supabase: DbClient, id: string) {
   const separator = id.indexOf(":")
   if (separator <= 0) throw new Error("Identificador inválido.")
   const category = id.slice(0, separator)
   const rowId = id.slice(separator + 1)
-  const source = FETCH_SOURCES[category]
+  // hasOwn: un "id" como "constructor:..." no debe encontrar nada heredado.
+  const source = Object.hasOwn(FETCH_SOURCES, category) ? FETCH_SOURCES[category] : undefined
   if (!source || !/^[A-Za-z0-9-]{1,80}$/.test(rowId)) {
     throw new Error("Identificador no permitido.")
   }
-  const { data, error } = await supabase.from(source.table).select(source.select).eq("id", rowId).maybeSingle()
+  const { data, error } = await source.leer(supabase, rowId)
   if (error) throw new Error(`No se pudo consultar ${source.table}`)
   if (!data) throw new Error("Registro no encontrado.")
   const safe = sanitizeMcpData(data) as FilaBuscada

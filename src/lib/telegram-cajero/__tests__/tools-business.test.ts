@@ -59,6 +59,12 @@ function globalSearchSupabase() {
           in() {
             return query
           },
+          range() {
+            return Promise.resolve({
+              data: table === "asistentes" ? [{ id: "a-1", nombre: "Ana", codigo: "1" }] : [],
+              error: null,
+            })
+          },
           limit() {
             if (table === "ventas_externas") {
               return Promise.resolve({

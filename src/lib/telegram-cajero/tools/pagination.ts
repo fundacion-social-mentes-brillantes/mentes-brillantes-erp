@@ -23,19 +23,32 @@ export type PaginationMeta = {
   stopReason: PaginationStopReason
 }
 
+/** Lo que se usa del error de PostgREST: codigo y mensaje, para registrar sin filtrar datos. */
+export type ErrorConsulta = { code?: string; message: string }
+
 export type PaginatedRows<T> = {
   rows: T[]
-  error: any | null
+  error: ErrorConsulta | null
   pagination: PaginationMeta
 }
 
 type PageResponse<T> = {
   data?: T[] | null
-  error?: any | null
+  error?: ErrorConsulta | null
   count?: number | null
 }
 
 type CursorValue = string | number
+
+/**
+ * La parte de una consulta de Supabase que usa el paginador. Cualquier
+ * `supabase.from(...).select(...)` con sus filtros cumple esta forma.
+ */
+export type ConsultaPaginable<T> = {
+  order(columna: string, opciones: { ascending: boolean }): ConsultaPaginable<T>
+  gt(columna: string, valor: CursorValue): ConsultaPaginable<T>
+  limit(cantidad: number): PromiseLike<PageResponse<T>>
+}
 
 type PaginationOptions<T> = {
   rowKey: Extract<keyof T, string>
@@ -83,7 +96,7 @@ function paginationMeta({
 }
 
 function cursorValue<T>(row: T, rowKey: Extract<keyof T, string>): CursorValue | null {
-  const value = (row as any)?.[rowKey]
+  const value = row?.[rowKey]
   if (typeof value === "string" && value.length > 0) return value
   if (typeof value === "number" && Number.isFinite(value)) return value
   return null
@@ -107,7 +120,7 @@ function isStrictlyAfter(current: CursorValue, previous: CursorValue) {
  * queda visible como `concurrent_change`; nunca se publica como completo.
  */
 export async function fetchPaginatedRows<T>(
-  buildQuery: (withExactCount: boolean) => any,
+  buildQuery: (withExactCount: boolean) => ConsultaPaginable<T>,
   options: PaginationOptions<T>
 ): Promise<PaginatedRows<T>> {
   const pageSize = safePageSize(options.pageSize)
@@ -124,7 +137,7 @@ export async function fetchPaginatedRows<T>(
     const result = (
       complete: boolean,
       stopReason: PaginationStopReason,
-      error: any | null,
+      error: ErrorConsulta | null,
       driftDetected = false
     ): PaginationAttempt<T> => ({
       rows,
@@ -147,7 +160,7 @@ export async function fetchPaginatedRows<T>(
       const requested = Math.min(pageSize, maxRows - rows.length)
       let query = buildQuery(pagesFetched === 0).order(options.rowKey, { ascending: true })
       if (cursor !== null) query = query.gt(options.rowKey, cursor)
-      const response = (await query.limit(requested)) as PageResponse<T>
+      const response = await query.limit(requested)
       pagesFetched += 1
 
       if (response?.error) return result(false, "query_error", response.error)
@@ -187,7 +200,7 @@ export async function fetchPaginatedRows<T>(
       return result(false, "max_pages", null)
     }
 
-    const finalCountResponse = (await buildQuery(true).limit(1)) as PageResponse<T>
+    const finalCountResponse = await buildQuery(true).limit(1)
     if (finalCountResponse?.error) return result(false, "query_error", finalCountResponse.error)
     const finalCount =
       Number.isInteger(finalCountResponse?.count) && Number(finalCountResponse.count) >= 0

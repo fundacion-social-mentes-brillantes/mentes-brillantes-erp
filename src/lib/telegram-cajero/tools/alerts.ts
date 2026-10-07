@@ -2,6 +2,10 @@ import type { Alert, ToolResult } from "./types"
 import type { SupabaseReader } from "./types"
 import { toolResult } from "./types"
 import { calcularSaldoFavorDisponible, esPagoValido, toSafeNumber } from "@/lib/utils/contable"
+import { leerTodasSinLanzar } from "@/lib/supabase/paginar"
+
+/** Tope de seguridad por consulta; muy por encima de lo que mueve la fundacion en un rango. */
+const MAXIMO_FILAS = 20_000
 
 export function getAlerts(results: ToolResult[]) {
   const alerts: Alert[] = results.flatMap((result) => result.alerts || [])
@@ -34,37 +38,67 @@ function money(value: unknown) {
 
 export async function getBusinessAlerts(supabase: SupabaseReader, fechaInicio: string, fechaFin: string) {
   const queryScope = { fechaInicio, fechaFin }
+  // Se lee TODO lo del rango (por paginas y en orden fijo). Antes cada consulta
+  // tenia un tope sin orden: con mas filas que el tope las alertas salian de
+  // una muestra al azar, y el saldo a favor de una persona se calculaba con
+  // parte de sus movimientos (podia anunciar saldo que ya se habia usado).
   const [pagos, egresos, cuentas, saldos] = await Promise.all([
-    supabase
-      .from("pagos_abonos")
-      .select("id, monto, metodo_pago, fecha_pago, estado, notas, cuentas_por_cobrar(concepto, asistentes(id, nombre, codigo))")
-      .gte("fecha_pago", fechaInicio)
-      .lte("fecha_pago", fechaFin)
-      .limit(200),
-    supabase
-      .from("egresos")
-      .select("id, concepto, monto, metodo_pago, fecha, estado, notas")
-      .gte("fecha", fechaInicio)
-      .lte("fecha", fechaFin)
-      .limit(100),
-    supabase
-      .from("cuentas_por_cobrar")
-      .select("id, concepto, valor_total, fecha_emision, estado, asistentes(nombre, codigo), pagos_abonos(monto, estado, notas)")
-      .in("estado", ["pendiente", "parcial"])
-      .limit(100),
-    supabase.from("movimientos_saldo_favor").select("id, tipo, monto, asistente_id, asistentes(nombre, codigo)").limit(300),
+    leerTodasSinLanzar(
+      (desde, hasta) =>
+        supabase
+          .from("pagos_abonos")
+          .select("id, monto, metodo_pago, fecha_pago, estado, notas, cuentas_por_cobrar(concepto, asistentes(id, nombre, codigo))")
+          .gte("fecha_pago", fechaInicio)
+          .lte("fecha_pago", fechaFin)
+          .order("id")
+          .range(desde, hasta),
+      { maximo: MAXIMO_FILAS }
+    ),
+    leerTodasSinLanzar(
+      (desde, hasta) =>
+        supabase
+          .from("egresos")
+          .select("id, concepto, monto, metodo_pago, fecha, estado, notas")
+          .gte("fecha", fechaInicio)
+          .lte("fecha", fechaFin)
+          .order("id")
+          .range(desde, hasta),
+      { maximo: MAXIMO_FILAS }
+    ),
+    // Solo se muestran las 5 mas viejas: basta traer las primeras en orden de emision.
+    leerTodasSinLanzar(
+      (desde, hasta) =>
+        supabase
+          .from("cuentas_por_cobrar")
+          .select("id, concepto, valor_total, fecha_emision, estado, asistentes(nombre, codigo), pagos_abonos(monto, estado, notas)")
+          .in("estado", ["pendiente", "parcial"])
+          .order("fecha_emision", { ascending: true })
+          .order("id")
+          .range(desde, hasta),
+      { maximo: 100 }
+    ),
+    // El saldo a favor es la suma de TODOS los movimientos de la persona.
+    leerTodasSinLanzar(
+      (desde, hasta) =>
+        supabase
+          .from("movimientos_saldo_favor")
+          .select("id, tipo, monto, asistente_id, asistentes(nombre, codigo)")
+          .order("id")
+          .range(desde, hasta),
+      { maximo: MAXIMO_FILAS }
+    ),
   ])
 
-  const errors = [pagos.error, egresos.error, cuentas.error, saldos.error].filter(Boolean)
-  errors.forEach((error: any) => console.error("[telegram-cajero] getBusinessAlerts parcial", { code: error.code, message: error.message }))
+  const errors = [pagos.error, egresos.error, cuentas.error, saldos.error].filter((error) => error !== null)
+  errors.forEach((error) => console.error("[telegram-cajero] getBusinessAlerts parcial", { message: error.message }))
 
-  const rowsPagos = pagos.error ? [] : pagos.data || []
-  const rowsEgresos = egresos.error ? [] : egresos.data || []
-  const rowsCuentas = cuentas.error ? [] : cuentas.data || []
-  const rowsSaldos = saldos.error ? [] : saldos.data || []
+  const rowsPagos = pagos.filas
+  const rowsEgresos = egresos.filas
+  const rowsCuentas = cuentas.filas
+  const rowsSaldos = saldos.filas
   const alerts: Alert[] = []
 
-  rowsPagos.filter((p: any) => !esPagoValido(p)).slice(0, 5).forEach((p: any) => {
+  rowsPagos.filter((p) => !esPagoValido(p)).slice(0, 5).forEach((p) => {
     alerts.push({
       severity: "medium",
       type: "pago_anulado",
@@ -76,7 +110,7 @@ export async function getBusinessAlerts(supabase: SupabaseReader, fechaInicio: s
     })
   })
 
-  rowsPagos.filter((p: any) => String(p.metodo_pago || "").toLowerCase() === "otro").slice(0, 5).forEach((p: any) => {
+  rowsPagos.filter((p) => String(p.metodo_pago || "").toLowerCase() === "otro").slice(0, 5).forEach((p) => {
     alerts.push({
       severity: "low",
       type: "metodo_pago_otro",
@@ -88,7 +122,7 @@ export async function getBusinessAlerts(supabase: SupabaseReader, fechaInicio: s
     })
   })
 
-  rowsEgresos.filter((e: any) => money(e.monto) >= 1000000).slice(0, 5).forEach((e: any) => {
+  rowsEgresos.filter((e) => money(e.monto) >= 1000000).slice(0, 5).forEach((e) => {
     alerts.push({
       severity: "medium",
       type: "egreso_alto",
@@ -102,12 +136,12 @@ export async function getBusinessAlerts(supabase: SupabaseReader, fechaInicio: s
 
   const today = new Date()
   rowsCuentas
-    .filter((c: any) => {
+    .filter((c) => {
       const age = (today.getTime() - new Date(c.fecha_emision).getTime()) / (1000 * 60 * 60 * 24)
       return age >= 60
     })
     .slice(0, 5)
-    .forEach((c: any) => {
+    .forEach((c) => {
       alerts.push({
         severity: "medium",
         type: "cuenta_antigua_pendiente",
@@ -119,8 +153,8 @@ export async function getBusinessAlerts(supabase: SupabaseReader, fechaInicio: s
       })
     })
 
-  const saldosPorAsistente = new Map<string, any[]>()
-  rowsSaldos.forEach((m: any) => {
+  const saldosPorAsistente = new Map<string, typeof rowsSaldos>()
+  rowsSaldos.forEach((m) => {
     const key = m.asistente_id || "sin_asistente"
     saldosPorAsistente.set(key, [...(saldosPorAsistente.get(key) || []), m])
   })
@@ -140,8 +174,8 @@ export async function getBusinessAlerts(supabase: SupabaseReader, fechaInicio: s
     }
   })
 
-  const duplicateKeys = new Map<string, any[]>()
-  rowsPagos.filter(esPagoValido).forEach((p: any) => {
+  const duplicateKeys = new Map<string, typeof rowsPagos>()
+  rowsPagos.filter(esPagoValido).forEach((p) => {
     const asistente = p.cuentas_por_cobrar?.asistentes?.id || p.cuentas_por_cobrar?.asistentes?.nombre || "sin_asistente"
     const key = `${asistente}:${p.fecha_pago}:${money(p.monto)}`
     duplicateKeys.set(key, [...(duplicateKeys.get(key) || []), p])

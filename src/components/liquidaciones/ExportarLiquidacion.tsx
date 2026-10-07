@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { FileText, Image as ImageIcon, Download } from 'lucide-react'
+import { FileText, Image as ImageIcon } from 'lucide-react'
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
 import { createClient } from '@/lib/supabase/client'

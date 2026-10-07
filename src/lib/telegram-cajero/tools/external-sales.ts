@@ -5,7 +5,7 @@ import { fetchPaginatedRows, partialPaginationMessage } from "./pagination"
 
 export async function getExternalSales(supabase: SupabaseReader, fechaInicio: string, fechaFin: string) {
   const queryScope = { fechaInicio, fechaFin }
-  const result = await fetchPaginatedRows<any>((withExactCount) =>
+  const result = await fetchPaginatedRows((withExactCount) =>
     supabase
       .from("ventas_externas")
       .select(
@@ -21,7 +21,7 @@ export async function getExternalSales(supabase: SupabaseReader, fechaInicio: st
     return toolError("getExternalSales", queryScope, "ventas_externas", result.error)
   }
 
-  const validas = result.rows.filter((item: any) => !esAnuladoCompleto(item))
+  const validas = result.rows.filter((item) => !esAnuladoCompleto(item))
   const subtotal = Math.round(sumarMontos(validas))
   const complete = result.pagination.complete
   const warning = complete ? null : partialPaginationMessage("ventas externas", result.pagination)

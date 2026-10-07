@@ -19,12 +19,12 @@ export const TIPOS_MOVIMIENTO = [
 export async function getRecentMovements(
   supabase: SupabaseReader,
   limit = 15,
-  tipo?: string | null
+  tipo?: (typeof TIPOS_MOVIMIENTO)[number] | null
 ) {
   const tope = Math.min(Math.max(Math.floor(limit) || 15, 1), 100)
   const queryScope: Record<string, unknown> = { limite: tope, tipo: tipo || null }
 
-  let query = (supabase as any)
+  let query = supabase
     .from("vw_movimientos_generales")
     .select(
       "movimiento_id, fecha, tipo_movimiento, asistente_nombre, concepto, metodo_pago, valor_ingreso, valor_egreso, valor_deuda, estado_o_saldo, categoria, creado_en"
@@ -41,7 +41,7 @@ export async function getRecentMovements(
 
   if (error) return toolError("getRecentMovements", queryScope, "vw_movimientos_generales", error)
 
-  const filas = (data || []).map((m: any) => ({
+  const filas = (data || []).map((m) => ({
     id: m.movimiento_id,
     fecha: m.fecha,
     registrado_en: m.creado_en,

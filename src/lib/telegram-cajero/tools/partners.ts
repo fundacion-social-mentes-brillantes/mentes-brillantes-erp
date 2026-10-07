@@ -25,7 +25,7 @@ export async function getPartnerSettlement(supabase: SupabaseReader, socioQuery?
 
   if (sociosErr) return toolError("getPartnerSettlement", queryScope, "socios", sociosErr)
 
-  let socios = (sociosData || []) as any[]
+  let socios = sociosData || []
   const q = socioQuery ? norm(socioQuery) : ""
   if (q) {
     const filtered = socios.filter((socio) => norm(socio.nombre).includes(q))
@@ -50,9 +50,9 @@ export async function getPartnerSettlement(supabase: SupabaseReader, socioQuery?
     .in("socio_id", ids)
     .order("generado_en", { ascending: false })
 
-  const ultimaPorSocio = new Map<string, any>()
-  for (const liq of (liqData || []) as any[]) {
-    if (!ultimaPorSocio.has(liq.socio_id)) ultimaPorSocio.set(liq.socio_id, liq)
+  const ultimaPorSocio = new Map<string, NonNullable<typeof liqData>[number]>()
+  for (const liq of liqData || []) {
+    if (liq.socio_id && !ultimaPorSocio.has(liq.socio_id)) ultimaPorSocio.set(liq.socio_id, liq)
   }
 
   const result = socios.map((socio) => {

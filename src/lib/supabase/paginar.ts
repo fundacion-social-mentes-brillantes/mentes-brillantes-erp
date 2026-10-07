@@ -8,7 +8,7 @@
 
 export const TAMANO_PAGINA = 1000
 
-type Pagina<T> = PromiseLike<{ data: T[] | null; error: { message: string } | null }>
+export type Pagina<T> = PromiseLike<{ data: T[] | null; error: { message: string } | null }>
 
 export async function leerTodas<T>(
   pedirPagina: (desde: number, hasta: number) => Pagina<T>,
@@ -26,4 +26,20 @@ export async function leerTodas<T>(
     if (lote.length < hasta - desde + 1) break
   }
   return filas
+}
+
+/**
+ * Igual que leerTodas, pero un fallo no lanza: vuelve como `error` junto a lo
+ * que alcanzo a leer (nada). Sirve donde varias consultas se combinan y una
+ * caida debe marcar el resultado como parcial en vez de tumbarlo todo.
+ */
+export async function leerTodasSinLanzar<T>(
+  pedirPagina: (desde: number, hasta: number) => Pagina<T>,
+  opciones: { tamano?: number; maximo?: number } = {}
+): Promise<{ filas: T[]; error: { message: string } | null }> {
+  try {
+    return { filas: await leerTodas(pedirPagina, opciones), error: null }
+  } catch (error) {
+    return { filas: [], error: { message: error instanceof Error ? error.message : "Fallo la consulta" } }
+  }
 }

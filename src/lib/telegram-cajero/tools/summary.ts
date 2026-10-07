@@ -2,7 +2,7 @@ import { agruparPorMetodo } from "@/lib/utils/liquidaciones"
 import { esAnuladoCompleto, filtrarIngresosOperativos, filtrarIngresosRealesSaldoAFavor, sumarMontos, toSafeNumber } from "@/lib/utils/contable"
 import type { SupabaseReader } from "./types"
 import { toolResult } from "./types"
-import { fetchPaginatedRows, partialPaginationMessage } from "./pagination"
+import { fetchPaginatedRows, partialPaginationMessage, type ErrorConsulta } from "./pagination"
 
 function money(value: unknown) {
   return Math.round(toSafeNumber(value))
@@ -10,27 +10,57 @@ function money(value: unknown) {
 
 export async function getSummary(supabase: SupabaseReader, fechaInicio: string, fechaFin: string) {
   const queryScope = { fechaInicio, fechaFin }
-  const pagedByDate = (table: string, columns: string, dateColumn: string) =>
-    fetchPaginatedRows<any>((withExactCount) =>
-      supabase
-        .from(table)
-        .select(columns, withExactCount ? { count: "exact" } : undefined)
-        .gte(dateColumn, fechaInicio)
-        .lte(dateColumn, fechaFin),
-      { rowKey: "id" }
-    )
+  // Una consulta por tabla, escrita entera: asi el compilador revisa que cada
+  // columna exista en su tabla.
+  const conteo = (exacto: boolean) => (exacto ? { count: "exact" as const } : undefined)
+  const porId = { rowKey: "id" as const }
 
   const [abonosRes, saldoRes, donacionesRes, ventasRes, egresosRes] = await Promise.all([
-    pagedByDate("pagos_abonos", "id, monto, metodo_pago, fecha_pago, estado, notas, origen_fondos", "fecha_pago"),
-    pagedByDate("movimientos_saldo_favor", "id, monto, metodo_pago, fecha, tipo, estado, notas", "fecha"),
-    pagedByDate("donaciones_asistentes", "id, monto, metodo_pago, fecha, estado, notas", "fecha"),
-    pagedByDate("ventas_externas", "id, monto, metodo_pago, fecha, estado, notas, concepto", "fecha"),
-    pagedByDate("egresos", "id, monto, metodo_pago, fecha, estado, notas, concepto", "fecha"),
+    fetchPaginatedRows((exacto) =>
+      supabase
+        .from("pagos_abonos")
+        .select("id, monto, metodo_pago, fecha_pago, estado, notas, origen_fondos", conteo(exacto))
+        .gte("fecha_pago", fechaInicio)
+        .lte("fecha_pago", fechaFin),
+      porId
+    ),
+    fetchPaginatedRows((exacto) =>
+      supabase
+        .from("movimientos_saldo_favor")
+        .select("id, monto, metodo_pago, fecha, tipo, estado, notas", conteo(exacto))
+        .gte("fecha", fechaInicio)
+        .lte("fecha", fechaFin),
+      porId
+    ),
+    fetchPaginatedRows((exacto) =>
+      supabase
+        .from("donaciones_asistentes")
+        .select("id, monto, metodo_pago, fecha, estado, notas", conteo(exacto))
+        .gte("fecha", fechaInicio)
+        .lte("fecha", fechaFin),
+      porId
+    ),
+    fetchPaginatedRows((exacto) =>
+      supabase
+        .from("ventas_externas")
+        .select("id, monto, metodo_pago, fecha, estado, notas, concepto", conteo(exacto))
+        .gte("fecha", fechaInicio)
+        .lte("fecha", fechaFin),
+      porId
+    ),
+    fetchPaginatedRows((exacto) =>
+      supabase
+        .from("egresos")
+        .select("id, monto, metodo_pago, fecha, estado, notas, concepto", conteo(exacto))
+        .gte("fecha", fechaInicio)
+        .lte("fecha", fechaFin),
+      porId
+    ),
   ])
 
   const results = [abonosRes, saldoRes, donacionesRes, ventasRes, egresosRes]
-  const errors = results.map((result) => result.error).filter(Boolean)
-  errors.forEach((error: any) => console.error("[telegram-cajero] getSummary parcial", { code: error.code, message: error.message }))
+  const errors = results.map((result) => result.error).filter((error): error is ErrorConsulta => error !== null)
+  errors.forEach((error) => console.error("[telegram-cajero] getSummary parcial", { code: error.code, message: error.message }))
 
   const abonos = abonosRes.rows
   const saldo = saldoRes.rows
@@ -40,9 +70,9 @@ export async function getSummary(supabase: SupabaseReader, fechaInicio: string, 
 
   const abonosOperativos = filtrarIngresosOperativos(abonos)
   const ingresosSaldoFavor = filtrarIngresosRealesSaldoAFavor(saldo)
-  const donacionesValidas = donaciones.filter((item: any) => !esAnuladoCompleto(item))
-  const ventasValidas = ventas.filter((item: any) => !esAnuladoCompleto(item))
-  const egresosValidos = egresos.filter((item: any) => !esAnuladoCompleto(item))
+  const donacionesValidas = donaciones.filter((item) => !esAnuladoCompleto(item))
+  const ventasValidas = ventas.filter((item) => !esAnuladoCompleto(item))
+  const egresosValidos = egresos.filter((item) => !esAnuladoCompleto(item))
   const ingresosCartera = money(sumarMontos([...abonosOperativos, ...ingresosSaldoFavor]))
   const totalDonaciones = money(sumarMontos(donacionesValidas))
   const totalVentasExternas = money(sumarMontos(ventasValidas))

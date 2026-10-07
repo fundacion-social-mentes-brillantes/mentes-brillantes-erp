@@ -24,6 +24,10 @@ function supabaseRegistrador(personas: any[]) {
         if (falla) return { data: null, error: { message: "operator does not exist: metodo_pago ~~* unknown" } }
         return { data: tabla === "asistentes" ? personas : [], error: null }
       }
+      q.range = async (desde: number, hasta: number) => {
+        registro.push(["range", desde, hasta])
+        return { data: tabla === "asistentes" ? personas.slice(desde, hasta + 1) : [], error: null }
+      }
       return q
     },
   }

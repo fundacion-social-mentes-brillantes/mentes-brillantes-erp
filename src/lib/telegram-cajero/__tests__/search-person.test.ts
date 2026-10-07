@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { searchPerson } from "../tools/search-person"
 
 // Mock minimo de la consulta que hace searchPerson:
-// from("asistentes").select(...).order(...).limit(...)  -> filas
+// from("asistentes").select(...).order(...).range(...)  -> filas (o .or().limit() por codigo)
 function asistentesSupabase(rows: any[]) {
   return {
     from: () => {
@@ -24,6 +24,9 @@ function asistentesSupabase(rows: any[]) {
         },
         limit: () =>
           Promise.resolve({ data: filtro ? rows.filter(filtro) : rows, error: null }),
+        // La lista completa se lee por paginas.
+        range: (desde: number, hasta: number) =>
+          Promise.resolve({ data: rows.slice(desde, hasta + 1), error: null }),
       }
       return q
     },

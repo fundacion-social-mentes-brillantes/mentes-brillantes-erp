@@ -1,3 +1,5 @@
+import type { DbClient } from "@/lib/supabase/types"
+
 export type ToolStatus = "ok" | "empty" | "partial" | "ambiguous" | "forbidden" | "error"
 export type RiskLevel = "low" | "medium" | "high"
 
@@ -28,9 +30,8 @@ export type ToolResult<T = unknown> = {
   requiresConfirmation: boolean
 }
 
-export type SupabaseReader = {
-  from(table: string): any
-}
+/** Cliente de solo lectura de las herramientas: el mismo cliente tipado del ERP. */
+export type SupabaseReader = DbClient
 
 export function toolResult<T>({
   toolName,
@@ -72,10 +73,12 @@ export function toolResult<T>({
   }
 }
 
-export function toolError(toolName: string, queryScope: Record<string, unknown>, source: string, error: any) {
+/** Registra el fallo (solo codigo y mensaje, sin datos) y devuelve un resultado de error. */
+export function toolError(toolName: string, queryScope: Record<string, unknown>, source: string, error: unknown) {
+  const e = (error && typeof error === "object" ? error : {}) as { code?: unknown; message?: unknown }
   console.error(`[telegram-cajero] ${toolName} fallo`, {
-    code: error?.code,
-    message: error?.message,
+    code: e.code,
+    message: e.message,
   })
   return toolResult({
     toolName,

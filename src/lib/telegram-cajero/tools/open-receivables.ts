@@ -1,13 +1,25 @@
-import { filtrarPagosValidos, sumarMontos, toSafeNumber } from "@/lib/utils/contable"
+import { filtrarPagosValidos, sumarMontos, toSafeNumber, type PagoRecord } from "@/lib/utils/contable"
 import type { SupabaseReader } from "./types"
 import { toolError, toolResult } from "./types"
 import { fetchPaginatedRows, partialPaginationMessage, safePageSize } from "./pagination"
 import { fetchAccountPayments } from "./account-payments"
 
-export function summarizeOpenReceivables(cuentas: any[]) {
+/** Una cuenta abierta con su persona y sus pagos, lista para resumir. */
+export type CuentaAbierta = {
+  id: string
+  asistente_id: string | null
+  concepto: string | null
+  estado: string | null
+  valor_total: number | string | null
+  fecha_emision: string | null
+  asistentes?: { nombre: string | null; codigo: string | null } | null
+  pagos_abonos?: PagoRecord[] | null
+}
+
+export function summarizeOpenReceivables(cuentas: CuentaAbierta[]) {
   const todas = (cuentas || [])
-    .filter((cuenta: any) => ["pendiente", "parcial"].includes(String(cuenta.estado || "").toLowerCase()))
-    .map((cuenta: any) => {
+    .filter((cuenta) => ["pendiente", "parcial"].includes(String(cuenta.estado || "").toLowerCase()))
+    .map((cuenta) => {
       const valor = Math.round(toSafeNumber(cuenta.valor_total))
       const abonado = Math.round(sumarMontos(filtrarPagosValidos(cuenta.pagos_abonos || [])))
       const pendiente = Math.max(0, valor - abonado)
@@ -55,7 +67,7 @@ export async function getOpenReceivablesSummary(supabase: SupabaseReader, limit 
   // ya no limita el universo usado para calcular una cifra global.
   const pageSize = safePageSize()
   const queryScope = { limit, pageSize }
-  const result = await fetchPaginatedRows<any>(
+  const result = await fetchPaginatedRows(
     (withExactCount) =>
       supabase
         .from("cuentas_por_cobrar")
@@ -71,8 +83,8 @@ export async function getOpenReceivablesSummary(supabase: SupabaseReader, limit 
     return toolError("getOpenReceivablesSummary", queryScope, "cuentas_por_cobrar", result.error)
   }
 
-  const payments = await fetchAccountPayments(supabase, result.rows.map((account: any) => account.id))
-  const accountsWithPayments = result.rows.map((account: any) => ({
+  const payments = await fetchAccountPayments(supabase, result.rows.map((account) => account.id))
+  const accountsWithPayments = result.rows.map((account) => ({
     ...account,
     pagos_abonos: payments.byAccountId.get(String(account.id)) || [],
   }))

@@ -2,7 +2,7 @@ import type { SupabaseReader } from "./types"
 import { toolError, toolResult } from "./types"
 
 // Periodos contables (abiertos/cerrados). Opcionalmente filtra por estado.
-export async function getPeriods(supabase: SupabaseReader, estado?: string | null) {
+export async function getPeriods(supabase: SupabaseReader, estado?: "abierto" | "cerrado" | null) {
   const queryScope = { estado: estado || null }
   let query = supabase
     .from("periodos")
@@ -22,7 +22,7 @@ export async function getPeriods(supabase: SupabaseReader, estado?: string | nul
     sources: ["periodos"],
     resultCount: rows.length,
     data: {
-      periodos: rows.map((row: any) => ({
+      periodos: rows.map((row) => ({
         nombre: row.nombre,
         estado: row.estado,
         fecha_inicio: row.fecha_inicio,

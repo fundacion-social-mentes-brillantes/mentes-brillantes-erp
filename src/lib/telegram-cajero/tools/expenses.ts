@@ -5,7 +5,7 @@ import { fetchPaginatedRows, partialPaginationMessage } from "./pagination"
 
 export async function getExpenses(supabase: SupabaseReader, fechaInicio: string, fechaFin: string) {
   const queryScope = { fechaInicio, fechaFin }
-  const result = await fetchPaginatedRows<any>((withExactCount) =>
+  const result = await fetchPaginatedRows((withExactCount) =>
     supabase
       .from("egresos")
       .select(
@@ -19,7 +19,7 @@ export async function getExpenses(supabase: SupabaseReader, fechaInicio: string,
 
   if (result.error && result.rows.length === 0) return toolError("getExpenses", queryScope, "egresos", result.error)
 
-  const validos = result.rows.filter((item: any) => !esAnuladoCompleto(item))
+  const validos = result.rows.filter((item) => !esAnuladoCompleto(item))
   const subtotal = Math.round(sumarMontos(validos))
   const complete = result.pagination.complete
   const warning = complete ? null : partialPaginationMessage("egresos", result.pagination)

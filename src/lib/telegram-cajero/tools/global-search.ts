@@ -2,7 +2,7 @@ import type { SupabaseReader } from "./types"
 import { toolResult } from "./types"
 import { searchPerson } from "./search-person"
 
-const SIN_RESULTADOS = Promise.resolve({ data: [] as any[], error: null as any })
+const SIN_RESULTADOS = Promise.resolve({ data: [] as never[], error: null })
 
 export async function searchGlobal(supabase: SupabaseReader, term: string) {
   const queryScope = { term }
@@ -24,9 +24,9 @@ export async function searchGlobal(supabase: SupabaseReader, term: string) {
   // Las personas se buscan por palabras y sin tildes, igual que en el resto del
   // ERP: "Gloria Fernandez" encuentra a "Gloria Stella Fernández Camelo". Antes
   // se buscaba la frase pegada y no la encontraba.
-  const personas: any = await searchPerson(supabase, normalized, 5)
+  const personas = await searchPerson(supabase, normalized, 5)
   const errorPersonas = personas.status === "error"
-  const filasPersonas = !errorPersonas && Array.isArray(personas.data) ? (personas.data as any[]) : []
+  const filasPersonas = !errorPersonas && Array.isArray(personas.data) ? personas.data : []
   const ids = filasPersonas.map((p) => p.id).filter(Boolean)
   const hayPersonas = ids.length > 0
 
@@ -95,7 +95,7 @@ export async function searchGlobal(supabase: SupabaseReader, term: string) {
     socios: socios.error ? [] : socios.data || [],
     periodos: periodos.error ? [] : periodos.data || [],
   }
-  const count = Object.values(data).reduce((acc, rows: any) => acc + rows.length, 0)
+  const count = Object.values(data).reduce((acc, rows) => acc + rows.length, 0)
   const failedSources = [
     errorPersonas ? "asistentes" : null,
     cuentas.error ? "cuentas_por_cobrar" : null,

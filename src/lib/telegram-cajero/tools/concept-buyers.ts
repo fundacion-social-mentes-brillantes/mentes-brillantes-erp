@@ -42,7 +42,7 @@ export async function getConceptBuyers(supabase: SupabaseReader, term: string, l
   else patterns.add(base + "s")
   const orFilter = Array.from(patterns).map((pattern) => `concepto.ilike.%${pattern}%`).join(",")
 
-  const result = await fetchPaginatedRows<any>((withExactCount) =>
+  const result = await fetchPaginatedRows((withExactCount) =>
     supabase
       .from("cuentas_por_cobrar")
       .select(
@@ -61,7 +61,7 @@ export async function getConceptBuyers(supabase: SupabaseReader, term: string, l
   for (const row of result.rows) {
     const id = row.asistente_id
     if (!id) continue
-    const asistente = row.asistentes || {}
+    const asistente = row.asistentes
     const existing = byPerson.get(id)
     if (existing) {
       existing.veces += 1
@@ -73,8 +73,8 @@ export async function getConceptBuyers(supabase: SupabaseReader, term: string, l
       }
     } else {
       byPerson.set(id, {
-        nombre: asistente.nombre || "Asistente",
-        codigo: asistente.codigo ?? null,
+        nombre: asistente?.nombre || "Asistente",
+        codigo: asistente?.codigo ?? null,
         veces: 1,
         primera_fecha: row.fecha_emision ?? null,
       })

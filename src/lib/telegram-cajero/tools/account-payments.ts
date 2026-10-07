@@ -1,3 +1,4 @@
+import type { Tables } from "@/lib/supabase/types"
 import type { SupabaseReader } from "./types"
 import {
   DEFAULT_MAX_PAGES,
@@ -5,25 +6,21 @@ import {
   fetchPaginatedRows,
   type PaginationMeta,
   safePageSize,
+  type ErrorConsulta,
 } from "./pagination"
 
 const ACCOUNT_ID_BATCH_SIZE = 200
 
-export type AccountPaymentRow = {
-  id: string
-  cuenta_id: string
-  monto?: number | string | null
-  estado?: string | null
-  notas?: string | null
-  metodo_pago?: string | null
-  fecha_pago?: string | null
-  origen_fondos?: string | null
-}
+/** Las columnas de pagos_abonos que se leen; cuenta_id nunca llega nulo porque se filtra por cuenta. */
+export type AccountPaymentRow = Pick<
+  Tables<"pagos_abonos">,
+  "id" | "cuenta_id" | "monto" | "estado" | "notas" | "metodo_pago" | "fecha_pago" | "origen_fondos"
+>
 
 export type AccountPaymentsResult = {
   rows: AccountPaymentRow[]
   byAccountId: Map<string, AccountPaymentRow[]>
-  error: any | null
+  error: ErrorConsulta | null
   pagination: PaginationMeta
 }
 
@@ -65,7 +62,7 @@ export async function fetchAccountPayments(
 
   const rows: AccountPaymentRow[] = []
   const batchMetas: PaginationMeta[] = []
-  let error: any | null = null
+  let error: ErrorConsulta | null = null
 
   for (let offset = 0; offset < uniqueIds.length; offset += ACCOUNT_ID_BATCH_SIZE) {
     const accountBatch = uniqueIds.slice(offset, offset + ACCOUNT_ID_BATCH_SIZE)

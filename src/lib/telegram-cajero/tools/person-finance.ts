@@ -7,7 +7,7 @@ import { fetchAccountPayments } from "./account-payments"
 export async function getPersonFinancialStatus(supabase: SupabaseReader, asistenteId: string) {
   const queryScope = { asistenteId }
   const [cuentasRes, saldoRes] = await Promise.all([
-    fetchPaginatedRows<any>((withExactCount) =>
+    fetchPaginatedRows((withExactCount) =>
       supabase
         .from("cuentas_por_cobrar")
         .select(
@@ -17,7 +17,7 @@ export async function getPersonFinancialStatus(supabase: SupabaseReader, asisten
         .eq("asistente_id", asistenteId),
       { rowKey: "id" }
     ),
-    fetchPaginatedRows<any>((withExactCount) =>
+    fetchPaginatedRows((withExactCount) =>
       supabase
         .from("movimientos_saldo_favor")
         .select(
@@ -33,19 +33,19 @@ export async function getPersonFinancialStatus(supabase: SupabaseReader, asisten
     return toolError("getPersonFinancialStatus", queryScope, "cuentas_por_cobrar", cuentasRes.error)
   }
 
-  const payments = await fetchAccountPayments(supabase, cuentasRes.rows.map((account: any) => account.id))
-  const cuentas = cuentasRes.rows.map((account: any) => ({
+  const payments = await fetchAccountPayments(supabase, cuentasRes.rows.map((account) => account.id))
+  const cuentas = cuentasRes.rows.map((account) => ({
     ...account,
     pagos_abonos: payments.byAccountId.get(String(account.id)) || [],
   }))
-  const processed = cuentas.map((cuenta: any) => {
+  const processed = cuentas.map((cuenta) => {
     const valor = Math.round(toSafeNumber(cuenta.valor_total))
     const abonado = Math.round(sumarMontos(filtrarPagosValidos(cuenta.pagos_abonos || [])))
     return { id: cuenta.id, concepto: cuenta.concepto, valor, abonado, pendiente: Math.max(0, valor - abonado) }
   })
-  const totalFacturado = processed.reduce((acc: number, item: any) => acc + item.valor, 0)
-  const totalAbonado = processed.reduce((acc: number, item: any) => acc + item.abonado, 0)
-  const totalPendiente = processed.reduce((acc: number, item: any) => acc + item.pendiente, 0)
+  const totalFacturado = processed.reduce((acc: number, item) => acc + item.valor, 0)
+  const totalAbonado = processed.reduce((acc: number, item) => acc + item.abonado, 0)
+  const totalPendiente = processed.reduce((acc: number, item) => acc + item.pendiente, 0)
   const saldoFavorConsultado = calcularSaldoFavorDisponible(saldoRes.rows)
   const accountsComplete = cuentasRes.pagination.complete && payments.pagination.complete
   const complete = accountsComplete && saldoRes.pagination.complete

@@ -10,7 +10,7 @@ function money(value: unknown) {
 // Donaciones registradas por una persona (asistente), excluyendo anuladas.
 export async function getPersonDonations(supabase: SupabaseReader, asistenteId: string) {
   const queryScope = { asistenteId }
-  const result = await fetchPaginatedRows<any>((withExactCount) =>
+  const result = await fetchPaginatedRows((withExactCount) =>
     supabase
       .from("donaciones_asistentes")
       .select(
@@ -25,7 +25,7 @@ export async function getPersonDonations(supabase: SupabaseReader, asistenteId: 
     return toolError("getPersonDonations", queryScope, "donaciones_asistentes", result.error)
   }
 
-  const rows = result.rows.filter((item: any) => !esAnuladoCompleto(item))
+  const rows = result.rows.filter((item) => !esAnuladoCompleto(item))
   const subtotal = money(sumarMontos(rows))
   const complete = result.pagination.complete
   const warning = complete ? null : partialPaginationMessage("donaciones de la persona", result.pagination)
@@ -44,7 +44,7 @@ export async function getPersonDonations(supabase: SupabaseReader, asistenteId: 
       cantidad_consultada: rows.length,
       cantidad_mostrada: displayed.length,
       lista_truncada: displayed.length < rows.length,
-      donaciones: displayed.map((row: any) => ({
+      donaciones: displayed.map((row) => ({
         fecha: row.fecha,
         monto: money(row.monto),
         metodo_pago: row.metodo_pago || null,
@@ -60,7 +60,7 @@ export async function getPersonDonations(supabase: SupabaseReader, asistenteId: 
 // Total de donaciones del centro en un rango de fechas, excluyendo anuladas.
 export async function getDonationsSummary(supabase: SupabaseReader, fechaInicio: string, fechaFin: string) {
   const queryScope = { fechaInicio, fechaFin }
-  const result = await fetchPaginatedRows<any>((withExactCount) =>
+  const result = await fetchPaginatedRows((withExactCount) =>
     supabase
       .from("donaciones_asistentes")
       .select(
@@ -76,7 +76,7 @@ export async function getDonationsSummary(supabase: SupabaseReader, fechaInicio:
     return toolError("getDonationsSummary", queryScope, "donaciones_asistentes", result.error)
   }
 
-  const rows = result.rows.filter((item: any) => !esAnuladoCompleto(item))
+  const rows = result.rows.filter((item) => !esAnuladoCompleto(item))
   const subtotal = money(sumarMontos(rows))
   const complete = result.pagination.complete
   const warning = complete ? null : partialPaginationMessage("donaciones del periodo", result.pagination)
@@ -95,7 +95,7 @@ export async function getDonationsSummary(supabase: SupabaseReader, fechaInicio:
       cantidad_consultada: rows.length,
       cantidad_mostrada: displayed.length,
       lista_truncada: displayed.length < rows.length,
-      donaciones: displayed.map((row: any) => ({
+      donaciones: displayed.map((row) => ({
         fecha: row.fecha,
         monto: money(row.monto),
         metodo_pago: row.metodo_pago || null,

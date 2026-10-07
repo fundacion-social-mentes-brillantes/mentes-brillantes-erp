@@ -1,7 +1,8 @@
+import { leerTodasSinLanzar } from "@/lib/supabase/paginar"
 import type { SupabaseReader } from "./types"
 import { toolError, toolResult } from "./types"
 
-const CANDIDATE_LIMIT = 1200
+const CANDIDATE_LIMIT = 20_000
 
 const NON_PERSON_WORDS = new Set([
   "a",
@@ -250,16 +251,22 @@ export async function searchPerson(supabase: SupabaseReader, term: string, limit
     })
   }
 
-  const { data, error } = await supabase
-    .from("asistentes")
-    .select("id, nombre, codigo, cedula")
-    .order("nombre", { ascending: true })
-    .limit(CANDIDATE_LIMIT)
+  // Por paginas: la API corta cada respuesta en 1000 filas.
+  const { filas: data, error } = await leerTodasSinLanzar(
+    (desde, hasta) =>
+      supabase
+        .from("asistentes")
+        .select("id, nombre, codigo, cedula")
+        .order("nombre", { ascending: true })
+        .order("id")
+        .range(desde, hasta),
+    { maximo: CANDIDATE_LIMIT }
+  )
 
   if (error) return toolError("searchPerson", queryScope, "asistentes", error)
 
   const tokens = tokenize(term)
-  const scored = ((data || []) as PersonRow[])
+  const scored = (data as PersonRow[])
     .map((row) => ({ row, score: scorePerson(row, term, tokens) }))
     .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score || normalize(a.row.nombre).localeCompare(normalize(b.row.nombre)))

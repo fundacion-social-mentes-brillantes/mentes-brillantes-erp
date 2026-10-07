@@ -20,7 +20,7 @@ function esConceptoCoach(concepto: unknown) {
 export async function getCoachSessions(supabase: SupabaseReader, asistenteId: string) {
   const queryScope = { asistenteId }
   const [paquetes, sesiones, cuentasCoach] = await Promise.all([
-    fetchPaginatedRows<any>(
+    fetchPaginatedRows(
       (withExactCount) =>
         supabase
           .from("coach_paquetes")
@@ -31,7 +31,7 @@ export async function getCoachSessions(supabase: SupabaseReader, asistenteId: st
           .eq("asistente_id", asistenteId),
       { rowKey: "id", pageSize: 200, maxRows: 5_000 }
     ),
-    fetchPaginatedRows<any>(
+    fetchPaginatedRows(
       (withExactCount) =>
         supabase
           .from("coach_sesiones")
@@ -43,7 +43,7 @@ export async function getCoachSessions(supabase: SupabaseReader, asistenteId: st
       { rowKey: "id", pageSize: 200, maxRows: 5_000 }
     ),
     // Sesiones que vienen de la MIGRACION: cuentas con concepto de sesion/coach.
-    fetchPaginatedRows<any>(
+    fetchPaginatedRows(
       (withExactCount) =>
         supabase
           .from("cuentas_por_cobrar")
@@ -64,10 +64,10 @@ export async function getCoachSessions(supabase: SupabaseReader, asistenteId: st
   }
 
   const paquetesRows = paquetes.rows
-  const sesionesDesc = [...sesiones.rows].sort((a: any, b: any) => toDateMs(b.fecha) - toDateMs(a.fecha))
+  const sesionesDesc = [...sesiones.rows].sort((a, b) => toDateMs(b.fecha) - toDateMs(a.fecha))
   const sesionesAsc = [...sesionesDesc].reverse()
   const compradasConsultadas = paquetesRows.reduce(
-    (acc: number, item: any) => acc + Math.round(toSafeNumber(item.sesiones_compradas)),
+    (acc: number, item) => acc + Math.round(toSafeNumber(item.sesiones_compradas)),
     0
   )
   const realizadasConsultadas = sesionesDesc.length
@@ -80,11 +80,11 @@ export async function getCoachSessions(supabase: SupabaseReader, asistenteId: st
 
   // Migracion: cuentas de "sesion coach" NO ligadas a un paquete del modulo
   // (asi no se cuentan doble con quienes ya estan en el modulo nuevo).
-  const cuentasLigadas = new Set(paquetesRows.map((paquete: any) => paquete.cuenta_id).filter(Boolean))
+  const cuentasLigadas = new Set(paquetesRows.map((paquete) => paquete.cuenta_id).filter(Boolean))
   const cuentasMigradas = paquetes.pagination.complete
     ? cuentasCoach.rows
-        .filter((cuenta: any) => esConceptoCoach(cuenta.concepto) && !cuentasLigadas.has(cuenta.id))
-        .map((cuenta: any) => ({
+        .filter((cuenta) => esConceptoCoach(cuenta.concepto) && !cuentasLigadas.has(cuenta.id))
+        .map((cuenta) => ({
           concepto: cuenta.concepto,
           fecha: cuenta.fecha_emision,
           valor: Math.round(toSafeNumber(cuenta.valor_total)),
@@ -94,7 +94,7 @@ export async function getCoachSessions(supabase: SupabaseReader, asistenteId: st
   const migracionComplete = paquetes.pagination.complete && cuentasCoach.pagination.complete
   const sesionesMigradasConsultadas = cuentasMigradas.length
   const sesionesMigradas = migracionComplete ? sesionesMigradasConsultadas : null
-  const fechasMigradas = cuentasMigradas.map((cuenta: any) => cuenta.fecha).filter(Boolean)
+  const fechasMigradas = cuentasMigradas.map((cuenta) => cuenta.fecha).filter(Boolean)
   const totalTomadas =
     realizadas !== null && sesionesMigradas !== null ? realizadas + sesionesMigradas : null
   const complete =
@@ -135,11 +135,11 @@ export async function getCoachSessions(supabase: SupabaseReader, asistenteId: st
       sesiones_tomadas_consultadas: knownTaken,
       fechas_migradas: fechasMigradas,
       detalle_migradas: cuentasMigradas,
-      fechas_tomadas: sesionesAsc.map((sesion: any) => sesion.fecha).filter(Boolean),
+      fechas_tomadas: sesionesAsc.map((sesion) => sesion.fecha).filter(Boolean),
       primera_sesion: primeraSesion,
       ultima_sesion: ultimaSesion,
       sesiones: sesionesDesc,
-      paquetes: paquetesRows.map((paquete: any) => ({
+      paquetes: paquetesRows.map((paquete) => ({
         id: paquete.id,
         cuenta_id: paquete.cuenta_id,
         sesiones_compradas: Math.round(toSafeNumber(paquete.sesiones_compradas)),
