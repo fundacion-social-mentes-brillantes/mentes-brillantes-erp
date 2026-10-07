@@ -125,6 +125,9 @@ export function Header({ userEmail, userRole = 'user' }: { userEmail?: string, u
     }
 
     setSearching(true);
+    // Si el texto cambia mientras esta busqueda viaja, su respuesta ya no se pinta
+    // (antes una busqueda vieja y lenta podia pisar los resultados de la nueva).
+    let vigente = true;
     const handle = setTimeout(async () => {
       const like = `%${textoParaFiltro(term)}%`;
       const isAdmin = userRole === "admin";
@@ -148,6 +151,7 @@ export function Header({ userEmail, userRole = 'user' }: { userEmail?: string, u
           .or(`notas.ilike.${like}`)
           .limit(6),
       ]);
+      if (!vigente) return;
 
       setResults({
         asistentes: aRes.data || [],
@@ -158,7 +162,10 @@ export function Header({ userEmail, userRole = 'user' }: { userEmail?: string, u
       setSearchOpen(true);
     }, 250);
 
-    return () => clearTimeout(handle);
+    return () => {
+      vigente = false;
+      clearTimeout(handle);
+    };
   }, [query, canUseGlobalSearch, supabase, userRole]);
 
   // Cierra el desplegable al hacer clic fuera o presionar Escape

@@ -6,6 +6,7 @@ import { estadoLegible, metodoPagoLegible, notaLegible } from '@/lib/utils/texto
 import { fechasDeRango, type RangoFecha } from './rangos'
 import type { Database } from '@/types/database'
 import { leerTodas } from '@/lib/supabase/paginar'
+import { crearTurnos } from '@/lib/utils/turnos'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
@@ -121,6 +122,8 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
 
   // Un solo cliente por montaje (crearlo en cada render rompia las dependencias).
   const supabase = useMemo(() => createClient(), [])
+  // Solo la consulta mas reciente pinta la tabla (ver lib/utils/turnos).
+  const [turnos] = useState(crearTurnos)
 
   // El rango se resuelve en el mismo cambio (antes era un efecto que corria
   // despues y obligaba a una guarda para no consultar sin fechas).
@@ -147,6 +150,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
 
   const fetchMovimientos = useCallback(async () => {
     if (!supabase) return
+    const turno = turnos.pedir()
     setLoading(true)
     setLoadError(null)
 
@@ -183,6 +187,9 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
       error = e
     }
 
+    // Si mientras tanto se pidio otra consulta (cambiaron los filtros), esta ya no pinta nada.
+    if (!turnos.vigente(turno)) return
+
     if (error) {
       console.error('Error cargando movimientos:', error)
       setLoadError('No se pudo cargar el historial porque falta la vista de movimientos o hay un problema de conexión. Contacta al administrador.')
@@ -198,7 +205,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
       setMovimientos(result)
     }
     setLoading(false)
-  }, [supabase, fechaInicio, fechaFin, tipoFiltro, asistenteFiltro, metodoFiltro, mostrarAplicaciones])
+  }, [supabase, turnos, fechaInicio, fechaFin, tipoFiltro, asistenteFiltro, metodoFiltro, mostrarAplicaciones])
 
   useEffect(() => {
     // Con un rango personalizado a medio escribir no se consulta: sin fechas
