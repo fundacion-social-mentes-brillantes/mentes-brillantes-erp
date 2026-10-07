@@ -1,31 +1,49 @@
-name: CI Tests
+name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
+# Cada cambio pasa por lo mismo que se revisa a mano: lint, tipos, pruebas y
+# compilacion de produccion. Si algo falla, no se publica.
 jobs:
-  test:
+  calidad:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Valores de mentira: la compilacion no se conecta a nada.
+      NEXT_PUBLIC_SUPABASE_URL: https://ejemplo.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: clave-publica-de-prueba
+      # Vercel corre en UTC: las pruebas tambien, para que una fecha de
+      # Colombia mal calculada falle aqui y no en produccion.
+      TZ: UTC
+      NEXT_TELEMETRY_DISABLED: "1"
     steps:
-      - name: Checkout
+      - name: Descargar el codigo
         uses: actions/checkout@v4
 
-      - name: Use Node.js 20
+      - name: Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
+          node-version-file: .nvmrc
+          cache: npm
 
-      - name: Install dependencies
+      - name: Instalar dependencias (exactas, del lockfile)
         run: npm ci
 
-      - name: Run tests
-        env:
-          NODE_OPTIONS: --require=./patch-netuse.cjs
-          ESBUILD_BINARY_PATH: ${{ github.workspace }}/node_modules/esbuild/bin/esbuild
-          TMP: .tmp
-          TEMP: .tmp
+      - name: Lint
+        run: npm run lint
+
+      - name: Tipos
+        run: npm run typecheck
+
+      - name: Pruebas
         run: npm test
+
+      - name: Auditoria de dependencias de produccion
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Compilacion de produccion
+        run: npm run build

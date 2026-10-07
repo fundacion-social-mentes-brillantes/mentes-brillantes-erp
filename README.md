@@ -9,8 +9,13 @@ Sistema interno en Next.js + Supabase para la gestion administrativa y financier
 - Historial general de movimientos con anulacion y eliminacion controlada.
 - Donaciones y egresos con auditoria.
 - Socios, periodos, adelantos y liquidaciones con exporte.
+- Asistente IA (web) y bot cajero de Telegram, ambos de solo lectura.
+- Conector MCP (Claude / ChatGPT) con OAuth: consultas y escrituras con borrador y confirmacion.
+- Integracion con la Agenda Mentes Brillantes: estado de cada persona, boton "pasar al ERP"
+  y espejo de sesiones para detectar diferencias.
 
 ## Stack
+- Node 22 (ver `.nvmrc`)
 - Next.js 16 + React 19
 - Supabase (Auth + Postgres)
 - Tailwind CSS v4
@@ -21,7 +26,19 @@ Sistema interno en Next.js + Supabase para la gestion administrativa y financier
 - `npm run build`
 - `npm run start`
 - `npm run lint`
+- `npm run typecheck`
 - `npm run test`
+
+Antes de publicar, los cuatro deben pasar sin errores: `npm run lint && npm run typecheck && npm test && npm run build`.
+GitHub Actions corre lo mismo en cada cambio ([.github/workflows/test.yml](./.github/workflows/test.yml)).
+
+## Configuracion
+Las variables de entorno estan explicadas en [.env.example](./.env.example). Las secretas
+(service-role, firmas, secretos compartidos) viven solo en Vercel.
+
+Cambios de base de datos: van como archivos en `supabase/migrations/` y se aplican a
+mano en Supabase despues de revisarlos; `supabase/schema.sql` es la referencia del
+esquema completo.
 
 ## Base de datos
 El contrato de referencia esta en [supabase/schema.sql](./supabase/schema.sql).
@@ -41,7 +58,7 @@ Objetos clave que deben existir en la BD:
 ## Reglas oficiales del negocio
 Este README es un resumen operativo del sistema. La fuente oficial de reglas contables es [docs/reglas-negocio-contables.md](./docs/reglas-negocio-contables.md); si existe alguna diferencia, prevalece esa documentacion.
 
-1. Ingresos validos del periodo = abonos validos + donaciones validas.
+1. Ingresos validos del periodo = abonos validos + donaciones validas + ventas externas validas.
 2. Aplicar saldo a favor a una cuenta no crea ingreso nuevo.
 3. Utilidad del periodo = ingresos validos - egresos validos.
 4. Adelantos a socios no reducen la utilidad; solo descuentan el neto a pagar del socio.
@@ -52,7 +69,7 @@ Este README es un resumen operativo del sistema. La fuente oficial de reglas con
 
 ## Liquidaciones
 - Base repartible: utilidad del periodo.
-- `ingresos_operativos = abonos validos + donaciones validas`
+- `ingresos_operativos = abonos validos + donaciones validas + ventas externas validas`
 - `egresos_periodo = egresos validos`
 - `utilidad_neta = ingresos_operativos - egresos_periodo`
 - `valor_neto_pagar = valor_correspondiente - adelantos_del_socio`
