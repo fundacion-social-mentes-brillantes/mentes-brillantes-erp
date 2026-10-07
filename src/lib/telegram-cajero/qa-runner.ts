@@ -3,11 +3,12 @@ import { getTelegramCajeroConfig } from "./config"
 import { planWithAi } from "./ai-planner"
 import { executeAiToolPlan } from "./tool-executor"
 import { writeAiResponse } from "./ai-response-writer"
+import type { TelegramSessionState } from "./memory"
 
 // Corre el cerebro real del bot cajero (planner IA -> tools -> redactor) y
 // devuelve la respuesta que daria, SIN tocar Telegram. Solo lectura. Compartido
 // por los endpoints de QA (probar-cajero y el de diagnostico bajo /api/telegram).
-export async function ejecutarConsultaCajero(pregunta: string, state: any) {
+export async function ejecutarConsultaCajero(pregunta: string, state: TelegramSessionState | null | undefined) {
   const config = getTelegramCajeroConfig()
   if (!config) return { error: "Bot no configurado (faltan TELEGRAM_BOT_TOKEN/WEBHOOK_SECRET)." }
 
@@ -34,7 +35,7 @@ export async function ejecutarConsultaCajero(pregunta: string, state: any) {
     const bundle = await executeAiToolPlan(supabase, plan)
     const respuesta = await writeAiResponse({ text: pregunta, plan, bundle, state: state || {}, config })
 
-    const nuevoState: any = { ...(state || {}), lastIntent: plan.intent }
+    const nuevoState: TelegramSessionState = { ...(state || {}), lastIntent: plan.intent }
     if (bundle.structuredResults.length) {
       const ultimo = bundle.structuredResults[bundle.structuredResults.length - 1]
       nuevoState.lastStructuredResult = ultimo

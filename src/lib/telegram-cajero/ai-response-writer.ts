@@ -4,6 +4,8 @@ import type { TelegramSessionState } from "./memory"
 import type { TelegramConfig } from "./types"
 import { minimizeAiProviderPayload } from "./ai-provider-payload"
 import { toSafeNumber } from "@/lib/utils/contable"
+import { mensajeDeError } from "@/lib/utils/errores"
+import { filas, lista, objeto } from "./lectura"
 import { PENSAR_DEEPSEEK } from "@/lib/deepseek-modelo"
 
 function formatCop(value: unknown) {
@@ -78,43 +80,45 @@ function getCalculationText(plan: AiPlannerPlan, state: TelegramSessionState, bu
 }
 
 function describePersonFinancial(item: ToolExecutionItem) {
-  const data: any = item.result?.data || {}
-  const cuentas = Array.isArray(data.cuentas) ? data.cuentas : []
-  const pendientes = cuentas.filter((cuenta: any) => Number(cuenta.pendiente || 0) > 0)
-  const name = item.person?.nombre || data.asistente?.nombre || "la persona"
+  const data = objeto(item.result?.data)
+  const cuentas = filas(data.cuentas)
+  const pendientes = cuentas.filter((cuenta) => Number(cuenta.pendiente || 0) > 0)
+  const name = item.person?.nombre || objeto(data.asistente).nombre || "la persona"
   return [
     `Listo, revise a ${name}.`,
     `Facturado: ${formatCop(data.total_facturado)}. Abonado: ${formatCop(data.total_abonado)}. Pendiente: ${formatCop(data.total_pendiente)}.`,
     toSafeNumber(data.saldo_a_favor) > 0 ? `Saldo a favor: ${formatCop(data.saldo_a_favor)}.` : "",
     pendientes.length
-      ? ["Cuentas pendientes:", ...pendientes.slice(0, 6).map((cuenta: any) => `- ${cuenta.concepto}: ${formatCop(cuenta.pendiente)}`)].join("\n")
+      ? ["Cuentas pendientes:", ...pendientes.slice(0, 6).map((cuenta) => `- ${cuenta.concepto}: ${formatCop(cuenta.pendiente)}`)].join("\n")
       : "No veo cuentas pendientes.",
   ].filter(Boolean).join("\n")
 }
 
 function describePayments(item: ToolExecutionItem) {
-  const rows: any[] = Array.isArray(item.result?.data) ? item.result!.data as any[] : []
+  const rows = filas(item.result?.data)
   const name = item.person?.nombre || "la persona"
   if (!rows.length) return `No veo pagos validos recientes para ${name}.`
   return [`Ultimos pagos de ${name}:`, ...rows.slice(0, 6).map((pago) => `- ${pago.fecha_pago}: ${formatCop(pago.monto)} ${pago.metodo_pago || ""} | ${pago.concepto || ""}`)].join("\n")
 }
 
 function describeCoach(item: ToolExecutionItem) {
-  const data: any = item.result?.data || {}
+  const data = objeto(item.result?.data)
   const name = item.person?.nombre || "la persona"
-  const sesiones = Array.isArray(data.sesiones) ? data.sesiones : []
-  const fechasTomadas = Array.isArray(data.fechas_tomadas) ? data.fechas_tomadas : sesiones.map((sesion: any) => sesion.fecha).filter(Boolean).reverse()
-  const paquetes = Array.isArray(data.paquetes) ? data.paquetes : []
-  const migradas = Array.isArray(data.detalle_migradas) ? data.detalle_migradas : []
+  const sesiones = filas(data.sesiones)
+  const fechasTomadas = Array.isArray(data.fechas_tomadas)
+    ? lista(data.fechas_tomadas)
+    : sesiones.map((sesion) => sesion.fecha).filter(Boolean).reverse()
+  const paquetes = filas(data.paquetes)
+  const migradas = filas(data.detalle_migradas)
   const totalTomadas = Number(data.sesiones_tomadas_total ?? data.sesiones_realizadas ?? 0)
-  const estado = data.interpretacion?.estado || null
+  const estado = objeto(data.interpretacion).estado || null
 
   // Caso migracion: no hay paquete/modulo, pero si cuentas de sesion coach.
   if (estado === "solo_migracion" && migradas.length) {
     return [
       `Sesiones coach de ${name}: ${migradas.length} (segun los registros que vienen de la migracion).`,
       "Fechas:",
-      ...migradas.map((cuenta: any, index: number) => `${index + 1}. ${cuenta.fecha}${cuenta.concepto ? ` — ${cuenta.concepto}` : ""}`),
+      ...migradas.map((cuenta, index: number) => `${index + 1}. ${cuenta.fecha}${cuenta.concepto ? ` — ${cuenta.concepto}` : ""}`),
       "Nota: estas sesiones estan como cuentas antiguas de 'sesion coach' (no en el modulo nuevo), por eso no tiene contador de compradas/restantes.",
     ].join("\n")
   }
@@ -124,10 +128,10 @@ function describeCoach(item: ToolExecutionItem) {
     `Compradas: ${data.sesiones_compradas || 0}. Tomadas/registradas: ${totalTomadas}. Restantes: ${data.sesiones_restantes || 0}.`,
     estado === "con_sesiones_restantes" ? "Estado: aun tiene sesiones disponibles." : estado === "sin_sesiones_restantes" ? "Estado: no quedan sesiones disponibles registradas." : "Estado: no veo paquete coach registrado.",
     fechasTomadas.length
-      ? ["Fechas tomadas (modulo):", ...fechasTomadas.slice(0, 20).map((fecha: string, index: number) => `${index + 1}. ${fecha}`)].join("\n")
+      ? ["Fechas tomadas (modulo):", ...fechasTomadas.slice(0, 20).map((fecha, index: number) => `${index + 1}. ${fecha}`)].join("\n")
       : "No veo fechas de sesiones tomadas en el contador del modulo.",
     migradas.length
-      ? [`Ademas, ${migradas.length} sesion(es) coach de registros migrados:`, ...migradas.map((cuenta: any, index: number) => `${index + 1}. ${cuenta.fecha}${cuenta.concepto ? ` — ${cuenta.concepto}` : ""}`)].join("\n")
+      ? [`Ademas, ${migradas.length} sesion(es) coach de registros migrados:`, ...migradas.map((cuenta, index: number) => `${index + 1}. ${cuenta.fecha}${cuenta.concepto ? ` — ${cuenta.concepto}` : ""}`)].join("\n")
       : "",
     sesiones[0] ? `Ultima registrada (modulo): ${sesiones[0].fecha}${sesiones[0].notas ? ` | ${sesiones[0].notas}` : ""}.` : "",
     paquetes.length ? `Paquetes registrados: ${paquetes.length}.` : "",
@@ -135,23 +139,23 @@ function describeCoach(item: ToolExecutionItem) {
 }
 
 function describePurchases(item: ToolExecutionItem) {
-  const rows: any[] = Array.isArray(item.result?.data) ? item.result!.data as any[] : []
+  const rows = filas(item.result?.data)
   const name = item.person?.nombre || "la persona"
   if (!rows.length) return `No veo cuentas o conceptos comprados para ${name}.`
   return [`Esto tiene registrado ${name}:`, ...rows.slice(0, 7).map((row) => `- ${row.concepto}: ${formatCop(row.valor_total)} | abonado ${formatCop(row.abonado)} | pendiente ${formatCop(row.pendiente)}`)].join("\n")
 }
 
 function describeConceptBuyers(item: ToolExecutionItem) {
-  const data: any = item.result?.data || {}
-  const personas: any[] = Array.isArray(data.personas) ? data.personas : []
+  const data = objeto(item.result?.data)
+  const personas = filas(data.personas)
   const termino = data.term || "ese concepto"
   if (!personas.length) return `No encontre personas con "${termino}" en las cuentas.`
-  const lineas = personas.map((persona: any, index: number) => `${index + 1}. ${persona.nombre}${persona.codigo ? ` (Cod: ${persona.codigo})` : ""}`)
+  const lineas = personas.map((persona, index: number) => `${index + 1}. ${persona.nombre}${persona.codigo ? ` (Cod: ${persona.codigo})` : ""}`)
   return [`Personas que compraron/iniciaron "${termino}": ${data.total_personas}.`, ...lineas].join("\n")
 }
 
 function describeSummary(item: ToolExecutionItem) {
-  const data: any = item.result?.data || {}
+  const data = objeto(item.result?.data)
   return [
     "Resumen del periodo:",
     `Ingresos operativos: ${formatCop(data.ingresos_operativos)}.`,
@@ -161,29 +165,29 @@ function describeSummary(item: ToolExecutionItem) {
 }
 
 function describeAlerts(item: ToolExecutionItem) {
-  const alerts: any[] = Array.isArray(item.result?.data) ? item.result!.data as any[] : []
+  const alerts = filas(item.result?.data)
   if (!alerts.length) return "No veo alertas claras con los datos consultados."
-  return ["Esto conviene revisar:", ...alerts.slice(0, 5).map((alert) => `- ${alert.type}: ${alert.evidence?.[0] || "sin evidencia"}`)].join("\n")
+  return ["Esto conviene revisar:", ...alerts.slice(0, 5).map((alert) => `- ${alert.type}: ${lista(alert.evidence)[0] || "sin evidencia"}`)].join("\n")
 }
 
 function describeDonations(item: ToolExecutionItem) {
-  const data: any = item.result?.data || {}
+  const data = objeto(item.result?.data)
   const name = item.person?.nombre || "la persona"
-  const donaciones = Array.isArray(data.donaciones) ? data.donaciones : []
+  const donaciones = filas(data.donaciones)
   if (!donaciones.length) return `No veo donaciones registradas de ${name}.`
   return [
     `Donaciones de ${name}: ${formatCop(data.total)} en ${data.cantidad || donaciones.length} registro(s).`,
-    ...donaciones.slice(0, 8).map((d: any) => `- ${d.fecha}: ${formatCop(d.monto)} ${d.metodo_pago || ""}`.trim()),
+    ...donaciones.slice(0, 8).map((d) => `- ${d.fecha}: ${formatCop(d.monto)} ${d.metodo_pago || ""}`.trim()),
   ].join("\n")
 }
 
 function describeDonationsSummary(item: ToolExecutionItem) {
-  const data: any = item.result?.data || {}
+  const data = objeto(item.result?.data)
   return `Donaciones del periodo: ${formatCop(data.total)} en ${data.cantidad || 0} donacion(es).`
 }
 
 function describeCounts(item: ToolExecutionItem) {
-  const data: any = item.result?.data || {}
+  const data = objeto(item.result?.data)
   const parts: string[] = []
   if (data.asistentes_activos != null) parts.push(`Asistentes activos: ${data.asistentes_activos}`)
   if (data.asistentes_total != null) parts.push(`Asistentes en total: ${data.asistentes_total}`)
@@ -192,11 +196,11 @@ function describeCounts(item: ToolExecutionItem) {
 }
 
 function describePartners(item: ToolExecutionItem) {
-  const data: any = item.result?.data || {}
-  const socios = Array.isArray(data.socios) ? data.socios : []
+  const data = objeto(item.result?.data)
+  const socios = filas(data.socios)
   if (!socios.length) return "No veo socios registrados."
-  return socios.slice(0, 6).map((socio: any) => {
-    const liq = socio.ultima_liquidacion
+  return socios.slice(0, 6).map((socio) => {
+    const liq = socio.ultima_liquidacion ? objeto(socio.ultima_liquidacion) : null
     const base = `${socio.nombre} — ${socio.porcentaje}%`
     if (!liq) return `${base}: sin liquidacion registrada todavia.`
     return `${base}: ultima liquidacion${liq.periodo ? ` (${liq.periodo})` : ""} neto a pagar ${formatCop(liq.valor_neto_pagar)} (correspondiente ${formatCop(liq.valor_correspondiente)}, adelantos descontados ${formatCop(liq.adelantos_descontados)}).`
@@ -204,17 +208,17 @@ function describePartners(item: ToolExecutionItem) {
 }
 
 function describePeriods(item: ToolExecutionItem) {
-  const data: any = item.result?.data || {}
-  const periodos = Array.isArray(data.periodos) ? data.periodos : []
+  const data = objeto(item.result?.data)
+  const periodos = filas(data.periodos)
   if (!periodos.length) return "No veo periodos registrados."
   return [
     "Periodos:",
-    ...periodos.slice(0, 8).map((p: any) => `- ${p.nombre} (${p.estado}) ${p.fecha_inicio || ""}${p.fecha_fin ? ` a ${p.fecha_fin}` : ""}`.trim()),
+    ...periodos.slice(0, 8).map((p) => `- ${p.nombre} (${p.estado}) ${p.fecha_inicio || ""}${p.fecha_fin ? ` a ${p.fecha_fin}` : ""}`.trim()),
   ].join("\n")
 }
 
 function describeFullProfile(item: ToolExecutionItem) {
-  const data: any = item.result?.data || {}
+  const data = objeto(item.result?.data)
   return [
     describePersonFinancial({ ...item, result: { ...item.result!, data: data.financial } }),
     describePurchases({ ...item, result: { ...item.result!, data: data.purchases } }),
@@ -276,11 +280,11 @@ export function buildDeterministicResponse(plan: AiPlannerPlan, bundle: ToolExec
     if (item.requestedTool === "getSummary") return describeSummary(item)
     if (item.requestedTool === "getBusinessAlerts") return describeAlerts(item)
     if (item.requestedTool === "getOpenReceivablesSummary") {
-      const data: any = item.result?.data || {}
-      const top = Array.isArray(data.top_personas) ? data.top_personas : []
+      const data = objeto(item.result?.data)
+      const top = filas(data.top_personas)
       return [
         `Veo ${data.personas_con_deuda || 0} persona(s) con saldo pendiente. Total cartera: ${formatCop(data.total_cartera)}.`,
-        ...top.slice(0, 8).map((row: any, index: number) => `${index + 1}. ${row.nombre}: ${formatCop(row.pendiente)} (${row.cuentas} cuenta(s))`),
+        ...top.slice(0, 8).map((row, index: number) => `${index + 1}. ${row.nombre}: ${formatCop(row.pendiente)} (${row.cuentas} cuenta(s))`),
       ].join("\n")
     }
     return item.result?.resultCount ? `Consulté ${item.requestedTool}: ${item.result.resultCount} resultado(s).` : item.userSafeMessage || "No encontre datos claros."
@@ -419,8 +423,8 @@ export async function writeAiResponse({
     }
 
     return fallback
-  } catch (error: any) {
-    console.error("[telegram-cajero] ai-response-writer fallo; usando plantilla", { message: error?.message })
+  } catch (error) {
+    console.error("[telegram-cajero] ai-response-writer fallo; usando plantilla", { message: mensajeDeError(error, "desconocido") })
     return fallback
   }
 }

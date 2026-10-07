@@ -1,3 +1,4 @@
+import { filas, objeto, textoONulo } from "./lectura"
 import { resolveNaturalDateRange } from "./dates"
 import type { TelegramSessionState } from "./memory"
 import type { PendingAction } from "./types"
@@ -235,20 +236,27 @@ async function executeTool(supabase: SupabaseReader, tool: AiPlannerTool): Promi
   }
 }
 
+/** La persona que viene dentro de los datos, si trae id y nombre. */
+function personaDe(valor: unknown): AsistenteRef | null {
+  const fila = objeto(valor)
+  if (typeof fila.id !== "string" || typeof fila.nombre !== "string") return null
+  return { id: fila.id, nombre: fila.nombre, codigo: textoONulo(fila.codigo) }
+}
+
 function structuredFromItem(item: ToolExecutionItem): NonNullable<TelegramSessionState["lastStructuredResult"]> | null {
   const result = item.result
   if (!result) return null
   if (result.status === "partial" || result.status === "error") return null
-  const data: any = result.data || {}
-  const person = item.person || data.asistente || null
+  const data = objeto(result.data)
+  const person = item.person || personaDe(data.asistente)
 
   if (item.requestedTool === "getPersonFullProfile" && person) {
-    const financial = data.financial || {}
-    const purchases = Array.isArray(data.purchases) ? data.purchases : []
-    const payments = Array.isArray(data.payments) ? data.payments : []
-    const coach = data.coach || {}
-    const cuentas = Array.isArray(financial.cuentas) ? financial.cuentas : []
-    const pendientes = cuentas.filter((cuenta: any) => Number(cuenta.pendiente || 0) > 0)
+    const financial = objeto(data.financial)
+    const purchases = filas(data.purchases)
+    const payments = filas(data.payments)
+    const coach = objeto(data.coach)
+    const cuentas = filas(financial.cuentas)
+    const pendientes = cuentas.filter((cuenta) => Number(cuenta.pendiente || 0) > 0)
     return {
       type: "estado_completo_persona",
       module: "asistentes",
@@ -263,21 +271,21 @@ function structuredFromItem(item: ToolExecutionItem): NonNullable<TelegramSessio
         sesiones_restantes: moneyNumber(coach.sesiones_restantes),
       },
       items: [
-        ...pendientes.slice(0, 8).map((cuenta: any) => ({
+        ...pendientes.slice(0, 8).map((cuenta) => ({
           tipo: "cuenta_pendiente",
           concepto: cuenta.concepto,
           pendiente: moneyNumber(cuenta.pendiente),
           valor: moneyNumber(cuenta.valor),
           abonado: moneyNumber(cuenta.abonado),
         })),
-        ...payments.slice(0, 5).map((pago: any) => ({
+        ...payments.slice(0, 5).map((pago) => ({
           tipo: "pago",
           fecha: pago.fecha_pago,
           monto: moneyNumber(pago.monto),
           metodo_pago: pago.metodo_pago || null,
           concepto: pago.concepto || null,
         })),
-        ...purchases.slice(0, 5).map((row: any) => ({
+        ...purchases.slice(0, 5).map((row) => ({
           tipo: "compra",
           concepto: row.concepto,
           valor_total: moneyNumber(row.valor_total),
@@ -290,8 +298,8 @@ function structuredFromItem(item: ToolExecutionItem): NonNullable<TelegramSessio
   }
 
   if (item.requestedTool === "getPersonFinancialStatus" && person) {
-    const cuentas = Array.isArray(data.cuentas) ? data.cuentas : []
-    const pendientes = cuentas.filter((cuenta: any) => Number(cuenta.pendiente || 0) > 0)
+    const cuentas = filas(data.cuentas)
+    const pendientes = cuentas.filter((cuenta) => Number(cuenta.pendiente || 0) > 0)
     return {
       type: "cuentas_pendientes_persona",
       module: "asistentes",
@@ -302,7 +310,7 @@ function structuredFromItem(item: ToolExecutionItem): NonNullable<TelegramSessio
         abonado: moneyNumber(data.total_abonado),
         saldo_a_favor: moneyNumber(data.saldo_a_favor),
       },
-      items: pendientes.map((cuenta: any) => ({
+      items: pendientes.map((cuenta) => ({
         concepto: cuenta.concepto,
         pendiente: moneyNumber(cuenta.pendiente),
         valor: moneyNumber(cuenta.valor),
@@ -313,16 +321,16 @@ function structuredFromItem(item: ToolExecutionItem): NonNullable<TelegramSessio
   }
 
   if (item.requestedTool === "getPersonPurchasesOrConcepts" && person) {
-    const items = Array.isArray(data) ? data : []
+    const items = filas(result.data)
     return {
       type: "compras_persona",
       module: "cuentas_por_cobrar",
       asistente: { id: person.id, nombre: person.nombre, codigo: person.codigo || null },
       totals: {
-        total: items.reduce((acc: number, row: any) => acc + moneyNumber(row.valor_total), 0),
-        pendiente: items.reduce((acc: number, row: any) => acc + moneyNumber(row.pendiente), 0),
+        total: items.reduce((acc: number, row) => acc + moneyNumber(row.valor_total), 0),
+        pendiente: items.reduce((acc: number, row) => acc + moneyNumber(row.pendiente), 0),
       },
-      items: items.map((row: any) => ({
+      items: items.map((row) => ({
         concepto: row.concepto,
         valor_total: moneyNumber(row.valor_total),
         pendiente: moneyNumber(row.pendiente),
@@ -333,7 +341,7 @@ function structuredFromItem(item: ToolExecutionItem): NonNullable<TelegramSessio
   }
 
   if (item.requestedTool === "getCoachSessions" && person) {
-    const sesiones = Array.isArray(data.sesiones) ? data.sesiones : []
+    const sesiones = filas(data.sesiones)
     return {
       type: "sesiones_coach_persona",
       module: "coach",
@@ -343,7 +351,7 @@ function structuredFromItem(item: ToolExecutionItem): NonNullable<TelegramSessio
         sesiones_realizadas: moneyNumber(data.sesiones_realizadas),
         sesiones_restantes: moneyNumber(data.sesiones_restantes),
       },
-      items: sesiones.slice(0, 10).map((sesion: any) => ({ fecha: sesion.fecha, notas: sesion.notas || null })),
+      items: sesiones.slice(0, 10).map((sesion) => ({ fecha: sesion.fecha, notas: sesion.notas || null })),
       sources: result.provenance.sources,
     }
   }
@@ -371,7 +379,7 @@ function structuredFromItem(item: ToolExecutionItem): NonNullable<TelegramSessio
         personas_con_deuda: moneyNumber(data.personas_con_deuda),
         cuentas_pendientes: moneyNumber(data.cuentas_pendientes),
       },
-      items: Array.isArray(data.top_personas) ? data.top_personas : [],
+      items: filas(data.top_personas),
       sources: result.provenance.sources,
     }
   }
@@ -381,7 +389,7 @@ function structuredFromItem(item: ToolExecutionItem): NonNullable<TelegramSessio
 
 export async function executeAiToolPlan(supabase: SupabaseReader, plan: AiPlannerPlan): Promise<ToolExecutionBundle> {
   const requestedTools = (plan.tools || []).filter((tool) => isAllowedToolName(tool.name)).slice(0, TOOL_LIMIT)
-  const rejected = (plan.tools || []).filter((tool) => !isAllowedToolName(tool.name as any))
+  const rejected = (plan.tools || []).filter((tool) => !isAllowedToolName(tool.name))
   const results: ToolExecutionItem[] = []
   const userSafeErrors: string[] = rejected.length ? ["Una tool solicitada no esta permitida y fue ignorada."] : []
 
@@ -390,13 +398,17 @@ export async function executeAiToolPlan(supabase: SupabaseReader, plan: AiPlanne
     results.push(item)
     if (item.result?.userSafeErrors?.length) userSafeErrors.push(...item.result.userSafeErrors)
     if (item.status === "ambiguous") {
-      const matches = Array.isArray(item.result?.data) ? item.result!.data as any[] : []
+      const matches = filas(item.result?.data)
       return {
         status: "ambiguous",
         results,
         pendingSelection: {
           action: actionFromTool(item.requestedTool),
-          matches: matches.map((match) => ({ nombre: match.nombre, codigo: match.codigo || null, cedula: match.cedula || null })),
+          matches: matches.map((match) => ({
+            nombre: String(match.nombre ?? ""),
+            codigo: textoONulo(match.codigo),
+            cedula: textoONulo(match.cedula),
+          })),
         },
         structuredResults: [],
         userSafeErrors,

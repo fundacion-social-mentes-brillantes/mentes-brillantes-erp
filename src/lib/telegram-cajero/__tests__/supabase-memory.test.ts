@@ -40,7 +40,7 @@ function mockSupabase() {
 describe("telegram cajero supabase memory store", () => {
   it("persiste seleccion pendiente entre lecturas", async () => {
     const supabase = mockSupabase()
-    const store = new SupabaseTelegramMemoryStore(supabase)
+    const store = new SupabaseTelegramMemoryStore(supabase as any)
     const scope = buildTelegramMemoryScope({ chatId: 1, userId: 2 })
 
     await store.save({
@@ -59,7 +59,7 @@ describe("telegram cajero supabase memory store", () => {
 
   it("borra una sesion por id tecnico", async () => {
     const supabase = mockSupabase()
-    const store = new SupabaseTelegramMemoryStore(supabase)
+    const store = new SupabaseTelegramMemoryStore(supabase as any)
     const scope = buildTelegramMemoryScope({ chatId: 1, userId: 2 })
     await store.save(newEmptySession(scope))
     await store.clear(scope)

@@ -1,3 +1,4 @@
+import { mensajeDeError } from "@/lib/utils/errores"
 import { resolveNaturalDateRange } from "./dates"
 import { normalizeText } from "./input"
 import type { TelegramSessionState } from "./memory"
@@ -807,8 +808,8 @@ export async function planWithAi(text: string, config: TelegramConfig, state: Te
     if (secondary) return secondary
 
     return fallback
-  } catch (error: any) {
-    console.error("[telegram-cajero] ai-planner fallo; usando fallback", { message: error?.message })
+  } catch (error) {
+    console.error("[telegram-cajero] ai-planner fallo; usando fallback", { message: mensajeDeError(error, "desconocido") })
     return fallback
   }
 }

@@ -30,7 +30,7 @@ const lanzarRedireccion = (destino: unknown) => {
 }
 
 /** Ejecuta una accion que termina redirigiendo: la redireccion cuenta como exito. */
-async function hastaRedirigir<T>(accion: Promise<T>): Promise<T | { success: true; redirigidoA: string }> {
+async function hastaRedirigir<T>(accion: Promise<T>): Promise<T | { success: true; redirigidoA: string; error?: undefined }> {
   try {
     return await accion
   } catch (error) {

@@ -7,25 +7,36 @@ import {
   type TelegramBotSession,
   type TelegramMemoryScope,
   type TelegramMemoryStore,
+  type TelegramPendingAction,
+  type TelegramPendingSelection,
+  type TelegramSessionState,
 } from "./types"
+import type { DbClient, Tables } from "@/lib/supabase/types"
+import type { Json } from "@/types/database"
+import { aJson, esObjetoJson } from "@/lib/supabase/json"
 
-type SupabaseLike = {
-  from(table: string): any
+/**
+ * Las columnas JSON las escribe solo este archivo (toRow), asi que al leerlas se
+ * confia en su forma; si una fila trae algo que no es objeto, se toma vacia.
+ */
+function desdeJson<T>(valor: Json | null, vacio: T): T {
+  return esObjetoJson(valor) ? (valor as unknown as T) : vacio
 }
 
-function toSession(row: any): TelegramBotSession {
+function toSession(row: Tables<"telegram_bot_sessions">): TelegramBotSession {
   return {
     id: row.id,
     scope: {
       tenantId: row.tenant_id || "mentes-brillantes",
-      channel: row.channel || "telegram",
+      // Hoy el unico canal es Telegram.
+      channel: "telegram",
       chatId: row.chat_id,
       userId: row.user_id,
       threadId: row.thread_id,
     },
-    state: row.state || {},
-    pendingSelection: row.pending_selection || null,
-    pendingAction: row.pending_action || null,
+    state: desdeJson<TelegramSessionState>(row.state, {}),
+    pendingSelection: desdeJson<TelegramPendingSelection | null>(row.pending_selection, null),
+    pendingAction: desdeJson<TelegramPendingAction | null>(row.pending_action, null),
     expiresAt: row.expires_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -40,16 +51,16 @@ function toRow(session: TelegramBotSession) {
     chat_id: session.scope.chatId,
     user_id: session.scope.userId,
     thread_id: session.scope.threadId || null,
-    state: session.state || {},
-    pending_selection: session.pendingSelection || null,
-    pending_action: session.pendingAction || null,
+    state: aJson(session.state || {}),
+    pending_selection: session.pendingSelection ? aJson(session.pendingSelection) : null,
+    pending_action: session.pendingAction ? aJson(session.pendingAction) : null,
     expires_at: session.expiresAt || expiresAtFrom(),
     updated_at: new Date().toISOString(),
   }
 }
 
 export class SupabaseTelegramMemoryStore implements TelegramMemoryStore {
-  constructor(private supabase: SupabaseLike) {}
+  constructor(private supabase: DbClient) {}
 
   async get(scope: TelegramMemoryScope) {
     const id = sessionId(scope)

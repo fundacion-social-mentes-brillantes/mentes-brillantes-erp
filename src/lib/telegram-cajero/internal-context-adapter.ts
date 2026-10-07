@@ -1,3 +1,4 @@
+import type { DbClient } from "@/lib/supabase/types"
 import {
   buildAsistenteIaContext,
   buildAsistenteIaContextByCodigo,
@@ -13,7 +14,7 @@ export type TelegramInternalContext = {
 }
 
 export async function buildTelegramInternalContext(
-  supabase: any,
+  supabase: DbClient,
   question: string,
   options: { asistenteId?: string | null; codigo?: string | number | null } = {}
 ): Promise<TelegramInternalContext> {
