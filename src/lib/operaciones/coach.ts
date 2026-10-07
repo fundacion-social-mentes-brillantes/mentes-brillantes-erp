@@ -57,13 +57,15 @@ async function paquetesDe(supabase: DbClient, asistenteId: string) {
   return data
 }
 
-function elegirPaquete(paquetes: any[], paqueteId?: string | null) {
+type PaqueteLeido = Awaited<ReturnType<typeof paquetesDe>>[number]
+
+function elegirPaquete(paquetes: PaqueteLeido[], paqueteId?: string | null): PaqueteLeido {
   if (paqueteId) {
-    const elegido = paqueteConCupo(paquetes as any, paqueteId)
+    const elegido = paqueteConCupo(paquetes, paqueteId)
     if (!elegido) throw new OperacionError("Ese paquete no es de la persona o ya no le quedan sesiones.")
     return elegido
   }
-  const destino = paqueteDestino(paquetes as any)
+  const destino = paqueteDestino(paquetes)
   if (!destino) throw new OperacionError("No quedan sesiones disponibles en los paquetes de esa persona.")
   return destino
 }
@@ -75,11 +77,9 @@ export async function previsualizarSesionCoach(
   const fecha = exigirFechaIso(params.fecha)
   const paquetes = await paquetesDe(supabase, params.asistenteId)
   const destino = elegirPaquete(paquetes, params.paqueteId)
-  const { compradas, realizadas, restantes } = resumenCoach(paquetes as any)
+  const { compradas, realizadas, restantes } = resumenCoach(paquetes)
 
-  const cuenta = Array.isArray((destino as any).cuentas_por_cobrar)
-    ? (destino as any).cuentas_por_cobrar[0]
-    : (destino as any).cuentas_por_cobrar
+  const cuenta = Array.isArray(destino.cuentas_por_cobrar) ? destino.cuentas_por_cobrar[0] : destino.cuentas_por_cobrar
   const compradoEl: string | null = cuenta?.fecha_emision ?? null
   const diasDeAntiguedad = compradoEl
     ? Math.floor(
@@ -132,10 +132,10 @@ export async function registrarSesionCoach(
     .eq("id", params.asistenteId)
     .is("fecha_inicio_proceso", null)
 
-  const { restantes } = resumenCoach(paquetes as any)
+  const { restantes } = resumenCoach(paquetes)
   return {
     paqueteId: destino.id,
-    cuentaId: (destino as any).cuenta_id ?? null,
+    cuentaId: destino.cuenta_id ?? null,
     fecha,
     restantesDespues: Math.max(0, restantes - 1),
   }

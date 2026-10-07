@@ -36,7 +36,7 @@ export function resumenCoach(paquetes: CoachPaquete[] = []): ResumenCoach {
 // (realizadas < compradas). Devuelve null si ningun paquete tiene cupo.
 // Asi una sesion nueva se registra contra el paquete correcto y no se sobre-llenan
 // ni se usan paquetes agotados.
-export function paqueteDestino(paquetes: CoachPaquete[] = []): CoachPaquete | null {
+export function paqueteDestino<T extends CoachPaquete>(paquetes: T[] = []): T | null {
   const ordenados = [...paquetes].sort((a, b) => {
     const fa = a.creado_en || ''
     const fb = b.creado_en || ''
@@ -50,7 +50,7 @@ export function paqueteDestino(paquetes: CoachPaquete[] = []): CoachPaquete | nu
 // Igual que paqueteDestino pero para un paquete concreto: lo devuelve solo si es
 // de la lista y aun tiene cupo. Sirve cuando la sesion tiene que caer en un
 // paquete determinado (el que se acaba de crear) y no en el mas antiguo.
-export function paqueteConCupo(paquetes: CoachPaquete[] = [], paqueteId: string): CoachPaquete | null {
+export function paqueteConCupo<T extends CoachPaquete>(paquetes: T[] = [], paqueteId: string): T | null {
   const paquete = paquetes.find((p) => p.id === paqueteId)
   return paquete && cuentaSesiones(paquete) < compradasPaquete(paquete) ? paquete : null
 }

@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import { headers } from 'next/headers'
+import { ipDeEncabezados, limpiarIntentos, registrarIntentoYExcede } from '@/lib/seguridad/limite-intentos'
 
 export type RegistroState = {
   error?: string
@@ -13,32 +15,8 @@ export type RegistroState = {
 } | null
 
 const REGISTRO_GENERIC_ERROR = 'No se pudo completar el registro. Verifica tus datos o solicita ayuda a la Fundación.'
-const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000
-const RATE_LIMIT_MAX_ATTEMPTS = 5
-const registroAttempts = new Map<string, { count: number; firstAttemptAt: number }>()
-
 function normalizeCredential(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, '')
-}
-
-function getRateLimitKey(email: string, codigo: string, cedula: string) {
-  return `${normalizeCredential(email)}:${normalizeCredential(codigo)}:${normalizeCredential(cedula)}`
-}
-
-function isRateLimited(key: string) {
-  const now = Date.now()
-  const current = registroAttempts.get(key)
-  if (!current || now - current.firstAttemptAt > RATE_LIMIT_WINDOW_MS) {
-    registroAttempts.set(key, { count: 1, firstAttemptAt: now })
-    return false
-  }
-  if (current.count >= RATE_LIMIT_MAX_ATTEMPTS) return true
-  current.count += 1
-  return false
-}
-
-function clearRateLimit(key: string) {
-  registroAttempts.delete(key)
 }
 
 export async function registroAction(prevState: RegistroState, formData: FormData): Promise<RegistroState> {
@@ -47,7 +25,6 @@ export async function registroAction(prevState: RegistroState, formData: FormDat
   const confirm = (formData.get('confirm') as string | null) || ''
   const codigo = (formData.get('codigo') as string | null)?.trim() || ''
   const cedula = (formData.get('cedula') as string | null)?.trim() || ''
-  const rateLimitKey = getRateLimitKey(email, codigo, cedula)
 
   if (!email || !password || !confirm || !codigo || !cedula) {
     return { error: 'Todos los campos son obligatorios.', email, codigo, cedula }
@@ -61,7 +38,17 @@ export async function registroAction(prevState: RegistroState, formData: FormDat
     return { error: REGISTRO_GENERIC_ERROR, email, codigo, cedula }
   }
 
-  if (isRateLimited(rateLimitKey)) {
+  // El limite cuenta por codigo de persona y por IP: cambiar el correo ya no
+  // reinicia la cuenta (antes la clave incluia el correo).
+  const admin = createAdminClient()
+  const claveCodigo = `codigo:${normalizeCredential(codigo)}`
+  const ip = ipDeEncabezados(await headers())
+  // 5 intentos por persona; 30 por IP (en la fundacion se registran varios desde el mismo wifi).
+  const excede = await registrarIntentoYExcede(admin, [
+    { clave: claveCodigo, maximo: 5 },
+    { clave: ip ? `ip:${ip}` : '', maximo: 30 },
+  ])
+  if (excede) {
     return { error: 'Demasiados intentos. Espera unos minutos antes de volver a intentar.', email, codigo, cedula }
   }
 
@@ -73,7 +60,6 @@ export async function registroAction(prevState: RegistroState, formData: FormDat
     return { error: 'Las contrase\u00f1as no coinciden.', email, codigo, cedula }
   }
 
-  const admin = createAdminClient()
   if (!admin) {
     return { error: 'Configuraci\u00f3n de Supabase pendiente.', email, codigo, cedula }
   }
@@ -132,7 +118,7 @@ export async function registroAction(prevState: RegistroState, formData: FormDat
     return { error: REGISTRO_GENERIC_ERROR, email, codigo, cedula }
   }
 
-  clearRateLimit(rateLimitKey)
+  await limpiarIntentos(admin, [claveCodigo])
 
   // 5) Iniciar sesi\u00f3n autom\u00e1ticamente
   const supabase = await createClient()

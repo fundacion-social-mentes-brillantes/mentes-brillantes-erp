@@ -151,7 +151,8 @@ export function supabaseFalso(tablas: Record<string, Fila[]>, opciones: Opciones
         insert: (filas: Fila | Fila[]) => {
           const lista = Array.isArray(filas) ? filas : [filas]
           const falla = opciones.fallaInsert?.includes(tabla)
-          const creadas = lista.map((f) => ({ id: `${tabla}-${++secuencia}`, ...f }))
+          // Como en la base: id y creado_en se ponen solos si no vienen.
+          const creadas = lista.map((f) => ({ id: `${tabla}-${++secuencia}`, creado_en: new Date().toISOString(), ...f }))
           if (!falla) {
             tablas[tabla] = [...(tablas[tabla] || []), ...creadas]
             for (const fila of creadas) escrituras.push({ tipo: "insert", tabla, fila })

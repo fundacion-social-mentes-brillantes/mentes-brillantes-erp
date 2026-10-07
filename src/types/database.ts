@@ -995,6 +995,24 @@ export type Database = {
         }
         Relationships: []
       }
+      registro_intentos: {
+        Row: {
+          clave: string
+          creado_en: string
+          id: number
+        }
+        Insert: {
+          clave: string
+          creado_en?: string
+          id?: never
+        }
+        Update: {
+          clave?: string
+          creado_en?: string
+          id?: never
+        }
+        Relationships: []
+      }
       socios: {
         Row: {
           activo: boolean | null

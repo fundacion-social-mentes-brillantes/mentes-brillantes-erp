@@ -3,131 +3,107 @@
 import { revalidatePath } from 'next/cache'
 import { requireAdmin, requireRoles } from '@/lib/utils/authz'
 import { fechaHoyBogota } from '@/lib/utils/fechas'
-import { paqueteDestino, resumenCoach } from '@/lib/utils/coach'
-import { registrarSesionCoach } from '@/lib/operaciones/coach'
+import { resumenCoach } from '@/lib/utils/coach'
+import { errorDeAccion } from '@/lib/utils/acciones'
+import { createClient } from '@/lib/supabase/server'
+import { editarSesionCoach, eliminarSesionCoach, registrarSesionCoach } from '@/lib/operaciones/coach'
+import { SinCambiosError } from '@/lib/operaciones/errores'
+
+// Sesiones coach. Registrar, corregir y borrar pasan por
+// lib/operaciones/coach.ts, las mismas reglas que usan el MCP y la agenda.
 
 export type CoachActionState = { error?: string; success?: boolean } | null
 
-export async function registrarSesion(prev: CoachActionState, formData: FormData): Promise<CoachActionState> {
-  let supabase
-  try {
-    ({ supabase } = await requireRoles(['admin', 'caja']))
-  } catch (e: any) {
-    return { error: e?.message || 'Acceso denegado' }
-  }
+const textoDe = (formData: FormData, campo: string) => {
+  const valor = formData.get(campo)
+  return typeof valor === 'string' ? valor.trim() : ''
+}
 
-  const paquete_id = formData.get('paquete_id') as string
-  const fecha = (formData.get('fecha') as string) || fechaHoyBogota()
-  const notas = (formData.get('notas') as string) || null
-
-  if (!paquete_id) return { error: 'Paquete requerido' }
-
-  const { data: paquete } = await supabase
-    .from('coach_paquetes')
-    .select('id, cuenta_id, asistente_id, sesiones_compradas, coach_sesiones (id)')
-    .eq('id', paquete_id)
-    .single()
-
-  if (!paquete) return { error: 'Paquete no encontrado' }
-
-  const realizadas = paquete.coach_sesiones?.length || 0
-  if (realizadas >= paquete.sesiones_compradas) {
-    return { error: 'No quedan sesiones disponibles en este paquete.' }
-  }
-
-  const { error } = await supabase.from('coach_sesiones').insert([{
-    paquete_id,
-    asistente_id: paquete.asistente_id,
-    fecha,
-    notas,
-  }])
-
-  if (error) return { error: error.message }
-
-  // Autocompletar fecha_inicio_proceso si es la primera sesión
-  if (!paquete.coach_sesiones || paquete.coach_sesiones.length === 0) {
-    await supabase
-      .from('asistentes')
-      .update({ fecha_inicio_proceso: fecha })
-      .eq('id', paquete.asistente_id)
-      .is('fecha_inicio_proceso', null)
-  }
-
-  revalidatePath(`/cuentas/${paquete.cuenta_id}`)
-  revalidatePath(`/asistentes/${paquete.asistente_id}`)
+function refrescar(asistenteId: string | null, cuentaId: string | null) {
+  if (cuentaId) revalidatePath(`/cuentas/${cuentaId}`)
+  if (asistenteId) revalidatePath(`/asistentes/${asistenteId}`)
   revalidatePath('/sesiones-coach')
+}
+
+/** Registra una sesion en un paquete concreto (desde el detalle de la cuenta). */
+export async function registrarSesion(_prev: CoachActionState, formData: FormData): Promise<CoachActionState> {
+  const paqueteId = textoDe(formData, 'paquete_id')
+  if (!paqueteId) return { error: 'Paquete requerido' }
+
+  let asistenteId: string | null = null
+  let cuentaId: string | null = null
+  try {
+    const { supabase, user, perfil } = await requireRoles(['admin', 'caja'])
+    const { data: paquete } = await supabase.from('coach_paquetes').select('asistente_id').eq('id', paqueteId).single()
+    if (!paquete) return { error: 'Paquete no encontrado' }
+
+    asistenteId = paquete.asistente_id
+    const r = await registrarSesionCoach(
+      supabase,
+      { userId: user.id, role: perfil.rol === 'admin' ? 'admin' : 'caja' },
+      { asistenteId, paqueteId, fecha: textoDe(formData, 'fecha') || fechaHoyBogota(), notas: textoDe(formData, 'notas') || null }
+    )
+    cuentaId = r.cuentaId
+  } catch (e) {
+    return errorDeAccion(e, 'No se pudo registrar la sesion coach.', 'coach')
+  }
+
+  refrescar(asistenteId, cuentaId)
   return { success: true }
 }
 
-export async function editarSesion(prev: CoachActionState, formData: FormData): Promise<CoachActionState> {
-  let supabase
+async function datosDeSesion(sesionId: string) {
+  const { supabase } = await requireAdmin()
+  const { data } = await supabase
+    .from('coach_sesiones')
+    .select('asistente_id, coach_paquetes (cuenta_id)')
+    .eq('id', sesionId)
+    .single()
+  const paquete = Array.isArray(data?.coach_paquetes) ? data?.coach_paquetes[0] : data?.coach_paquetes
+  return { asistenteId: data?.asistente_id ?? null, cuentaId: paquete?.cuenta_id ?? null }
+}
+
+export async function editarSesion(_prev: CoachActionState, formData: FormData): Promise<CoachActionState> {
+  const sesionId = textoDe(formData, 'sesion_id')
+  if (!sesionId) return { error: 'Sesión requerida' }
+
+  let destino = { asistenteId: null as string | null, cuentaId: null as string | null }
   try {
-    ({ supabase } = await requireAdmin())
-  } catch (e: any) {
-    return { error: e?.message || 'Acceso denegado' }
+    const { supabase, user } = await requireAdmin()
+    destino = await datosDeSesion(sesionId)
+    await editarSesionCoach(supabase, { userId: user.id, role: 'admin' }, {
+      sesionId,
+      fecha: textoDe(formData, 'fecha') || fechaHoyBogota(),
+      notas: textoDe(formData, 'notas') || null,
+    })
+  } catch (e) {
+    if (!(e instanceof SinCambiosError)) return errorDeAccion(e, 'No se pudo editar la sesion coach.', 'coach')
   }
 
-  const sesion_id = formData.get('sesion_id') as string
-  const fecha = (formData.get('fecha') as string) || fechaHoyBogota()
-  const notas = (formData.get('notas') as string) || null
-
-  if (!sesion_id) return { error: 'Sesión requerida' }
-
-  const { data: sesion } = await supabase
-    .from('coach_sesiones')
-    .select('id, paquete_id, asistente_id, coach_paquetes (cuenta_id)')
-    .eq('id', sesion_id)
-    .single()
-
-  if (!sesion) return { error: 'Sesión no encontrada' }
-
-  const { error } = await supabase
-    .from('coach_sesiones')
-    .update({ fecha, notas })
-    .eq('id', sesion_id)
-
-  if (error) return { error: error.message }
-
-  const cuenta_id = (sesion as any).coach_paquetes?.cuenta_id
-  const asistente_id = sesion.asistente_id
-  if (cuenta_id) revalidatePath(`/cuentas/${cuenta_id}`)
-  if (asistente_id) revalidatePath(`/asistentes/${asistente_id}`)
-  revalidatePath('/sesiones-coach')
+  refrescar(destino.asistenteId, destino.cuentaId)
   return { success: true }
 }
 
-export async function eliminarSesion(prev: CoachActionState, formData: FormData): Promise<CoachActionState> {
-  let supabase
+export async function eliminarSesion(_prev: CoachActionState, formData: FormData): Promise<CoachActionState> {
+  const sesionId = textoDe(formData, 'sesion_id')
+  if (!sesionId) return { error: 'Sesión requerida' }
+
+  let destino = { asistenteId: null as string | null, cuentaId: null as string | null }
   try {
-    ({ supabase } = await requireAdmin())
-  } catch (e: any) {
-    return { error: e?.message || 'Acceso denegado' }
+    const { supabase, user } = await requireAdmin()
+    destino = await datosDeSesion(sesionId)
+    await eliminarSesionCoach(supabase, { userId: user.id, role: 'admin' }, sesionId)
+  } catch (e) {
+    return errorDeAccion(e, 'No se pudo eliminar la sesion coach.', 'coach')
   }
 
-  const sesion_id = formData.get('sesion_id') as string
-  if (!sesion_id) return { error: 'Sesión requerida' }
-
-  const { data: sesion } = await supabase
-    .from('coach_sesiones')
-    .select('id, paquete_id, asistente_id, coach_paquetes (cuenta_id)')
-    .eq('id', sesion_id)
-    .single()
-
-  if (!sesion) return { error: 'Sesión no encontrada' }
-
-  const { error } = await supabase.from('coach_sesiones').delete().eq('id', sesion_id)
-  if (error) return { error: error.message }
-
-  const cuenta_id = (sesion as any).coach_paquetes?.cuenta_id
-  const asistente_id = sesion.asistente_id
-  if (cuenta_id) revalidatePath(`/cuentas/${cuenta_id}`)
-  if (asistente_id) revalidatePath(`/asistentes/${asistente_id}`)
-  revalidatePath('/sesiones-coach')
+  refrescar(destino.asistenteId, destino.cuentaId)
   return { success: true }
 }
 
 export async function getCoachSummary(asistente_id: string) {
-  const supabase = await import('@/lib/supabase/server').then((m) => m.createClient())
+  // Lectura con la sesion de quien mira: las politicas de la base deciden que ve.
+  const supabase = await createClient()
   if (!supabase) return null
 
   const { data: paquetes } = await supabase
@@ -137,7 +113,7 @@ export async function getCoachSummary(asistente_id: string) {
 
   if (!paquetes) return null
 
-  const { compradas, realizadas, restantes } = resumenCoach(paquetes as any)
+  const { compradas, realizadas, restantes } = resumenCoach(paquetes)
 
   return {
     paquetes,
@@ -157,13 +133,6 @@ export async function registrarSesionCoachAsistente(
   fecha?: string | null,
   notas?: string | null
 ): Promise<CoachActionState> {
-  let supabase
-  try {
-    ({ supabase } = await requireRoles(['admin', 'caja']))
-  } catch (e: any) {
-    return { error: e?.message || 'Acceso denegado' }
-  }
-
   if (!asistenteId) return { error: 'Asistente requerido' }
 
   const fechaSesion = typeof fecha === 'string' && fecha.trim() ? fecha.trim() : fechaHoyBogota()
@@ -171,18 +140,21 @@ export async function registrarSesionCoachAsistente(
     return { error: 'La fecha no tiene un formato valido.' }
   }
 
-  // Nucleo compartido con el MCP: elige el paquete mas antiguo con cupo,
-  // inserta la sesion y autocompleta el inicio de proceso.
-  let destinoCuentaId: string | null = null
+  let cuentaId: string | null = null
   try {
-    const r = await registrarSesionCoach(supabase, { userId: '' }, { asistenteId, fecha: fechaSesion, notas })
-    destinoCuentaId = r.cuentaId
-  } catch (e: any) {
-    return { error: e?.message || 'No se pudo registrar la sesion coach.' }
+    const { supabase, user, perfil } = await requireRoles(['admin', 'caja'])
+    // Nucleo compartido con el MCP: elige el paquete mas antiguo con cupo,
+    // inserta la sesion y autocompleta el inicio de proceso.
+    const r = await registrarSesionCoach(
+      supabase,
+      { userId: user.id, role: perfil.rol === 'admin' ? 'admin' : 'caja' },
+      { asistenteId, fecha: fechaSesion, notas }
+    )
+    cuentaId = r.cuentaId
+  } catch (e) {
+    return errorDeAccion(e, 'No se pudo registrar la sesion coach.', 'coach')
   }
 
-  revalidatePath('/sesiones-coach')
-  revalidatePath(`/asistentes/${asistenteId}`)
-  if (destinoCuentaId) revalidatePath(`/cuentas/${destinoCuentaId}`)
+  refrescar(asistenteId, cuentaId)
   return { success: true }
 }
