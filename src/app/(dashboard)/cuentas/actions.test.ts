@@ -1434,7 +1434,7 @@ describe('cuentas/actions revertirAbonoConSaldo', () => {
 
     const result = await revertirAbonoConSaldo('cuenta-1', 'abono-1')
 
-    expect(result?.error).toMatch(/ya esta anulado/i)
+    expect(result?.error).toMatch(/ya est[aá] anulado/i)
     expect(rpc).not.toHaveBeenCalled()
   })
 

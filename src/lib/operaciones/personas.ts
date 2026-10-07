@@ -126,7 +126,7 @@ async function leerPersonaCompleta(supabase: DbClient, asistenteId: string) {
     .select("id, nombre, codigo, cedula, correo, telefono, fecha_registro, fecha_inicio_proceso, activo")
     .eq("id", asistenteId)
     .single()
-  if (error || !data) throw new OperacionError("No encontre esa persona.")
+  if (error || !data) throw new OperacionError("No encontré esa persona.")
   return data
 }
 
@@ -201,7 +201,7 @@ export async function buscarPersonaPorId(supabase: DbClient, asistenteId: string
     .select("id, nombre, codigo, cedula, correo, telefono, activo")
     .eq("id", asistenteId)
     .single()
-  if (error || !data) throw new OperacionError("No encontre esa persona.")
+  if (error || !data) throw new OperacionError("No encontré esa persona.")
   return data
 }
 
@@ -228,7 +228,7 @@ export async function previsualizarEliminacionPersona(supabase: DbClient, asiste
   if ((count || 0) > 0) {
     throw new OperacionError(
       `No se puede eliminar a ${persona.nombre} porque tiene ${count} cuenta(s) registradas. ` +
-        "Si ya no participa, desactivala en vez de borrarla."
+        "Si ya no participa, desactívala en vez de borrarla."
     )
   }
 

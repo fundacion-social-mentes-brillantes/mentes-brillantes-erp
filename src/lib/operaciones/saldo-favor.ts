@@ -152,7 +152,7 @@ async function validarReversoAbono(supabase: DbClient, params: RevertirAbonoPara
   if (error || !abono) throw new OperacionError("No se encontró el abono a revertir.")
   if (abono.cuenta_id !== params.cuentaId) throw new OperacionError("El abono no pertenece a la cuenta indicada.")
   if (abono.estado === "anulado" || String(abono.notas || "").toUpperCase().includes("[ANULADO]")) {
-    throw new OperacionError("El abono ya esta anulado.")
+    throw new OperacionError("El abono ya está anulado.")
   }
   if (String(abono.origen_fondos || "").toLowerCase() === "saldo_a_favor") {
     throw new OperacionError("Este pago proviene de saldo a favor; no se revierte por este flujo.")

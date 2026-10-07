@@ -28,13 +28,13 @@ export const TIPOS_ANULABLES = TIPOS_MOVIMIENTO
 export type TipoMovimientoAnulable = TipoMovimiento
 
 export const APLICACION_SALDO_BLOQUEADA =
-  "Las aplicaciones de saldo a favor no se pueden editar, anular ni eliminar por aqui. Deben gestionarse desde un flujo contable dedicado para no desbalancear la cuenta ni el saldo."
+  "Las aplicaciones de saldo a favor no se pueden editar, anular ni eliminar por aquí, para no descuadrar la cuenta ni el saldo."
 export const ANTICIPO_BLOQUEADO =
-  "Los anticipos/saldo a favor no se pueden editar, anular ni eliminar por aqui. Deben gestionarse desde el perfil de la persona, con su flujo contable dedicado."
+  "Los anticipos (saldo a favor) no se pueden editar, anular ni eliminar por aquí. Para revertirlos, usa la ficha de la persona."
 export const ABONO_CON_SALDO_BLOQUEADO =
-  "Ese abono genero saldo a favor por sobrepago. Debe gestionarse desde el detalle de la cuenta para no duplicar ni perder dinero."
+  "Ese abono generó saldo a favor por sobrepago. Anúlalo desde el detalle de la cuenta, para no duplicar ni perder dinero."
 export const PAGO_DESDE_SALDO_BLOQUEADO =
-  "No se puede anular ni eliminar este pago porque proviene de saldo a favor. Requiere el flujo de devolucion de saldo."
+  "No se puede anular ni eliminar este pago porque se hizo con saldo a favor, que ya se descontó. Si fue un error, avísale al administrador."
 
 export type AnularMovimientoParams = {
   tipo: TipoMovimientoAnulable
@@ -93,7 +93,7 @@ async function validar(supabase: DbClient, params: AnularMovimientoParams) {
   exigirTipoAnulable(params.tipo, "anulacion")
 
   const mov = await leerMovimiento(supabase, params.tipo, params.movimientoId)
-  if (!mov) throw new OperacionError("No encontre ese movimiento.")
+  if (!mov) throw new OperacionError("No encontré ese movimiento.")
 
   if (esAnulado(mov)) throw new OperacionError("Ese movimiento ya estaba anulado.")
 
@@ -200,7 +200,7 @@ export async function previsualizarEliminacion(supabase: DbClient, params: Elimi
   exigirTipoAnulable(params.tipo, "eliminar")
 
   const mov = await leerMovimiento(supabase, params.tipo, params.movimientoId)
-  if (!mov) throw new OperacionError("No encontre ese movimiento.")
+  if (!mov) throw new OperacionError("No encontré ese movimiento.")
 
   const periodoError = await assertFechaEditable(supabase, mov.fecha, "Eliminar el movimiento")
   if (periodoError) throw new OperacionError(periodoError)
@@ -255,6 +255,16 @@ export type TipoMovimientoEditable = (typeof TIPOS_EDITABLES)[number]
  */
 export const TIPOS_CON_EDICION = ["abono", ...TIPOS_EDITABLES] as const
 
+export const METODO_PAGO_CON_SALDO_BLOQUEADO =
+  "Ese pago se hizo con saldo a favor: su método no se puede cambiar, porque pasaría a contarse como dinero nuevo."
+
+function esPagoConSaldo(mov: MovimientoLeido) {
+  return (
+    String(mov.metodoPago || "").toLowerCase() === "saldo_a_favor" ||
+    String(mov.origenFondos || "").toLowerCase() === "saldo_a_favor"
+  )
+}
+
 export const EDICION_ABONO_BLOQUEADA =
   "El monto de un abono no se puede editar desde aqui. Usa el detalle de la cuenta para preservar correctamente sobrepagos y saldo a favor."
 
@@ -307,12 +317,19 @@ export async function previsualizarEdicion(supabase: DbClient, params: EditarMov
   const metodoPago = params.metodoPago !== undefined ? exigirMetodoPago(params.metodoPago) : undefined
 
   const mov = await leerMovimiento(supabase, params.tipo, params.movimientoId)
-  if (!mov) throw new OperacionError("No encontre ese movimiento.")
-  if (esAnulado(mov)) throw new OperacionError("Ese movimiento esta anulado; no se puede editar.")
+  if (!mov) throw new OperacionError("No encontré ese movimiento.")
+  if (esAnulado(mov)) throw new OperacionError("Ese movimiento está anulado; no se puede editar.")
 
   if (params.tipo === "abono") {
     if (params.monto !== undefined && params.monto !== mov.monto) {
       throw new OperacionError(EDICION_ABONO_BLOQUEADA)
+    }
+    // Un pago hecho con saldo a favor no es dinero nuevo: si se le cambiara el
+    // metodo a "nequi" contaria como ingreso aunque el saldo ya se gasto, y la
+    // plata quedaria contada dos veces. (Pasar algo A saldo a favor ya lo
+    // bloquea exigirMetodoPago.)
+    if (metodoPago !== undefined && metodoPago !== mov.metodoPago && esPagoConSaldo(mov)) {
+      throw new OperacionError(METODO_PAGO_CON_SALDO_BLOQUEADO)
     }
     if (await tieneSaldoFavorAsociado(supabase, mov.cuentaId, params.movimientoId)) {
       throw new OperacionError(ABONO_CON_SALDO_BLOQUEADO)

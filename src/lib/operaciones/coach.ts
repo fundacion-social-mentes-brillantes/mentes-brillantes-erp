@@ -149,7 +149,7 @@ async function leerSesion(supabase: DbClient, sesionId: string) {
     .select("id, fecha, notas, paquete_id, asistente_id, asistentes(nombre)")
     .eq("id", sesionId)
     .single()
-  if (error || !data) throw new OperacionError("No encontre esa sesion coach.")
+  if (error || !data) throw new OperacionError("No encontré esa sesión coach.")
   return data
 }
 

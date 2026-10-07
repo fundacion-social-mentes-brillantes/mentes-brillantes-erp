@@ -74,7 +74,7 @@ export async function buscarSocio(supabase: DbClient, termino: string) {
     .limit(5)
   if (error) throw new OperacionError("No se pudieron buscar los socios.")
   const filas = data || []
-  if (!filas.length) throw new OperacionError(`No encontre al socio "${termino}".`)
+  if (!filas.length) throw new OperacionError(`No encontré al socio "${termino}".`)
   if (filas.length > 1) {
     throw new OperacionError(
       `Hay varios socios que coinciden: ${filas.map((s) => s.nombre).join(", ")}. Se mas preciso.`
@@ -102,7 +102,7 @@ export async function validarPeriodoNuevo(supabase: DbClient, datos: DatosPeriod
   if (error) throw new OperacionError("No se pudieron consultar los periodos.")
   if ((abiertos || []).length > 0) {
     throw new OperacionError(
-      `Ya hay un periodo abierto (${abiertos[0].nombre}). Cierra su liquidacion antes de abrir otro.`
+      `Ya hay un periodo abierto (${abiertos[0].nombre}). Cierra su liquidación antes de abrir otro.`
     )
   }
 

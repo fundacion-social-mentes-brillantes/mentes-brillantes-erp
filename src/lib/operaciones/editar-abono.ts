@@ -55,7 +55,7 @@ export async function editarMontoAbono(supabase: DbClient, actor: ActorErp, para
     .single()
   if (abonoError || !abono) throw new OperacionError("No se encontró el abono.")
   if (abono.cuenta_id !== cuentaId) throw new OperacionError("El abono no pertenece a la cuenta indicada.")
-  if (esAnuladoCompleto(abono)) throw new OperacionError("Ese abono esta anulado; no se puede editar.")
+  if (esAnuladoCompleto(abono)) throw new OperacionError("Ese abono está anulado; no se puede editar.")
 
   const periodoError = await assertFechaEditable(supabase, abono.fecha_pago, "Editar el abono")
   if (periodoError) throw new OperacionError(periodoError)

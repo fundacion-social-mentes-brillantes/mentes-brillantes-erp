@@ -78,7 +78,7 @@ describe('movimientos/actions', () => {
       await anularMovimiento('msf-anticipo-1', 'anticipo'),
       await eliminarMovimiento('msf-anticipo-1', 'anticipo'),
     ]) {
-      expect(resultado?.error).toMatch(/anticipos\/saldo a favor no se pueden editar, anular ni eliminar/i)
+      expect(resultado?.error).toMatch(/anticipos \(saldo a favor\) no se pueden editar, anular ni eliminar/i)
     }
 
     expect(revalidatePathMock).not.toHaveBeenCalled()
@@ -303,7 +303,7 @@ describe('movimientos/actions', () => {
 
     const result = await eliminarMovimiento('abono-1', 'abono')
 
-    expect(result?.error).toMatch(/genero saldo a favor por sobrepago/i)
+    expect(result?.error).toMatch(/gener[oó] saldo a favor por sobrepago/i)
   })
 
   it('bloquea eliminar un pago hecho CON saldo a favor', async () => {
@@ -323,7 +323,7 @@ describe('movimientos/actions', () => {
 
     const result = await eliminarMovimiento('abono-sf-1', 'abono')
 
-    expect(result?.error).toMatch(/proviene de saldo a favor/i)
+    expect(result?.error).toMatch(/se hizo con saldo a favor/i)
   })
 })
 
