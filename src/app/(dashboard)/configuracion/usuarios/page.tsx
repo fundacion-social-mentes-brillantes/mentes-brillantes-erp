@@ -19,7 +19,7 @@ export default async function UsuariosConfigPage() {
     .order('nombre')
 
   const perfilesNormalizados =
-    (perfiles || []).map((p: any) => ({
+    (perfiles || []).map((p) => ({
       ...p,
       asistentes: Array.isArray(p.asistentes) ? (p.asistentes[0] ?? null) : p.asistentes ?? null,
     }))

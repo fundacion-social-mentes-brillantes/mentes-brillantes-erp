@@ -70,7 +70,7 @@ export async function Dashboard({ periodo: periodoId }: { periodo?: string }) {
     .from("periodos")
     .select("id, nombre, fecha_inicio, fecha_fin, estado, creado_en")
     .order("creado_en", { ascending: false });
-  const periodos: Periodo[] = (periodosData ?? []).map((p: any) => ({
+  const periodos: Periodo[] = (periodosData ?? []).map((p) => ({
     id: p.id,
     nombre: p.nombre,
     fecha_inicio: p.fecha_inicio,
@@ -153,7 +153,7 @@ export async function Dashboard({ periodo: periodoId }: { periodo?: string }) {
     // Salvaguarda: si el período está cerrado pero NO tiene liquidación, se
     // calculan en vivo como siempre. Nunca se muestra un período en blanco.
     const necesitaMovimientos = !hayLiquidacion || conGrafica;
-    const vacio = { data: [] as any[] };
+    const vacio = { data: [] as never[] };
 
     const [
       { data: rawIngresos },
@@ -173,12 +173,12 @@ export async function Dashboard({ periodo: periodoId }: { periodo?: string }) {
 
     const ingresosData = filtrarIngresosOperativos(rawIngresos ?? [], { excluirSaldoAFavor: true, excluirAplicacionSaldo: true });
     const saldoFavorIngresos = filtrarIngresosRealesSaldoAFavor(rawSaldo ?? []);
-    const donacionesValidas = (rawDonaciones ?? []).filter((d: any) => !esAnuladoCompleto(d));
-    const ventasValidas = (rawVentas ?? []).filter((v: any) => !esAnuladoCompleto(v));
-    const egresosValidos = (rawEgresos ?? []).filter((e: any) => !esAnuladoCompleto(e));
+    const donacionesValidas = (rawDonaciones ?? []).filter((d) => !esAnuladoCompleto(d));
+    const ventasValidas = (rawVentas ?? []).filter((v) => !esAnuladoCompleto(v));
+    const egresosValidos = (rawEgresos ?? []).filter((e) => !esAnuladoCompleto(e));
 
     let ingresosCartera = Math.round(sumarMontos([...ingresosData, ...saldoFavorIngresos]));
-    let donaciones = Math.round(donacionesValidas.reduce((a: number, d: any) => a + Number(d.monto), 0));
+    let donaciones = Math.round(donacionesValidas.reduce((a: number, d) => a + Number(d.monto), 0));
     let ventasExternas = Math.round(sumarMontos(ventasValidas));
     let ingresosTotales = Math.round(ingresosCartera + donaciones + ventasExternas);
     let egresos = Math.round(sumarMontos(egresosValidos));
@@ -187,19 +187,19 @@ export async function Dashboard({ periodo: periodoId }: { periodo?: string }) {
 
     // La liquidación ya se consultó arriba; aquí solo se aplican sus cifras.
     if (hayLiquidacion) {
-      const liq: any = liqRows![0];
+      const liq = liqRows![0];
       ingresosCartera = Math.round(Number(liq.ingresos_cobrados) || 0);
       donaciones = Math.round(Number(liq.donaciones_periodo) || 0);
       ingresosTotales = Math.round(Number(liq.ingresos_operativos ?? ingresosCartera + donaciones) || 0);
-      egresos = Math.round((resumenRows ?? []).reduce((a: number, r: any) => a + Number(r.salidas_egresos || 0), 0));
-      ventasExternas = Math.round((resumenRows ?? []).reduce((a: number, r: any) => a + Number(r.ingresos_ventas_externas || 0), 0));
+      egresos = Math.round((resumenRows ?? []).reduce((a: number, r) => a + Number(r.salidas_egresos || 0), 0));
+      ventasExternas = Math.round((resumenRows ?? []).reduce((a: number, r) => a + Number(r.ingresos_ventas_externas || 0), 0));
       utilidad = Math.round(ingresosTotales - egresos);
       congelado = true;
     }
 
-    const facturado = Math.round((cuentasRango ?? []).reduce((acc: number, c: any) => acc + Number(c.valor_total), 0));
-    const pendiente = Math.round((cuentasRango ?? []).reduce((acc: number, c: any) => {
-      const abonado = filtrarPagosValidosCuentas(c.pagos_abonos || []).reduce((s: number, p: any) => s + Number(p.monto), 0);
+    const facturado = Math.round((cuentasRango ?? []).reduce((acc: number, c) => acc + Number(c.valor_total), 0));
+    const pendiente = Math.round((cuentasRango ?? []).reduce((acc: number, c) => {
+      const abonado = filtrarPagosValidosCuentas(c.pagos_abonos || []).reduce((s: number, p) => s + Number(p.monto), 0);
       return acc + (Number(c.valor_total) - abonado);
     }, 0));
 
@@ -209,12 +209,12 @@ export async function Dashboard({ periodo: periodoId }: { periodo?: string }) {
     if (conGrafica) {
       const dias = buildDays(inicio, fin);
       const ingresosDiarios = [
-        ...ingresosData.map((it: any) => ({ fecha: it.fecha_pago, monto: it.monto })),
-        ...saldoFavorIngresos.map((it: any) => ({ fecha: it.fecha, monto: it.monto })),
-        ...ventasValidas.map((it: any) => ({ fecha: it.fecha, monto: it.monto })),
-        ...donacionesValidas.map((it: any) => ({ fecha: it.fecha, monto: it.monto })),
+        ...ingresosData.map((it) => ({ fecha: it.fecha_pago, monto: it.monto })),
+        ...saldoFavorIngresos.map((it) => ({ fecha: it.fecha, monto: it.monto })),
+        ...ventasValidas.map((it) => ({ fecha: it.fecha, monto: it.monto })),
+        ...donacionesValidas.map((it) => ({ fecha: it.fecha, monto: it.monto })),
       ];
-      const egresosDiarios = egresosValidos.map((it: any) => ({ fecha: it.fecha, monto: it.monto }));
+      const egresosDiarios = egresosValidos.map((it) => ({ fecha: it.fecha, monto: it.monto }));
       chartData = construirSerieDiaria(dias, ingresosDiarios, egresosDiarios);
     }
 
@@ -276,15 +276,15 @@ export async function Dashboard({ periodo: periodoId }: { periodo?: string }) {
   // Las cuentas con más de 30 días salen de la misma lista: es exactamente el
   // mismo criterio que tenía la consulta que se eliminó (fecha_emision < corte).
   const carteraAntiguaData = (carteraTotalData ?? []).filter(
-    (c: any) => c.fecha_emision && c.fecha_emision < thirtyDaysAgoStr
+    (c) => c.fecha_emision && c.fecha_emision < thirtyDaysAgoStr
   );
   const carteraTotal = Math.round(carteraTotalData?.reduce((acc, curr) => {
-    const abonado = filtrarPagosValidosCuentas(curr.pagos_abonos || []).reduce((sum: number, pago: any) => sum + Number(pago.monto), 0);
+    const abonado = filtrarPagosValidosCuentas(curr.pagos_abonos || []).reduce((sum: number, pago) => sum + Number(pago.monto), 0);
     return acc + (Number(curr.valor_total) - abonado);
   }, 0) || 0);
   let carteraAntigua = 0;
-  carteraAntiguaData.forEach((curr: any) => {
-    const abonado = filtrarPagosValidosCuentas(curr.pagos_abonos || []).reduce((sum: number, p: any) => sum + Number(p.monto), 0);
+  carteraAntiguaData.forEach((curr) => {
+    const abonado = filtrarPagosValidosCuentas(curr.pagos_abonos || []).reduce((sum: number, p) => sum + Number(p.monto), 0);
     const pendiente = Number(curr.valor_total) - abonado;
     if (pendiente > 0) carteraAntigua += pendiente;
   });

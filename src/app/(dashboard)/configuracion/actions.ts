@@ -1,6 +1,7 @@
 'use server'
 
 import { textoParaFiltro } from '@/lib/supabase/filtros'
+import { mensajeDeError } from '@/lib/utils/errores'
 import type { MetodoPago } from '@/lib/operaciones/errores'
 import { revalidatePath } from 'next/cache'
 import { requireAdmin } from '@/lib/utils/authz'
@@ -43,7 +44,10 @@ export async function actualizarConfiguracionEmpresa(formData: FormData) {
   return { success: true }
 }
 
-export async function procesarMigracion(tipo: string, rows: any[]) {
+/** Cada fila del CSV tal como la entrega Papa con encabezados: texto por columna. */
+export type FilaCsv = Record<string, string | undefined>
+
+export async function procesarMigracion(tipo: string, rows: FilaCsv[]) {
   const { supabase } = await requireAdmin()
 
   if (!tipo || !rows || !Array.isArray(rows)) {
@@ -56,7 +60,7 @@ export async function procesarMigracion(tipo: string, rows: any[]) {
   const errorMsgs: string[] = []
 
   // Helpers para buscar IDs
-  const getSocioId = async (nombreOrId: string) => {
+  const getSocioId = async (nombreOrId: string | undefined) => {
     if (!nombreOrId) return null;
     const limpio = textoParaFiltro(nombreOrId)
     const { data } = await supabase.from('socios').select('id').or(`nombre.ilike.%${limpio}%,legacy_row_id.eq.${limpio}`).limit(1).single()
@@ -73,7 +77,7 @@ export async function procesarMigracion(tipo: string, rows: any[]) {
     return data?.id || null
   }
 
-  const parseDate = (d: string) => {
+  const parseDate = (d: string | undefined) => {
     if (!d) return new Date().toISOString().split('T')[0];
     // Si viene como DD/MM/YYYY
     if (d.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
@@ -83,14 +87,14 @@ export async function procesarMigracion(tipo: string, rows: any[]) {
     return d;
   }
 
-  const parseBoolean = (val: any) => {
+  const parseBoolean = (val: unknown) => {
     if (val === undefined || val === null || val === '') return true;
     const str = String(val).trim().toLowerCase();
     if (str === 'false' || str === 'n' || str === '0' || str === 'no') return false;
     return true;
   }
 
-  const parseCurrency = (val: any) => {
+  const parseCurrency = (val: unknown) => {
     if (val === undefined || val === null || val === '') return 0;
     // Convertir a string, quitar $, comas, espacios y comillas
     const cleaned = String(val).replace(/[$,\s"']/g, '');
@@ -366,9 +370,9 @@ export async function procesarMigracion(tipo: string, rows: any[]) {
         }
       }
 
-    } catch (err: any) {
+    } catch (err) {
       errors++
-      errorMsgs.push(`Fila ${index + 1}: Excepción - ${err.message}`)
+      errorMsgs.push(`Fila ${index + 1}: Excepción - ${mensajeDeError(err, 'error desconocido')}`)
     }
   }
 

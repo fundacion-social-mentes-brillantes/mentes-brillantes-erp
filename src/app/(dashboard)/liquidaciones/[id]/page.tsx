@@ -12,6 +12,7 @@ import { ImagenAdelantosSocio } from './ImagenAdelantosSocio'
 import { agruparAdelantosConDevoluciones, agruparAdelantosPorSocio, agruparPorMetodo, construirDetallesResumenPorCuenta, MetodoPago, METODOS_PAGO_RESUMEN } from '@/lib/utils/liquidaciones'
 import { fechaHoyBogota } from '@/lib/utils/fechas'
 import { esAnuladoCompleto, filtrarIngresosOperativos, filtrarIngresosRealesSaldoAFavor, sumarMontos } from '@/lib/utils/contable'
+import type { PagoRecord } from '@/lib/utils/contable'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -52,14 +53,14 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
     entregado: socio.entregado,
     devuelto: socio.devuelto,
     pendiente: socio.pendiente,
-    adelantos: socio.adelantos.map(({ adelanto, devoluciones, entregado, devuelto, pendiente }: any) => ({
+    adelantos: socio.adelantos.map(({ adelanto, devoluciones, entregado, devuelto, pendiente }) => ({
       fecha: String(adelanto.fecha || ''),
       monto: entregado,
       metodo: String(adelanto.metodo_pago || 'otro'),
       notas: adelanto.notas || null,
       devuelto,
       pendiente,
-      devoluciones: devoluciones.map((devolucion: any) => ({
+      devoluciones: devoluciones.map((devolucion) => ({
         fecha: String(devolucion.fecha || ''),
         monto: Math.abs(Number(devolucion.monto) || 0),
         metodo: String(devolucion.metodo_pago || 'otro'),
@@ -131,10 +132,10 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
   let ingresos_operativos = 0
   let egresos_periodo = 0
   let adelantos_periodo = 0
-  let ingresosData: any[] = []
-  let ingresosSaldoFavorData: any[] = []
-  let donacionesValidas: any[] = []
-  let egresosData: any[] = []
+  let ingresosData: PagoRecord[] = []
+  let ingresosSaldoFavorData: PagoRecord[] = []
+  let donacionesValidas: PagoRecord[] = []
+  let egresosData: PagoRecord[] = []
   let resumenPorCuenta: {
     metodo_pago: MetodoPago
     total_ingresos: number
@@ -150,7 +151,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
 
   if (periodo.estado === 'abierto') {
     ingresosData =
-      filtrarIngresosOperativos(abonosPeriodo).map((a: any) => ({
+      filtrarIngresosOperativos(abonosPeriodo).map((a) => ({
         monto: a.monto,
         metodo_pago: a.metodo_pago,
         origen_fondos: a.origen_fondos,
@@ -159,7 +160,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
       })) || []
 
     ingresosSaldoFavorData =
-      filtrarIngresosRealesSaldoAFavor(saldoFavorPeriodo).map((m: any) => ({
+      filtrarIngresosRealesSaldoAFavor(saldoFavorPeriodo).map((m) => ({
         monto: m.monto,
         metodo_pago: m.metodo_pago,
         tipo: m.tipo,
@@ -169,16 +170,16 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
     ingresos_cobrados = Math.round(sumarMontos([...ingresosData, ...ingresosSaldoFavorData]))
 
     donacionesValidas = donacionesPeriodo.filter((d) => !esAnuladoCompleto(d))
-    donaciones_periodo = Math.round(donacionesValidas.reduce((acc: number, curr: any) => acc + Number(curr.monto), 0))
+    donaciones_periodo = Math.round(donacionesValidas.reduce((acc: number, curr) => acc + Number(curr.monto), 0))
 
     const ventasExternasValidas = ventasExternasPeriodo.filter((v) => !esAnuladoCompleto(v))
     ventas_externas_periodo = Math.round(
-      ventasExternasValidas.reduce((acc: number, curr: any) => acc + Number(curr.monto), 0)
+      ventasExternasValidas.reduce((acc: number, curr) => acc + Number(curr.monto), 0)
     )
 
     egresosData = egresosPeriodoRaw.filter((item) => !esAnuladoCompleto(item))
     const egresosValidos = Math.round(egresosData.reduce((acc, curr) => acc + Number(curr.monto), 0))
-    adelantos_periodo = Math.round(adelantos.reduce((acc: number, curr: any) => acc + Number(curr.monto), 0))
+    adelantos_periodo = Math.round(adelantos.reduce((acc: number, curr) => acc + Number(curr.monto), 0))
     egresos_periodo = egresosValidos
 
     ingresos_operativos = ingresos_cobrados + donaciones_periodo + ventas_externas_periodo
@@ -216,7 +217,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
       saldo_neto_periodo: 0,
     }))
     resumenPorCuenta = base.map((item) => {
-      const row = (resumenDb || []).find((r: any) => r.metodo_pago === item.metodo_pago)
+      const row = (resumenDb || []).find((r) => r.metodo_pago === item.metodo_pago)
       return row
         ? {
             metodo_pago: item.metodo_pago,
@@ -232,13 +233,13 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
         : item
     })
     adelantos_periodo = Math.round(
-      resumenPorCuenta.reduce((acc: number, row: any) => acc + Number(row.salidas_adelantos ?? 0), 0)
+      resumenPorCuenta.reduce((acc: number, row) => acc + Number(row.salidas_adelantos ?? 0), 0)
     )
     egresos_periodo = Math.round(
-      resumenPorCuenta.reduce((acc: number, row: any) => acc + Number(row.salidas_egresos ?? 0), 0)
+      resumenPorCuenta.reduce((acc: number, row) => acc + Number(row.salidas_egresos ?? 0), 0)
     )
     ventas_externas_periodo = Math.round(
-      resumenPorCuenta.reduce((acc: number, row: any) => acc + Number(row.ingresos_ventas_externas ?? 0), 0)
+      resumenPorCuenta.reduce((acc: number, row) => acc + Number(row.ingresos_ventas_externas ?? 0), 0)
     )
     resumenTotales = resumenPorCuenta.reduce(
       (acc, r) => ({
@@ -273,20 +274,20 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
     ? socios?.map(socio => {
         const porcentaje = Number(socio.porcentaje_participacion)
         const corresponde = (utilidad_neta * porcentaje) / 100
-        const adelantosSocio = adelantos.filter((a: any) => a.socio_id === socio.id)
-        const totalAdelantos = adelantosSocio.reduce((acc: number, curr: any) => acc + Number(curr.monto), 0)
+        const adelantosSocio = adelantos.filter((a) => a.socio_id === socio.id)
+        const totalAdelantos = adelantosSocio.reduce((acc: number, curr) => acc + Number(curr.monto), 0)
         return {
           id: socio.id,
-          nombre: socio.nombre,
+          nombre: socio.nombre ?? 'Sin nombre',
           porcentaje,
           corresponde,
           adelantos: totalAdelantos,
           neto: corresponde - totalAdelantos
         }
       }) || []
-    : liquidaciones?.map((liq: any) => ({
+    : liquidaciones?.map((liq) => ({
         id: liq.id,
-        nombre: liq.socios?.nombre,
+        nombre: liq.socios?.nombre ?? 'Sin nombre',
         porcentaje: Number(liq.porcentaje_aplicado),
         corresponde: Number(liq.valor_correspondiente),
         adelantos: Number(liq.adelantos_descontados),
@@ -439,7 +440,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
               </p>
             </div>
             <div className="divide-y divide-zinc-100 max-h-[500px] overflow-y-auto">
-              {adelantosConDevoluciones.map(({ adelanto, devoluciones, entregado, devuelto, pendiente }: any) => (
+              {adelantosConDevoluciones.map(({ adelanto, devoluciones, entregado, devuelto, pendiente }) => (
                 <div key={adelanto.id} className="p-4 hover:bg-zinc-50/50">
                   <div className="flex justify-between items-start mb-1">
                     <p className="font-medium text-zinc-900 text-sm">{adelanto.socios?.nombre}</p>
@@ -461,7 +462,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                         <span>Devuelto</span>
                         <span>-${devuelto.toLocaleString()}</span>
                       </div>
-                      {devoluciones.map((devolucion: any) => (
+                      {devoluciones.map((devolucion) => (
                         <div key={devolucion.id} className="flex justify-between text-[11px] text-emerald-700/80">
                           <span>
                             {formatearFechaIso(devolucion.fecha)} · {devolucion.metodo_pago || 'otro'}
@@ -483,7 +484,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                 </div>
               ))}
 
-              {devolucionesHuerfanas.map((devolucion: any) => (
+              {devolucionesHuerfanas.map((devolucion) => (
                 <div key={devolucion.id} className="p-4 bg-emerald-50/40">
                   <div className="flex justify-between items-start mb-1">
                     <p className="font-medium text-zinc-900 text-sm">{devolucion.socios?.nombre}</p>
@@ -532,8 +533,8 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                     socios?.map(socio => {
                       const porcentaje = Number(socio.porcentaje_participacion)
                       const corresponde = (utilidad_neta * porcentaje) / 100
-                      const adelantosSocio = adelantos.filter((a: any) => a.socio_id === socio.id)
-                      const totalAdelantos = adelantosSocio.reduce((acc: number, curr: any) => acc + Number(curr.monto), 0)
+                      const adelantosSocio = adelantos.filter((a) => a.socio_id === socio.id)
+                      const totalAdelantos = adelantosSocio.reduce((acc: number, curr) => acc + Number(curr.monto), 0)
                       const neto = corresponde - totalAdelantos
 
                       return (
@@ -550,7 +551,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                     })
                   ) : (
                     // Liquidación Guardada
-                    liquidaciones?.map((liq: any) => (
+                    liquidaciones?.map((liq) => (
                       <tr key={liq.id}>
                         <td className="py-4 font-medium text-zinc-900">{liq.socios?.nombre}</td>
                         <td className="py-4 text-right text-zinc-500">{Number(liq.porcentaje_aplicado)}%</td>

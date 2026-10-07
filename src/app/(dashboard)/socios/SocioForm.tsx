@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { AlertCircle } from 'lucide-react'
 import Link from 'next/link'
+import type { Tables } from '@/lib/supabase/types'
 
-export function SocioForm({ socio }: { socio?: any }) {
+export function SocioForm({ socio }: { socio?: Tables<'socios'> | null }) {
   const actionWithId = saveSocio.bind(null, socio?.id || null)
   const [state, formAction, isPending] = useActionState(actionWithId, null)
 

@@ -17,6 +17,26 @@ type AlertItem = {
   icon?: "alert" | "clock";
 };
 
+type ResultadosBusqueda = {
+  asistentes: Array<{ id: string; nombre: string; codigo: string | null; cedula?: string | null }>;
+  cuentas: Array<{ id: string; concepto: string; valor_total: number; estado: string; asistentes: { nombre: string } | null }>;
+  movimientos: Array<{
+    id: string;
+    monto: number;
+    metodo_pago: string | null;
+    fecha_pago: string;
+    notas: string | null;
+    cuentas_por_cobrar: { id: string; concepto: string } | null;
+  }>;
+};
+
+type CuentaParaAviso = {
+  id: string;
+  valor_total: number;
+  asistentes: { nombre: string } | null;
+  pagos_abonos: Array<{ monto: number; estado: string | null; notas: string | null }> | null;
+};
+
 export function Header({ userEmail, userRole = 'user' }: { userEmail?: string, userRole?: string }) {
   const initial = userEmail ? userEmail.charAt(0).toUpperCase() : 'U';
   const router = useRouter();
@@ -28,7 +48,7 @@ export function Header({ userEmail, userRole = 'user' }: { userEmail?: string, u
   const [loadingAlerts, setLoadingAlerts] = useState(false);
 
   // Búsqueda global en vivo (desplegable de resultados mientras se escribe)
-  const [results, setResults] = useState<{ asistentes: any[]; cuentas: any[]; movimientos: any[] }>({
+  const [results, setResults] = useState<ResultadosBusqueda>({
     asistentes: [],
     cuentas: [],
     movimientos: [],
@@ -66,9 +86,9 @@ export function Header({ userEmail, userRole = 'user' }: { userEmail?: string, u
         .order("fecha_emision", { ascending: true })
         .limit(5);
 
-      const buildAlert = (item: any, label: string, icon: AlertItem["icon"]): AlertItem => {
+      const buildAlert = (item: CuentaParaAviso, label: string, icon: AlertItem["icon"]): AlertItem => {
         const pagosValidos = filtrarPagosValidosCuentas(item.pagos_abonos || []);
-        const abonado = pagosValidos.reduce((sum: number, p: any) => sum + Number(p.monto), 0);
+        const abonado = pagosValidos.reduce((sum: number, p) => sum + Number(p.monto), 0);
         const pendiente = Math.max(0, Number(item.valor_total) - abonado);
         return {
           title: label,
@@ -107,13 +127,15 @@ export function Header({ userEmail, userRole = 'user' }: { userEmail?: string, u
     const handle = setTimeout(async () => {
       const like = `%${textoParaFiltro(term)}%`;
       const isAdmin = userRole === "admin";
-      const aFields = isAdmin ? "id, nombre, codigo, cedula" : "id, nombre, codigo";
       const aFilter = isAdmin
         ? `nombre.ilike.${like},codigo.ilike.${like},cedula.ilike.${like}`
         : `nombre.ilike.${like},codigo.ilike.${like}`;
 
       const [aRes, cRes, mRes] = await Promise.all([
-        supabase.from("asistentes").select(aFields).or(aFilter).limit(6),
+        // La cedula solo la ve el admin: para caja ni se pide.
+        isAdmin
+          ? supabase.from("asistentes").select("id, nombre, codigo, cedula").or(aFilter).limit(6)
+          : supabase.from("asistentes").select("id, nombre, codigo").or(aFilter).limit(6),
         supabase
           .from("cuentas_por_cobrar")
           .select("id, concepto, valor_total, estado, asistentes(nombre)")
@@ -226,7 +248,7 @@ export function Header({ userEmail, userRole = 'user' }: { userEmail?: string, u
                       <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[rgb(var(--text-muted))] flex items-center gap-1.5">
                         <Users className="h-3.5 w-3.5" /> Asistentes
                       </p>
-                      {results.asistentes.map((a: any) => (
+                      {results.asistentes.map((a) => (
                         <Link
                           key={a.id}
                           href={`/asistentes/${a.id}`}
@@ -250,7 +272,7 @@ export function Header({ userEmail, userRole = 'user' }: { userEmail?: string, u
                       <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[rgb(var(--text-muted))] flex items-center gap-1.5">
                         <Receipt className="h-3.5 w-3.5" /> Cuentas
                       </p>
-                      {results.cuentas.map((c: any) => (
+                      {results.cuentas.map((c) => (
                         <Link
                           key={c.id}
                           href={`/cuentas/${c.id}`}
@@ -272,7 +294,7 @@ export function Header({ userEmail, userRole = 'user' }: { userEmail?: string, u
                       <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[rgb(var(--text-muted))] flex items-center gap-1.5">
                         <History className="h-3.5 w-3.5" /> Movimientos
                       </p>
-                      {results.movimientos.map((m: any) => {
+                      {results.movimientos.map((m) => {
                         const cuentaId = m.cuentas_por_cobrar?.id;
                         const inner = (
                           <>

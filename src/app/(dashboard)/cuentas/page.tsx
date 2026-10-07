@@ -39,7 +39,7 @@ export default async function CuentasPage({ searchParams }: Params) {
       .select('id')
       .ilike('nombre', `%${busqueda}%`)
       .limit(500)
-    asistentesCoincidentes = (data ?? []).map((a: any) => a.id)
+    asistentesCoincidentes = (data ?? []).map((a) => a.id)
   }
 
   let query = supabase
@@ -73,7 +73,7 @@ export default async function CuentasPage({ searchParams }: Params) {
     .order('id', { ascending: false })
     .range(desde, desde + POR_PAGINA - 1)
 
-  const cuentas = (cuentasData ?? []).map((cuenta: any) => {
+  const cuentas = (cuentasData ?? []).map((cuenta) => {
     const valor_total = Number(cuenta.valor_total)
     const pagosValidos = filtrarPagosValidos(cuenta.pagos_abonos ?? [])
     const total_abonado = sumarMontos(pagosValidos)

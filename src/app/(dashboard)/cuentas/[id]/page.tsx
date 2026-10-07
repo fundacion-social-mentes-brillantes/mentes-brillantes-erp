@@ -42,7 +42,7 @@ export default async function DetalleCuentaPage({
     notFound()
   }
 
-  const abonos = cuenta.pagos_abonos?.sort((a: any, b: any) => 
+  const abonos = cuenta.pagos_abonos?.sort((a, b) => 
     new Date(b.fecha_pago).getTime() - new Date(a.fecha_pago).getTime()
   ) || []
 
@@ -65,7 +65,7 @@ export default async function DetalleCuentaPage({
   const abonosConSaldoActivo = new Set<string>()
   for (const m of movimientosSaldo || []) {
     if (m.tipo !== 'ingreso') continue
-    const nota = (m as any).notas || ''
+    const nota = m.notas || ''
     if (nota.includes('[ANULADO]')) continue
     const match = nota.match(/\[ABONO:([0-9a-fA-F-]+)\]/)
     if (match) abonosConSaldoActivo.add(match[1])
@@ -80,7 +80,7 @@ export default async function DetalleCuentaPage({
   }
 
   // Fetch auditoria
-  const abonoIds = abonos.map((a: any) => a.id)
+  const abonoIds = abonos.map((a) => a.id)
   const { data: auditoria } = await supabase
     .from('auditoria_financiera')
     .select('*')
@@ -186,7 +186,7 @@ export default async function DetalleCuentaPage({
                     sesionesCompradas={paquete.sesiones_compradas}
                     sesionesRealizadas={sesionesRealizadas}
                     sesionesRestantes={sesionesRestantes}
-                    sesiones={(paquete.coach_sesiones || []).map((s: any) => ({ fecha: s.fecha, notas: s.notas }))}
+                    sesiones={(paquete.coach_sesiones || []).map((s) => ({ fecha: s.fecha, notas: s.notas }))}
                   />
                 </div>
               </div>
@@ -194,8 +194,8 @@ export default async function DetalleCuentaPage({
                 <h4 className="text-sm font-semibold text-[rgb(var(--text-primary))] mb-2">Historial de sesiones</h4>
                 <div className="divide-y divide-[rgb(var(--border))] border border-[rgb(var(--border))] rounded-lg overflow-hidden bg-[rgb(var(--surface-1))]">
                   {paquete.coach_sesiones?.length ? paquete.coach_sesiones
-                    .sort((a: any, b: any) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
-                    .map((s: any) => (
+                    .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
+                    .map((s) => (
                       <div key={s.id} className="px-4 py-3 text-sm flex justify-between items-start gap-3">
                         <div className="space-y-1">
                           <span className="block text-[rgb(var(--text-primary))]">{formatearFechaIso(s.fecha)}</span>
@@ -227,7 +227,7 @@ export default async function DetalleCuentaPage({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[rgb(var(--border))]">
-                  {abonos.map((abono: any) => (
+                  {abonos.map((abono) => (
                     <tr key={abono.id} className="hover:bg-[rgb(var(--surface-2))]">
                       <td className="px-4 py-3 text-[rgb(var(--text-primary))]">{formatearFechaIso(abono.fecha_pago)}</td>
                       <td className="px-4 py-3 text-[rgb(var(--text-muted))] capitalize">
@@ -323,13 +323,13 @@ export default async function DetalleCuentaPage({
             <h3 className="font-medium text-zinc-900">Historial de Correcciones (Admin)</h3>
           </div>
           <div className="divide-y divide-zinc-100">
-            {auditoria.map((aud: any) => (
+            {auditoria.map((aud) => (
               <div key={aud.id} className="p-4 text-sm">
                 <div className="flex justify-between mb-1">
                   <span className="font-medium text-zinc-900">
                     {aud.accion === 'edicion_valor' ? 'Edición de Valor Total' : 'Edición de Abono'}
                   </span>
-                  <span className="text-zinc-500">{new Date(aud.fecha).toLocaleString('es-CO')}</span>
+                  <span className="text-zinc-500">{aud.fecha ? new Date(aud.fecha).toLocaleString('es-CO') : ''}</span>
                 </div>
                 <div className="text-zinc-600 mb-1">
                   Cambio: <span className="line-through text-red-500">${Number(aud.valor_anterior).toLocaleString('es-CO')}</span> 

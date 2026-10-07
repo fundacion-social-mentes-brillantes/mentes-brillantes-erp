@@ -3,13 +3,16 @@
 import { useState, useRef, useEffect } from 'react'
 import { Check, ChevronsUpDown, Search } from 'lucide-react'
 
+/** Lo que el buscador necesita de cada persona. */
+export type AsistenteOpcion = { id: string; nombre: string; codigo?: string | null; cedula?: string | null }
+
 export function SearchableAsistenteSelect({ 
   asistentes, 
   name = "asistente_id",
   disabled = false,
   initialSelectedId,
 }: { 
-  asistentes: any[],
+  asistentes: AsistenteOpcion[],
   name?: string,
   disabled?: boolean,
   initialSelectedId?: string

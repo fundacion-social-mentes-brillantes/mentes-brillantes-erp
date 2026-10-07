@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { AlertCircle } from 'lucide-react'
 import Link from 'next/link'
+import type { Tables } from '@/lib/supabase/types'
 
-export function AsistenteForm({ asistente, codigoSugerido, readOnlyDates = false }: { asistente?: any; codigoSugerido?: number; readOnlyDates?: boolean }) {
+export function AsistenteForm({ asistente, codigoSugerido, readOnlyDates = false }: { asistente?: Tables<'asistentes'> | null; codigoSugerido?: number; readOnlyDates?: boolean }) {
   const actionWithId = saveAsistente.bind(null, asistente?.id || null)
   const [state, formAction, isPending] = useActionState(actionWithId, null)
 
@@ -35,15 +36,15 @@ export function AsistenteForm({ asistente, codigoSugerido, readOnlyDates = false
         </div>
         <div className="space-y-2">
           <label className="text-sm font-medium text-zinc-900">Cédula</label>
-          <Input name="cedula" defaultValue={asistente?.cedula} disabled={isPending} />
+          <Input name="cedula" defaultValue={asistente?.cedula ?? ''} disabled={isPending} />
         </div>
         <div className="space-y-2">
           <label className="text-sm font-medium text-zinc-900">Correo Electrónico</label>
-          <Input name="correo" type="email" defaultValue={asistente?.correo} disabled={isPending} />
+          <Input name="correo" type="email" defaultValue={asistente?.correo ?? ''} disabled={isPending} />
         </div>
         <div className="space-y-2">
           <label className="text-sm font-medium text-zinc-900">Teléfono</label>
-          <Input name="telefono" defaultValue={asistente?.telefono} disabled={isPending} />
+          <Input name="telefono" defaultValue={asistente?.telefono ?? ''} disabled={isPending} />
         </div>
         <div className="space-y-2">
           <label className="text-sm font-medium text-zinc-900">Código Interno</label>

@@ -4,10 +4,9 @@ import { rutaInternaSegura } from '@/lib/utils/rutas'
 
 type SearchParams = { asistente?: string | string[]; returnTo?: string | string[] }
 
-export default async function NuevaCuentaPage({ searchParams }: { searchParams?: SearchParams | Promise<SearchParams> }) {
-  const resolvedParams = typeof (searchParams as any)?.then === 'function'
-    ? await (searchParams as Promise<SearchParams>)
-    : (searchParams as SearchParams) || {}
+export default async function NuevaCuentaPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  // En Next 16 los parametros de busqueda llegan siempre como promesa.
+  const resolvedParams: SearchParams = (await searchParams) ?? {}
 
   const asistenteInicial = Array.isArray(resolvedParams.asistente)
     ? resolvedParams.asistente[0]
@@ -20,10 +19,10 @@ export default async function NuevaCuentaPage({ searchParams }: { searchParams?:
 
   const { supabase } = await requireRoles(['admin', 'caja'])
   const { data: asistentes } = await supabase
-    ?.from('asistentes')
+    .from('asistentes')
     .select('id, nombre, codigo')
     .eq('activo', true)
-    .order('nombre') || { data: [] }
+    .order('nombre')
 
   return (
     <div className="space-y-6">

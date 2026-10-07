@@ -37,7 +37,7 @@ export default async function AsistentesPage({ searchParams }: { searchParams: P
     .limit(1, { referencedTable: 'coach_sesiones' })
 
   const asistentes = (rawAsistentes || [])
-    .map((a: any) => {
+    .map((a) => {
       const { ultima_actividad, activo } = estadoPorActividad(a)
       return {
         id: a.id,
@@ -46,12 +46,13 @@ export default async function AsistentesPage({ searchParams }: { searchParams: P
         correo: a.correo ?? null,
         telefono: a.telefono ?? null,
         codigo: a.codigo ?? null,
-        activo: a.activo,
+        // Sin dato se toma activo, que es el valor por defecto de la base.
+        activo: a.activo ?? true,
         activo_visible: activo,
         ultima_actividad,
       }
     })
-    .sort((a: any, b: any) => {
+    .sort((a, b) => {
       const valA = a.codigo ? parseInt(a.codigo, 10) : null
       const valB = b.codigo ? parseInt(b.codigo, 10) : null
 

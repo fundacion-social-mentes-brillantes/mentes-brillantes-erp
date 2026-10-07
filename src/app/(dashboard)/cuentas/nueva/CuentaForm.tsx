@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import { SearchableAsistenteSelect } from '@/components/SearchableAsistenteSelect'
+import type { AsistenteOpcion } from '@/components/SearchableAsistenteSelect'
 
 type ModalidadCobro = 'normal' | 'cortesia' | 'cubierto_por_otro_proceso'
 
@@ -33,7 +34,7 @@ const parsePositiveMoney = (value: string) => {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
-export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asistentes: any[], asistenteInicial?: string, returnTo?: string }) {
+export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asistentes: AsistenteOpcion[], asistenteInicial?: string, returnTo?: string }) {
   const [state, formAction, isPending] = useActionState<ActionState, FormData>(saveCuenta, null)
   const [tipo, setTipo] = useState<'general' | 'coach'>('general')
   const [modalidadCobro, setModalidadCobro] = useState<ModalidadCobro>('normal')

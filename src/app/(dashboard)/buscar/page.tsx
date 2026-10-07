@@ -2,32 +2,29 @@ import Link from "next/link";
 import { textoParaFiltro } from "@/lib/supabase/filtros";
 import { redirect } from "next/navigation";
 import { AuthzError, requireRoles, type Role } from "@/lib/utils/authz";
+import type { DbClient } from "@/lib/supabase/types";
 
 export const dynamic = "force-dynamic";
 
-type SearchResult = {
-  asistentes: any[];
-  cuentas: any[];
-  movimientos: any[];
-};
-
-async function runSearch(q: string, role: Role, supabase: any): Promise<SearchResult> {
-  if (!supabase) return { asistentes: [], cuentas: [], movimientos: [] };
+async function runSearch(q: string, role: Role, supabase: DbClient) {
 
   // Limpio: ver lib/supabase/filtros.ts (las comas y parentesis abrian filtros nuevos).
   const term = `%${textoParaFiltro(q)}%`;
   const isAdmin = role === "admin";
-  const asistentesFields = isAdmin ? "id, nombre, codigo, cedula" : "id, nombre, codigo";
   const asistentesFilter = isAdmin
     ? `nombre.ilike.${term},codigo.ilike.${term},cedula.ilike.${term}`
     : `nombre.ilike.${term},codigo.ilike.${term}`;
 
   const [{ data: asistentes }, { data: cuentas }, { data: movimientos }] = await Promise.all([
-    supabase
-      .from("asistentes")
-      .select(asistentesFields)
-      .or(asistentesFilter)
-      .limit(10),
+    // La cedula solo la ve el admin: para caja ni se pide.
+    isAdmin
+      ? supabase.from("asistentes").select("id, nombre, codigo, cedula").or(asistentesFilter).limit(10)
+      : supabase
+          .from("asistentes")
+          .select("id, nombre, codigo")
+          .or(asistentesFilter)
+          .limit(10)
+          .then((r) => ({ ...r, data: r.data?.map((a) => ({ ...a, cedula: null as string | null })) ?? null })),
     supabase
       .from("cuentas_por_cobrar")
       .select("id, concepto, valor_total, estado, asistentes(nombre)")
@@ -47,9 +44,9 @@ async function runSearch(q: string, role: Role, supabase: any): Promise<SearchRe
   };
 }
 
-export default async function BuscarPage({ searchParams }: { searchParams?: { q?: string } }) {
+export default async function BuscarPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   let perfil: { rol: Role };
-  let supabase: any;
+  let supabase: DbClient;
 
   try {
     const auth = await requireRoles(["admin", "caja"]);
@@ -62,7 +59,9 @@ export default async function BuscarPage({ searchParams }: { searchParams?: { q?
     throw error;
   }
 
-  const q = searchParams?.q?.trim();
+  // En Next 16 los parametros de busqueda llegan siempre como promesa; leerlos
+  // directo daba undefined y la busqueda salia vacia siempre.
+  const q = (await searchParams)?.q?.trim();
   if (!q) {
     return (
       <div className="max-w-5xl mx-auto py-10 space-y-4">
@@ -112,7 +111,7 @@ export default async function BuscarPage({ searchParams }: { searchParams?: { q?
         <section className="space-y-2">
           <h2 className="text-lg font-semibold text-[rgb(var(--text-primary))]">Cuentas por cobrar</h2>
           <div className="divide-y divide-[rgb(var(--border))] rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] overflow-hidden">
-            {results.cuentas.map((c: any) => (
+            {results.cuentas.map((c) => (
               <Link key={c.id} href={`/cuentas/${c.id}`} prefetch={false} className="block px-4 py-3 hover:bg-[rgb(var(--surface-2))] transition-colors">
                 <div className="flex items-center justify-between">
                   <p className="font-medium text-[rgb(var(--text-primary))]">{c.concepto}</p>
@@ -131,7 +130,7 @@ export default async function BuscarPage({ searchParams }: { searchParams?: { q?
         <section className="space-y-2">
           <h2 className="text-lg font-semibold text-[rgb(var(--text-primary))]">Movimientos</h2>
           <div className="divide-y divide-[rgb(var(--border))] rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] overflow-hidden">
-            {results.movimientos.map((m: any) => (
+            {results.movimientos.map((m) => (
               <div key={m.id} className="px-4 py-3">
                 <p className="font-medium text-[rgb(var(--text-primary))]">Abono ${Number(m.monto).toLocaleString()}</p>
                 <p className="text-xs text-[rgb(var(--text-muted))]">

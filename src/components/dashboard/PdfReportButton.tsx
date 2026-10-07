@@ -89,11 +89,11 @@ export function PdfReportButton({ displayMonthName }: { displayMonthName: string
         const computedStyle = window.getComputedStyle(el)
         
         colorProperties.forEach(prop => {
-          const value = computedStyle[prop as any]
+          const value = computedStyle[prop]
           // Si el valor computado usa funciones modernas que html2canvas no soporta
           if (value && (value.includes('oklch') || value.includes('lab') || value.includes('color(') || value.includes('oklab'))) {
             // Sobrescribir inline style con un fallback seguro RGB/HEX
-            (el as HTMLElement).style[prop as any] = safeFallbackColors[prop] || '#000000'
+            (el as HTMLElement).style[prop] = safeFallbackColors[prop] || '#000000'
           }
         })
       })

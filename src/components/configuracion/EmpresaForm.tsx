@@ -1,5 +1,6 @@
 'use client'
 
+import { mensajeDeError } from '@/lib/utils/errores'
 import { useState } from 'react'
 import { Save, Lock } from 'lucide-react'
 import { actualizarConfiguracionEmpresa } from '@/app/(dashboard)/configuracion/actions'
@@ -27,8 +28,8 @@ export function EmpresaForm({ initialData, isAdmin }: { initialData: EmpresaData
     try {
       await actualizarConfiguracionEmpresa(formData)
       setMessage({ type: 'success', text: 'Configuración guardada correctamente.' })
-    } catch (error: any) {
-      setMessage({ type: 'error', text: error.message || 'Error al guardar la configuración.' })
+    } catch (error) {
+      setMessage({ type: 'error', text: mensajeDeError(error, 'Error al guardar la configuración.') })
     } finally {
       setIsPending(false)
     }

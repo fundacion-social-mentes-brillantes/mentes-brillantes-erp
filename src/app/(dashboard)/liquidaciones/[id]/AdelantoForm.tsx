@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { MoneyInput } from '@/components/ui/money-input'
 import { AlertCircle, CheckCircle2 } from 'lucide-react'
+import type { Tables } from '@/lib/supabase/types'
 
-export function AdelantoForm({ periodoId, socios }: { periodoId: string, socios: any[] }) {
+export function AdelantoForm({ periodoId, socios }: { periodoId: string, socios: Array<Pick<Tables<'socios'>, 'id' | 'nombre' | 'porcentaje_participacion'>> }) {
   const actionWithId = saveAdelanto.bind(null, periodoId)
   const [state, formAction, isPending] = useActionState(actionWithId, null)
   const formRef = useRef<HTMLFormElement>(null)

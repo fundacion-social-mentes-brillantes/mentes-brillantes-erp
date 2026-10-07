@@ -1,14 +1,15 @@
 'use client'
 
+import { mensajeDeError } from '@/lib/utils/errores'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { AlertCircle, CheckCircle2, Upload, Info } from 'lucide-react'
-import { procesarMigracion } from './actions'
+import { procesarMigracion, type FilaCsv } from './actions'
 import Papa from 'papaparse'
 
 export function MigracionForm() {
   const [isPending, setIsPending] = useState(false)
-  const [result, setResult] = useState<{ success?: boolean, message?: string, errors?: string[], stats?: any } | null>(null)
+  const [result, setResult] = useState<{ success?: boolean, message?: string, errors?: string[], stats?: { total: number; inserted: number; ignored: number; errors: number } } | null>(null)
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -29,12 +30,12 @@ export function MigracionForm() {
       const text = await file.text()
       const cleanText = text.replace(/^\uFEFF/, '')
 
-      Papa.parse(cleanText, {
+      Papa.parse<FilaCsv>(cleanText, {
         header: true,
         skipEmptyLines: 'greedy',
         transformHeader: (header) => header.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_'),
         complete: async (results) => {
-          const rows = results.data.filter((row: any) => row && Object.keys(row).length >= 3)
+          const rows = results.data.filter((row) => row && Object.keys(row).length >= 3)
           
           if (rows.length === 0) {
             setResult({ success: false, message: 'No se encontraron datos válidos en el CSV', errors: results.errors.map(e => e.message) })
@@ -45,19 +46,19 @@ export function MigracionForm() {
           try {
             const res = await procesarMigracion(tipo, rows)
             setResult(res)
-          } catch (error: any) {
-            setResult({ success: false, message: error.message || 'Error desconocido' })
+          } catch (error) {
+            setResult({ success: false, message: mensajeDeError(error, 'Error desconocido') })
           } finally {
             setIsPending(false)
           }
         },
-        error: (error: any) => {
+        error: (error: Error) => {
           setResult({ success: false, message: 'Error al leer el CSV', errors: [error.message] })
           setIsPending(false)
         }
       })
-    } catch (error: any) {
-      setResult({ success: false, message: error.message || 'Error al procesar el archivo' })
+    } catch (error) {
+      setResult({ success: false, message: mensajeDeError(error, 'Error al procesar el archivo') })
       setIsPending(false)
     }
   }

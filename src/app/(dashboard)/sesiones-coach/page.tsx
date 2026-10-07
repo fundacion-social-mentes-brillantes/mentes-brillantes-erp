@@ -1,3 +1,4 @@
+import { filtrarPagosValidos, sumarMontos, toSafeNumber } from '@/lib/utils/contable'
 import { redirect } from 'next/navigation'
 import { getCurrentProfile } from '@/lib/utils/authz'
 import { resumenCoach } from '@/lib/utils/coach'
@@ -24,45 +25,61 @@ export default async function SesionesCoachPage() {
     )
     .order('creado_en', { ascending: true })
 
-  /** Un pago anulado no cuenta. Se marca por partida doble: estado y nota. */
-  const pendienteDe = (cuenta: any): number => {
+  type Paquete = NonNullable<typeof paquetes>[number]
+  type CuentaDelPaquete = NonNullable<Paquete['cuentas_por_cobrar']>
+
+  /** Lo que falta por pagar; un pago anulado (por estado o por nota) no cuenta. */
+  const pendienteDe = (cuenta: CuentaDelPaquete | null | undefined): number => {
     if (!cuenta) return 0
-    const pagado = (cuenta.pagos_abonos || [])
-      .filter((p: any) => {
-        const anulado =
-          String(p?.estado || '').toLowerCase() === 'anulado' ||
-          String(p?.notas || '').toUpperCase().includes('[ANULADO]')
-        return !anulado
-      })
-      .reduce((total: number, p: any) => total + Number(p?.monto || 0), 0)
-    return Math.max(0, Number(cuenta.valor_total || 0) - pagado)
+    const pagado = sumarMontos(filtrarPagosValidos(cuenta.pagos_abonos || []))
+    return Math.max(0, toSafeNumber(cuenta.valor_total) - pagado)
   }
 
-  const porAsistente = new Map<string, any>()
+  type SesionDeFila = { id: string; fecha: string; notas: string | null; paqueteId: string; paqueteConcepto: string | null }
+  type PaqueteDeFila = {
+    id: string
+    sesiones_compradas: number
+    creado_en: string | null
+    coach_sesiones: Paquete['coach_sesiones']
+    cuentaId: string | null
+    concepto: string | null
+    compradoEl: string | null
+    valorTotal: number
+    pendiente: number
+  }
+  type FilaAsistente = {
+    asistenteId: string
+    nombre: string
+    codigo: string | null
+    cedula: string | null
+    paquetes: PaqueteDeFila[]
+    sesiones: SesionDeFila[]
+  }
+
+  const porAsistente = new Map<string, FilaAsistente>()
   for (const p of paquetes || []) {
-    const aid = (p as any).asistente_id
+    const aid = p.asistente_id
     if (!aid) continue
-    if (!porAsistente.has(aid)) {
-      const asis = Array.isArray((p as any).asistentes) ? (p as any).asistentes[0] : (p as any).asistentes
-      porAsistente.set(aid, {
+    let row = porAsistente.get(aid)
+    if (!row) {
+      const asis = p.asistentes
+      row = {
         asistenteId: aid,
         nombre: asis?.nombre || 'Sin nombre',
         codigo: asis?.codigo || null,
         cedula: asis?.cedula || null,
         paquetes: [],
-        sesiones: [] as any[],
-      })
+        sesiones: [],
+      }
+      porAsistente.set(aid, row)
     }
-    const row = porAsistente.get(aid)
-    const sesionesPaquete = (p as any).coach_sesiones || []
-    const cuenta = Array.isArray((p as any).cuentas_por_cobrar)
-      ? (p as any).cuentas_por_cobrar[0]
-      : (p as any).cuentas_por_cobrar
+    const sesionesPaquete = p.coach_sesiones || []
+    const cuenta = p.cuentas_por_cobrar
 
     row.paquetes.push({
-      id: (p as any).id,
-      sesiones_compradas: (p as any).sesiones_compradas,
-      creado_en: (p as any).creado_en,
+      id: p.id,
+      sesiones_compradas: p.sesiones_compradas,
+      creado_en: p.creado_en,
       coach_sesiones: sesionesPaquete,
       // Lo que hace falta para poder ver cada compra por separado.
       cuentaId: cuenta?.id ?? null,
@@ -77,7 +94,7 @@ export default async function SesionesCoachPage() {
         id: s.id,
         fecha: s.fecha,
         notas: s.notas,
-        paqueteId: (p as any).id,
+        paqueteId: p.id,
         paqueteConcepto: cuenta?.concepto ?? null,
       })
     }
@@ -91,7 +108,7 @@ export default async function SesionesCoachPage() {
       // Cada compra por separado, de la mas nueva a la mas vieja, con sus
       // sesiones colgando. Es lo que faltaba para no ver todo revuelto.
       const compras = row.paquetes
-        .map((p: any) => ({
+        .map((p) => ({
           id: p.id,
           cuentaId: p.cuentaId,
           concepto: p.concepto,
@@ -101,11 +118,11 @@ export default async function SesionesCoachPage() {
           compradas: Number(p.sesiones_compradas || 0),
           usadas: (p.coach_sesiones || []).length,
           restantes: Math.max(0, Number(p.sesiones_compradas || 0) - (p.coach_sesiones || []).length),
-          sesiones: [...(p.coach_sesiones || [])].sort((a: any, b: any) =>
+          sesiones: [...(p.coach_sesiones || [])].sort((a, b) =>
             a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0
           ),
         }))
-        .sort((a: any, b: any) => {
+        .sort((a, b) => {
           const fa = a.compradoEl || ''
           const fb = b.compradoEl || ''
           return fa < fb ? 1 : fa > fb ? -1 : 0

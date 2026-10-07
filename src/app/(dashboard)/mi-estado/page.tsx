@@ -27,7 +27,7 @@ export default async function MiEstadoPage() {
     .order('fecha_emision', { ascending: false });
 
   const resumen = (cuentas ?? []).reduce(
-    (acc, cuenta: any) => {
+    (acc, cuenta) => {
       const pagosValidos = filtrarPagosValidos(cuenta.pagos_abonos ?? []);
       const abonado = sumarMontos(pagosValidos);
       acc.totalAbonado += abonado;
@@ -65,7 +65,7 @@ export default async function MiEstadoPage() {
           <span className="text-sm text-[rgb(var(--text-muted))]">{(cuentas ?? []).length} registros</span>
         </div>
         <div className="divide-y divide-[rgb(var(--border))]">
-          {(cuentas ?? []).map((cuenta: any) => {
+          {(cuentas ?? []).map((cuenta) => {
             const pagosValidos = filtrarPagosValidos(cuenta.pagos_abonos ?? []);
             const abonado = sumarMontos(pagosValidos);
             const pendiente = Math.max(0, Number(cuenta.valor_total) - abonado);

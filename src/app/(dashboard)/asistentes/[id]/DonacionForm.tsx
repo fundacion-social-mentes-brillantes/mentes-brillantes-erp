@@ -22,7 +22,7 @@ type DonacionFormProps = {
 }
 
 export function DonacionForm({ asistenteId, disabled = false }: DonacionFormProps) {
-  const [state, action] = useFormState(async (_prev: any, formData: FormData) => {
+  const [state, action] = useFormState(async (_prev: unknown, formData: FormData) => {
     return await crearDonacion(asistenteId, formData)
   }, null)
 

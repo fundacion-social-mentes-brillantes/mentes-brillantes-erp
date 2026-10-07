@@ -84,7 +84,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
   // Misma regla de conteo que /sesiones-coach (helper compartido resumenCoach).
   const { compradas: sesionesCompradas, realizadas: sesionesRealizadas, restantes: sesionesRestantes } =
     resumenCoach(paquetesCoach || [])
-  const sesionesLista = (sesionesCoach || []).map((s: any) => ({
+  const sesionesLista = (sesionesCoach || []).map((s) => ({
     id: s.id,
     fecha: s.fecha,
     notas: s.notas,
@@ -98,7 +98,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
 
   // Cada compra por separado, de la mas nueva a la mas vieja, con sus sesiones.
   const comprasCoach = [...(paquetesCoach || [])]
-    .map((p: any) => {
+    .map((p) => {
       const cuenta = Array.isArray(p.cuentas_por_cobrar) ? p.cuentas_por_cobrar[0] : p.cuentas_por_cobrar
       const usadas = (p.coach_sesiones || []).length
       const compradasPaq = toSafeNumber(p.sesiones_compradas)
@@ -111,7 +111,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
         compradas: compradasPaq,
         usadas,
         restantes: Math.max(0, compradasPaq - usadas),
-        sesiones: [...(p.coach_sesiones || [])].sort((a: any, b: any) =>
+        sesiones: [...(p.coach_sesiones || [])].sort((a, b) =>
           a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0
         ),
       }
@@ -147,7 +147,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
 
   const todosLosAbonos = (cuentas || [])
     .flatMap((cuenta) =>
-      (cuenta.pagos_abonos || []).map((pago: any) => ({
+      (cuenta.pagos_abonos || []).map((pago) => ({
         ...pago,
         concepto_cuenta: cuenta.concepto,
         cuenta_id: cuenta.id,
@@ -384,7 +384,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                       </p>
                       {compra.sesiones.length > 0 && (
                         <p className="mt-1 text-[11px] text-zinc-600">
-                          {compra.sesiones.map((s: any) => formatearFechaIso(s.fecha)).join(" · ")}
+                          {compra.sesiones.map((s) => formatearFechaIso(s.fecha)).join(" · ")}
                         </p>
                       )}
                     </div>
@@ -468,7 +468,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
             <div className="p-5 space-y-3">
               {todosLosAbonos.length ? (
                 <div className="h-[420px] overflow-y-auto space-y-3 pr-1">
-                  {todosLosAbonos.map((pago: any) => (
+                  {todosLosAbonos.map((pago) => (
                     <div key={pago.id} className="flex items-center justify-between rounded-lg border border-zinc-200 p-3 bg-white">
                       <div>
                         <p className="font-medium text-zinc-900 text-sm">${toSafeNumber(pago.monto).toLocaleString("es-CO")}</p>

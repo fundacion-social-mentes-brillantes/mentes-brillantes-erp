@@ -6,8 +6,9 @@ import { AlertCircle } from 'lucide-react'
 import { crearVentaExterna, editarVentaExterna } from './actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import type { Tables } from '@/lib/supabase/types'
 
-export function VentaExternaForm({ venta }: { venta?: any }) {
+export function VentaExternaForm({ venta }: { venta?: Tables<'ventas_externas'> | null }) {
   const action = venta?.id ? editarVentaExterna.bind(null, venta.id) : crearVentaExterna
   const [state, formAction, isPending] = useActionState(action, null)
 
@@ -34,7 +35,7 @@ export function VentaExternaForm({ venta }: { venta?: any }) {
 
         <div className="space-y-2">
           <label className="text-sm font-medium text-[rgb(var(--text-primary))]">Comprador</label>
-          <Input name="comprador_nombre" defaultValue={venta?.comprador_nombre} disabled={isPending} />
+          <Input name="comprador_nombre" defaultValue={venta?.comprador_nombre ?? ''} disabled={isPending} />
         </div>
 
         <div className="space-y-2">
@@ -66,7 +67,7 @@ export function VentaExternaForm({ venta }: { venta?: any }) {
 
         <div className="space-y-2 md:col-span-2">
           <label className="text-sm font-medium text-[rgb(var(--text-primary))]">Notas</label>
-          <Input name="notas" defaultValue={venta?.notas} disabled={isPending} />
+          <Input name="notas" defaultValue={venta?.notas ?? ''} disabled={isPending} />
         </div>
       </div>
 

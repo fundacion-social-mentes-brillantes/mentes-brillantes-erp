@@ -46,7 +46,7 @@ export function AsistenteIAClient() {
     setActiveConversationId(data.activeConversationId || null)
     setMessages(
       Array.isArray(data.messages) && data.messages.length
-        ? data.messages.map((message: any) => ({ role: message.role, content: message.content }))
+        ? data.messages.map((message: Message) => ({ role: message.role, content: message.content }))
         : [initialMessage]
     )
     setSelectionOptions([])

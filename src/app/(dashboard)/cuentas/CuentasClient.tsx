@@ -26,7 +26,7 @@ type Cuenta = {
   fecha_emision: string
   estado: string
   valor_total: number
-  asistente_id: string
+  asistente_id: string | null
   asistente_nombre: string | null
   abonos: Abono[]
   saldos: {
@@ -158,7 +158,7 @@ export function CuentasClient({
                     className="hover:bg-[rgb(var(--surface-2))] cursor-pointer transition-colors align-top"
                   >
                     <td className="px-6 py-4 font-medium text-[rgb(var(--text-primary))] break-words">
-                      {cuenta.asistente_nombre ? (
+                      {cuenta.asistente_id && cuenta.asistente_nombre ? (
                         <Link
                           href={`/asistentes/${cuenta.asistente_id}`} prefetch={false}
                           onClick={(e) => e.stopPropagation()}
@@ -222,7 +222,7 @@ export function CuentasClient({
             >
               <div className="flex justify-between items-start gap-3">
                 <div className="min-w-0">
-                  {cuenta.asistente_nombre ? (
+                  {cuenta.asistente_id && cuenta.asistente_nombre ? (
                     <Link
                       href={`/asistentes/${cuenta.asistente_id}`} prefetch={false}
                       onClick={(e) => e.stopPropagation()}
@@ -300,7 +300,7 @@ export function CuentasClient({
               <div className="grid grid-cols-2 gap-4 bg-[rgb(var(--surface-2))] p-4 rounded-xl border border-[rgb(var(--border))]">
                 <div>
                   <p className="text-xs text-[rgb(var(--text-muted))] font-medium mb-1">Asistente</p>
-                  {selectedCuenta.asistente_nombre ? (
+                  {selectedCuenta.asistente_id && selectedCuenta.asistente_nombre ? (
                     <>
                       <p className="font-medium text-[rgb(var(--text-primary))]">{selectedCuenta.asistente_nombre}</p>
                       <Link

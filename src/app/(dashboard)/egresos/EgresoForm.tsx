@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { AlertCircle } from 'lucide-react'
 import Link from 'next/link'
+import type { Tables } from '@/lib/supabase/types'
 
-export function EgresoForm({ egreso }: { egreso?: any }) {
+export function EgresoForm({ egreso }: { egreso?: Tables<'egresos'> | null }) {
   const actionWithId = saveEgreso.bind(null, egreso?.id || null)
   const [state, formAction, isPending] = useActionState(actionWithId, null)
 
@@ -98,7 +99,7 @@ export function EgresoForm({ egreso }: { egreso?: any }) {
           <label className="text-sm font-medium text-[rgb(var(--text-primary))]">Notas (Opcional)</label>
           <Input
             name="notas"
-            defaultValue={egreso?.notas}
+            defaultValue={egreso?.notas ?? ''}
             placeholder="Referencia o detalle adicional"
             disabled={isPending}
             className="bg-[rgb(var(--input-bg))] text-[rgb(var(--text-primary))]"
