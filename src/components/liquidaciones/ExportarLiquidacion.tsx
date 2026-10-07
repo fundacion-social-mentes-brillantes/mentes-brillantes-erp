@@ -5,6 +5,7 @@ import { FileText, Image as ImageIcon } from 'lucide-react'
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
 import { createClient } from '@/lib/supabase/client'
+import { pesos } from '@/lib/utils/pesos'
 
 type SocioData = {
   id: string
@@ -45,13 +46,7 @@ export function ExportarLiquidacion({ empresa: initialEmpresa, periodo, financie
   const printRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      maximumFractionDigits: 0
-    }).format(amount)
-  }
+  const formatCurrency = (amount: number) => pesos(amount)
 
   const generateImage = async (type: 'pdf' | 'png') => {
     if (!printRef.current || !supabase) return
@@ -211,7 +206,8 @@ export function ExportarLiquidacion({ empresa: initialEmpresa, periodo, financie
                     <td className="py-3 px-4 font-medium" style={{ color: '#1f2937', border: '1px solid #e5e7eb' }}>{socio.nombre}</td>
                     <td className="py-3 px-4 text-center" style={{ color: '#4b5563', border: '1px solid #e5e7eb' }}>{socio.porcentaje}%</td>
                     <td className="py-3 px-4 text-right" style={{ color: '#1f2937', border: '1px solid #e5e7eb' }}>{formatCurrency(socio.corresponde)}</td>
-                    <td className="py-3 px-4 text-right" style={{ color: '#dc2626', border: '1px solid #e5e7eb' }}>-{formatCurrency(socio.adelantos)}</td>
+                    {/* Sin adelantos se ve "$ 0" en gris, no "-$ 0" en rojo. */}
+                    <td className="py-3 px-4 text-right" style={{ color: socio.adelantos > 0 ? '#dc2626' : '#6b7280', border: '1px solid #e5e7eb' }}>{formatCurrency(-socio.adelantos)}</td>
                     <td className="py-3 px-4 text-right font-bold" style={{ color: '#111827', border: '1px solid #d1d5db', backgroundColor: '#f3f4f6' }}>
                       {formatCurrency(socio.neto)}
                     </td>

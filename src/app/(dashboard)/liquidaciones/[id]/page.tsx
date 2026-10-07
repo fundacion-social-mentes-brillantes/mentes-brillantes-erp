@@ -543,7 +543,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                           <td className="py-4 font-medium text-zinc-900">{socio.nombre}</td>
                           <td className="py-4 text-right text-zinc-500">{porcentaje}%</td>
                           <td className="py-4 text-right text-zinc-900">{pesos(corresponde)}</td>
-                          <td className="py-4 text-right text-amber-600">{pesos(-(totalAdelantos))}</td>
+                          <td className={`py-4 text-right ${totalAdelantos > 0 ? 'text-amber-600' : 'text-zinc-400'}`}>{pesos(-(totalAdelantos))}</td>
                           <td className={`py-4 text-right font-bold ${neto >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                             {pesos(neto)}
                           </td>
@@ -557,7 +557,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                         <td className="py-4 font-medium text-zinc-900">{liq.socios?.nombre}</td>
                         <td className="py-4 text-right text-zinc-500">{Number(liq.porcentaje_aplicado)}%</td>
                         <td className="py-4 text-right text-zinc-900">{pesos(Number(liq.valor_correspondiente))}</td>
-                        <td className="py-4 text-right text-amber-600">{pesos(-(Number(liq.adelantos_descontados)))}</td>
+                        <td className={`py-4 text-right ${Number(liq.adelantos_descontados) > 0 ? 'text-amber-600' : 'text-zinc-400'}`}>{pesos(-(Number(liq.adelantos_descontados)))}</td>
                         <td className={`py-4 text-right font-bold ${Number(liq.valor_neto_pagar) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                           {pesos(Number(liq.valor_neto_pagar))}
                         </td>
