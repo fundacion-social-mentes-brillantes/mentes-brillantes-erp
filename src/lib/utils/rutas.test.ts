@@ -26,4 +26,8 @@ describe("rutaInternaSegura", () => {
     expect(rutaInternaSegura(undefined)).toBeNull()
     expect(rutaInternaSegura(42)).toBeNull()
   })
+  it('un destino que empieza con @ no puede sacar a la persona del ERP (regreso de Google)', () => {
+    expect(rutaInternaSegura('@otro.com')).toBeNull()
+    expect(rutaInternaSegura('https://otro.com')).toBeNull()
+  })
 })

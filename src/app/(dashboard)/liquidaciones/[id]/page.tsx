@@ -13,6 +13,7 @@ import { agruparAdelantosConDevoluciones, agruparAdelantosPorSocio, agruparPorMe
 import { fechaHoyBogota } from '@/lib/utils/fechas'
 import { esAnuladoCompleto, filtrarIngresosOperativos, filtrarIngresosRealesSaldoAFavor, sumarMontos } from '@/lib/utils/contable'
 import type { PagoRecord } from '@/lib/utils/contable'
+import { pesos } from '@/lib/utils/pesos'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -316,7 +317,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
           </div>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <ExportarLiquidacion 
             empresa={empresa}
             periodo={{
@@ -344,23 +345,23 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
       <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
         <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
           <p className="text-sm text-zinc-500">Ingresos cobrados (cartera)</p>
-          <p className="text-2xl font-semibold text-emerald-600 mt-2">${ingresos_cobrados.toLocaleString()}</p>
+          <p className="text-2xl font-semibold text-emerald-600 mt-2">{pesos(ingresos_cobrados)}</p>
         </div>
         <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
           <p className="text-sm text-zinc-500">Donaciones</p>
-          <p className="text-2xl font-semibold text-teal-600 mt-2">${donaciones_periodo.toLocaleString()}</p>
+          <p className="text-2xl font-semibold text-teal-600 mt-2">{pesos(donaciones_periodo)}</p>
         </div>
         <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
           <p className="text-sm text-zinc-500">Ingresos totales</p>
-          <p className="text-2xl font-semibold text-emerald-700 mt-2">${ingresos_operativos.toLocaleString()}</p>
+          <p className="text-2xl font-semibold text-emerald-700 mt-2">{pesos(ingresos_operativos)}</p>
         </div>
         <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
           <p className="text-sm text-zinc-500">Egresos del Período</p>
-          <p className="text-2xl font-semibold text-red-600 mt-2">${egresos_periodo.toLocaleString()}</p>
+          <p className="text-2xl font-semibold text-red-600 mt-2">{pesos(egresos_periodo)}</p>
         </div>
         <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
           <p className="text-sm text-zinc-500">Utilidad Neta a Repartir</p>
-          <p className="text-2xl font-bold text-zinc-900 mt-2">${utilidad_neta.toLocaleString()}</p>
+          <p className="text-2xl font-bold text-zinc-900 mt-2">{pesos(utilidad_neta)}</p>
         </div>
       </div>
 
@@ -444,7 +445,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                 <div key={adelanto.id} className="p-4 hover:bg-zinc-50/50">
                   <div className="flex justify-between items-start mb-1">
                     <p className="font-medium text-zinc-900 text-sm">{adelanto.socios?.nombre}</p>
-                    <p className="font-semibold text-amber-600 text-sm">${entregado.toLocaleString()}</p>
+                    <p className="font-semibold text-amber-600 text-sm">{pesos(entregado)}</p>
                   </div>
                   <div className="flex justify-between items-center text-xs text-zinc-500">
                     <p>{formatearFechaIso(adelanto.fecha)}</p>
@@ -460,7 +461,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                     <div className="mt-2 rounded-lg bg-emerald-50 border border-emerald-200 p-2 space-y-1">
                       <div className="flex justify-between text-xs font-medium text-emerald-700">
                         <span>Devuelto</span>
-                        <span>-${devuelto.toLocaleString()}</span>
+                        <span>{pesos(-(devuelto))}</span>
                       </div>
                       {devoluciones.map((devolucion) => (
                         <div key={devolucion.id} className="flex justify-between text-[11px] text-emerald-700/80">
@@ -468,12 +469,12 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                             {formatearFechaIso(devolucion.fecha)} · {devolucion.metodo_pago || 'otro'}
                             {devolucion.notas ? ` · ${devolucion.notas}` : ''}
                           </span>
-                          <span>${Math.abs(Number(devolucion.monto)).toLocaleString()}</span>
+                          <span>{pesos(Math.abs(Number(devolucion.monto)))}</span>
                         </div>
                       ))}
                       <div className="flex justify-between text-xs font-semibold text-zinc-700 pt-1 border-t border-emerald-200">
                         <span>{pendiente > 0 ? 'Queda del adelanto' : 'Devuelto completo'}</span>
-                        <span>${pendiente.toLocaleString()}</span>
+                        <span>{pesos(pendiente)}</span>
                       </div>
                     </div>
                   )}
@@ -489,7 +490,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                   <div className="flex justify-between items-start mb-1">
                     <p className="font-medium text-zinc-900 text-sm">{devolucion.socios?.nombre}</p>
                     <p className="font-semibold text-emerald-700 text-sm">
-                      -${Math.abs(Number(devolucion.monto)).toLocaleString()}
+                      {pesos(-(Math.abs(Number(devolucion.monto))))}
                     </p>
                   </div>
                   <p className="text-xs text-zinc-500">
@@ -541,10 +542,10 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                         <tr key={socio.id}>
                           <td className="py-4 font-medium text-zinc-900">{socio.nombre}</td>
                           <td className="py-4 text-right text-zinc-500">{porcentaje}%</td>
-                          <td className="py-4 text-right text-zinc-900">${corresponde.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
-                          <td className="py-4 text-right text-amber-600">-${totalAdelantos.toLocaleString()}</td>
+                          <td className="py-4 text-right text-zinc-900">{pesos(corresponde)}</td>
+                          <td className="py-4 text-right text-amber-600">{pesos(-(totalAdelantos))}</td>
                           <td className={`py-4 text-right font-bold ${neto >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                            ${neto.toLocaleString(undefined, {maximumFractionDigits: 0})}
+                            {pesos(neto)}
                           </td>
                         </tr>
                       )
@@ -555,10 +556,10 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                       <tr key={liq.id}>
                         <td className="py-4 font-medium text-zinc-900">{liq.socios?.nombre}</td>
                         <td className="py-4 text-right text-zinc-500">{Number(liq.porcentaje_aplicado)}%</td>
-                        <td className="py-4 text-right text-zinc-900">${Number(liq.valor_correspondiente).toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
-                        <td className="py-4 text-right text-amber-600">-${Number(liq.adelantos_descontados).toLocaleString()}</td>
+                        <td className="py-4 text-right text-zinc-900">{pesos(Number(liq.valor_correspondiente))}</td>
+                        <td className="py-4 text-right text-amber-600">{pesos(-(Number(liq.adelantos_descontados)))}</td>
                         <td className={`py-4 text-right font-bold ${Number(liq.valor_neto_pagar) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                          ${Number(liq.valor_neto_pagar).toLocaleString(undefined, {maximumFractionDigits: 0})}
+                          {pesos(Number(liq.valor_neto_pagar))}
                         </td>
                       </tr>
                     ))

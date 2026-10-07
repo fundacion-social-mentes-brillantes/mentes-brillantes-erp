@@ -5,12 +5,14 @@ import { loginAction } from './actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { AlertCircle } from 'lucide-react'
+import { useConservarSiFalla } from '@/lib/hooks/use-conservar-si-falla'
 
 export function LoginForm() {
   const [state, formAction, isPending] = useActionState(loginAction, null)
+  const recordarFormulario = useConservarSiFalla(state)
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form onSubmitCapture={recordarFormulario} action={formAction} className="space-y-4">
       <div className="space-y-2">
         <label className="text-sm font-semibold text-[rgb(var(--text-primary))]" htmlFor="email">
           Correo electrónico

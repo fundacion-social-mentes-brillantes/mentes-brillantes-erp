@@ -2,6 +2,7 @@
 
 import { useFormState, useFormStatus } from 'react-dom'
 import { crearDonacion } from '../donacionesActions'
+import { useConservarSiFalla } from '@/lib/hooks/use-conservar-si-falla'
 
 function SubmitButton({ disabled = false }: { disabled?: boolean }) {
   const { pending } = useFormStatus()
@@ -25,9 +26,10 @@ export function DonacionForm({ asistenteId, disabled = false }: DonacionFormProp
   const [state, action] = useFormState(async (_prev: unknown, formData: FormData) => {
     return await crearDonacion(asistenteId, formData)
   }, null)
+  const recordarFormulario = useConservarSiFalla(state)
 
   return (
-    <form action={action} className="space-y-3">
+    <form onSubmitCapture={recordarFormulario} action={action} className="space-y-3">
       <div className="space-y-1">
         <label className="text-xs font-medium text-[rgb(var(--text-muted))]">Monto (COP)</label>
         <input

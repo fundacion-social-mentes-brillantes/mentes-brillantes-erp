@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { Plus, Edit2 } from 'lucide-react'
 import { DeleteEgresoButton } from './DeleteEgresoButton'
 import { requireRoles } from '@/lib/utils/authz'
+import { pesos } from '@/lib/utils/pesos'
 
 // Se pide una pagina a la vez, igual que en Cuentas: la lista crecia para
 // siempre y se bajaba entera en cada carga.
@@ -71,7 +72,7 @@ export default async function EgresosPage({ searchParams }: Params) {
                   </td>
                   <td className="px-6 py-4 text-zinc-500 capitalize">{egreso.metodo_pago}</td>
                   <td className="px-6 py-4 text-right font-medium text-red-600">
-                    ${Number(egreso.monto).toLocaleString()}
+                    {pesos(Number(egreso.monto))}
                   </td>
                   <td className="px-6 py-4 text-right space-x-2">
                     <Link href={`/egresos/${egreso.id}/editar`} prefetch={false} className="inline-flex p-2 text-zinc-400 hover:text-blue-600 transition-colors rounded-md hover:bg-blue-50">
@@ -112,7 +113,7 @@ export default async function EgresosPage({ searchParams }: Params) {
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-zinc-500 capitalize">{egreso.metodo_pago}</p>
-                  <p className="font-bold text-red-600 text-lg">${Number(egreso.monto).toLocaleString()}</p>
+                  <p className="font-bold text-red-600 text-lg">{pesos(Number(egreso.monto))}</p>
                 </div>
               </div>
 

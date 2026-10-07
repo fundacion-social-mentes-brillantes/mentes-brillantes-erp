@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireRoles } from "@/lib/utils/authz";
 import { filtrarPagosValidos, sumarMontos } from "@/lib/utils/contable";
+import { pesos } from "@/lib/utils/pesos"
 
 export default async function MiEstadoPage() {
   const { supabase, perfil } = await requireRoles(['consulta']);
@@ -51,11 +52,11 @@ export default async function MiEstadoPage() {
         </div>
         <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] p-4 shadow-soft">
           <p className="text-sm text-[rgb(var(--text-muted))]">Total abonado</p>
-          <p className="text-lg font-semibold text-[rgb(var(--text-primary))]">${resumen.totalAbonado.toLocaleString()}</p>
+          <p className="text-lg font-semibold text-[rgb(var(--text-primary))]">{pesos(resumen.totalAbonado)}</p>
         </div>
         <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] p-4 shadow-soft">
           <p className="text-sm text-[rgb(var(--text-muted))]">Saldo pendiente</p>
-          <p className="text-lg font-semibold text-[rgb(var(--text-primary))]">${resumen.totalPendiente.toLocaleString()}</p>
+          <p className="text-lg font-semibold text-[rgb(var(--text-primary))]">{pesos(resumen.totalPendiente)}</p>
         </div>
       </div>
 
@@ -77,9 +78,9 @@ export default async function MiEstadoPage() {
                     <p className="text-sm text-[rgb(var(--text-muted))] capitalize">{cuenta.estado}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm text-[rgb(var(--text-muted))]">Valor: ${Number(cuenta.valor_total).toLocaleString()}</p>
-                    <p className="text-sm text-[rgb(var(--text-muted))]">Abonado: ${abonado.toLocaleString()}</p>
-                    <p className="text-sm font-semibold text-[rgb(var(--text-primary))]">Pendiente: ${pendiente.toLocaleString()}</p>
+                    <p className="text-sm text-[rgb(var(--text-muted))]">Valor: {pesos(Number(cuenta.valor_total))}</p>
+                    <p className="text-sm text-[rgb(var(--text-muted))]">Abonado: {pesos(abonado)}</p>
+                    <p className="text-sm font-semibold text-[rgb(var(--text-primary))]">Pendiente: {pesos(pendiente)}</p>
                   </div>
                 </div>
               </div>

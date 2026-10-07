@@ -8,6 +8,7 @@ import { AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import { SearchableAsistenteSelect } from '@/components/SearchableAsistenteSelect'
 import type { AsistenteOpcion } from '@/components/SearchableAsistenteSelect'
+import { useConservarSiFalla } from '@/lib/hooks/use-conservar-si-falla'
 
 type ModalidadCobro = 'normal' | 'cortesia' | 'cubierto_por_otro_proceso'
 
@@ -36,6 +37,7 @@ const parsePositiveMoney = (value: string) => {
 
 export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asistentes: AsistenteOpcion[], asistenteInicial?: string, returnTo?: string }) {
   const [state, formAction, isPending] = useActionState<ActionState, FormData>(saveCuenta, null)
+  const recordarFormulario = useConservarSiFalla(state)
   const [tipo, setTipo] = useState<'general' | 'coach'>('general')
   const [modalidadCobro, setModalidadCobro] = useState<ModalidadCobro>('normal')
   const [sesiones, setSesiones] = useState<number>(1)
@@ -82,7 +84,7 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
   }
 
   return (
-    <form action={formAction} className="space-y-6 w-full max-w-2xl bg-white p-4 md:p-6 rounded-xl border border-zinc-200 shadow-sm">
+    <form onSubmitCapture={recordarFormulario} action={formAction} className="space-y-6 w-full max-w-2xl bg-white p-4 md:p-6 rounded-xl border border-zinc-200 shadow-sm">
       {returnTo && <input type="hidden" name="return_to" value={returnTo} />}
       {state?.error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-red-600">

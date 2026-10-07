@@ -2,15 +2,17 @@
 
 import { useActionState, useState } from 'react'
 import { crearUsuario, UsuarioState } from './actions'
+import { useConservarSiFalla } from '@/lib/hooks/use-conservar-si-falla'
 
 type Asistente = { id: string; nombre: string }
 
 export function NewUsuarioForm({ asistentes }: { asistentes: Asistente[] }) {
   const [rol, setRol] = useState<'admin' | 'caja' | 'consulta'>('caja')
   const [state, formAction, pending] = useActionState<UsuarioState, FormData>(crearUsuario, null)
+  const recordarFormulario = useConservarSiFalla(state)
 
   return (
-    <form action={formAction} className="space-y-3 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] p-4 shadow-soft">
+    <form onSubmitCapture={recordarFormulario} action={formAction} className="space-y-3 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] p-4 shadow-soft">
       <div className="flex items-start justify-between gap-2 flex-wrap">
         <div>
           <h3 className="text-sm font-semibold text-[rgb(var(--text-primary))]">Nuevo usuario interno</h3>

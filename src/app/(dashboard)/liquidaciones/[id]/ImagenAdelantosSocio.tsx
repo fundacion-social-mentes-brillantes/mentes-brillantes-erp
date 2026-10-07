@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react'
 import html2canvas from 'html2canvas'
 import { ImageDown } from 'lucide-react'
+import { pesos } from '@/lib/utils/pesos'
 
 // Imagen para mandarle al socio cuando pregunta "¿yo cuánto debo?".
 //
@@ -25,7 +26,6 @@ export type SocioImagen = {
   adelantos: AdelantoImagen[]
 }
 
-const pesos = (n: number) => `$${Math.round(n).toLocaleString('es-CO')}`
 
 /** dd/mm/aaaa sin pasar por Date: 'YYYY-MM-DD' en UTC se corre un día. */
 function fechaCorta(iso: string): string {

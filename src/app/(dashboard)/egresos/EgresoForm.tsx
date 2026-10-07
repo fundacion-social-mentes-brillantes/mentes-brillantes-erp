@@ -7,16 +7,19 @@ import { Input } from '@/components/ui/input'
 import { AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import type { Tables } from '@/lib/supabase/types'
+import { useConservarSiFalla } from '@/lib/hooks/use-conservar-si-falla'
 
 export function EgresoForm({ egreso }: { egreso?: Tables<'egresos'> | null }) {
   const actionWithId = saveEgreso.bind(null, egreso?.id || null)
   const [state, formAction, isPending] = useActionState(actionWithId, null)
+  const recordarFormulario = useConservarSiFalla(state)
 
   const selectClass =
     'flex h-10 w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--input-bg))] px-3 py-2 text-sm text-[rgb(var(--text-primary))] ring-offset-[rgb(var(--surface-1))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--accent))] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:[color-scheme:dark]'
 
   return (
     <form
+      onSubmitCapture={recordarFormulario}
       action={formAction}
       className="space-y-6 max-w-2xl bg-[rgb(var(--surface-1))] p-6 rounded-xl border border-[rgb(var(--border))] shadow-sm text-[rgb(var(--text-primary))]"
     >

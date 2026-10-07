@@ -3,6 +3,7 @@
 import { useActionState, useState } from 'react'
 import { EllipsisVertical, Pencil, Ban, Trash2 } from 'lucide-react'
 import { anularDonacionForm, editarDonacionForm, eliminarDonacionForm } from '../donacionesActions'
+import { useConservarSiFalla } from '@/lib/hooks/use-conservar-si-falla'
 
 type Props = {
   donacion: {
@@ -26,7 +27,11 @@ export function DonacionActionsMenu({ donacion, isAdmin = true }: Props) {
 function MenuDonacion({ donacion }: { donacion: Props['donacion'] }) {
   const [open, setOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
+  // Solo se muestra el resultado de lo ultimo que se hizo (antes, tras anular
+  // seguia diciendo "Donacion actualizada").
+  const [ultima, setUltima] = useState<'editar' | 'anular' | null>(null)
   const [editState, editAction] = useActionState(editarDonacionForm, null)
+  const recordarFormulario = useConservarSiFalla(editState)
   const [anularState, anularAction] = useActionState(anularDonacionForm, null)
   const [eliminarState, eliminarAction] = useActionState(eliminarDonacionForm, null)
 
@@ -52,7 +57,7 @@ function MenuDonacion({ donacion }: { donacion: Props['donacion'] }) {
               >
                 <Pencil className="w-4 h-4" /> Editar
               </button>
-              <form action={anularAction} className="space-y-1">
+              <form action={anularAction} onSubmit={() => setUltima('anular')} className="space-y-1">
                 <input type="hidden" name="id" value={donacion.id} />
                 <input type="hidden" name="asistente_id" value={donacion.asistente_id} />
                 <button
@@ -82,7 +87,7 @@ function MenuDonacion({ donacion }: { donacion: Props['donacion'] }) {
               </form>
             </>
           ) : (
-            <form action={editAction} className="space-y-2" onSubmit={() => setIsEditing(false)}>
+            <form onSubmitCapture={recordarFormulario} action={editAction} className="space-y-2" onSubmit={() => { setIsEditing(false); setUltima('editar') }}>
               <input type="hidden" name="id" value={donacion.id} />
               <input type="hidden" name="asistente_id" value={donacion.asistente_id} />
               <div className="space-y-1">
@@ -145,7 +150,8 @@ function MenuDonacion({ donacion }: { donacion: Props['donacion'] }) {
           )}
           {/* Fuera del formulario: al guardar este se cierra y el resultado debe seguir a la vista. */}
           {editState?.error && <p className="text-xs text-red-500">{editState.error}</p>}
-          {editState?.success && <p className="text-xs text-emerald-600">Donación actualizada.</p>}
+          {ultima === 'editar' && editState?.success && <p className="text-xs text-emerald-600">Donación actualizada.</p>}
+          {ultima === 'anular' && anularState?.success && <p className="text-xs text-emerald-600">Donación anulada.</p>}
         </div>
       )}
     </div>

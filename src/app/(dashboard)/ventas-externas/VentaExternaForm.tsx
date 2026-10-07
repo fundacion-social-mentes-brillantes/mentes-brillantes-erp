@@ -7,16 +7,19 @@ import { crearVentaExterna, editarVentaExterna } from './actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { Tables } from '@/lib/supabase/types'
+import { useConservarSiFalla } from '@/lib/hooks/use-conservar-si-falla'
 
 export function VentaExternaForm({ venta }: { venta?: Tables<'ventas_externas'> | null }) {
   const action = venta?.id ? editarVentaExterna.bind(null, venta.id) : crearVentaExterna
   const [state, formAction, isPending] = useActionState(action, null)
+  const recordarFormulario = useConservarSiFalla(state)
 
   const selectClass =
     'flex h-10 w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--input-bg))] px-3 py-2 text-sm text-[rgb(var(--text-primary))] ring-offset-[rgb(var(--surface-1))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--accent))] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:[color-scheme:dark]'
 
   return (
     <form
+      onSubmitCapture={recordarFormulario}
       action={formAction}
       className="space-y-6 max-w-2xl bg-[rgb(var(--surface-1))] p-6 rounded-xl border border-[rgb(var(--border))] shadow-sm text-[rgb(var(--text-primary))]"
     >

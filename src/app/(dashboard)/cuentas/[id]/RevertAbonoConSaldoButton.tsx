@@ -10,7 +10,7 @@ export function RevertAbonoConSaldoButton({ cuentaId, abonoId }: { cuentaId: str
   const handleClick = () => {
     if (
       !window.confirm(
-        'Vas a anular este abono y revertir el saldo a favor que genero. Solo procede si ese saldo a favor no se ha usado. ¿Continuar?'
+        'Vas a anular este abono y revertir el saldo a favor que generó. Solo procede si ese saldo a favor no se ha usado. ¿Continuar?'
       )
     )
       return

@@ -5,11 +5,14 @@ import { aplicarSaldoFavor, ActionState } from '../actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { AlertCircle, CheckCircle2, Wallet } from 'lucide-react'
+import { pesos } from '@/lib/utils/pesos'
+import { useConservarSiFalla } from '@/lib/hooks/use-conservar-si-falla'
 
 export function AplicarSaldoForm({ cuentaId, asistenteId, maxMonto }: { cuentaId: string, asistenteId: string, maxMonto: number }) {
   const actionWithArgs = (state: ActionState, formData: FormData) =>
     aplicarSaldoFavor(cuentaId, asistenteId, maxMonto.toString(), state, formData)
   const [state, formAction, isPending] = useActionState<ActionState, FormData>(actionWithArgs, null)
+  const recordarFormulario = useConservarSiFalla(state)
   const formRef = useRef<HTMLFormElement>(null)
 
   // Limpiar el formulario despues de guardar. Va en un efecto: hacerlo
@@ -19,7 +22,7 @@ export function AplicarSaldoForm({ cuentaId, asistenteId, maxMonto }: { cuentaId
   }, [state])
 
   return (
-    <form ref={formRef} action={formAction} className="space-y-4">
+    <form ref={formRef} onSubmitCapture={recordarFormulario} action={formAction} className="space-y-4">
       {state?.error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-red-600">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
@@ -46,7 +49,7 @@ export function AplicarSaldoForm({ cuentaId, asistenteId, maxMonto }: { cuentaId
           required 
           disabled={isPending} 
         />
-        <p className="text-xs text-zinc-500">Máximo aplicable: ${maxMonto.toLocaleString()}</p>
+        <p className="text-xs text-zinc-500">Máximo aplicable: {pesos(maxMonto)}</p>
       </div>
 
       <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" disabled={isPending}>

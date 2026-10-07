@@ -8,4 +8,9 @@ describe('MovimientosClient', () => {
     expect(isMovimientoBloqueadoEnHistorial('aplicacion_saldo')).toBe(true)
     expect(isMovimientoBloqueadoEnHistorial('abono')).toBe(false)
   })
+
+  it('un pago hecho con saldo a favor tampoco ofrece anular ni borrar', () => {
+    expect(isMovimientoBloqueadoEnHistorial('abono', 'saldo_a_favor')).toBe(true)
+    expect(isMovimientoBloqueadoEnHistorial('abono', 'nequi')).toBe(false)
+  })
 })

@@ -6,6 +6,7 @@ import { Search, CalendarPlus, History, X, HeartHandshake, CheckCircle2 } from '
 import { registrarSesionCoachAsistente, editarSesion, eliminarSesion } from '@/app/(dashboard)/coach/actions'
 import { estadoCoach } from '@/lib/utils/coach'
 import { coincideBusqueda } from '@/lib/utils/busqueda'
+import { pesos } from '@/lib/utils/pesos'
 
 type Sesion = { id: string; fecha: string; notas?: string | null; paqueteId?: string; paqueteConcepto?: string | null }
 
@@ -36,7 +37,6 @@ type AsistenteCoach = {
   compras: Compra[]
 }
 
-const pesos = (n: number) => `$${Math.round(n).toLocaleString('es-CO')}`
 
 type Filtro = 'todos' | 'pendientes' | 'sin'
 

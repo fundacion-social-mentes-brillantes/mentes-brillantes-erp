@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useFormState, useFormStatus } from 'react-dom'
 import { editarSesion, eliminarSesion } from '@/app/(dashboard)/coach/actions'
+import { useConservarSiFalla } from '@/lib/hooks/use-conservar-si-falla'
 
 function SubmitBtn({ label }: { label: string }) {
   const { pending } = useFormStatus()
@@ -21,19 +22,37 @@ export function CoachSessionActions({ sesionId, fecha, notas }: { sesionId: stri
   const [editOpen, setEditOpen] = useState(false)
   const [deleteState, deleteAction] = useFormState(eliminarSesion, null)
   const [editState, editAction] = useFormState(editarSesion, null)
+  const recordarFormulario = useConservarSiFalla(editState)
 
   return (
     <div className="space-y-2">
-      <button
-        type="button"
-        onClick={() => setEditOpen((v) => !v)}
-        className="text-xs text-[rgb(var(--info))] hover:underline"
-      >
-        {editOpen ? 'Cerrar edición' : 'Editar'}
-      </button>
+      {/* Editar y Eliminar en la misma fila, separados (antes salian pegados: "EditarEliminar"). */}
+      <div className="flex items-center justify-end gap-3">
+        <button
+          type="button"
+          onClick={() => setEditOpen((v) => !v)}
+          className="text-xs text-[rgb(var(--info))] hover:underline"
+        >
+          {editOpen ? 'Cerrar edición' : 'Editar'}
+        </button>
+        <form
+          action={deleteAction}
+          onSubmit={(e) => {
+            if (!confirm('¿Eliminar esta sesión?')) e.preventDefault()
+          }}
+          className="inline-flex"
+        >
+          <input type="hidden" name="sesion_id" value={sesionId} />
+          <button type="submit" className="text-xs text-[rgb(var(--danger))] hover:underline">
+            Eliminar
+          </button>
+        </form>
+      </div>
+      {deleteState?.error && <p className="text-xs text-[rgb(var(--danger))]">{deleteState.error}</p>}
+      {deleteState?.success && <p className="text-xs text-[rgb(var(--success))]">Sesión eliminada.</p>}
 
       {editOpen && (
-        <form action={editAction} className="space-y-2 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] p-3">
+        <form onSubmitCapture={recordarFormulario} action={editAction} className="space-y-2 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] p-3">
           <input type="hidden" name="sesion_id" value={sesionId} />
           <div className="space-y-1">
             <label className="text-xs text-[rgb(var(--text-muted))]">Fecha</label>
@@ -59,20 +78,6 @@ export function CoachSessionActions({ sesionId, fecha, notas }: { sesionId: stri
         </form>
       )}
 
-      <form
-        action={deleteAction}
-        onSubmit={(e) => {
-          if (!confirm('¿Eliminar esta sesión?')) e.preventDefault()
-        }}
-        className="inline-block"
-      >
-        <input type="hidden" name="sesion_id" value={sesionId} />
-        <button type="submit" className="text-xs text-[rgb(var(--danger))] hover:underline">
-          Eliminar
-        </button>
-        {deleteState?.error && <p className="text-xs text-[rgb(var(--danger))]">{deleteState.error}</p>}
-        {deleteState?.success && <p className="text-xs text-[rgb(var(--success))]">Sesión eliminada.</p>}
-      </form>
     </div>
   )
 }

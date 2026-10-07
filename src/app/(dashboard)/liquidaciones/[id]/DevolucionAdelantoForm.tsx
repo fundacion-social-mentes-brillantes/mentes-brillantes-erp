@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { MoneyInput } from '@/components/ui/money-input'
 import { AlertCircle, CheckCircle2, Undo2 } from 'lucide-react'
+import { pesos } from '@/lib/utils/pesos'
+import { useConservarSiFalla } from '@/lib/hooks/use-conservar-si-falla'
 
 type SocioConSaldo = { id: string; nombre: string; pendiente: number }
 
@@ -31,6 +33,7 @@ export function DevolucionAdelantoForm({
 }) {
   const actionWithId = saveDevolucionSocio.bind(null, periodoId)
   const [state, formAction, isPending] = useActionState(actionWithId, null)
+  const recordarFormulario = useConservarSiFalla(state)
   const formRef = useRef<HTMLFormElement>(null)
   const selectClass =
     "flex h-10 w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--input-bg))] px-3 py-2 text-sm text-[rgb(var(--text-primary))] ring-offset-[rgb(var(--surface-1))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--accent))] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:[color-scheme:dark]"
@@ -52,7 +55,7 @@ export function DevolucionAdelantoForm({
   }
 
   return (
-    <form ref={formRef} action={formAction} className="space-y-4">
+    <form ref={formRef} onSubmitCapture={recordarFormulario} action={formAction} className="space-y-4">
       {state?.error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-red-600">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
@@ -73,7 +76,7 @@ export function DevolucionAdelantoForm({
           <option value="">Seleccione...</option>
           {conSaldo.map((s) => (
             <option key={s.id} value={s.id}>
-              {s.nombre} — debe ${s.pendiente.toLocaleString('es-CO')}
+              {s.nombre} — debe {pesos(s.pendiente)}
             </option>
           ))}
         </select>

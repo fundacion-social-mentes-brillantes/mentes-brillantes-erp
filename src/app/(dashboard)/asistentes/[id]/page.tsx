@@ -23,6 +23,8 @@ import { CoachSessionActions } from "@/components/coach/CoachSessionActions"
 import { requireRoles } from "@/lib/utils/authz"
 import { estadoPorActividad } from "@/lib/utils/asistentes"
 import { paqueteDestino, resumenCoach } from "@/lib/utils/coach"
+import { pesos } from "@/lib/utils/pesos"
+import { metodoPagoLegible, notaLegible } from "@/lib/utils/textos"
 
 const cardContainer =
   "rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] shadow-sm overflow-hidden"
@@ -65,7 +67,8 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
   const donaciones = donacionesData || []
   const donacionesActivas = donaciones.filter((d) => !esAnuladoCompleto(d))
   const totalDonado = Math.round(donacionesActivas.reduce((acc, curr) => acc + toSafeNumber(curr.monto), 0))
-  const cantidadDonaciones = donaciones.length
+  // Las anuladas no suman al total, asi que tampoco al conteo.
+  const cantidadDonaciones = donacionesActivas.length
 
   const { data: paquetesCoach } = await supabase
     .from("coach_paquetes")
@@ -123,6 +126,8 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
     })
 
   const actividad = estadoPorActividad({
+    fecha_registro: asistente.fecha_registro,
+    fecha_inicio_proceso: asistente.fecha_inicio_proceso,
     cuentas_por_cobrar: cuentas || [],
     movimientos_saldo_favor: movimientos,
     donaciones_asistentes: donaciones,
@@ -249,19 +254,19 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
               <div>
                 <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Total Facturado</p>
                 <p className="text-xl font-semibold text-zinc-900">
-                  ${toSafeNumber(totalFacturado).toLocaleString("es-CO")}
+                  {pesos(toSafeNumber(totalFacturado))}
                 </p>
               </div>
               <div>
                 <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Total Abonado</p>
                 <p className="text-xl font-semibold text-emerald-600">
-                  ${toSafeNumber(totalAbonado).toLocaleString("es-CO")}
+                  {pesos(toSafeNumber(totalAbonado))}
                 </p>
               </div>
               <div className="pt-4 border-t border-zinc-100">
                 <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Saldo Pendiente</p>
                 <p className="text-xl font-semibold text-amber-600">
-                  ${toSafeNumber(saldoPendiente).toLocaleString("es-CO")}
+                  {pesos(toSafeNumber(saldoPendiente))}
                 </p>
               </div>
             </div>
@@ -276,7 +281,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
             <div className="p-5 space-y-3">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-zinc-600">Total donado</span>
-                <span className="font-semibold text-emerald-700">${toSafeNumber(totalDonado).toLocaleString("es-CO")}</span>
+                <span className="font-semibold text-emerald-700">{pesos(toSafeNumber(totalDonado))}</span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-zinc-600">Cantidad de donaciones</span>
@@ -294,11 +299,11 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                       >
                         <div>
                           <p className="text-sm font-medium text-[rgb(var(--text-primary))]">
-                            ${toSafeNumber(donacion.monto).toLocaleString("es-CO")} · {donacion.metodo_pago}
+                            {pesos(toSafeNumber(donacion.monto))} · {metodoPagoLegible(donacion.metodo_pago)}
                           </p>
                           <p className="text-[11px] text-[rgb(var(--text-muted))]">
                             {formatearFechaIso(donacion.fecha)}
-                            {donacion.notas ? ` · ${donacion.notas}` : ""}
+                            {notaLegible(donacion.notas) ? ` · ${notaLegible(donacion.notas)}` : ""}
                           </p>
                         </div>
                         <DonacionActionsMenu donacion={donacion} isAdmin={isAdmin} />
@@ -328,7 +333,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
               <h3 className={cardTitle}>Saldo a Favor</h3>
             </div>
             <div className="p-5 space-y-3">
-              <p className="text-sm text-zinc-700">Saldo disponible: ${toSafeNumber(saldoAFavor).toLocaleString("es-CO")}</p>
+              <p className="text-sm text-zinc-700">Saldo disponible: {pesos(toSafeNumber(saldoAFavor))}</p>
               <AnticipoForm asistenteId={asistente.id} disabled={!isAdmin} />
               {saldoAFavor > 0 && <PagarConSaldoButton asistenteId={asistente.id} disabled={!isAdmin} />}
               <p className="text-[11px] text-zinc-500">
@@ -442,11 +447,11 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                         </div>
                         <div className="text-right text-sm">
                           <p className="text-zinc-600">
-                            Valor: ${toSafeNumber(cuenta.valorCuenta ?? cuenta.valor_total).toLocaleString("es-CO")}
+                            Valor: {pesos(toSafeNumber(cuenta.valorCuenta ?? cuenta.valor_total))}
                           </p>
-                          <p className="text-emerald-600">Abonado: ${toSafeNumber(cuenta.abonado).toLocaleString("es-CO")}</p>
+                          <p className="text-emerald-600">Abonado: {pesos(toSafeNumber(cuenta.abonado))}</p>
                           <p className="text-amber-600">
-                            Pendiente: ${toSafeNumber(cuenta.pendiente).toLocaleString("es-CO")}
+                            Pendiente: {pesos(toSafeNumber(cuenta.pendiente))}
                           </p>
                         </div>
                       </div>
@@ -471,14 +476,14 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                   {todosLosAbonos.map((pago) => (
                     <div key={pago.id} className="flex items-center justify-between rounded-lg border border-zinc-200 p-3 bg-white">
                       <div>
-                        <p className="font-medium text-zinc-900 text-sm">${toSafeNumber(pago.monto).toLocaleString("es-CO")}</p>
+                        <p className="font-medium text-zinc-900 text-sm">{pesos(toSafeNumber(pago.monto))}</p>
                         <p className="text-xs text-zinc-500">
                           {formatearFechaIso(pago.fecha_pago)} · {pago.concepto_cuenta}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-zinc-500">
-                        <span>{pago.metodo_pago || "—"}</span>
-                        <span>{pago.notas || "Sin notas"}</span>
+                        <span>{metodoPagoLegible(pago.metodo_pago)}</span>
+                        <span>{notaLegible(pago.notas) || "Sin notas"}</span>
                       </div>
                     </div>
                   ))}
@@ -505,10 +510,10 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                     >
                       <span>{formatearFechaIso(mov.fecha)}</span>
                       <span className={mov.tipo === "ingreso" ? "text-emerald-600" : "text-amber-600"}>
-                        {mov.tipo === "ingreso" ? "+" : "-"}${toSafeNumber(mov.monto).toLocaleString("es-CO")}
+                        {mov.tipo === "ingreso" ? "+" : "-"}{pesos(toSafeNumber(mov.monto))}
                       </span>
-                      <span>{mov.metodo_pago}</span>
-                      <span className="text-zinc-500 truncate max-w-[180px]">{mov.notas || "Sin notas"}</span>
+                      <span>{metodoPagoLegible(mov.metodo_pago)}</span>
+                      <span className="text-zinc-500 truncate max-w-[180px]" title={notaLegible(mov.notas)}>{notaLegible(mov.notas) || "Sin notas"}</span>
                       {isAdmin && mov.tipo === "ingreso" && !(mov.notas || "").includes("[ANULADO]") && (
                         <RevertAnticipoButton asistenteId={asistente.id} anticipoId={mov.id} />
                       )}

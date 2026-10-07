@@ -13,6 +13,9 @@ type Donacion = { fecha?: FechaNullable }
 type SesionCoach = { fecha?: FechaNullable }
 
 export type AsistenteActividad = {
+  /** Registrarse (o empezar el proceso) tambien es actividad: alguien recien creado no esta "inactivo". */
+  fecha_registro?: FechaNullable
+  fecha_inicio_proceso?: FechaNullable
   cuentas_por_cobrar?: Cuenta[] | null
   movimientos_saldo_favor?: MovimientoSaldo[] | null
   donaciones_asistentes?: Donacion[] | null
@@ -21,6 +24,11 @@ export type AsistenteActividad = {
 
 export function obtenerUltimaActividad(data: AsistenteActividad): Date | null {
   const fechas: Date[] = []
+
+  for (const valor of [data.fecha_registro, data.fecha_inicio_proceso]) {
+    const f = toDate(valor)
+    if (f) fechas.push(f)
+  }
 
   data.cuentas_por_cobrar?.forEach((c) => {
     const fe = toDate(c.fecha_emision)

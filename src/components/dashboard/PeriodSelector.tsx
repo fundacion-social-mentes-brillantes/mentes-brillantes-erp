@@ -29,12 +29,12 @@ export function PeriodSelector({
   if (!periodos.length) return null
 
   return (
-    <div className="flex items-center gap-2 bg-[rgba(var(--surface-1),0.78)] border border-[rgba(var(--border),0.68)] rounded-xl px-3 py-2 shadow-soft backdrop-blur-md">
+    <div className="flex min-w-0 max-w-full items-center gap-2 bg-[rgba(var(--surface-1),0.78)] border border-[rgba(var(--border),0.68)] rounded-xl px-3 py-2 shadow-soft backdrop-blur-md">
       <CalendarRange className="w-4 h-4 text-[rgb(var(--warning))] shrink-0" />
       <select
         value={currentId ?? periodos[0]?.id}
         onChange={(e) => router.push(`/?periodo=${e.target.value}`)}
-        className="text-sm font-semibold text-[rgb(var(--text-primary))] bg-transparent border-none focus:ring-0 p-0 pr-1 cursor-pointer outline-none max-w-[16rem]"
+        className="text-sm font-semibold text-[rgb(var(--text-primary))] bg-transparent border-none focus:ring-0 p-0 pr-1 cursor-pointer outline-none min-w-0 max-w-[16rem] truncate"
         aria-label="Seleccionar período de liquidación"
       >
         {periodos.map((p) => (

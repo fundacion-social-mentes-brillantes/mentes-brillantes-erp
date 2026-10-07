@@ -3,6 +3,8 @@ import Link from 'next/link'
 import { Edit2, Plus } from 'lucide-react'
 import { requireRoles } from '@/lib/utils/authz'
 import { VentaExternaActions } from './VentaExternaActions'
+import { pesos } from '@/lib/utils/pesos'
+import { estadoLegible, metodoPagoLegible } from '@/lib/utils/textos'
 
 export default async function VentasExternasPage() {
   const { supabase, perfil } = await requireRoles(['admin', 'caja'])
@@ -46,14 +48,14 @@ export default async function VentasExternasPage() {
                   <td className="px-6 py-4 text-zinc-500">{formatearFechaIso(venta.fecha)}</td>
                   <td className="px-6 py-4 font-medium text-zinc-900">{venta.concepto}</td>
                   <td className="px-6 py-4 text-zinc-500">{venta.comprador_nombre || 'Sin comprador'}</td>
-                  <td className="px-6 py-4 text-zinc-500 capitalize">{venta.metodo_pago}</td>
+                  <td className="px-6 py-4 text-zinc-500">{metodoPagoLegible(venta.metodo_pago)}</td>
                   <td className="px-6 py-4">
-                    <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-zinc-100 text-zinc-700">
-                      {venta.estado}
+                    <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${venta.estado === 'anulado' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700'}`}>
+                      {estadoLegible(venta.estado)}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right font-medium text-emerald-600">
-                    ${Number(venta.monto).toLocaleString()}
+                    {pesos(Number(venta.monto))}
                   </td>
                   {isAdmin && (
                     <td className="px-6 py-4 text-right space-x-2">
@@ -97,16 +99,16 @@ export default async function VentasExternasPage() {
                   </p>
                 </div>
                 <p className="shrink-0 text-base font-bold text-emerald-600">
-                  ${Number(venta.monto).toLocaleString()}
+                  {pesos(Number(venta.monto))}
                 </p>
               </div>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="inline-flex items-center px-2 py-1 rounded-md font-medium bg-zinc-100 text-zinc-700 capitalize">
-                    {venta.metodo_pago}
+                  <span className="inline-flex items-center px-2 py-1 rounded-md font-medium bg-zinc-100 text-zinc-700">
+                    {metodoPagoLegible(venta.metodo_pago)}
                   </span>
-                  <span className="inline-flex items-center px-2 py-1 rounded-md font-medium bg-zinc-100 text-zinc-700 capitalize">
-                    {venta.estado}
+                  <span className={`inline-flex items-center px-2 py-1 rounded-md font-medium ${venta.estado === 'anulado' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700'}`}>
+                    {estadoLegible(venta.estado)}
                   </span>
                 </div>
                 {isAdmin && (

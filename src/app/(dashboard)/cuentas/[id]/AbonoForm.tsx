@@ -5,12 +5,15 @@ import { saveAbono } from '../actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { AlertCircle, CheckCircle2 } from 'lucide-react'
+import { pesos } from '@/lib/utils/pesos'
+import { useConservarSiFalla } from '@/lib/hooks/use-conservar-si-falla'
 
 export type AbonoActionState = Awaited<ReturnType<typeof saveAbono>>
 
 export function AbonoForm({ cuentaId, maxMonto }: { cuentaId: string; maxMonto: number }) {
   const actionWithId = (state: AbonoActionState, formData: FormData) => saveAbono(cuentaId, state, formData)
   const [state, formAction, isPending] = useActionState<AbonoActionState, FormData>(actionWithId, null)
+  const recordarFormulario = useConservarSiFalla(state)
   const formRef = useRef<HTMLFormElement>(null)
 
   // Limpiar el formulario despues de guardar. Va en un efecto: hacerlo
@@ -20,7 +23,7 @@ export function AbonoForm({ cuentaId, maxMonto }: { cuentaId: string; maxMonto: 
   }, [state])
 
   return (
-    <form ref={formRef} action={formAction} className="space-y-4">
+    <form ref={formRef} onSubmitCapture={recordarFormulario} action={formAction} className="space-y-4">
       {state?.error && (
         <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-3 text-red-600">
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
@@ -47,13 +50,13 @@ export function AbonoForm({ cuentaId, maxMonto }: { cuentaId: string; maxMonto: 
           disabled={isPending}
         />
         <p className="text-xs text-zinc-500">
-          Saldo pendiente actual: ${maxMonto.toLocaleString()}. Si el pago supera ese valor, el excedente quedara
+          Saldo pendiente actual: {pesos(maxMonto)}. Si el pago supera ese valor, el excedente quedará
           como saldo a favor.
         </p>
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium text-zinc-900">Metodo de Pago *</label>
+        <label className="text-sm font-medium text-zinc-900">Método de pago *</label>
         <select
           name="metodo_pago"
           required

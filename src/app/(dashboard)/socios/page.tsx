@@ -45,11 +45,11 @@ export default async function SociosPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right space-x-2">
-                    <Link href={`/socios/${socio.id}/editar`} prefetch={false} className="inline-flex p-2 text-zinc-400 hover:text-blue-600 transition-colors rounded-md hover:bg-blue-50">
+                    <Link href={`/socios/${socio.id}/editar`} prefetch={false} title="Editar socio" aria-label={`Editar a ${socio.nombre}`} className="inline-flex p-2 text-zinc-400 hover:text-blue-600 transition-colors rounded-md hover:bg-blue-50">
                       <Edit2 className="w-4 h-4" />
                     </Link>
                     <form action={toggleSocioEstado.bind(null, socio.id, !socio.activo)} className="inline-block">
-                      <button type="submit" className={`inline-flex p-2 transition-colors rounded-md ${socio.activo ? 'text-zinc-400 hover:text-red-600 hover:bg-red-50' : 'text-zinc-400 hover:text-emerald-600 hover:bg-emerald-50'}`}>
+                      <button type="submit" title={socio.activo ? 'Desactivar socio' : 'Activar socio'} aria-label={`${socio.activo ? 'Desactivar' : 'Activar'} a ${socio.nombre}`} className={`inline-flex p-2 transition-colors rounded-md ${socio.activo ? 'text-zinc-400 hover:text-red-600 hover:bg-red-50' : 'text-zinc-400 hover:text-emerald-600 hover:bg-emerald-50'}`}>
                         {socio.activo ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
                       </button>
                     </form>

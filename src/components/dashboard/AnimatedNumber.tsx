@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { miles } from '@/lib/utils/pesos'
 
 // Número que "cuenta" hasta su valor al aparecer.
 // SEGURO para cifras financieras: el HTML del servidor ya trae el valor final
@@ -8,7 +9,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react'
 // el conteo es solo un adorno cuando la pestaña está visible.
 export function AnimatedNumber({
   value,
-  prefix = '$',
+  prefix = '$ ',
   duration = 950,
   className,
   style,
@@ -50,9 +51,10 @@ export function AnimatedNumber({
 
   return (
     <span className={className} style={style}>
+      {/* Mismo formato que el resto del ERP: "-$ 1.000" (ver lib/utils/pesos) */}
+      {display < 0 ? '-' : ''}
       {prefix}
-      {/* en-US fijo para que coincida con el formato del resto del dashboard */}
-      {display.toLocaleString('en-US')}
+      {miles(Math.abs(display))}
     </span>
   )
 }

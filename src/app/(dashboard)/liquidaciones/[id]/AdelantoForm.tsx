@@ -7,10 +7,12 @@ import { Input } from '@/components/ui/input'
 import { MoneyInput } from '@/components/ui/money-input'
 import { AlertCircle, CheckCircle2 } from 'lucide-react'
 import type { Tables } from '@/lib/supabase/types'
+import { useConservarSiFalla } from '@/lib/hooks/use-conservar-si-falla'
 
 export function AdelantoForm({ periodoId, socios }: { periodoId: string, socios: Array<Pick<Tables<'socios'>, 'id' | 'nombre' | 'porcentaje_participacion'>> }) {
   const actionWithId = saveAdelanto.bind(null, periodoId)
   const [state, formAction, isPending] = useActionState(actionWithId, null)
+  const recordarFormulario = useConservarSiFalla(state)
   const formRef = useRef<HTMLFormElement>(null)
   const selectClass =
     "flex h-10 w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--input-bg))] px-3 py-2 text-sm text-[rgb(var(--text-primary))] ring-offset-[rgb(var(--surface-1))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--accent))] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:[color-scheme:dark]"
@@ -22,7 +24,7 @@ export function AdelantoForm({ periodoId, socios }: { periodoId: string, socios:
   }, [state])
 
   return (
-    <form ref={formRef} action={formAction} className="space-y-4">
+    <form ref={formRef} onSubmitCapture={recordarFormulario} action={formAction} className="space-y-4">
       {state?.error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-red-600">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />

@@ -1,6 +1,8 @@
 'use client'
 
-import { formatearFechaIso } from '@/lib/utils/fechas'
+import { formatearFechaHora, formatearFechaIso } from '@/lib/utils/fechas'
+import { pesos } from '@/lib/utils/pesos'
+import { estadoLegible, metodoPagoLegible, notaLegible } from '@/lib/utils/textos'
 import { fechasDeRango, type RangoFecha } from './rangos'
 import type { Database } from '@/types/database'
 import { leerTodas } from '@/lib/supabase/paginar'
@@ -75,8 +77,17 @@ function aMovimiento(fila: FilaVista): Movimiento {
   }
 }
 
-export const isMovimientoBloqueadoEnHistorial = (tipo: Movimiento['tipo_movimiento'] | string | null | undefined) =>
-  tipo === 'aplicacion_saldo' || tipo === 'anticipo'
+export const isMovimientoBloqueadoEnHistorial = (
+  tipo: Movimiento['tipo_movimiento'] | string | null | undefined,
+  metodoPago?: string | null
+) =>
+  tipo === 'aplicacion_saldo' ||
+  tipo === 'anticipo' ||
+  // Un pago hecho con saldo a favor: el servidor tampoco deja anularlo ni
+  // borrarlo, asi que no se ofrecen botones que solo terminan en error.
+  (tipo === 'abono' && esPagoConSaldo(metodoPago))
+
+const esPagoConSaldo = (metodoPago?: string | null) => String(metodoPago || '').toLowerCase() === 'saldo_a_favor'
 
 /** Cuantos movimientos se bajan como maximo de una sola vez. */
 const TOPE_MOVIMIENTOS = 2000
@@ -122,11 +133,17 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
     }
   }
 
-  const movimientoBloqueado = isMovimientoBloqueadoEnHistorial(selectedMov?.tipo_movimiento)
+  const movimientoBloqueado = isMovimientoBloqueadoEnHistorial(selectedMov?.tipo_movimiento, selectedMov?.metodo_pago)
   const mensajeBloqueoMovimiento =
     selectedMov?.tipo_movimiento === 'anticipo'
-      ? 'Los anticipos/saldo a favor no se gestionan desde Historial General. Usa el perfil del asistente para revertirlos de forma segura.'
-      : 'Las aplicaciones de saldo a favor no se editan, anulan ni eliminan desde Historial General para evitar descuadres contables.'
+      ? 'Los anticipos (saldo a favor) no se manejan desde el Historial General. Para revertirlos, usa la ficha de la persona.'
+      : selectedMov?.tipo_movimiento === 'abono'
+        ? 'Este pago se hizo con saldo a favor. No se puede anular ni borrar desde aquí, porque el saldo ya se descontó; si fue un error, avísale al administrador.'
+        : 'El uso de saldo a favor no se edita, anula ni borra desde el Historial General, para no descuadrar las cuentas.'
+
+  // La vista del historial no trae el monto de un pago hecho con saldo a favor
+  // (no es ingreso), y el panel mostraba "$ 0". Se consulta al abrirlo.
+  const [montoPagoConSaldo, setMontoPagoConSaldo] = useState<{ id: string; monto: number } | null>(null)
 
   const fetchMovimientos = useCallback(async () => {
     if (!supabase) return
@@ -192,14 +209,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
     void fetchMovimientos()
   }, [rangoFecha, fechaInicio, fechaFin, fetchMovimientos])
 
-  const formatCurrency = (amount: number) => {
-    if (!amount) return '$0'
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      maximumFractionDigits: 0
-    }).format(amount)
-  }
+  const formatCurrency = (amount: number) => pesos(amount)
 
   const getTipoIcon = (tipo: string) => {
     switch (tipo) {
@@ -242,6 +252,17 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
 
   const handleRowClick = (mov: Movimiento) => {
     setSelectedMov(mov)
+    setMontoPagoConSaldo(null)
+    if (supabase && mov.tipo_movimiento === 'abono' && esPagoConSaldo(mov.metodo_pago)) {
+      void supabase
+        .from('pagos_abonos')
+        .select('monto')
+        .eq('id', mov.movimiento_id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data) setMontoPagoConSaldo({ id: mov.movimiento_id, monto: Number(data.monto) })
+        })
+    }
     // Initialize edit form based on movement type
     const inicial: FormEdicion = {
       monto: String(
@@ -489,7 +510,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                           <span>{mov.asistente_nombre}</span>
                         )
                       ) : (
-                        <span className="text-zinc-400 italic">N/A</span>
+                        <span className="text-zinc-400">—</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-zinc-700 max-w-[200px] truncate" title={mov.concepto}>
@@ -497,8 +518,8 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                     </td>
                     <td className="px-4 py-3">
                       {mov.metodo_pago ? (
-                        <span className="capitalize text-zinc-600 bg-zinc-100 px-2 py-1 rounded-md text-xs border border-zinc-200">
-                          {mov.metodo_pago.replace('_', ' ')}
+                        <span className="whitespace-nowrap text-zinc-600 bg-zinc-100 px-2 py-1 rounded-md text-xs border border-zinc-200">
+                          {metodoPagoLegible(mov.metodo_pago)}
                         </span>
                       ) : <span className="text-zinc-400">-</span>}
                     </td>
@@ -514,11 +535,19 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                       ) : '-'}
                     </td>
                     <td className={`px-4 py-3 text-right font-medium ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'text-zinc-400 line-through' : 'text-red-600'}`}>
-                      {mov.valor_egreso > 0 ? formatCurrency(mov.valor_egreso) : '-'}
+                      {mov.valor_egreso > 0 ? (
+                        mov.tipo_movimiento === 'aplicacion_saldo' ? (
+                          // Usar saldo a favor no es plata que sale de la fundacion.
+                          <span className="inline-flex items-center justify-end gap-1.5 text-zinc-500" title="Uso de saldo a favor: no es plata que sale">
+                            <ArrowRightLeft className="w-3.5 h-3.5" />
+                            {formatCurrency(mov.valor_egreso)}
+                          </span>
+                        ) : formatCurrency(mov.valor_egreso)
+                      ) : '-'}
                     </td>
                     <td className="px-4 py-3 text-xs text-zinc-500 max-w-[150px] truncate">
-                      {mov.estado_o_saldo && <span className={`capitalize font-medium mr-2 ${mov.estado_o_saldo.toLowerCase() === 'anulado' ? 'text-red-500' : 'text-zinc-700'}`}>[{mov.estado_o_saldo}]</span>}
-                      <span title={mov.notas || ''}>{mov.notas || ''}</span>
+                      {mov.estado_o_saldo && <span className={`font-medium mr-2 ${mov.estado_o_saldo.toLowerCase() === 'anulado' ? 'text-red-500' : 'text-zinc-700'}`}>{estadoLegible(mov.estado_o_saldo)}</span>}
+                      <span title={notaLegible(mov.notas)}>{notaLegible(mov.notas)}</span>
                     </td>
                   </tr>
                 ))
@@ -574,14 +603,18 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
               <div className="flex items-center justify-between pt-2 border-t border-zinc-100">
                 <div className="flex flex-col gap-1">
                   {mov.metodo_pago && (
-                    <span className="capitalize text-zinc-600 bg-zinc-100 px-2 py-0.5 rounded-md text-xs border border-zinc-200 w-fit">{mov.metodo_pago.replace('_', ' ')}</span>
+                    <span className="text-zinc-600 bg-zinc-100 px-2 py-0.5 rounded-md text-xs border border-zinc-200 w-fit">{metodoPagoLegible(mov.metodo_pago)}</span>
                   )}
                 </div>
 
                 <div className={`text-right ${mov.estado_o_saldo?.toLowerCase() === 'anulado' ? 'line-through opacity-70' : ''}`}>
                   {mov.valor_deuda > 0 && <div className="font-bold text-blue-600">{formatCurrency(mov.valor_deuda)}</div>}
                   {mov.valor_ingreso > 0 && <div className="font-bold text-emerald-600">+{formatCurrency(mov.valor_ingreso)}</div>}
-                  {mov.valor_egreso > 0 && <div className="font-bold text-red-600">-{formatCurrency(mov.valor_egreso)}</div>}
+                  {mov.valor_egreso > 0 && (
+                    mov.tipo_movimiento === 'aplicacion_saldo'
+                      ? <div className="font-bold text-zinc-500" title="Uso de saldo a favor: no es plata que sale">↔ {formatCurrency(mov.valor_egreso)}</div>
+                      : <div className="font-bold text-red-600">{formatCurrency(-mov.valor_egreso)}</div>
+                  )}
                 </div>
               </div>
             </div>
@@ -601,13 +634,13 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                   </span>
                   {selectedMov.estado_o_saldo && (
                     <span className={`text-xs font-bold uppercase tracking-wider ${selectedMov.estado_o_saldo.toLowerCase() === 'anulado' ? 'text-red-500' : 'text-zinc-500'}`}>
-                      {selectedMov.estado_o_saldo}
+                      {estadoLegible(selectedMov.estado_o_saldo)}
                     </span>
                   )}
                 </div>
                 <SheetTitle className="text-xl">{selectedMov.concepto || 'Movimiento'}</SheetTitle>
                 <SheetDescription>
-                  Registrado el {new Date(selectedMov.creado_en).toLocaleString('es-CO')}
+                  Registrado el {formatearFechaHora(selectedMov.creado_en, '—')}
                 </SheetDescription>
               </SheetHeader>
 
@@ -617,7 +650,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                   <div className="grid grid-cols-2 gap-4 bg-zinc-50 p-4 rounded-xl border border-zinc-200">
                     <div>
                       <p className="text-xs text-zinc-500 font-medium">Asistente</p>
-                      <p className="font-medium text-zinc-900">{selectedMov.asistente_nombre || 'N/A'}</p>
+                      <p className="font-medium text-zinc-900">{selectedMov.asistente_nombre || '—'}</p>
                       {isAsistenteValidForLink(selectedMov.asistente_id, selectedMov.asistente_nombre) && (
                         <Link
                           href={`/asistentes/${selectedMov.asistente_id}`}
@@ -634,20 +667,27 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                     </div>
                     <div>
                       <p className="text-xs text-zinc-500 font-medium">Valor</p>
-                      <p className={`font-bold ${selectedMov.valor_ingreso > 0 ? 'text-emerald-600' : selectedMov.valor_egreso > 0 ? 'text-red-600' : 'text-blue-600'}`}>
-                        {formatCurrency(selectedMov.valor_ingreso || selectedMov.valor_egreso || selectedMov.valor_deuda)}
-                      </p>
+                      {montoPagoConSaldo?.id === selectedMov.movimiento_id ? (
+                        <>
+                          <p className="font-bold text-zinc-600">{formatCurrency(montoPagoConSaldo.monto)}</p>
+                          <p className="text-xs text-zinc-500">Pagado con saldo a favor</p>
+                        </>
+                      ) : (
+                        <p className={`font-bold ${selectedMov.valor_ingreso > 0 ? 'text-emerald-600' : selectedMov.tipo_movimiento === 'aplicacion_saldo' ? 'text-zinc-600' : selectedMov.valor_egreso > 0 ? 'text-red-600' : 'text-blue-600'}`}>
+                          {formatCurrency(selectedMov.valor_ingreso || selectedMov.valor_egreso || selectedMov.valor_deuda)}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <p className="text-xs text-zinc-500 font-medium">Método de Pago</p>
-                      <p className="font-medium text-zinc-900 capitalize">{selectedMov.metodo_pago?.replace('_', ' ') || 'N/A'}</p>
+                      <p className="font-medium text-zinc-900">{metodoPagoLegible(selectedMov.metodo_pago)}</p>
                     </div>
                   </div>
 
                   {selectedMov.notas && (
                     <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200">
                       <p className="text-xs text-yellow-800 font-bold mb-1 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Notas / Observaciones</p>
-                      <p className="text-sm text-yellow-900">{selectedMov.notas}</p>
+                      <p className="text-sm text-yellow-900">{notaLegible(selectedMov.notas) || selectedMov.notas}</p>
                     </div>
                   )}
 
@@ -668,7 +708,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                         disabled={movimientoBloqueado}
                         className="w-full flex justify-center items-center gap-2 bg-zinc-900 text-white py-2 rounded-lg font-medium hover:bg-zinc-800 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        <Pencil className="w-4 h-4" /> Activar Edición Libre
+                        <Pencil className="w-4 h-4" /> Editar
                       </button>
 
                       {selectedMov.estado_o_saldo?.toLowerCase() !== 'anulado' && !movimientoBloqueado && (
@@ -677,7 +717,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                           disabled={isAnulando}
                           className="w-full flex justify-center items-center gap-2 bg-red-50 text-red-600 py-2 rounded-lg font-medium hover:bg-red-100 transition-colors border border-red-200"
                         >
-                          {isAnulando ? 'Anulando...' : <><Ban className="w-4 h-4" /> Anular Movimiento (Safe)</>}
+                          {isAnulando ? 'Anulando…' : <><Ban className="w-4 h-4" /> Anular (queda en el historial)</>}
                         </button>
                       )}
 
@@ -686,7 +726,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                         disabled={isDeleting || movimientoBloqueado}
                         className="w-full flex justify-center items-center gap-2 text-red-500 text-sm font-medium hover:underline mt-4 disabled:cursor-not-allowed disabled:no-underline disabled:opacity-60"
                       >
-                        {isDeleting ? 'Borrando duro...' : <><Trash2 className="w-4 h-4" /> Eliminar Permanentemente (Hard Delete)</>}
+                        {isDeleting ? 'Eliminando…' : <><Trash2 className="w-4 h-4" /> Eliminar para siempre</>}
                       </button>
                     </div>
                   )}
@@ -695,7 +735,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                 /* EDIT MODE (Admin Only) */
                 <div className="space-y-4">
                   <div className="bg-zinc-900 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center justify-between">
-                    <span>Modo Edición Activado</span>
+                    <span>Editando</span>
                     <button onClick={() => setIsEditing(false)} className="text-zinc-400 hover:text-white">Cancelar</button>
                   </div>
 

@@ -2,6 +2,7 @@
 
 import { useFormState, useFormStatus } from 'react-dom'
 import { registrarSesion } from '@/app/(dashboard)/coach/actions'
+import { useConservarSiFalla } from '@/lib/hooks/use-conservar-si-falla'
 
 function Submit() {
   const { pending } = useFormStatus()
@@ -18,9 +19,10 @@ function Submit() {
 
 export function RegisterCoachSessionForm({ paqueteId, disabled }: { paqueteId: string; disabled?: boolean }) {
   const [state, formAction] = useFormState(registrarSesion, null)
+  const recordarFormulario = useConservarSiFalla(state)
 
   return (
-    <form action={formAction} className="space-y-3">
+    <form onSubmitCapture={recordarFormulario} action={formAction} className="space-y-3">
       <input type="hidden" name="paquete_id" value={paqueteId} />
       <div className="space-y-1">
         <label className="text-xs font-medium text-[rgb(var(--text-muted))]">Fecha</label>

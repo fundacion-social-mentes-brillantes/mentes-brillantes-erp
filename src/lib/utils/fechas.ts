@@ -26,6 +26,25 @@ export function fechaLocalISO(date: Date = new Date(), timeZone: string = ZONA_H
 export const fechaHoyBogota = (): string => fechaLocalISO()
 
 /**
+ * Fecha y hora de un instante (timestamptz) en hora de Colombia:
+ * "7/10/2026, 4:05 p. m.". Sin la zona, la pagina armada en el servidor (UTC)
+ * mostraba la hora 5 horas adelantada.
+ */
+export function formatearFechaHora(instante?: string | Date | null, alterno = ''): string {
+  if (!instante) return alterno
+  const d = instante instanceof Date ? instante : new Date(instante)
+  if (Number.isNaN(d.getTime())) return alterno
+  return new Intl.DateTimeFormat('es-CO', {
+    timeZone: ZONA_HORARIA,
+    day: 'numeric',
+    month: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(d)
+}
+
+/**
  * Muestra una fecha DATE ('AAAA-MM-DD') tal cual, sin pasarla por new Date().
  *
  * Es importante: new Date('2026-07-30') se interpreta como medianoche UTC, y al

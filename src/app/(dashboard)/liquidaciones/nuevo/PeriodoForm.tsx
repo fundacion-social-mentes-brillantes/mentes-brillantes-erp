@@ -6,12 +6,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { AlertCircle } from 'lucide-react'
 import Link from 'next/link'
+import { useConservarSiFalla } from '@/lib/hooks/use-conservar-si-falla'
 
 export function PeriodoForm() {
   const [state, formAction, isPending] = useActionState(savePeriodo, null)
+  const recordarFormulario = useConservarSiFalla(state)
 
   return (
-    <form action={formAction} className="space-y-6 max-w-2xl bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
+    <form onSubmitCapture={recordarFormulario} action={formAction} className="space-y-6 max-w-2xl bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
       {state?.error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-red-600">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />

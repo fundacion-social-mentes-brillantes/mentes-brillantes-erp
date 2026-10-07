@@ -9,10 +9,13 @@ import { EditValorModal, EditAbonoModal } from './EditModals'
 import { DeleteCuentaButton } from './DeleteCuentaButton'
 import { RevertAbonoConSaldoButton } from './RevertAbonoConSaldoButton'
 import { calcularSaldoFavorDisponibleRaw, filtrarPagosValidos, sumarMontos } from '@/lib/utils/contable'
-import { formatearFechaIso } from '@/lib/utils/fechas'
+import { formatearFechaHora, formatearFechaIso } from '@/lib/utils/fechas'
+import { describirAccionAuditoria } from '@/lib/utils/auditoria-texto'
 import { RegisterCoachSessionForm } from '@/components/coach/RegisterCoachSessionForm'
 import { CoachSessionsPdf } from '@/components/coach/CoachSessionsPdf'
 import { CoachSessionActions } from '@/components/coach/CoachSessionActions'
+import { pesos } from '@/lib/utils/pesos'
+import { metodoPagoLegible, notaLegible } from '@/lib/utils/textos'
 
 export default async function DetalleCuentaPage({
   params,
@@ -132,17 +135,17 @@ export default async function DetalleCuentaPage({
               <div>
                 <p className="text-sm text-[rgb(var(--text-muted))]">Valor Total</p>
                 <div className="flex items-center gap-2">
-                  <p className="text-xl font-semibold text-[rgb(var(--text-primary))]">${Number(saldos.valor_total).toLocaleString()}</p>
+                  <p className="text-xl font-semibold text-[rgb(var(--text-primary))]">{pesos(Number(saldos.valor_total))}</p>
                   {isAdmin && <EditValorModal cuentaId={cuenta.id} valorActual={Number(saldos.valor_total)} />}
                 </div>
               </div>
               <div>
                 <p className="text-sm text-[rgb(var(--text-muted))]">Total Abonado</p>
-                <p className="text-xl font-semibold text-[rgb(var(--success))]">${Number(saldos.total_abonado).toLocaleString()}</p>
+                <p className="text-xl font-semibold text-[rgb(var(--success))]">{pesos(Number(saldos.total_abonado))}</p>
               </div>
               <div>
                 <p className="text-sm text-[rgb(var(--text-muted))]">Saldo Pendiente</p>
-                <p className="text-xl font-semibold text-[rgb(var(--danger-strong))]">${Number(saldos.monto_pendiente).toLocaleString()}</p>
+                <p className="text-xl font-semibold text-[rgb(var(--danger-strong))]">{pesos(Number(saldos.monto_pendiente))}</p>
               </div>
             </div>
             <div className="mt-4 text-sm text-[rgb(var(--text-muted))]">
@@ -227,28 +230,33 @@ export default async function DetalleCuentaPage({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[rgb(var(--border))]">
-                  {abonos.map((abono) => (
-                    <tr key={abono.id} className="hover:bg-[rgb(var(--surface-2))]">
+                  {abonos.map((abono) => {
+                    const anulado = abono.estado === 'anulado' || (abono.notas || '').includes('[ANULADO]')
+                    return (
+                    <tr key={abono.id} className={`hover:bg-[rgb(var(--surface-2))] ${anulado ? 'opacity-60' : ''}`}>
                       <td className="px-4 py-3 text-[rgb(var(--text-primary))]">{formatearFechaIso(abono.fecha_pago)}</td>
-                      <td className="px-4 py-3 text-[rgb(var(--text-muted))] capitalize">
-                        {abono.origen_fondos === 'saldo_a_favor' ? 'Saldo a favor' : abono.metodo_pago}
+                      <td className="px-4 py-3 text-[rgb(var(--text-muted))]">
+                        {abono.origen_fondos === 'saldo_a_favor' ? 'Saldo a favor' : metodoPagoLegible(abono.metodo_pago)}
                       </td>
-                      <td className="px-4 py-3 text-right font-medium text-emerald-600">
+                      <td className={`px-4 py-3 text-right font-medium ${anulado ? 'text-[rgb(var(--text-muted))]' : 'text-emerald-600'}`}>
                         <div className="flex items-center justify-end gap-2">
-                          ${Number(abono.monto).toLocaleString()}
-                          {isAdmin && <EditAbonoModal abonoId={abono.id} cuentaId={cuenta.id} valorActual={Number(abono.monto)} />}
+                          <span className={anulado ? 'line-through' : ''}>{pesos(Number(abono.monto))}</span>
+                          {/* Un abono anulado ya no se corrige: el servidor lo rechazaria. */}
+                          {isAdmin && !anulado && <EditAbonoModal abonoId={abono.id} cuentaId={cuenta.id} valorActual={Number(abono.monto)} />}
                           {isAdmin &&
-                            abono.estado !== 'anulado' &&
-                            !(abono.notas || '').includes('[ANULADO]') &&
+                            !anulado &&
                             abono.origen_fondos !== 'saldo_a_favor' &&
                             abonosConSaldoActivo.has(abono.id) && (
                               <RevertAbonoConSaldoButton cuentaId={cuenta.id} abonoId={abono.id} />
                             )}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-[rgb(var(--text-muted))] text-xs truncate max-w-[150px]">{abono.notas || '-'}</td>
+                      <td className="px-4 py-3 text-[rgb(var(--text-muted))] text-xs truncate max-w-[180px]" title={notaLegible(abono.notas)}>
+                        {notaLegible(abono.notas) || '-'}
+                      </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                   {!abonos.length && (
                     <tr>
                       <td colSpan={4} className="px-4 py-8 text-center text-[rgb(var(--text-muted))]">
@@ -291,7 +299,7 @@ export default async function DetalleCuentaPage({
                     <Wallet className="w-5 h-5 text-emerald-600" />
                     <h3 className="font-semibold text-[rgb(var(--text-primary))]">Saldo a Favor Disponible</h3>
                   </div>
-                  <p className="text-2xl font-bold text-[rgb(var(--success))] mb-4">${saldoAFavor.toLocaleString('es-CO')}</p>
+                  <p className="text-2xl font-bold text-[rgb(var(--success))] mb-4">{pesos(saldoAFavor)}</p>
                   <AplicarSaldoForm 
                     cuentaId={cuenta.id} 
                     asistenteId={asistenteId}
@@ -320,24 +328,35 @@ export default async function DetalleCuentaPage({
       {isAdmin && auditoria && auditoria.length > 0 && (
         <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden mt-6">
           <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50">
-            <h3 className="font-medium text-zinc-900">Historial de Correcciones (Admin)</h3>
+            <h3 className="font-medium text-zinc-900">Historial de cambios (Admin)</h3>
           </div>
           <div className="divide-y divide-zinc-100">
-            {auditoria.map((aud) => (
-              <div key={aud.id} className="p-4 text-sm">
-                <div className="flex justify-between mb-1">
-                  <span className="font-medium text-zinc-900">
-                    {aud.accion === 'edicion_valor' ? 'Edición de Valor Total' : 'Edición de Abono'}
-                  </span>
-                  <span className="text-zinc-500">{aud.fecha ? new Date(aud.fecha).toLocaleString('es-CO') : ''}</span>
+            {auditoria.map((aud) => {
+              const linea = describirAccionAuditoria(aud.accion)
+              return (
+                <div key={aud.id} className="p-4 text-sm">
+                  <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 mb-1">
+                    <span className="font-medium text-zinc-900">{linea.titulo}</span>
+                    <span className="text-zinc-500">{formatearFechaHora(aud.fecha)}</span>
+                  </div>
+                  <div className="text-zinc-600 mb-1">
+                    {linea.tipo === 'nuevo' && (
+                      <>Valor: <span className="text-emerald-600 font-medium">{pesos(Number(aud.valor_nuevo))}</span></>
+                    )}
+                    {linea.tipo === 'baja' && (
+                      <>Valor: <span className="line-through text-red-500">{pesos(Number(aud.valor_anterior))}</span></>
+                    )}
+                    {linea.tipo === 'cambio' && (
+                      <>
+                        Antes <span className="line-through text-red-500">{pesos(Number(aud.valor_anterior))}</span>
+                        {' → '}ahora <span className="text-emerald-600 font-medium">{pesos(Number(aud.valor_nuevo))}</span>
+                      </>
+                    )}
+                  </div>
+                  {aud.motivo && <div className="text-zinc-500 italic">Motivo: {aud.motivo}</div>}
                 </div>
-                <div className="text-zinc-600 mb-1">
-                  Cambio: <span className="line-through text-red-500">${Number(aud.valor_anterior).toLocaleString('es-CO')}</span> 
-                  {' -> '} <span className="text-emerald-600 font-medium">${Number(aud.valor_nuevo).toLocaleString('es-CO')}</span>
-                </div>
-                <div className="text-zinc-500 italic">Motivo: {aud.motivo}</div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}

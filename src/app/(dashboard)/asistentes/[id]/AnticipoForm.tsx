@@ -5,6 +5,7 @@ import { saveAnticipo } from '../actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { AlertCircle, CheckCircle2 } from 'lucide-react'
+import { useConservarSiFalla } from '@/lib/hooks/use-conservar-si-falla'
 
 type AnticipoFormProps = {
   asistenteId: string
@@ -14,6 +15,7 @@ type AnticipoFormProps = {
 export function AnticipoForm({ asistenteId, disabled = false }: AnticipoFormProps) {
   const actionWithId = saveAnticipo.bind(null, asistenteId)
   const [state, formAction, isPending] = useActionState(actionWithId, null)
+  const recordarFormulario = useConservarSiFalla(state)
   const formRef = useRef<HTMLFormElement>(null)
 
   // Limpiar el formulario despues de guardar. Va en un efecto: hacerlo
@@ -25,7 +27,7 @@ export function AnticipoForm({ asistenteId, disabled = false }: AnticipoFormProp
   const isLocked = disabled || isPending
 
   return (
-    <form ref={formRef} action={formAction} className="space-y-4">
+    <form ref={formRef} onSubmitCapture={recordarFormulario} action={formAction} className="space-y-4">
       {state?.error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-red-600">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />

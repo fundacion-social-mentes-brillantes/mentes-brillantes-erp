@@ -7,10 +7,12 @@ import { Input } from '@/components/ui/input'
 import { AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import type { Tables } from '@/lib/supabase/types'
+import { useConservarSiFalla } from '@/lib/hooks/use-conservar-si-falla'
 
 export function AsistenteForm({ asistente, codigoSugerido, readOnlyDates = false }: { asistente?: Tables<'asistentes'> | null; codigoSugerido?: number; readOnlyDates?: boolean }) {
   const actionWithId = saveAsistente.bind(null, asistente?.id || null)
   const [state, formAction, isPending] = useActionState(actionWithId, null)
+  const recordarFormulario = useConservarSiFalla(state)
 
   const [codigoInterno, setCodigoInterno] = useState<string>(
     asistente?.codigo != null
@@ -21,7 +23,7 @@ export function AsistenteForm({ asistente, codigoSugerido, readOnlyDates = false
   )
 
   return (
-    <form action={formAction} className="space-y-6 w-full max-w-2xl bg-white p-4 md:p-6 rounded-xl border border-zinc-200 shadow-sm">
+    <form onSubmitCapture={recordarFormulario} action={formAction} className="space-y-6 w-full max-w-2xl bg-white p-4 md:p-6 rounded-xl border border-zinc-200 shadow-sm">
       {state?.error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-red-600">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />

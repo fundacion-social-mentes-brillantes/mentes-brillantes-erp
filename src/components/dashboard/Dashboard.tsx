@@ -18,6 +18,7 @@ const PdfReportButton = dynamic(() => import("./PdfReportButton").then((m) => m.
 });
 import { filtrarIngresosOperativos, filtrarIngresosRealesSaldoAFavor, esAnuladoCompleto, filtrarPagosValidosCuentas, sumarMontos } from "@/lib/utils/contable";
 import { construirSerieDiaria } from "@/lib/utils/dashboard";
+import { pesos } from "@/lib/utils/pesos"
 
 type Periodo = {
   id: string;
@@ -344,7 +345,8 @@ export async function Dashboard({ periodo: periodoId }: { periodo?: string }) {
                 <p className="text-xs text-[rgb(var(--text-muted))] truncate">{periodoLabel} · {periodoFechasLabel}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3 shrink-0">
+            {/* En celular los dos controles bajan de renglon en vez de salirse de la pantalla. */}
+            <div className="flex flex-wrap items-center gap-3 min-w-0">
               <PdfReportButton displayMonthName={periodoLabel} />
               <PeriodSelector periodos={periodos} currentId={selectedPeriodo?.id} />
             </div>
@@ -361,12 +363,12 @@ export async function Dashboard({ periodo: periodoId }: { periodo?: string }) {
             <div className="mt-3 flex items-center justify-center gap-3 flex-wrap text-xs text-[rgb(var(--text-muted))]">
               <span className="inline-flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-[rgb(var(--success))]" />
-                Ingresos <b className="text-[rgb(var(--success))] tabular-nums">${ingresosTotales.toLocaleString()}</b>
+                Ingresos <b className="text-[rgb(var(--success))] tabular-nums">{pesos(ingresosTotales)}</b>
               </span>
               <span className="opacity-60">−</span>
               <span className="inline-flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-[rgb(var(--danger))]" />
-                Egresos <b className="text-[rgb(var(--danger))] tabular-nums">${egresosMes.toLocaleString()}</b>
+                Egresos <b className="text-[rgb(var(--danger))] tabular-nums">{pesos(egresosMes)}</b>
               </span>
             </div>
             <div className="mt-3 flex items-center justify-center gap-2">
@@ -395,7 +397,7 @@ export async function Dashboard({ periodo: periodoId }: { periodo?: string }) {
                 <c.icon className="h-4 w-4" />
               </span>
             </div>
-            <p className="mt-2 text-xl md:text-2xl font-extrabold tracking-tight tabular-nums" style={{ color: `rgb(${c.color})` }}>${c.value.toLocaleString()}</p>
+            <p className="mt-2 text-xl md:text-2xl font-extrabold tracking-tight tabular-nums" style={{ color: `rgb(${c.color})` }}>{pesos(c.value)}</p>
             <div className="mt-2">{trendPill(c.trend, c.goodIsUp)}</div>
           </div>
         ))}
@@ -425,7 +427,7 @@ export async function Dashboard({ periodo: periodoId }: { periodo?: string }) {
                 <b.icon className="h-4 w-4" />
               </span>
             </div>
-            <p className="mt-2 text-lg md:text-2xl font-extrabold tracking-tight tabular-nums" style={{ color: `rgb(${b.color})` }}>${b.value.toLocaleString()}</p>
+            <p className="mt-2 text-lg md:text-2xl font-extrabold tracking-tight tabular-nums" style={{ color: `rgb(${b.color})` }}>{pesos(b.value)}</p>
             {typeof b.trend === "number" && <div className="mt-2">{trendPill(b.trend, b.goodIsUp ?? true)}</div>}
           </div>
         ))}

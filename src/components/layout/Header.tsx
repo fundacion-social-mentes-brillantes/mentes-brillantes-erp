@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme/ThemeProvider";
 import { createClient } from "@/lib/supabase/client";
 import { filtrarPagosValidosCuentas } from "@/lib/utils/contable";
+import { pesos } from '@/lib/utils/pesos'
 
 type AlertItem = {
   title: string;
@@ -92,7 +93,7 @@ export function Header({ userEmail, userRole = 'user' }: { userEmail?: string, u
         const pendiente = Math.max(0, Number(item.valor_total) - abonado);
         return {
           title: label,
-          description: `${item.asistentes?.nombre || "Asistente"} • Pendiente $${pendiente.toLocaleString()}`,
+          description: `${item.asistentes?.nombre || "Asistente"} • Pendiente ${pesos(pendiente)}`,
           href: `/cuentas/${item.id}`,
           icon,
         };
@@ -283,7 +284,7 @@ export function Header({ userEmail, userRole = 'user' }: { userEmail?: string, u
                             <span className="block text-sm font-medium text-[rgb(var(--text-primary))] truncate">{c.concepto}</span>
                             <span className="block text-xs text-[rgb(var(--text-muted))] truncate">{c.asistentes?.nombre || "Asistente"} · {c.estado}</span>
                           </span>
-                          <span className="shrink-0 text-xs font-medium text-[rgb(var(--text-muted))]">${Number(c.valor_total).toLocaleString()}</span>
+                          <span className="shrink-0 text-xs font-medium text-[rgb(var(--text-muted))]">{pesos(Number(c.valor_total))}</span>
                         </Link>
                       ))}
                     </div>
@@ -298,7 +299,7 @@ export function Header({ userEmail, userRole = 'user' }: { userEmail?: string, u
                         const cuentaId = m.cuentas_por_cobrar?.id;
                         const inner = (
                           <>
-                            <span className="block text-sm font-medium text-[rgb(var(--text-primary))] truncate">Abono ${Number(m.monto).toLocaleString()}</span>
+                            <span className="block text-sm font-medium text-[rgb(var(--text-primary))] truncate">Abono {pesos(Number(m.monto))}</span>
                             <span className="block text-xs text-[rgb(var(--text-muted))] truncate">
                               {m.cuentas_por_cobrar?.concepto || "Cuenta"} · {m.metodo_pago}
                               {m.notas ? `  ·  ${m.notas}` : ""}
@@ -341,7 +342,8 @@ export function Header({ userEmail, userRole = 'user' }: { userEmail?: string, u
         )}
       </div>
       
-      <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end flex-wrap sm:flex-nowrap">
+      {/* En celular: tema, avisos y avatar en una sola fila a la derecha (antes eran dos filas mas). */}
+      <div className="flex items-center gap-3 w-full sm:w-auto justify-end flex-nowrap">
         <ThemeToggle />
         {canSeeOperationalAlerts && (
           <div className="relative">
@@ -397,8 +399,8 @@ export function Header({ userEmail, userRole = 'user' }: { userEmail?: string, u
             )}
           </div>
         )}
-        <div className="flex items-center gap-3 border-l border-[rgba(var(--border),0.58)] pl-4 ml-2">
-          <div className="flex flex-col items-end min-w-0">
+        <div className="flex items-center gap-3 sm:border-l sm:border-[rgba(var(--border),0.58)] sm:pl-4 sm:ml-2" title={userEmail || undefined}>
+          <div className="hidden sm:flex flex-col items-end min-w-0">
             <span className="text-sm font-medium text-[rgb(var(--text-primary))] truncate max-w-[42vw] sm:max-w-[16rem]">{userEmail}</span>
             {userRole === 'admin' ? (
               <span className="text-[10px] sm:text-xs font-semibold premium-badge px-2 py-0.5 rounded-full mt-0.5">

@@ -3,6 +3,7 @@ import { textoParaFiltro } from "@/lib/supabase/filtros";
 import { redirect } from "next/navigation";
 import { AuthzError, requireRoles, type Role } from "@/lib/utils/authz";
 import type { DbClient } from "@/lib/supabase/types";
+import { pesos } from "@/lib/utils/pesos"
 
 export const dynamic = "force-dynamic";
 
@@ -115,7 +116,7 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
               <Link key={c.id} href={`/cuentas/${c.id}`} prefetch={false} className="block px-4 py-3 hover:bg-[rgb(var(--surface-2))] transition-colors">
                 <div className="flex items-center justify-between">
                   <p className="font-medium text-[rgb(var(--text-primary))]">{c.concepto}</p>
-                  <span className="text-sm text-[rgb(var(--text-muted))]">${Number(c.valor_total).toLocaleString()}</span>
+                  <span className="text-sm text-[rgb(var(--text-muted))]">{pesos(Number(c.valor_total))}</span>
                 </div>
                 <p className="text-xs text-[rgb(var(--text-muted))]">
                   {c.asistentes?.nombre || "Asistente"} • {c.estado}
@@ -132,7 +133,7 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
           <div className="divide-y divide-[rgb(var(--border))] rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] overflow-hidden">
             {results.movimientos.map((m) => (
               <div key={m.id} className="px-4 py-3">
-                <p className="font-medium text-[rgb(var(--text-primary))]">Abono ${Number(m.monto).toLocaleString()}</p>
+                <p className="font-medium text-[rgb(var(--text-primary))]">Abono {pesos(Number(m.monto))}</p>
                 <p className="text-xs text-[rgb(var(--text-muted))]">
                   {m.cuentas_por_cobrar?.concepto || "Cuenta"} • {m.metodo_pago} • {m.fecha_pago}
                 </p>
