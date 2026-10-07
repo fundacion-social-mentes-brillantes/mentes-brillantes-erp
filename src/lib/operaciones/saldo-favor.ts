@@ -1,3 +1,4 @@
+import { mensajeDeError } from "@/lib/utils/errores"
 import type { DbClient } from "@/lib/supabase/types"
 import {
   calcularPendienteCuenta,
@@ -426,13 +427,13 @@ export async function pagarDeudasConSaldo(supabase: DbClient, actor: ActorErp, a
         monto: paso.seAplica,
       })
       aplicadas.push({ cuentaId: paso.cuentaId, concepto: paso.concepto, monto: paso.seAplica })
-    } catch (e: any) {
+    } catch (e) {
       if (!aplicadas.length) throw e
       return {
         aplicadas,
         totalAplicado: aplicadas.reduce((a, x) => a + x.monto, 0),
         parcial: true,
-        motivo: e?.message || "Se interrumpio al aplicar una de las cuentas.",
+        motivo: mensajeDeError(e, "Se interrumpio al aplicar una de las cuentas."),
       }
     }
   }

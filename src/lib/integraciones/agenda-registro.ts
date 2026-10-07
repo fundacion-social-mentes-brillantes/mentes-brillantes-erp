@@ -1,6 +1,7 @@
 import { registrarSesionCoach } from "@/lib/operaciones/coach"
 import { resumenCoach } from "@/lib/utils/coach"
 import { OperacionError } from "@/lib/operaciones/errores"
+import type { DbClient } from "@/lib/supabase/types"
 
 // Pasar una sesion de la AGENDA a la contabilidad, desde el boton de la agenda.
 //
@@ -23,7 +24,7 @@ export type ResultadoRegistro =
 
 export type ResumenCupo = { compradas: number; realizadas: number; restantes: number }
 
-async function paquetesDe(admin: any, asistenteId: string) {
+async function paquetesDe(admin: DbClient, asistenteId: string) {
   const { data, error } = await admin
     .from("coach_paquetes")
     .select("id, cuenta_id, sesiones_compradas, creado_en, coach_sesiones (id), cuentas_por_cobrar (concepto)")
@@ -34,7 +35,7 @@ async function paquetesDe(admin: any, asistenteId: string) {
 }
 
 /** Ya registrada si esta enlazada a este evento, o si esa persona ya tiene una sesion ese dia. */
-async function sesionYaRegistrada(admin: any, asistenteId: string, fecha: string, eventoAgendaId: string | null) {
+async function sesionYaRegistrada(admin: DbClient, asistenteId: string, fecha: string, eventoAgendaId: string | null) {
   const { data, error } = await admin
     .from("coach_sesiones")
     .select("id, evento_agenda_id, fecha")
@@ -57,7 +58,7 @@ async function sesionYaRegistrada(admin: any, asistenteId: string, fecha: string
 }
 
 export async function pasarSesionDeAgendaAlErp(
-  admin: any,
+  admin: DbClient,
   params: { codigo: string; fecha: string; eventoAgendaId?: string | null }
 ): Promise<ResultadoRegistro> {
   const codigo = String(params.codigo).trim()
@@ -82,7 +83,7 @@ export async function pasarSesionDeAgendaAlErp(
   }
 
   const paquetes = await paquetesDe(admin, persona.id)
-  const cupo = resumenCoach(paquetes as any)
+  const cupo = resumenCoach(paquetes)
 
   if (await sesionYaRegistrada(admin, persona.id, fecha, eventoAgendaId)) {
     return {
@@ -109,13 +110,29 @@ export async function pasarSesionDeAgendaAlErp(
     }
   }
 
-  const registrada = await registrarSesionCoach(
-    admin,
-    { userId: "agenda", role: "caja" },
-    { asistenteId: persona.id, fecha, eventoAgendaId }
-  )
+  let registrada: Awaited<ReturnType<typeof registrarSesionCoach>>
+  try {
+    registrada = await registrarSesionCoach(
+      admin,
+      { userId: "agenda", role: "caja" },
+      { asistenteId: persona.id, fecha, eventoAgendaId }
+    )
+  } catch (error) {
+    // Dos clics casi a la vez: el segundo choca con el indice unico del evento.
+    // Si al volver a mirar la sesion ya esta, es "ya estaba", no un error.
+    if (await sesionYaRegistrada(admin, persona.id, fecha, eventoAgendaId)) {
+      return {
+        estado: "ya_estaba",
+        persona: persona.nombre,
+        fecha,
+        mensaje: `${persona.nombre} ya tiene registrada la sesión del ${fecha} en el ERP.`,
+        coach: cupo,
+      }
+    }
+    throw error
+  }
 
-  const destino = paquetes.find((p: any) => p.id === registrada.paqueteId)
+  const destino = paquetes.find((p) => p.id === registrada.paqueteId)
   const cuenta = Array.isArray(destino?.cuentas_por_cobrar)
     ? destino?.cuentas_por_cobrar[0]
     : destino?.cuentas_por_cobrar
@@ -148,7 +165,7 @@ export type EventoConsultado = { id: string; codigo?: string | null; fecha?: str
  * agenda algo ya cobrado.
  */
 export async function eventosYaEnElErp(
-  admin: any,
+  admin: DbClient,
   eventos: Array<EventoConsultado | string>
 ): Promise<string[]> {
   const lista: EventoConsultado[] = eventos
@@ -177,7 +194,7 @@ export async function eventosYaEnElErp(
   const codigos = Array.from(new Set(conDatos.map((e) => String(e.codigo))))
   const { data: personas } = await admin.from("asistentes").select("id, codigo").in("codigo", codigos)
 
-  const idPorCodigo = new Map<string, string>((personas || []).map((p: any) => [String(p.codigo), p.id]))
+  const idPorCodigo = new Map<string, string>((personas || []).map((p) => [String(p.codigo), p.id]))
   if (!idPorCodigo.size) return Array.from(registrados)
 
   const fechas = Array.from(new Set(conDatos.map((e) => String(e.fecha))))
@@ -187,7 +204,7 @@ export async function eventosYaEnElErp(
     .in("asistente_id", Array.from(new Set(idPorCodigo.values())))
     .in("fecha", fechas)
 
-  const porPersonaFecha = new Map<string, any>()
+  const porPersonaFecha = new Map<string, NonNullable<typeof sesiones>[number]>()
   for (const s of sesiones || []) porPersonaFecha.set(`${s.asistente_id}|${s.fecha}`, s)
 
   const porRellenar: Array<{ sesionId: string; eventoId: string }> = []

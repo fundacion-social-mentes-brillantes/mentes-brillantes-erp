@@ -1,3 +1,4 @@
+import { filtrarPagosValidos, sumarMontos, toSafeNumber, type PagoRecord } from "@/lib/utils/contable"
 import type { DbClient } from "@/lib/supabase/types"
 import { OperacionError } from "./errores"
 
@@ -56,20 +57,17 @@ export type Cobertura = {
 
 const pesos = (n: number) => `$${Math.round(n).toLocaleString("es-CO")}`
 
-/** Un pago anulado no cuenta. Se marca por partida doble: estado y nota. */
-const esAnulado = (p: any) =>
-  String(p?.estado || "").toLowerCase() === "anulado" ||
-  String(p?.notas || "").toUpperCase().includes("[ANULADO]")
+type CuentaConPagos = { valor_total: number | string | null; pagos_abonos?: PagoRecord[] | null }
 
-function pendienteDeCuenta(cuenta: any): number {
+/** Lo que falta por pagar; un pago anulado (por estado o por nota) no cuenta. */
+function pendienteDeCuenta(cuenta: CuentaConPagos | null | undefined): number {
   if (!cuenta) return 0
-  const pagado = (cuenta.pagos_abonos || [])
-    .filter((p: any) => !esAnulado(p))
-    .reduce((total: number, p: any) => total + Number(p?.monto || 0), 0)
-  return Math.max(0, Number(cuenta.valor_total || 0) - pagado)
+  const pagado = sumarMontos(filtrarPagosValidos(cuenta.pagos_abonos || []))
+  return Math.max(0, toSafeNumber(cuenta.valor_total) - pagado)
 }
 
-const primera = (v: any) => (Array.isArray(v) ? v[0] : v)
+/** Un embebido de PostgREST puede llegar como objeto o como lista de uno. */
+const primera = <T>(v: T | T[] | null | undefined): T | null | undefined => (Array.isArray(v) ? v[0] : v)
 
 /** Cupo y deuda de cada persona, en tres consultas para toda la lista. */
 export async function cargarEstadoCupo(
@@ -105,7 +103,7 @@ export async function cargarEstadoCupo(
 
   for (const id of ids) mapa.set(id, { paquetes: [], deudaTotal: 0 })
 
-  for (const p of (paquetes || []) as any[]) {
+  for (const p of paquetes || []) {
     const estado = mapa.get(p.asistente_id)
     if (!estado) continue
     const cuenta = primera(p.cuentas_por_cobrar)
@@ -119,7 +117,8 @@ export async function cargarEstadoCupo(
     })
   }
 
-  for (const c of (cuentas || []) as any[]) {
+  for (const c of cuentas || []) {
+    if (!c.asistente_id) continue
     const estado = mapa.get(c.asistente_id)
     if (estado) estado.deudaTotal += pendienteDeCuenta(c)
   }

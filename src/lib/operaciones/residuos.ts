@@ -1,3 +1,4 @@
+import { filtrarPagosValidos, sumarMontos } from "@/lib/utils/contable"
 import type { DbClient } from "@/lib/supabase/types"
 import { leerTodas } from "@/lib/supabase/paginar"
 import { OperacionError } from "./errores"
@@ -43,17 +44,10 @@ export async function buscarCuentasConResiduo(admin: DbClient): Promise<CuentaCo
 
   const resultado: CuentaConResiduo[] = []
 
-  for (const cuenta of (data || []) as any[]) {
+  for (const cuenta of data || []) {
     // Un pago anulado no cuenta (doble marca: estado y nota), igual que en el
     // resto del sistema.
-    const pagado = (cuenta.pagos_abonos || [])
-      .filter((pago: any) => {
-        const anulado =
-          String(pago?.estado || "").toLowerCase() === "anulado" ||
-          String(pago?.notas || "").toUpperCase().includes("[ANULADO]")
-        return !anulado
-      })
-      .reduce((total: number, pago: any) => total + Number(pago?.monto || 0), 0)
+    const pagado = sumarMontos(filtrarPagosValidos(cuenta.pagos_abonos || []))
 
     const valorTotal = Number(cuenta.valor_total || 0)
     const residuo = valorTotal - pagado

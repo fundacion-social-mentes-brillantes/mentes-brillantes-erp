@@ -1,3 +1,4 @@
+import { mensajeDeError } from "@/lib/utils/errores"
 import type { DbClient } from "@/lib/supabase/types"
 import { OperacionError } from "./errores"
 import { fechaHoyBogota } from "@/lib/utils/fechas"
@@ -276,18 +277,18 @@ export async function calcularDiferencias(
 
   if (errorEventos) throw new OperacionError("No se pudieron leer los eventos de la agenda.")
 
-  const yaResuelto = new Set((resueltas || []).map((r: any) => `${r.evento_id}|${r.tipo}`))
+  const yaResuelto = new Set((resueltas || []).map((r) => `${r.evento_id}|${r.tipo}`))
   const lista = eventos || []
   if (!lista.length) return []
 
-  const codigos = Array.from(new Set(lista.map((e: any) => String(e.codigo_persona))))
+  const codigos = Array.from(new Set(lista.map((e) => String(e.codigo_persona))))
 
   const { data: personas } = await admin
     .from("asistentes")
     .select("id, codigo, nombre")
     .in("codigo", codigos)
 
-  const porCodigo = new Map<string, any>((personas || []).map((p: any) => [String(p.codigo), p]))
+  const porCodigo = new Map((personas || []).map((p) => [String(p.codigo), p]))
 
   // Sesiones del ERP en la ventana, para cruzarlas con los eventos.
   const { data: sesiones } = await admin
@@ -296,8 +297,9 @@ export async function calcularDiferencias(
     .gte("fecha", desde)
     .lte("fecha", hasta)
 
-  const porEvento = new Map<string, any>()
-  const porPersonaFecha = new Map<string, any>()
+  type SesionErp = NonNullable<typeof sesiones>[number]
+  const porEvento = new Map<string, SesionErp>()
+  const porPersonaFecha = new Map<string, SesionErp>()
   for (const s of sesiones || []) {
     if (s.evento_agenda_id) porEvento.set(s.evento_agenda_id, s)
     porPersonaFecha.set(`${s.asistente_id}|${s.fecha}`, s)
@@ -402,7 +404,7 @@ async function adjuntarCobertura(admin: DbClient, diferencias: Diferencia[]) {
   const porPersona = new Map<string, Diferencia[]>()
   for (const d of diferencias) {
     if (d.tipo !== "sesion_sin_registrar") continue
-    const asistenteId = String((d.detalle as any)?.asistenteId || "")
+    const asistenteId = String(d.detalle?.asistenteId || "")
     if (!asistenteId) continue
     const lista = porPersona.get(asistenteId) || []
     lista.push(d)
@@ -413,9 +415,9 @@ async function adjuntarCobertura(admin: DbClient, diferencias: Diferencia[]) {
   let estados
   try {
     estados = await cargarEstadoCupo(admin, Array.from(porPersona.keys()))
-  } catch (error: any) {
+  } catch (error) {
     // Avisar sin el cupo sigue siendo mejor que no avisar.
-    console.error("[agenda-sync] no se pudo calcular el cupo", { message: error?.message })
+    console.error("[agenda-sync] no se pudo calcular el cupo", { message: mensajeDeError(error, "desconocido") })
     return
   }
 

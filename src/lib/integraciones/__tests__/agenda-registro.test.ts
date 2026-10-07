@@ -7,8 +7,11 @@ function fakeAdmin(opts: {
   persona?: { id: string; nombre: string; codigo: string } | null
   paquetes?: any[]
   sesionesExistentes?: any[]
+  /** Simula el segundo de dos clics: al insertar, el otro ya guardo la sesion. */
+  chocaConOtroClic?: boolean
 }) {
   const insertados: Array<{ tabla: string; filas: any[] }> = []
+  let sesiones = opts.sesionesExistentes ?? []
 
   const client: any = {
     insertados,
@@ -18,7 +21,7 @@ function fakeAdmin(opts: {
       const resolver = async () => {
         if (tabla === "asistentes") return { data: opts.persona ?? null, error: null }
         if (tabla === "coach_paquetes") return { data: opts.paquetes ?? [], error: null }
-        if (tabla === "coach_sesiones") return { data: opts.sesionesExistentes ?? [], error: null }
+        if (tabla === "coach_sesiones") return { data: sesiones, error: null }
         return { data: [], error: null }
       }
 
@@ -35,6 +38,10 @@ function fakeAdmin(opts: {
         maybeSingle: () => resolver(),
         insert: (filas: any[]) => {
           insertados.push({ tabla, filas })
+          if (opts.chocaConOtroClic && tabla === "coach_sesiones") {
+            sesiones = [{ id: "del-otro-clic", fecha: filas[0].fecha, evento_agenda_id: filas[0].evento_agenda_id }]
+            return Promise.resolve({ error: { code: "23505", message: "duplicate key value violates unique constraint" } })
+          }
           return Promise.resolve({ error: null })
         },
         then: (res: any, rej: any) => resolver().then(res, rej),
@@ -69,6 +76,18 @@ describe("pasarSesionDeAgendaAlErp", () => {
     const insertada = admin.insertados.find((x: any) => x.tabla === "coach_sesiones")
     expect(insertada.filas[0].evento_agenda_id).toBe("evt-abc")
     expect(insertada.filas[0].fecha).toBe("2026-07-29")
+  })
+
+  it("dos clics casi a la vez: el segundo contesta 'ya estaba' y no un error", async () => {
+    const admin = fakeAdmin({ persona: PERSONA, paquetes: [paquete(3, 1)], chocaConOtroClic: true })
+
+    const r: any = await pasarSesionDeAgendaAlErp(admin, {
+      codigo: "211",
+      fecha: "2026-07-29",
+      eventoAgendaId: "evt-abc",
+    })
+
+    expect(r.estado).toBe("ya_estaba")
   })
 
   // Lo que el boton de la agenda tiene que poder decir sin escribir nada.

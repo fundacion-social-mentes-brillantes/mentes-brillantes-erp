@@ -1,3 +1,4 @@
+import { filtrarPagosValidos, sumarMontos } from "@/lib/utils/contable"
 import type { DbClient } from "@/lib/supabase/types"
 import { leerTodas } from "@/lib/supabase/paginar"
 import { OperacionError } from "./errores"
@@ -59,21 +60,14 @@ export async function buscarPrepagadasSinUsar(
   const hoy = new Date()
   const resultado: PrepagadaSinUsar[] = []
 
-  for (const paquete of paquetes as any[]) {
+  for (const paquete of paquetes) {
     const cuenta = Array.isArray(paquete.cuentas_por_cobrar)
       ? paquete.cuentas_por_cobrar[0]
       : paquete.cuentas_por_cobrar
     if (!cuenta?.fecha_emision) continue
 
     // Un anulado no cuenta como pago (doble marca: estado y nota).
-    const pagado = (cuenta.pagos_abonos || [])
-      .filter((p: any) => {
-        const anulado =
-          String(p?.estado || "").toLowerCase() === "anulado" ||
-          String(p?.notas || "").toUpperCase().includes("[ANULADO]")
-        return !anulado
-      })
-      .reduce((total: number, p: any) => total + Number(p?.monto || 0), 0)
+    const pagado = sumarMontos(filtrarPagosValidos(cuenta.pagos_abonos || []))
 
     if (pagado <= 0) continue
 

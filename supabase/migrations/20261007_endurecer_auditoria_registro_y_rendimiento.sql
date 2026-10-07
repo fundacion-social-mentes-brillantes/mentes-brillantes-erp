@@ -209,4 +209,13 @@ create policy saldo_delete_admin_recent_caja on public.movimientos_saldo_favor
     )
   );
 
+-- Un evento de la agenda no puede quedar cobrado dos veces. schema.sql ya lo
+-- declaraba UNICO, pero en produccion el indice se creo sin UNIQUE: dos clics
+-- seguidos en "pasar al ERP" podian descontar dos sesiones. Revisado el
+-- 7 oct 2026: no hay ningun evento repetido, asi que el indice unico entra limpio.
+drop index if exists public.idx_coach_sesiones_evento_agenda;
+create unique index idx_coach_sesiones_evento_agenda
+  on public.coach_sesiones (evento_agenda_id)
+  where evento_agenda_id is not null;
+
 commit;
