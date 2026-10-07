@@ -37,7 +37,7 @@ const selectSingle = (data: any, error: any = null) => ({
 })
 
 const insertSingle = (data: any, error: any = null) =>
-  vi.fn(() => ({
+  vi.fn((_filas: Array<Record<string, unknown>>) => ({
     select: vi.fn(() => ({
       single: vi.fn().mockResolvedValue({ data, error }),
     })),

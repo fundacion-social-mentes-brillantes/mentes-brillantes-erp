@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest"
-import { analyzeErpQuestion, mergeWorkspaceEntity } from "../erp-analyst"
+import { analyzeErpQuestion, mergeWorkspaceEntity, type AnalystDecision } from "../erp-analyst"
 import type { TelegramSessionState } from "../memory"
+
+// Solo algunas decisiones traen texto; las de herramienta no.
+const textOf = (decision: AnalystDecision) => ("text" in decision ? decision.text : "")
 
 const marcelaResult: NonNullable<TelegramSessionState["lastStructuredResult"]> = {
   type: "cuentas_pendientes_persona",
@@ -20,28 +23,28 @@ describe("telegram cajero erp analyst", () => {
   it("responde total desde lastResultSummary estructurado sin buscar persona", () => {
     const decision = analyzeErpQuestion("en total cuanto debe?", { lastStructuredResult: marcelaResult })
     expect(decision.kind).toBe("answer")
-    expect(decision.text).toContain("$819.000")
-    expect(decision.text).toContain("$145.000 + $100.000")
+    expect(textOf(decision)).toContain("$819.000")
+    expect(textOf(decision)).toContain("$145.000 + $100.000")
   })
 
   it("suma los items del ultimo resultado", () => {
     const decision = analyzeErpQuestion("cuanto da la suma de eso?", { lastStructuredResult: marcelaResult })
     expect(decision.kind).toBe("answer")
-    expect(decision.text).toContain("$819.000")
+    expect(textOf(decision)).toContain("$819.000")
   })
 
   it("observa prudentemente el ultimo resultado", () => {
     const decision = analyzeErpQuestion("que observas?", { lastStructuredResult: marcelaResult })
     expect(decision.kind).toBe("answer")
-    expect(decision.text).toContain("revisar")
-    expect(decision.text).toContain("$278.000")
+    expect(textOf(decision)).toContain("revisar")
+    expect(textOf(decision)).toContain("$278.000")
   })
 
   it("explica el ultimo resultado", () => {
     const decision = analyzeErpQuestion("explicame eso", { lastStructuredResult: marcelaResult })
     expect(decision.kind).toBe("answer")
-    expect(decision.text).toContain("cuentas_pendientes_persona")
-    expect(decision.text).toContain("Fuentes")
+    expect(textOf(decision)).toContain("cuentas_pendientes_persona")
+    expect(textOf(decision)).toContain("Fuentes")
   })
 
   it("quien debe mas usa cartera global si no hay workspace", () => {
@@ -73,15 +76,15 @@ describe("telegram cajero erp analyst", () => {
 
     const sum = analyzeErpQuestion("suma las 3", state)
     expect(sum.kind).toBe("answer")
-    expect(sum.text).toContain("$919.000")
+    expect(textOf(sum)).toContain("$919.000")
 
     const top = analyzeErpQuestion("cual debe mas", state)
     expect(top.kind).toBe("answer")
-    expect(top.text).toContain("Marcela")
+    expect(textOf(top)).toContain("Marcela")
 
     const second = analyzeErpQuestion("explicame la segunda", state)
     expect(second.kind).toBe("answer")
-    expect(second.text).toContain("Sandra")
+    expect(textOf(second)).toContain("Sandra")
   })
 
   it("suma los dos y compara desde workspace", () => {
@@ -93,9 +96,9 @@ describe("telegram cajero erp analyst", () => {
         ],
       },
     }
-    expect(analyzeErpQuestion("suma los dos", state).text).toContain("$819.000")
-    expect(analyzeErpQuestion("comparalos dos", state).text).toContain("Marcela")
-    expect(analyzeErpQuestion("cual esta peor", state).text).toContain("Marcela")
+    expect(textOf(analyzeErpQuestion("suma los dos", state))).toContain("$819.000")
+    expect(textOf(analyzeErpQuestion("comparalos dos", state))).toContain("Marcela")
+    expect(textOf(analyzeErpQuestion("cual esta peor", state))).toContain("Marcela")
   })
 
   it("la segunda resuelve desde workspace", () => {
@@ -107,7 +110,7 @@ describe("telegram cajero erp analyst", () => {
         ],
       },
     }
-    expect(analyzeErpQuestion("explicame la segunda", state).text).toContain("Sandra")
+    expect(textOf(analyzeErpQuestion("explicame la segunda", state))).toContain("Sandra")
   })
 
   it("que esta raro activa alertas", () => {

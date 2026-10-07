@@ -173,7 +173,7 @@ describe("registrarAbono: reglas contables", () => {
     await expect(
       registrarAbono(db, ACTOR, { cuentaId: "c1", monto: 150000, metodoPago: "efectivo", fechaPago: "2026-07-10", notas: null })
     ).rejects.toBeInstanceOf(OperacionError)
-    expect(db.borrados.some((b) => b.tabla === "pagos_abonos")).toBe(true)
+    expect(db.borrados.some((b: { tabla: string }) => b.tabla === "pagos_abonos")).toBe(true)
   })
 
   it("revierte todo si falla la consolidacion de la cuenta", async () => {
@@ -181,8 +181,8 @@ describe("registrarAbono: reglas contables", () => {
     await expect(
       registrarAbono(db, ACTOR, { cuentaId: "c1", monto: 150000, metodoPago: "efectivo", fechaPago: "2026-07-10", notas: null })
     ).rejects.toThrow(/revirtio/i)
-    expect(db.borrados.some((b) => b.tabla === "pagos_abonos")).toBe(true)
-    expect(db.borrados.some((b) => b.tabla === "movimientos_saldo_favor")).toBe(true)
+    expect(db.borrados.some((b: { tabla: string }) => b.tabla === "pagos_abonos")).toBe(true)
+    expect(db.borrados.some((b: { tabla: string }) => b.tabla === "movimientos_saldo_favor")).toBe(true)
   })
 
   it("deja auditoria del abono", async () => {

@@ -13,3 +13,6 @@ coverage/
 
 # Config local de Claude Code (no es parte de la app)
 .claude/
+
+# Caché de compilación y temporales
+.tmp/

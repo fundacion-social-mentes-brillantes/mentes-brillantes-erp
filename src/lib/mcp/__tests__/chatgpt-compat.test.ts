@@ -25,8 +25,16 @@ vi.mock("@/lib/telegram-cajero/tools", async () => {
 import { registerErpTools } from "../erp-tools"
 
 const RAW_TOOLS_LIST_SCHEMA = z.object({
-  tools: z.array(z.object({ name: z.string() }).passthrough()),
+  tools: z.array(z.object({
+    name: z.string(),
+    securitySchemes: z.unknown().optional(),
+    _meta: z.object({ securitySchemes: z.unknown().optional() }).passthrough().optional(),
+  }).passthrough()),
 }).passthrough()
+
+// callTool devuelve un tipo amplio; aqui solo nos interesa el texto del primer bloque.
+const firstText = (result: unknown) =>
+  (result as { content: Array<{ text: string }> }).content[0].text
 
 function validAuthInfo(): AuthInfo {
   return {
@@ -192,7 +200,7 @@ describe("compatibilidad MCP real con ChatGPT", () => {
         name: "search",
         arguments: { query: "Taller" },
       })
-      const searchText = JSON.parse((searchResult.content[0] as any).text)
+      const searchText = JSON.parse(firstText(searchResult))
       expect(searchText).toEqual(searchResult.structuredContent)
       const searchUrl = new URL((searchResult.structuredContent as any).results[0].url)
       expect(searchUrl.origin).toBe("https://erp.example.test")
@@ -204,7 +212,7 @@ describe("compatibilidad MCP real con ChatGPT", () => {
         name: "fetch",
         arguments: { id: "ventas_externas:sale-1" },
       })
-      const fetchText = JSON.parse((fetchResult.content[0] as any).text)
+      const fetchText = JSON.parse(firstText(fetchResult))
       expect(fetchText).toEqual(fetchResult.structuredContent)
       const fetchUrl = new URL((fetchResult.structuredContent as any).url)
       expect(fetchUrl.origin).toBe("https://erp.example.test")
