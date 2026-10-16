@@ -14,5 +14,13 @@ coverage/
 # Config local de Claude Code (no es parte de la app)
 .claude/
 
-# Caché de compilación y temporales
+# CachÃ© de compilaciÃ³n y temporales
 .tmp/
+
+# Android (la llave de firma vive fuera del repo, en C:\Android\firma)
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+*.jks
+*.keystore

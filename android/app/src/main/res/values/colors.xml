@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- El fondo del ERP (theme_color de src/app/manifest.ts). -->
+    <color name="fondo">#0a1016</color>
+</resources>

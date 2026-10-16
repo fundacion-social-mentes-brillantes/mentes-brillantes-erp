@@ -1,0 +1,15 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.use_as_origin"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "org.fundacionsocialmentesbrillantes.finanzas",
+      "sha256_cert_fingerprints": [
+        "F7:23:49:51:7D:5D:01:F5:84:D9:0D:24:59:5C:D0:A4:E0:85:C4:D6:62:F3:5A:78:E5:C3:E4:E1:47:0D:53:4D"
+      ]
+    }
+  }
+]

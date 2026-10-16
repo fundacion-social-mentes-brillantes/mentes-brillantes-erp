@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Finanzas GEMB</string>
+    <string name="url_inicio" translatable="false">https://mentes-brillantes-erp.vercel.app/</string>
+    <string name="proveedor" translatable="false">org.fundacionsocialmentesbrillantes.finanzas.archivos</string>
+    <string name="asset_statements" translatable="false">
+        [{\"relation\": [\"delegate_permission/common.handle_all_urls\", \"delegate_permission/common.use_as_origin\"],
+          \"target\": {\"namespace\": \"web\", \"site\": \"https://mentes-brillantes-erp.vercel.app\"}}]
+    </string>
+</resources>
