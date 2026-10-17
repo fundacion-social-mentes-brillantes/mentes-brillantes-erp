@@ -10,6 +10,8 @@ import {
   siguienteCodigoPersona,
   type CambiosPersona,
 } from "@/lib/operaciones/personas"
+import { apagarEnlace, cambiarEnlace, encenderEnlace, estadoEnlace } from "@/lib/enlaces-personales/enlaces"
+import { secretoEnlaces } from "@/lib/enlaces-personales/token"
 import { OperacionMcpError } from "../operaciones"
 import {
   FECHA,
@@ -180,6 +182,66 @@ export const OPERACIONES_PERSONAS: DefinicionOperacion[] = [
       const { asistenteId, ...cambios } = d
       const r = await editarPersona(admin, { userId: actor.userId, role: actor.role }, asistenteId, cambios)
       return { asistente_id: r.id, nombre: r.nombre, campos_cambiados: r.camposCambiados }
+    },
+  }),
+
+  operacion({
+    nombre: "enlace_personal",
+    titulo: "Crear, cambiar o apagar el enlace «Mi proceso» de una persona",
+    descripcion:
+      "Maneja el enlace privado con el que una persona ve sus sesiones y sus pagos desde el celular, sin contraseña " +
+      "(solo para mirar). crear: lo enciende (si ya estaba encendido, sigue el mismo). cambiar: da uno nuevo y el que " +
+      "ya se envió deja de funcionar. apagar: la persona ya no puede abrir su página. Por seguridad esta operación no " +
+      "devuelve el enlace: después de confirmar, pídelo con la herramienta enlace_personal.",
+    roles: ["admin", "caja"],
+    riesgo: "editar",
+    schema: {
+      persona: z.string().trim().min(1).max(160),
+      accion: z.enum(["crear", "cambiar", "apagar"]),
+    },
+    previsualizar: async (admin, _actor, args) => {
+      if (!secretoEnlaces()) throw new OperacionMcpError("Los enlaces personales no están configurados en el servidor.")
+      const persona = await resolverPersona(admin, String(args.persona))
+      const accion = args.accion as "crear" | "cambiar" | "apagar"
+      const actual = await estadoEnlace(admin, persona.id)
+      const encendido = Boolean(actual?.activo)
+      if (accion === "apagar" && !encendido) {
+        throw new OperacionMcpError(`${persona.nombre} no tiene un enlace encendido; no hay nada que apagar.`)
+      }
+      const resumen = {
+        crear: encendido
+          ? `${persona.nombre} ya tiene su enlace encendido: se deja el mismo`
+          : `Crear el enlace «Mi proceso» de ${persona.nombre}`,
+        cambiar: `Darle a ${persona.nombre} un enlace nuevo (el que ya se envió dejará de funcionar)`,
+        apagar: `Apagar el enlace de ${persona.nombre} (ya no podrá abrir su página)`,
+      }[accion]
+      return {
+        datos: { asistenteId: persona.id, nombre: persona.nombre, accion },
+        resumen,
+        detalle: {
+          persona: persona.nombre,
+          codigo: persona.codigo,
+          accion,
+          estado_actual: encendido ? "encendido" : actual ? "apagado" : "sin enlace",
+        },
+        avisos: [
+          accion === "cambiar" && encendido ? "El enlace anterior dejará de funcionar para la persona." : null,
+        ],
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const asistenteId = String(d.asistenteId)
+      if (d.accion === "apagar") {
+        await apagarEnlace(admin, asistenteId)
+        return { persona: d.nombre, estado: "apagado" }
+      }
+      if (d.accion === "cambiar") await cambiarEnlace(admin, asistenteId, actor.userId)
+      else await encenderEnlace(admin, asistenteId, actor.userId)
+      return {
+        persona: d.nombre,
+        estado: "encendido",
+        siguiente_paso: "Pide el enlace con la herramienta enlace_personal para enviárselo.",
+      }
     },
   }),
 

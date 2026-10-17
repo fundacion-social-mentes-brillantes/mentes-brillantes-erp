@@ -34,6 +34,8 @@ import { buscarCuentasConResiduo } from "@/lib/operaciones/residuos"
 import { auditMcpToolCall, McpAuditError } from "./audit"
 import { sanitizeMcpData } from "./privacy"
 import { leerConfiguracionEmpresa } from "@/lib/operaciones/configuracion"
+import { consultarEnlace } from "@/lib/enlaces-personales/enlaces"
+import { secretoEnlaces } from "@/lib/enlaces-personales/token"
 import { MCP_PRIMARY_SCOPE } from "./constants"
 
 type ToolOutput = {
@@ -565,6 +567,18 @@ export function registerErpTools(server: McpServer) {
   registerPersonTool(server, "compras_persona", "Compras de una persona", "Cuentas y conceptos comprados, con abonado y pendiente.", (s, id, args) => getPersonPurchasesOrConcepts(s, id, args.limite || 15))
   registerPersonTool(server, "donaciones_persona", "Donaciones de una persona", "Donaciones válidas registradas.", (s, id) => getPersonDonations(s, id))
   registerPersonTool(server, "sesiones_coach_persona", "Sesiones coach de una persona", "Conteos y fechas de sesiones; nunca devuelve notas privadas.", (s, id) => getCoachSessions(s, id))
+  registerPersonTool(
+    server,
+    "enlace_personal",
+    "Enlace «Mi proceso» de una persona",
+    "Devuelve el enlace privado con el que la persona ve sus sesiones y sus pagos desde el celular (solo para mirar), " +
+      "si está encendido, y cuándo lo abrió por última vez. Si no tiene, explica cómo crearlo con preparar_enlace_personal.",
+    async (s, id) => {
+      const secreto = secretoEnlaces()
+      if (!secreto) throw new Error("Los enlaces personales no están configurados en el servidor.")
+      return consultarEnlace(s, id, secreto)
+    }
+  )
 
   register(
     server,

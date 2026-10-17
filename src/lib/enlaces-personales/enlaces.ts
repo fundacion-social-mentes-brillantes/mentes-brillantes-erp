@@ -79,6 +79,24 @@ export async function validarEnlace(admin: DbClient, token: string, secreto: str
   return datos.asistenteId
 }
 
+export type ConsultaEnlace =
+  | { estado: "encendido"; enlace: string; ultimo_acceso: string | null }
+  | { estado: "apagado" | "sin_enlace"; mensaje: string }
+
+/** Lo que responde el MCP cuando le piden el enlace de alguien. */
+export async function consultarEnlace(admin: DbClient, asistenteId: string, secreto: string): Promise<ConsultaEnlace> {
+  const estado = await estadoEnlace(admin, asistenteId)
+  if (estado?.activo) {
+    return { estado: "encendido", enlace: urlEnlace(asistenteId, estado.version, secreto), ultimo_acceso: estado.ultimoAcceso }
+  }
+  return {
+    estado: estado ? "apagado" : "sin_enlace",
+    mensaje: estado
+      ? "Su enlace esta apagado. Para darle uno nuevo, usa preparar_enlace_personal con accion crear."
+      : "Todavia no tiene enlace. Para crearlo, usa preparar_enlace_personal con accion crear.",
+  }
+}
+
 /** Anota cuando la persona abrio su pagina (para que el equipo lo vea). */
 export async function anotarAcceso(admin: DbClient, asistenteId: string) {
   await admin

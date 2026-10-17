@@ -24,6 +24,7 @@ export type OperacionEscritura =
   | "sesion_coach"
   | "persona"
   | "editar_persona"
+  | "enlace_personal"
   | "anular_movimiento"
   | "eliminar_movimiento"
   | "editar_movimiento"

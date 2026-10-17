@@ -24,6 +24,8 @@ const PERMISOS_ESPERADOS: Record<string, Array<"admin" | "caja">> = {
   sesion_coach: ["admin", "caja"],
   persona: ["admin", "caja"],
   editar_persona: ["admin", "caja"],
+  // Enlace "Mi proceso": en la ficha lo manejan admin y caja (enlaceActions.ts)
+  enlace_personal: ["admin", "caja"],
 
   // Egresos: en el ERP la cajera NO puede, ni siquiera crear.
   egreso: ["admin"],
