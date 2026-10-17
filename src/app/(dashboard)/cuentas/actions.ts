@@ -14,7 +14,11 @@ import { registrarAuditoria, type FilaAuditoria } from "@/lib/operaciones/audito
 import { editarValorCuenta, eliminarCuenta } from "@/lib/operaciones/cuentas"
 import { editarMontoAbono } from "@/lib/operaciones/editar-abono"
 import { OperacionError, exigirMetodoPago } from "@/lib/operaciones/errores"
-import { aplicarSaldoAFavor, revertirAbonoConSaldo as revertirAbonoConSaldoOp } from "@/lib/operaciones/saldo-favor"
+import {
+  aplicarSaldoAFavor,
+  deshacerPagoConSaldo as deshacerPagoConSaldoOp,
+  revertirAbonoConSaldo as revertirAbonoConSaldoOp,
+} from "@/lib/operaciones/saldo-favor"
 
 // Acciones del modulo de cuentas. Las reglas contables (abonos, saldo a favor,
 // valor de la cuenta, borrado, reversos) viven en lib/operaciones, las mismas
@@ -247,6 +251,26 @@ export async function revertirAbonoConSaldo(cuentaId: string, abonoId: string): 
 
   revalidatePath(`/cuentas/${cuentaId}`)
   revalidatePath("/cuentas")
+  revalidatePath("/movimientos")
+  revalidatePath("/dashboard")
+  return { success: true }
+}
+
+// --------------------------------------------
+// Deshacer un pago hecho CON saldo a favor: se anula y el saldo vuelve a la persona
+// (transaccion atomica en la RPC revertir_pago_con_saldo_trx).
+// --------------------------------------------
+export async function deshacerPagoConSaldo(cuentaId: string, abonoId: string): Promise<ActionState> {
+  try {
+    const { supabase, user } = await requireAdmin()
+    await deshacerPagoConSaldoOp(supabase, { userId: user.id, role: "admin" }, { cuentaId, abonoId })
+  } catch (e) {
+    return comoError(e, "Error al anular el pago.")
+  }
+
+  revalidatePath(`/cuentas/${cuentaId}`)
+  revalidatePath("/cuentas")
+  revalidatePath("/asistentes")
   revalidatePath("/movimientos")
   revalidatePath("/dashboard")
   return { success: true }

@@ -42,8 +42,8 @@ export const OPERACIONES_CORRECCIONES: DefinicionOperacion[] = [
     titulo: "Anular un movimiento",
     descripcion:
       "Marca como ANULADO un pago, egreso, donacion o venta externa mal registrado. No lo borra: queda el rastro. " +
-      "Es la forma correcta de corregir un error. Los pagos hechos con saldo a favor y los que generaron sobrepago " +
-      "no se pueden anular por aqui.",
+      "Es la forma correcta de corregir un error. Un pago hecho con saldo a favor tambien se anula aqui: el saldo " +
+      "vuelve a la persona en la misma operacion. Los pagos que generaron sobrepago se anulan con revertir_abono_con_saldo.",
     roles: ["admin"],
     riesgo: "destructiva",
     schema: {

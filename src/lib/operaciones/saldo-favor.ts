@@ -3,6 +3,8 @@ import type { DbClient } from "@/lib/supabase/types"
 import {
   calcularPendienteCuenta,
   calcularSaldoFavorDisponibleRaw,
+  esAnuladoCompleto,
+  esSaldoAFavor,
   toSafeNumber,
 } from "@/lib/utils/contable"
 import { assertFechaEditable } from "@/lib/utils/periodos"
@@ -209,6 +211,82 @@ export async function revertirAbonoConSaldo(
   const estadoCuenta = await recalcularEstadoCuenta(supabase, params.cuentaId)
 
   return { abonoId: params.abonoId, montoRevertido: v.monto, estadoCuenta }
+}
+
+// ------------------------------------------- deshacer un pago hecho con saldo
+
+// Un pago que SALIO del saldo a favor se anula devolviendo ese saldo: anular
+// solo el pago dejaria el saldo gastado sin contrapartida. Lo hace la RPC
+// revertir_pago_con_saldo_trx en una transaccion: anula el pago, marca su
+// descuento de saldo y devuelve el monto ACTUAL del pago (si se corrigio, sus
+// ajustes [ABONO:id] ya movieron el saldo) como un ingreso con metodo
+// saldo_a_favor, que nunca cuenta como ingreso nuevo. Los pagos de la carga
+// inicial no tienen su descuento registrado y la RPC los rechaza.
+
+export const EFECTO_DESHACER_PAGO_CON_SALDO =
+  "El pago queda ANULADO, la deuda de esa cuenta vuelve a subir y el saldo a favor regresa a la persona."
+
+export type DeshacerPagoConSaldoParams = {
+  cuentaId: string
+  abonoId: string
+  /** Por que se anula; queda en la auditoria. */
+  motivo?: string | null
+}
+
+async function validarDeshacerPagoConSaldo(supabase: DbClient, params: DeshacerPagoConSaldoParams) {
+  const { data: abono, error } = await supabase
+    .from("pagos_abonos")
+    .select(
+      "cuenta_id, monto, estado, notas, origen_fondos, metodo_pago, fecha_pago, cuentas_por_cobrar(concepto, asistente_id, asistentes(nombre))"
+    )
+    .eq("id", params.abonoId)
+    .single()
+
+  if (error || !abono) throw new OperacionError("No se encontró el pago.")
+  if (abono.cuenta_id !== params.cuentaId) throw new OperacionError("El pago no pertenece a la cuenta indicada.")
+  if (!esSaldoAFavor(abono)) throw new OperacionError("Ese pago no se hizo con saldo a favor.")
+  if (esAnuladoCompleto(abono)) throw new OperacionError("Ese pago ya está anulado.")
+
+  const periodoError = await assertFechaEditable(supabase, abono.fecha_pago, "Anular el pago")
+  if (periodoError) throw new OperacionError(periodoError)
+
+  const cuenta = Array.isArray(abono.cuentas_por_cobrar) ? abono.cuentas_por_cobrar[0] : abono.cuentas_por_cobrar
+  const persona = cuenta ? (Array.isArray(cuenta.asistentes) ? cuenta.asistentes[0] : cuenta.asistentes) : null
+
+  return {
+    monto: toSafeNumber(abono.monto),
+    fecha: abono.fecha_pago as string,
+    concepto: cuenta?.concepto ?? null,
+    personaNombre: persona?.nombre ?? null,
+    asistenteId: cuenta?.asistente_id ?? null,
+  }
+}
+
+export async function previsualizarDeshacerPagoConSaldo(supabase: DbClient, params: DeshacerPagoConSaldoParams) {
+  const v = await validarDeshacerPagoConSaldo(supabase, params)
+  const saldoAntes = v.asistenteId ? await saldoFavorDisponible(supabase, v.asistenteId) : 0
+  return { ...v, saldoAntes, saldoDespues: saldoAntes + v.monto, efecto: EFECTO_DESHACER_PAGO_CON_SALDO }
+}
+
+export async function deshacerPagoConSaldo(
+  supabase: DbClient,
+  actor: ActorErp,
+  params: DeshacerPagoConSaldoParams
+) {
+  const v = await validarDeshacerPagoConSaldo(supabase, params)
+  if (!actor.userId) throw new OperacionError("No se puede anular el pago sin identificar al usuario.")
+
+  const { data, error } = await supabase.rpc("revertir_pago_con_saldo_trx", {
+    p_abono_id: params.abonoId,
+    p_usuario_id: actor.userId,
+    p_motivo: params.motivo?.trim() || null,
+  })
+  if (error) {
+    throw new OperacionError(error.message || "No se pudo anular el pago. La operacion se revirtio por completo.")
+  }
+
+  const estadoCuenta = await recalcularEstadoCuenta(supabase, params.cuentaId)
+  return { abonoId: params.abonoId, montoDevuelto: toSafeNumber(data ?? v.monto), estadoCuenta }
 }
 
 export type RevertirAnticipoParams = { asistenteId: string; anticipoId: string }

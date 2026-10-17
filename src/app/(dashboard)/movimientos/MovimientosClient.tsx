@@ -137,11 +137,14 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
   }
 
   const movimientoBloqueado = isMovimientoBloqueadoEnHistorial(selectedMov?.tipo_movimiento, selectedMov?.metodo_pago)
+  // Un pago hecho con saldo a favor no se edita ni se borra, pero SI se anula:
+  // el servidor lo anula devolviendo el saldo a la persona.
+  const esPagoConSaldoElegido = selectedMov?.tipo_movimiento === 'abono' && esPagoConSaldo(selectedMov?.metodo_pago)
   const mensajeBloqueoMovimiento =
     selectedMov?.tipo_movimiento === 'anticipo'
       ? 'Los anticipos (saldo a favor) no se manejan desde el Historial General. Para revertirlos, usa la ficha de la persona.'
       : selectedMov?.tipo_movimiento === 'abono'
-        ? 'Este pago se hizo con saldo a favor. No se puede anular ni borrar desde aquí, porque el saldo ya se descontó; si fue un error, avísale al administrador.'
+        ? 'Este pago se hizo con saldo a favor: no se edita ni se borra. Si fue un error, anúlalo: la deuda vuelve a subir y el saldo regresa a la persona.'
         : 'El uso de saldo a favor no se edita, anula ni borra desde el Historial General, para no descuadrar las cuentas.'
 
   // La vista del historial no trae el monto de un pago hecho con saldo a favor
@@ -314,7 +317,10 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
 
   const handleAnular = async () => {
     if (!selectedMov) return
-    if (!window.confirm('¿Estás seguro de anular este movimiento?')) return;
+    const pregunta = esPagoConSaldoElegido
+      ? '¿Anular este pago hecho con saldo a favor? La deuda vuelve a subir y el saldo regresa a la persona.'
+      : '¿Estás seguro de anular este movimiento?'
+    if (!window.confirm(pregunta)) return;
 
     setIsAnulando(true)
     try {
@@ -718,7 +724,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                         <Pencil className="w-4 h-4" /> Editar
                       </button>
 
-                      {selectedMov.estado_o_saldo?.toLowerCase() !== 'anulado' && !movimientoBloqueado && (
+                      {selectedMov.estado_o_saldo?.toLowerCase() !== 'anulado' && (!movimientoBloqueado || esPagoConSaldoElegido) && (
                         <button
                           onClick={handleAnular}
                           disabled={isAnulando}

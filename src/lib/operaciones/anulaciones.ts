@@ -4,6 +4,7 @@ import { OperacionError, SinCambiosError, exigirFechaIso, exigirMetodoPago } fro
 import { registrarAuditoria } from "./auditoria"
 import { recalcularEstadoCuenta } from "./estado-cuenta"
 import type { ActorErp } from "./abonos"
+import { EFECTO_DESHACER_PAGO_CON_SALDO, deshacerPagoConSaldo } from "./saldo-favor"
 import {
   TABLA_POR_TIPO,
   TIPOS_MOVIMIENTO,
@@ -34,7 +35,7 @@ export const ANTICIPO_BLOQUEADO =
 export const ABONO_CON_SALDO_BLOQUEADO =
   "Ese abono generó saldo a favor por sobrepago. Anúlalo desde el detalle de la cuenta, para no duplicar ni perder dinero."
 export const PAGO_DESDE_SALDO_BLOQUEADO =
-  "No se puede anular ni eliminar este pago porque se hizo con saldo a favor, que ya se descontó. Si fue un error, avísale al administrador."
+  "Este pago se hizo con saldo a favor: no se puede eliminar. Si fue un error, anúlalo: la deuda vuelve a subir y el saldo regresa a la persona."
 
 export type AnularMovimientoParams = {
   tipo: TipoMovimientoAnulable
@@ -77,11 +78,20 @@ function exigirTipoAnulable(tipo: string, accion: string): asserts tipo is TipoM
   }
 }
 
-async function exigirAbonoSinSaldo(supabase: DbClient, mov: MovimientoLeido, abonoId: string) {
+/**
+ * Un pago que SALIO del saldo a favor no se borra (dejaria el saldo gastado
+ * sin contrapartida). Anularlo si se puede: anularMovimiento lo hace
+ * devolviendo el saldo (deshacerPagoConSaldo).
+ */
+async function exigirAbonoSinSaldo(
+  supabase: DbClient,
+  mov: MovimientoLeido,
+  abonoId: string,
+  opciones: { permitirPagoConSaldo?: boolean } = {}
+) {
   if (mov.tipo !== "abono") return
-  const origen = String(mov.origenFondos || "").toLowerCase()
-  const metodo = String(mov.metodoPago || "").toLowerCase()
-  if (origen === "saldo_a_favor" || metodo === "saldo_a_favor") {
+  if (esPagoConSaldo(mov)) {
+    if (opciones.permitirPagoConSaldo) return
     throw new OperacionError(PAGO_DESDE_SALDO_BLOQUEADO)
   }
   if (await tieneSaldoFavorAsociado(supabase, mov.cuentaId, abonoId)) {
@@ -100,7 +110,7 @@ async function validar(supabase: DbClient, params: AnularMovimientoParams) {
   const periodoError = await assertFechaEditable(supabase, mov.fecha, "Anular el movimiento")
   if (periodoError) throw new OperacionError(periodoError)
 
-  await exigirAbonoSinSaldo(supabase, mov, params.movimientoId)
+  await exigirAbonoSinSaldo(supabase, mov, params.movimientoId, { permitirPagoConSaldo: true })
   return mov
 }
 
@@ -146,9 +156,11 @@ export async function previsualizarAnulacion(
     fecha: mov.fecha,
     yaAnulado: false,
     efecto:
-      params.tipo === "abono"
-        ? "El pago dejara de contar y la deuda de esa cuenta volvera a subir."
-        : "El movimiento dejara de contar en los totales del periodo.",
+      params.tipo !== "abono"
+        ? "El movimiento dejara de contar en los totales del periodo."
+        : esPagoConSaldo(mov)
+          ? EFECTO_DESHACER_PAGO_CON_SALDO
+          : "El pago dejara de contar y la deuda de esa cuenta volvera a subir.",
   }
 }
 
@@ -158,6 +170,18 @@ export async function anularMovimiento(
   params: AnularMovimientoParams
 ) {
   const mov = await validar(supabase, params)
+
+  // Pago hecho con saldo a favor: se anula devolviendo el saldo, en una sola
+  // transaccion (que tambien deja la auditoria).
+  if (params.tipo === "abono" && esPagoConSaldo(mov)) {
+    if (!mov.cuentaId) throw new OperacionError("Ese pago no tiene una cuenta asociada.")
+    await deshacerPagoConSaldo(supabase, actor, {
+      cuentaId: mov.cuentaId,
+      abonoId: params.movimientoId,
+      motivo: params.motivo,
+    })
+    return { tipo: params.tipo, movimientoId: params.movimientoId, montoAnulado: mov.monto }
+  }
 
   const notasNuevas = `[ANULADO] ${mov.notas || ""}`.trim()
   const { error } = await actualizarMovimiento(supabase, params.tipo, params.movimientoId, {

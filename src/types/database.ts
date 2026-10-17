@@ -1259,6 +1259,10 @@ export type Database = {
             }
             Returns: undefined
           }
+      revertir_pago_con_saldo_trx: {
+        Args: { p_abono_id: string; p_usuario_id: string; p_motivo?: string | null }
+        Returns: number
+      }
       role_claim: {
         Args: never
         Returns: {

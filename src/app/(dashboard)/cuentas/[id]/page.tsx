@@ -8,6 +8,7 @@ import { AplicarSaldoForm } from './AplicarSaldoForm'
 import { EditValorModal, EditAbonoModal } from './EditModals'
 import { DeleteCuentaButton } from './DeleteCuentaButton'
 import { RevertAbonoConSaldoButton } from './RevertAbonoConSaldoButton'
+import { DeshacerPagoConSaldoButton } from './DeshacerPagoConSaldoButton'
 import { calcularSaldoFavorDisponibleRaw, filtrarPagosValidos, sumarMontos } from '@/lib/utils/contable'
 import { formatearFechaHora, formatearFechaIso } from '@/lib/utils/fechas'
 import { describirAccionAuditoria } from '@/lib/utils/auditoria-texto'
@@ -249,6 +250,9 @@ export default async function DetalleCuentaPage({
                             abonosConSaldoActivo.has(abono.id) && (
                               <RevertAbonoConSaldoButton cuentaId={cuenta.id} abonoId={abono.id} />
                             )}
+                          {isAdmin && !anulado && abono.origen_fondos === 'saldo_a_favor' && (
+                            <DeshacerPagoConSaldoButton cuentaId={cuenta.id} abonoId={abono.id} />
+                          )}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-[rgb(var(--text-muted))] text-xs truncate max-w-[180px]" title={notaLegible(abono.notas)}>
