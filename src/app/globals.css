@@ -541,6 +541,60 @@ body {
   .rise-in { animation: none; }
 }
 
+/* ============================================================
+   Pantalla de carga al cambiar de sección (CargandoSeccion):
+   el ícono flota, sus luces se mueven y el punto respira.
+   ============================================================ */
+@keyframes carga-aparece {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes carga-aparece-quieta {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes carga-flota {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes carga-halo {
+  0%, 100% { opacity: 0.45; transform: scale(0.92); }
+  50% { opacity: 0.85; transform: scale(1.05); }
+}
+@keyframes carga-luz-a {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(48px, -36px); }
+}
+@keyframes carga-luz-b {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(-48px, 36px); }
+}
+@keyframes carga-punto {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+/* El retraso de 0,12 s evita que en los cambios rápidos alcance a parpadear. */
+.carga-seccion { animation: carga-aparece 0.35s ease-out 0.12s both; }
+.carga-seccion-icono { animation: carga-flota 3.2s ease-in-out infinite; }
+.carga-seccion-halo {
+  background:
+    radial-gradient(circle at 28% 72%, rgba(255, 122, 46, 0.38), transparent 62%),
+    radial-gradient(circle at 76% 28%, rgba(43, 85, 255, 0.38), transparent 62%);
+  filter: blur(18px);
+  animation: carga-halo 3.2s ease-in-out infinite;
+}
+.carga-seccion-luz-a { animation: carga-luz-a 6s ease-in-out infinite; }
+.carga-seccion-luz-b { animation: carga-luz-b 7s ease-in-out infinite; }
+.carga-seccion-punto { animation: carga-punto 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .carga-seccion { animation-name: carga-aparece-quieta; }
+  .carga-seccion-icono,
+  .carga-seccion-halo,
+  .carga-seccion-luz-a,
+  .carga-seccion-luz-b,
+  .carga-seccion-punto { animation: none; }
+}
+
 /* Brillo dorado de la línea de utilidad en la gráfica del dashboard */
 #dashboard-content .recharts-line-curve {
   filter: drop-shadow(0 0 6px rgba(var(--warning), 0.45));
