@@ -8,8 +8,12 @@ describe("rutas publicas del middleware", () => {
     }
   })
 
+  it("la pagina Mi proceso (/p/<enlace>) se ve sin sesion: la protege su enlace firmado", () => {
+    expect(esRutaPublica("/p/AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_AbCdEfGh")).toBe(true)
+  })
+
   it("todo lo demas exige sesion, incluso rutas que solo se parecen", () => {
-    for (const ruta of ["/", "/cuentas", "/registros-viejos", "/loginfalso", "/movimientos", "/api/backup/pagos_abonos"]) {
+    for (const ruta of ["/", "/cuentas", "/registros-viejos", "/loginfalso", "/movimientos", "/api/backup/pagos_abonos", "/pagos", "/personas"]) {
       expect(esRutaPublica(ruta)).toBe(false)
     }
   })

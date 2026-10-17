@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Download, Share, X, Plus } from "lucide-react";
 
 type BeforeInstallPromptEvent = Event & {
@@ -31,6 +32,8 @@ export function InstallPrompt() {
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
   const [visible, setVisible] = useState(false);
   const [showIosHelp, setShowIosHelp] = useState(false);
+  // La pagina "Mi proceso" (/p/...) es de cada persona, no del equipo: ahi no se ofrece instalar el ERP.
+  const esPaginaPersonal = usePathname()?.startsWith("/p/") ?? false;
 
   useEffect(() => {
     if (isStandalone()) return; // ya está instalada
@@ -60,7 +63,7 @@ export function InstallPrompt() {
     };
   }, []);
 
-  if (!visible) return null;
+  if (!visible || esPaginaPersonal) return null;
 
   const dismiss = () => {
     setVisible(false);

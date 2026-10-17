@@ -6,6 +6,20 @@ const nextConfig = {
   outputFileTracingIncludes: {
     "/api/backup/[resource]": ["./supabase/schema.sql"],
   },
+  // "Mi proceso" (/p/<enlace>): pagina personal de cada persona. Sin cache, fuera
+  // de los buscadores y sin pasar su direccion a otros sitios.
+  async headers() {
+    return [
+      {
+        source: "/p/:token*",
+        headers: [
+          { key: "Cache-Control", value: "private, no-store, max-age=0" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
+          { key: "Referrer-Policy", value: "no-referrer" },
+        ],
+      },
+    ];
+  },
 };
 
 export default withSentryConfig(nextConfig, {

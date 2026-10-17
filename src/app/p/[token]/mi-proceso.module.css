@@ -1,0 +1,162 @@
+/* "Mi proceso": la pagina que cada persona abre con su enlace privado.
+   Diseno aprobado por Sebastian el 17-oct-2026 (carne con sellos):
+   rosado y vino del ERP, dorado solo en los sellos; Young Serif para titulos y
+   Public Sans para el texto. El dorado nunca es texto (no da contraste). */
+
+.fondo {
+  --rosado: #fcebf2;
+  --papel: #fff9fb;
+  --vino: #3c1a2c;
+  --vino-suave: #7a4a5e;
+  --linea: rgba(60, 26, 44, 0.12);
+  --dorado: #bf953f;
+  --dorado-tinta: #8a6420;
+  --frambuesa: #a8385e;
+  --barra: #d84c7c;
+
+  min-height: 100dvh;
+  background: var(--rosado);
+  color: var(--vino);
+  font-family: var(--letra-texto), system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.pagina {
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 22px 16px calc(40px + env(safe-area-inset-bottom));
+}
+
+.marca { display: flex; align-items: center; gap: 12px; }
+.marca img { width: 72px; height: auto; }
+.marca span { font-size: 13px; line-height: 1.25; color: var(--vino-suave); }
+
+.titulo,
+.subtitulo,
+.carne h2 {
+  font-family: var(--letra-titulos), Georgia, serif;
+  font-weight: 400;
+  margin: 0;
+}
+.titulo { font-size: 40px; line-height: 1.05; letter-spacing: -0.01em; margin-top: 26px; }
+.hoy { margin: 6px 0 0; color: var(--vino-suave); }
+
+/* El carne: papel con la ranura para colgarlo. */
+.carne {
+  position: relative;
+  margin-top: 26px;
+  background: var(--papel);
+  border: 1px solid var(--linea);
+  border-radius: 18px;
+  padding: 30px 20px 22px;
+  box-shadow: 0 1px 0 rgba(60, 26, 44, 0.04), 0 14px 30px -18px rgba(60, 26, 44, 0.35);
+}
+.carne::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  width: 46px;
+  height: 8px;
+  margin-left: -23px;
+  border-radius: 99px;
+  background: var(--rosado);
+  box-shadow: inset 0 1px 2px rgba(60, 26, 44, 0.25);
+}
+.carne h2 { font-size: 23px; }
+.dueno { margin: 2px 0 0; font-size: 14px; color: var(--vino-suave); }
+
+.sellos {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px 6px;
+  margin: 20px 0 14px;
+  padding: 0;
+  list-style: none;
+}
+.sello { aspect-ratio: 1; display: grid; place-items: center; }
+.sello svg { width: 100%; height: 100%; overflow: visible; }
+.tomada svg { transform: rotate(var(--giro, 0deg)); }
+.tomada .tinta { filter: url(#tinta-sello); }
+.dia { font: 400 17px var(--letra-titulos), Georgia, serif; fill: var(--dorado-tinta); }
+.mes { font: 700 9px var(--letra-texto), sans-serif; fill: var(--dorado-tinta); }
+
+/* Al abrir, los sellos se estampan uno tras otro (una sola vez). */
+.tomada { animation: estampar 0.32s cubic-bezier(0.2, 0.8, 0.25, 1) both; animation-delay: calc(var(--n) * 55ms + 250ms); }
+@keyframes estampar {
+  from { opacity: 0; transform: scale(1.35); }
+  to { opacity: 1; transform: none; }
+}
+
+.mas { margin: 0 0 14px; font-size: 14px; color: var(--vino-suave); }
+.vacio { margin: 18px 0 16px; color: var(--vino-suave); }
+
+.cuenta-sesiones { display: flex; gap: 22px; align-items: baseline; border-top: 1px dashed var(--linea); padding-top: 14px; }
+.cuenta-sesiones b { display: block; font: 400 30px/1 var(--letra-titulos), Georgia, serif; }
+.cuenta-sesiones span { font-size: 14px; color: var(--vino-suave); }
+
+/* Pagos */
+.pagos { margin-top: 34px; }
+.subtitulo { font-size: 26px; }
+.resumen { margin: 12px 0 18px; }
+.rotulo { margin: 0; color: var(--vino-suave); }
+.cifra { margin: 2px 0 4px; font: 400 36px/1.05 var(--letra-titulos), Georgia, serif; color: var(--frambuesa); }
+.cifra-al-dia { color: var(--vino); }
+.pagado { margin: 0; font-size: 15px; color: var(--vino-suave); }
+
+.deudas { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--linea); }
+.deuda { padding: 14px 0; border-bottom: 1px solid var(--linea); }
+.fila { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.deuda h3 { margin: 0; font: 700 16px/1.3 var(--letra-texto), sans-serif; }
+.monto { font-weight: 700; color: var(--frambuesa); white-space: nowrap; }
+.barra { height: 6px; margin: 9px 0 6px; border-radius: 99px; background: rgba(216, 76, 124, 0.16); overflow: hidden; }
+.barra i { display: block; height: 100%; border-radius: 99px; background: var(--barra); }
+.detalle { margin: 0; font-size: 14px; color: var(--vino-suave); }
+
+.pagadas { border-bottom: 1px solid var(--linea); }
+.pagadas summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 0;
+  font-weight: 700;
+}
+.pagadas summary::-webkit-details-marker { display: none; }
+.pagadas summary span { font-weight: 400; color: var(--vino-suave); font-size: 14px; }
+.pagadas[open] summary span::before { content: "Ocultar"; }
+.pagadas[open] summary span .ver { display: none; }
+.pagadas summary:focus-visible { outline: 3px solid var(--barra); outline-offset: 2px; border-radius: 6px; }
+.pagadas ul { list-style: none; margin: 0 0 12px; padding: 0; }
+.pagadas li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 15px; }
+.pagadas li em { font-style: normal; color: var(--vino-suave); white-space: nowrap; }
+
+.whatsapp {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 30px;
+  padding: 15px 18px;
+  border-radius: 12px;
+  background: var(--vino);
+  color: #fff;
+  font: 700 17px var(--letra-texto), sans-serif;
+  text-decoration: none;
+  transition: background-color 0.18s ease;
+}
+.whatsapp:hover { background: #2a111f; }
+.whatsapp:focus-visible { outline: 3px solid var(--barra); outline-offset: 3px; }
+.whatsapp svg { width: 22px; height: 22px; fill: currentColor; }
+.pie { margin: 18px 0 0; font-size: 13px; color: var(--vino-suave); text-align: center; }
+
+/* Enlace apagado o vista previa: solo la marca y un mensaje. */
+.aviso { margin-top: 26px; }
+.aviso p { margin: 10px 0 0; color: var(--vino-suave); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tomada { animation: none; }
+  .whatsapp { transition: none; }
+}

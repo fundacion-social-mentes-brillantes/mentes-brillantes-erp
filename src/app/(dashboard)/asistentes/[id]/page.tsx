@@ -10,7 +10,12 @@ import {
   HeartHandshake,
 } from "lucide-react"
 import { notFound } from "next/navigation"
-import { formatearFechaIso, fechaLocalISO } from "@/lib/utils/fechas"
+import { formatearFechaHora, formatearFechaIso, fechaLocalISO } from "@/lib/utils/fechas"
+import { createAdminClient } from "@/lib/supabase/admin"
+import { estadoEnlace, urlEnlace } from "@/lib/enlaces-personales/enlaces"
+import { secretoEnlaces } from "@/lib/enlaces-personales/token"
+import { primerNombre, telefonoWhatsApp } from "@/lib/enlaces-personales/proceso"
+import { EnlacePersonalCard } from "./EnlacePersonalCard"
 import { AnticipoForm } from "./AnticipoForm"
 import { PagarConSaldoButton } from "./PagarConSaldoButton"
 import { calcularSaldoFavorDisponible, esAnuladoCompleto, filtrarPagosValidos, sumarMontos, toSafeNumber } from "@/lib/utils/contable"
@@ -150,6 +155,13 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
   const totalAbonado = Math.round(toSafeNumber(cuentasProcesadas.reduce((acc, c) => acc + c.abonado, 0)))
   const saldoPendiente = Math.max(0, Math.round(toSafeNumber(totalFacturado - totalAbonado)))
 
+  // Enlace personal "Mi proceso": la tabla solo la lee el servidor (service role).
+  const secretoEnlace = secretoEnlaces()
+  const clienteEnlaces = createAdminClient()
+  const enlace =
+    secretoEnlace && clienteEnlaces ? await estadoEnlace(clienteEnlaces, id).catch(() => null) : null
+  const urlEnlacePersonal = enlace?.activo && secretoEnlace ? urlEnlace(id, enlace.version, secretoEnlace) : null
+
   const todosLosAbonos = (cuentas || [])
     .flatMap((cuenta) =>
       (cuenta.pagos_abonos || []).map((pago) => ({
@@ -242,6 +254,23 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                     : "No registrado"}
                 </p>
               </div>
+            </div>
+          </div>
+
+          <div className={cardContainer}>
+            <div className={cardHeader}>
+              <span className={headerAccent} aria-hidden />
+              <h3 className={cardTitle}>Enlace personal</h3>
+            </div>
+            <div className="p-5">
+              <EnlacePersonalCard
+                asistenteId={asistente.id}
+                primerNombre={primerNombre(asistente.nombre)}
+                whatsappPersona={telefonoWhatsApp(asistente.telefono)}
+                url={urlEnlacePersonal}
+                ultimoAcceso={enlace?.activo ? formatearFechaHora(enlace.ultimoAcceso) || null : null}
+                configurado={Boolean(secretoEnlace && clienteEnlaces)}
+              />
             </div>
           </div>
 

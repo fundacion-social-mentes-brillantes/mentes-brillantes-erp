@@ -510,6 +510,44 @@ export type Database = {
           },
         ]
       }
+      enlaces_personales: {
+        Row: {
+          activo: boolean
+          actualizado_en: string
+          asistente_id: string
+          creado_en: string
+          creado_por: string | null
+          ultimo_acceso: string | null
+          version: number
+        }
+        Insert: {
+          activo?: boolean
+          actualizado_en?: string
+          asistente_id: string
+          creado_en?: string
+          creado_por?: string | null
+          ultimo_acceso?: string | null
+          version?: number
+        }
+        Update: {
+          activo?: boolean
+          actualizado_en?: string
+          asistente_id?: string
+          creado_en?: string
+          creado_por?: string | null
+          ultimo_acceso?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enlaces_personales_asistente_id_fkey"
+            columns: ["asistente_id"]
+            isOneToOne: true
+            referencedRelation: "asistentes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       egresos: {
         Row: {
           categoria: string
