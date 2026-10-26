@@ -106,7 +106,7 @@ function registrarHerramienta(
   name: string,
   title: string,
   description: string,
-  inputSchema: Record<string, z.ZodTypeAny>,
+  inputSchema: z.ZodRawShape,
   anotaciones: typeof ANOTACIONES_BORRADOR | typeof ANOTACIONES_ESCRITURA,
   run: (admin: DbClient, actor: Actor, args: Record<string, unknown>) => Promise<unknown>
 ) {
@@ -187,7 +187,7 @@ export function registerEscrituraTools(server: McpServer) {
     "Paso 2 de 2. ESCRIBE en la contabilidad la operacion preparada. Llamala UNICAMENTE despues de que el usuario " +
       "haya aprobado explicitamente el resumen. Cada confirmacion sirve una sola vez.",
     {
-      confirmacion_id: z.string().uuid().describe("El id devuelto por una herramienta preparar_*"),
+      confirmacion_id: z.string().guid().describe("El id devuelto por una herramienta preparar_*"),
       confirmacion_reforzada: z
         .literal("CONFIRMO")
         .optional()
@@ -244,7 +244,7 @@ export function registerEscrituraTools(server: McpServer) {
     "cancelar_operacion",
     "Cancelar una operacion preparada",
     "Descarta un borrador que el usuario no aprobo, para que no pueda confirmarse despues por error.",
-    { confirmacion_id: z.string().uuid() },
+    { confirmacion_id: z.string().guid() },
     ANOTACIONES_BORRADOR,
     async (admin, actor, args) => {
       const ok = await cancelarBorrador(admin, { id: String(args.confirmacion_id), userId: actor.userId })

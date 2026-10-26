@@ -183,7 +183,7 @@ export const OPERACIONES_ADMINISTRACION: DefinicionOperacion[] = [
     roles: ["admin"],
     riesgo: "destructiva",
     schema: {
-      periodo_id: z.string().uuid(),
+      periodo_id: z.string().guid(),
       nueva_fecha_fin: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     },
     previsualizar: async (admin, _actor, args) => {
@@ -215,7 +215,7 @@ export const OPERACIONES_ADMINISTRACION: DefinicionOperacion[] = [
     roles: ["admin"],
     riesgo: "crear",
     schema: {
-      periodo_id: z.string().uuid(),
+      periodo_id: z.string().guid(),
       socio: z.string().trim().min(2).max(160),
       monto: z.coerce.number().positive().max(100_000_000),
       fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -266,7 +266,7 @@ export const OPERACIONES_ADMINISTRACION: DefinicionOperacion[] = [
       socio: z.string().trim().min(2).max(160),
       monto: z.coerce.number().positive().max(100_000_000),
       fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-      adelanto_id: z.string().uuid().optional(),
+      adelanto_id: z.string().guid().optional(),
       metodo_pago: z.enum(METODOS_PAGO).optional(),
       notas: z.string().trim().max(300).optional(),
     },
@@ -364,7 +364,7 @@ export const OPERACIONES_ADMINISTRACION: DefinicionOperacion[] = [
       "Es la operacion mas delicada del sistema.",
     roles: ["admin"],
     riesgo: "destructiva",
-    schema: { periodo_id: z.string().uuid() },
+    schema: { periodo_id: z.string().guid() },
     previsualizar: async (admin, _actor, args) => {
       const datos = { periodoId: String(args.periodo_id) }
       const periodo = await validarCierreLiquidacion(admin, datos.periodoId)
