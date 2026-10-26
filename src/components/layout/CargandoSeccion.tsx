@@ -109,11 +109,11 @@ export function CargandoSeccion() {
       </div>
 
       <div className="flex flex-col items-center gap-1.5">
-        <p aria-hidden className="m-0 flex items-baseline gap-0.5 text-[rgb(var(--text-primary))]">
+        <p aria-hidden className="m-0 flex items-baseline gap-0.5 text-tinta">
           <span ref={numero} className="text-4xl font-semibold tabular-nums tracking-tight">0</span>
-          <span className="text-lg font-semibold text-[rgb(var(--gold))]">%</span>
+          <span className="text-lg font-semibold text-oro">%</span>
         </p>
-        <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.28em] text-[rgb(var(--text-muted))]">{texto}</p>
+        <p className="m-0 text-xs font-semibold tracking-[0.28em] text-gris">{texto}</p>
       </div>
     </div>
   );

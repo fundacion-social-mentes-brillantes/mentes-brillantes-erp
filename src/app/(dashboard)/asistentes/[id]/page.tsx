@@ -32,11 +32,10 @@ import { pesos } from "@/lib/utils/pesos"
 import { metodoPagoLegible, notaLegible } from "@/lib/utils/textos"
 
 const cardContainer =
-  "rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] shadow-sm overflow-hidden"
+  "rounded-2xl border border-linea bg-panel overflow-hidden"
 const cardHeader =
-  "flex items-center gap-2 px-5 py-4 bg-[rgb(var(--surface-2))] border-b border-[rgb(var(--border))]"
-const cardTitle = "text-sm font-semibold text-[rgb(var(--text-primary))] tracking-wide"
-const headerAccent = "w-1 h-5 rounded-full bg-[rgb(var(--accent))]"
+  "flex items-center gap-2 px-5 py-4 border-b border-linea [&>svg]:text-gris"
+const cardTitle = "text-base font-semibold text-tinta"
 
 export default async function AsistenteDetallePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -173,40 +172,37 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
     .sort((a, b) => new Date(b.fecha_pago).getTime() - new Date(a.fecha_pago).getTime())
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto pb-10">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+    <div className="space-y-6 pb-10">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
           <Link
             href="/asistentes"
-            className="inline-flex p-2 text-zinc-400 hover:text-zinc-900 transition-colors rounded-md hover:bg-zinc-100"
+            aria-label="Volver a asistentes"
+            className="mt-0.5 inline-grid h-9 w-9 shrink-0 place-items-center rounded-lg text-gris transition-colors hover:bg-suave hover:text-tinta"
           >
             <ArrowLeft className="w-5 h-5" />
           </Link>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 flex items-center gap-3">
+          <div className="min-w-0">
+            <h1 className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xl font-semibold tracking-[-0.01em] text-tinta md:text-[1.75rem]">
               {asistente.nombre}
               <span
-                className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${
-                  actividad.activo
-                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200"
-                    : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-200"
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                  actividad.activo ? "bg-verde/12 text-verde" : "bg-suave-2 text-gris"
                 }`}
               >
                 {actividad.activo ? "Activo" : "Inactivo"}
               </span>
             </h1>
-            <p className="text-zinc-500 flex items-center gap-2">
-              {asistente.codigo && (
-                <span className="font-mono bg-zinc-100 px-1.5 py-0.5 rounded text-xs text-zinc-600">#{asistente.codigo}</span>
-              )}
-              {asistente.cedula && <span>CC: {asistente.cedula}</span>}
-              <span className="text-xs text-zinc-500 dark:text-zinc-400">Última actividad: {ultimaActividadTexto}</span>
+            <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gris">
+              {asistente.codigo && <span>Código {asistente.codigo}</span>}
+              {asistente.cedula && <span>CC {asistente.cedula}</span>}
+              <span>Última actividad: {ultimaActividadTexto}</span>
             </p>
           </div>
         </div>
         <Link
           href={`/asistentes/${asistente.id}/editar`}
-          className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium border border-zinc-200 bg-white hover:bg-zinc-100 hover:text-zinc-900 h-10 px-4 py-2"
+          className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-2xl border border-linea bg-panel px-4 text-sm font-semibold text-tinta transition-colors hover:border-linea-fuerte hover:bg-suave"
         >
           <Edit2 className="w-4 h-4" />
           Editar
@@ -217,27 +213,26 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
         {/* Columna izquierda */}
         <div className="space-y-6 md:col-span-1">
           {saldoFavorError && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 text-amber-800 p-4 text-sm">{saldoFavorError}</div>
+            <div className="rounded-xl border border-ambar/30 bg-ambar/10 text-ambar p-4 text-sm">{saldoFavorError}</div>
           )}
 
           <div className={cardContainer}>
             <div className={cardHeader}>
-              <span className={headerAccent} aria-hidden />
               <h3 className={cardTitle}>Información de Contacto</h3>
             </div>
             <div className="p-5 space-y-4">
               <div>
-                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Correo Electrónico</p>
-                <p className="text-sm text-zinc-900">{asistente.correo || "No registrado"}</p>
+                <p className="text-sm text-gris mb-0.5">Correo Electrónico</p>
+                <p className="text-sm text-tinta">{asistente.correo || "No registrado"}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Teléfono</p>
-                <p className="text-sm text-zinc-900">{asistente.telefono || "No registrado"}</p>
+                <p className="text-sm text-gris mb-0.5">Teléfono</p>
+                <p className="text-sm text-tinta">{asistente.telefono || "No registrado"}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Fecha de registro</p>
-                <p className="text-sm text-zinc-900 flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-zinc-400" />
+                <p className="text-sm text-gris mb-0.5">Fecha de registro</p>
+                <p className="text-sm text-tinta flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-gris" />
                   {asistente.fecha_registro
                     ? formatearFechaIso(asistente.fecha_registro)
                     : asistente.creado_en
@@ -246,9 +241,9 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                 </p>
               </div>
               <div>
-                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Fecha de inicio de proceso</p>
-                <p className="text-sm text-zinc-900 flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-zinc-400" />
+                <p className="text-sm text-gris mb-0.5">Fecha de inicio de proceso</p>
+                <p className="text-sm text-tinta flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-gris" />
                   {asistente.fecha_inicio_proceso
                     ? formatearFechaIso(asistente.fecha_inicio_proceso)
                     : "No registrado"}
@@ -259,7 +254,6 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
 
           <div className={cardContainer}>
             <div className={cardHeader}>
-              <span className={headerAccent} aria-hidden />
               <h3 className={cardTitle}>Enlace personal</h3>
             </div>
             <div className="p-5">
@@ -276,25 +270,24 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
 
           <div className={cardContainer}>
             <div className={cardHeader}>
-              <span className={headerAccent} aria-hidden />
               <h3 className={cardTitle}>Resumen Financiero</h3>
             </div>
             <div className="p-5 space-y-5">
               <div>
-                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Total Facturado</p>
-                <p className="text-xl font-semibold text-zinc-900">
+                <p className="text-sm text-gris mb-0.5">Total Facturado</p>
+                <p className="text-xl font-semibold text-tinta">
                   {pesos(toSafeNumber(totalFacturado))}
                 </p>
               </div>
               <div>
-                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Total Abonado</p>
-                <p className="text-xl font-semibold text-emerald-600">
+                <p className="text-sm text-gris mb-0.5">Total Abonado</p>
+                <p className="text-xl font-semibold text-verde">
                   {pesos(toSafeNumber(totalAbonado))}
                 </p>
               </div>
-              <div className="pt-4 border-t border-zinc-100">
-                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Saldo Pendiente</p>
-                <p className="text-xl font-semibold text-amber-600">
+              <div className="pt-4 border-t border-linea">
+                <p className="text-sm text-gris mb-0.5">Saldo Pendiente</p>
+                <p className="text-xl font-semibold text-ambar">
                   {pesos(toSafeNumber(saldoPendiente))}
                 </p>
               </div>
@@ -303,34 +296,33 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
 
           <div className={cardContainer}>
             <div className={cardHeader + " flex items-center"}>
-              <span className={headerAccent} aria-hidden />
-              <HeartHandshake className="w-4 h-4 text-[rgb(var(--text-muted))]" />
+              <HeartHandshake className="w-4 h-4 text-gris" />
               <h3 className={cardTitle}>Donaciones</h3>
             </div>
             <div className="p-5 space-y-3">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-zinc-600">Total donado</span>
-                <span className="font-semibold text-emerald-700">{pesos(toSafeNumber(totalDonado))}</span>
+                <span className="text-gris">Total donado</span>
+                <span className="font-semibold text-verde">{pesos(toSafeNumber(totalDonado))}</span>
               </div>
               <div className="flex items-center justify-between text-sm">
-                <span className="text-zinc-600">Cantidad de donaciones</span>
-                <span className="font-medium text-zinc-900">{cantidadDonaciones}</span>
+                <span className="text-gris">Cantidad de donaciones</span>
+                <span className="font-medium text-tinta">{cantidadDonaciones}</span>
               </div>
               <DonacionForm asistenteId={asistente.id} disabled={!isAdmin} />
               {donaciones.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-xs text-[rgb(var(--text-muted))]">Historial de donaciones</p>
+                  <p className="text-xs text-gris">Historial de donaciones</p>
                   <div className="space-y-2">
                     {donaciones.map((donacion) => (
                       <div
                         key={donacion.id}
-                        className="flex items-center justify-between rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] px-3 py-2"
+                        className="flex items-center justify-between py-2.5"
                       >
                         <div>
-                          <p className="text-sm font-medium text-[rgb(var(--text-primary))]">
+                          <p className="text-sm font-medium text-tinta">
                             {pesos(toSafeNumber(donacion.monto))} · {metodoPagoLegible(donacion.metodo_pago)}
                           </p>
-                          <p className="text-[11px] text-[rgb(var(--text-muted))]">
+                          <p className="text-xs text-gris">
                             {formatearFechaIso(donacion.fecha)}
                             {notaLegible(donacion.notas) ? ` · ${notaLegible(donacion.notas)}` : ""}
                           </p>
@@ -346,26 +338,24 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
 
           <div className={cardContainer}>
             <div className={cardHeader + " flex items-center"}>
-              <span className={headerAccent} aria-hidden />
-              <FileText className="w-4 h-4 text-[rgb(var(--text-muted))]" />
+              <FileText className="w-4 h-4 text-gris" />
               <h3 className={cardTitle}>Documentos</h3>
             </div>
-            <div className="p-5 space-y-3 text-sm text-zinc-600">
+            <div className="p-5 space-y-3 text-sm text-gris">
               <p>No hay documentos cargados.</p>
             </div>
           </div>
 
           <div className={cardContainer}>
             <div className={cardHeader + " flex items-center"}>
-              <span className={headerAccent} aria-hidden />
-              <Wallet className="w-4 h-4 text-[rgb(var(--text-muted))]" />
+              <Wallet className="w-4 h-4 text-gris" />
               <h3 className={cardTitle}>Saldo a Favor</h3>
             </div>
             <div className="p-5 space-y-3">
-              <p className="text-sm text-zinc-700">Saldo disponible: {pesos(toSafeNumber(saldoAFavor))}</p>
+              <p className="text-sm text-tinta">Saldo disponible: {pesos(toSafeNumber(saldoAFavor))}</p>
               <AnticipoForm asistenteId={asistente.id} disabled={!isAdmin} />
               {saldoAFavor > 0 && <PagarConSaldoButton asistenteId={asistente.id} disabled={!isAdmin} />}
-              <p className="text-[11px] text-zinc-500">
+              <p className="text-xs text-gris">
                 Los anticipos se revierten desde este perfil, no desde Historial General.
               </p>
             </div>
@@ -373,34 +363,33 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
 
           <div className={cardContainer}>
             <div className={cardHeader + " flex items-center"}>
-              <span className={headerAccent} aria-hidden />
-              <HeartHandshake className="w-4 h-4 text-[rgb(var(--text-muted))]" />
+              <HeartHandshake className="w-4 h-4 text-gris" />
               <h3 className={cardTitle}>Sesiones guía coach</h3>
             </div>
             <div className="p-5 space-y-3">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-zinc-600">Compradas</span>
-                <span className="font-medium text-zinc-900">{sesionesCompradas}</span>
+                <span className="text-gris">Compradas</span>
+                <span className="font-medium text-tinta">{sesionesCompradas}</span>
               </div>
               <div className="flex items-center justify-between text-sm">
-                <span className="text-zinc-600">Realizadas</span>
-                <span className="font-medium text-zinc-900">{sesionesRealizadas}</span>
+                <span className="text-gris">Realizadas</span>
+                <span className="font-medium text-tinta">{sesionesRealizadas}</span>
               </div>
               <div className="flex items-center justify-between text-sm">
-                <span className="text-zinc-600">Restantes</span>
-                <span className="font-medium text-zinc-900">{sesionesRestantes}</span>
+                <span className="text-gris">Restantes</span>
+                <span className="font-medium text-tinta">{sesionesRestantes}</span>
               </div>
 
               {/* El total de arriba suma todas las compras. Aquí se ven una por
                   una, que es lo que hace falta para no leerlas revueltas. */}
               {comprasCoach.length > 0 && (
-                <div className="pt-3 border-t border-zinc-200 space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                <div className="pt-3 border-t border-linea space-y-2">
+                  <p className="text-xs font-semibold text-gris">
                     Paquetes comprados ({comprasCoach.length})
                   </p>
                   {comprasCoach.map((compra, i) => (
-                    <div key={compra.id} className="rounded-lg border border-zinc-200 bg-white px-3 py-2">
-                      <p className="text-xs font-medium text-zinc-900">
+                    <div key={compra.id} className="rounded-xl bg-suave px-3 py-2">
+                      <p className="text-xs font-medium text-tinta">
                         {compra.cuentaId ? (
                           <Link href={`/cuentas/${compra.cuentaId}`} className="hover:underline">
                             {compra.concepto || "Paquete coach"}
@@ -409,15 +398,15 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                           compra.concepto || "Paquete coach"
                         )}
                         {i === 0 && comprasCoach.length > 1 && (
-                          <span className="ml-2 text-[10px] font-bold uppercase text-emerald-600">el último</span>
+                          <span className="ml-2 text-xs font-bold text-verde">el último</span>
                         )}
                       </p>
-                      <p className="text-[11px] text-zinc-500">
+                      <p className="text-xs text-gris">
                         Comprado el {formatearFechaIso(compra.compradoEl)} · {compra.usadas} de {compra.compradas} tomadas ·{" "}
                         {compra.restantes} {compra.restantes === 1 ? "queda" : "quedan"}
                       </p>
                       {compra.sesiones.length > 0 && (
-                        <p className="mt-1 text-[11px] text-zinc-600">
+                        <p className="mt-1 text-xs text-gris">
                           {compra.sesiones.map((s) => formatearFechaIso(s.fecha)).join(" · ")}
                         </p>
                       )}
@@ -447,39 +436,40 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
         {/* Columna derecha */}
         <div className="md:col-span-2 space-y-6">
           <div className={cardContainer}>
-            <div className={cardHeader + " flex items-center justify-between"}>
-              <span className={headerAccent} aria-hidden />
-              <CreditCard className="w-4 h-4 text-[rgb(var(--text-muted))]" />
-              <h3 className={cardTitle}>Cuentas por Cobrar</h3>
+            <div className={cardHeader + " justify-between"}>
+              <div className="flex items-center gap-2 [&>svg]:text-gris">
+                <CreditCard className="w-4 h-4" />
+                <h3 className={cardTitle}>Cuentas por Cobrar</h3>
+              </div>
               <Link
                 href={`/cuentas/nueva?asistente=${asistente.id}&returnTo=/asistentes/${asistente.id}`}
-                className="text-xs font-semibold text-[rgb(var(--accent-strong))] bg-[rgba(var(--accent),0.12)] border border-[rgba(var(--accent),0.35)] px-3 py-1.5 rounded-md hover:bg-[rgba(var(--accent),0.2)] transition-colors"
+                className="inline-flex h-9 items-center rounded-xl bg-acento/10 px-3 text-sm font-semibold text-acento transition-colors hover:bg-acento/15"
               >
                 Crear cuenta de cobro
               </Link>
             </div>
             <div className="p-5 space-y-4">
               {cuentasProcesadas.length ? (
-                <div className="h-[520px] overflow-y-auto space-y-4 pr-1">
+                <div className="max-h-[520px] overflow-y-auto divide-y divide-linea -my-2">
                   {cuentasProcesadas.map((cuenta) => (
                     <Link
                       key={cuenta.id}
                       href={`/cuentas/${cuenta.id}?backTo=/asistentes/${asistente.id}`}
-                      className="block rounded-lg border border-zinc-200 p-4 bg-zinc-50/60 hover:bg-zinc-100/70 hover:border-zinc-300 transition-colors cursor-pointer"
+                      className="-mx-2 block rounded-xl px-2 py-3 transition-colors hover:bg-suave"
                     >
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="font-medium text-zinc-900">{cuenta.concepto}</p>
-                          <p className="text-xs text-zinc-500">
+                          <p className="font-medium text-tinta">{cuenta.concepto}</p>
+                          <p className="text-xs text-gris">
                             Emisión: {formatearFechaIso(cuenta.fecha_emision)}
                           </p>
                         </div>
                         <div className="text-right text-sm">
-                          <p className="text-zinc-600">
+                          <p className="text-gris">
                             Valor: {pesos(toSafeNumber(cuenta.valorCuenta ?? cuenta.valor_total))}
                           </p>
-                          <p className="text-emerald-600">Abonado: {pesos(toSafeNumber(cuenta.abonado))}</p>
-                          <p className="text-amber-600">
+                          <p className="text-verde">Abonado: {pesos(toSafeNumber(cuenta.abonado))}</p>
+                          <p className="text-ambar">
                             Pendiente: {pesos(toSafeNumber(cuenta.pendiente))}
                           </p>
                         </div>
@@ -488,29 +478,28 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-zinc-500">Sin cuentas registradas.</p>
+                <p className="text-sm text-gris">Sin cuentas registradas.</p>
               )}
             </div>
           </div>
 
           <div className={cardContainer}>
             <div className={cardHeader + " flex items-center"}>
-              <span className={headerAccent} aria-hidden />
-              <Clock className="w-4 h-4 text-[rgb(var(--text-muted))]" />
+              <Clock className="w-4 h-4 text-gris" />
               <h3 className={cardTitle}>Historial de Abonos</h3>
             </div>
             <div className="p-5 space-y-3">
               {todosLosAbonos.length ? (
-                <div className="h-[420px] overflow-y-auto space-y-3 pr-1">
+                <div className="max-h-[420px] overflow-y-auto divide-y divide-linea -my-2">
                   {todosLosAbonos.map((pago) => (
-                    <div key={pago.id} className="flex items-center justify-between rounded-lg border border-zinc-200 p-3 bg-white">
+                    <div key={pago.id} className="flex items-center justify-between py-3">
                       <div>
-                        <p className="font-medium text-zinc-900 text-sm">{pesos(toSafeNumber(pago.monto))}</p>
-                        <p className="text-xs text-zinc-500">
+                        <p className="font-medium text-tinta text-sm">{pesos(toSafeNumber(pago.monto))}</p>
+                        <p className="text-xs text-gris">
                           {formatearFechaIso(pago.fecha_pago)} · {pago.concepto_cuenta}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-zinc-500">
+                      <div className="flex items-center gap-2 text-xs text-gris">
                         <span>{metodoPagoLegible(pago.metodo_pago)}</span>
                         <span>{notaLegible(pago.notas) || "Sin notas"}</span>
                       </div>
@@ -518,31 +507,30 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-zinc-500">No hay abonos registrados.</p>
+                <p className="text-sm text-gris">No hay abonos registrados.</p>
               )}
             </div>
           </div>
 
           <div className={cardContainer}>
             <div className={cardHeader + " flex items-center"}>
-              <span className={headerAccent} aria-hidden />
-              <Wallet className="w-4 h-4 text-[rgb(var(--text-muted))]" />
+              <Wallet className="w-4 h-4 text-gris" />
               <h3 className={cardTitle}>Historial Saldo a Favor</h3>
             </div>
             <div className="p-5 space-y-2">
               {movimientos.length ? (
-                <div className="h-[420px] overflow-y-auto space-y-2 pr-1">
+                <div className="max-h-[420px] overflow-y-auto divide-y divide-linea -my-2">
                   {movimientos.map((mov) => (
                     <div
                       key={mov.id}
-                      className="flex items-center justify-between gap-3 border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white"
+                      className="flex items-center justify-between gap-3 py-2.5 text-sm"
                     >
                       <span>{formatearFechaIso(mov.fecha)}</span>
-                      <span className={mov.tipo === "ingreso" ? "text-emerald-600" : "text-amber-600"}>
+                      <span className={mov.tipo === "ingreso" ? "text-verde" : "text-ambar"}>
                         {mov.tipo === "ingreso" ? "+" : "-"}{pesos(toSafeNumber(mov.monto))}
                       </span>
                       <span>{metodoPagoLegible(mov.metodo_pago)}</span>
-                      <span className="text-zinc-500 truncate max-w-[180px]" title={notaLegible(mov.notas)}>{notaLegible(mov.notas) || "Sin notas"}</span>
+                      <span className="text-gris truncate max-w-[180px]" title={notaLegible(mov.notas)}>{notaLegible(mov.notas) || "Sin notas"}</span>
                       {isAdmin && mov.tipo === "ingreso" && !(mov.notas || "").includes("[ANULADO]") && (
                         <RevertAnticipoButton asistenteId={asistente.id} anticipoId={mov.id} />
                       )}
@@ -550,28 +538,27 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-zinc-500">Sin movimientos de saldo a favor.</p>
+                <p className="text-sm text-gris">Sin movimientos de saldo a favor.</p>
               )}
             </div>
           </div>
 
           <div className={cardContainer}>
             <div className={cardHeader + " flex items-center"}>
-              <span className={headerAccent} aria-hidden />
-              <HeartHandshake className="w-4 h-4 text-[rgb(var(--text-muted))]" />
+              <HeartHandshake className="w-4 h-4 text-gris" />
               <h3 className={cardTitle}>Historial de Sesiones coach</h3>
             </div>
             <div className="p-5 space-y-2">
               {sesionesLista.length ? (
-                <div className="h-[420px] overflow-y-auto space-y-2 pr-1">
+                <div className="max-h-[420px] overflow-y-auto divide-y divide-linea -my-2">
                   {sesionesLista.map((s, idx) => (
                     <div
                       key={`${s.paquete_id}-${s.fecha}-${idx}`}
-                      className="flex items-center justify-between border border-zinc-200 rounded-lg px-3 py-2 text-xs bg-white"
+                      className="flex items-center justify-between py-2.5 text-sm"
                     >
                       <div className="flex flex-col gap-1">
                         <span>{formatearFechaIso(s.fecha)}</span>
-                        <span className="text-zinc-600 truncate max-w-[200px]">{s.notas || "Sin notas"}</span>
+                        <span className="text-gris truncate max-w-[200px]">{s.notas || "Sin notas"}</span>
                       </div>
                       {isAdmin && s.id && (
                         <CoachSessionActions sesionId={s.id} fecha={s.fecha} notas={s.notas} />
@@ -580,7 +567,7 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-zinc-500">No hay sesiones registradas.</p>
+                <p className="text-sm text-gris">No hay sesiones registradas.</p>
               )}
             </div>
           </div>

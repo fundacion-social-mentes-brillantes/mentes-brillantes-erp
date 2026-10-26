@@ -40,13 +40,13 @@ export function RevertAnticipoButton({
         type="button"
         onClick={handleClick}
         disabled={disabled || isPending}
-        className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-800 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+        className="inline-flex items-center gap-1 rounded-md border border-ambar/30 bg-ambar/10 px-2.5 py-1 text-xs font-medium text-ambar transition-colors hover:bg-ambar/15 disabled:cursor-not-allowed disabled:opacity-60"
       >
         <RotateCcw className="h-3.5 w-3.5" />
         {isPending ? 'Revirtiendo...' : 'Revertir anticipo'}
       </button>
       {error && (
-        <p className="max-w-[220px] text-right text-[11px] text-red-600 flex items-start justify-end gap-1">
+        <p className="max-w-[220px] text-right text-xs text-rojo flex items-start justify-end gap-1">
           <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
           <span>{error}</span>
         </p>

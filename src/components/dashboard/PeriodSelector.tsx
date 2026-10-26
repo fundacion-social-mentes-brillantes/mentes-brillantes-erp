@@ -29,16 +29,16 @@ export function PeriodSelector({
   if (!periodos.length) return null
 
   return (
-    <div className="flex min-w-0 max-w-full items-center gap-2 bg-[rgba(var(--surface-1),0.78)] border border-[rgba(var(--border),0.68)] rounded-xl px-3 py-2 shadow-soft backdrop-blur-md">
-      <CalendarRange className="w-4 h-4 text-[rgb(var(--warning))] shrink-0" />
+    <div className="flex h-10 min-w-0 max-w-full items-center gap-2 rounded-2xl border border-linea bg-panel px-3 transition-colors hover:border-linea-fuerte">
+      <CalendarRange className="h-4 w-4 shrink-0 text-gris" aria-hidden />
       <select
         value={currentId ?? periodos[0]?.id}
         onChange={(e) => router.push(`/?periodo=${e.target.value}`)}
-        className="text-sm font-semibold text-[rgb(var(--text-primary))] bg-transparent border-none focus:ring-0 p-0 pr-1 cursor-pointer outline-none min-w-0 max-w-[16rem] truncate"
+        className="text-sm font-semibold text-tinta bg-transparent border-none focus:ring-0 p-0 pr-1 cursor-pointer outline-none min-w-0 max-w-[16rem] truncate"
         aria-label="Seleccionar período de liquidación"
       >
         {periodos.map((p) => (
-          <option key={p.id} value={p.id} className="text-[rgb(var(--text-primary))] bg-[rgb(var(--surface-1))]">
+          <option key={p.id} value={p.id} className="text-tinta bg-panel">
             {p.nombre} ({fmt(p.fecha_inicio)}–{fmt(p.fecha_fin)}){p.estado === 'cerrado' ? ' · cerrado' : ''}
           </option>
         ))}

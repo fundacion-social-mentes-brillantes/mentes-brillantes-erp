@@ -104,87 +104,87 @@ export default async function DetalleCuentaPage({
   const sesionesRestantes = paquete ? Math.max(0, (paquete.sesiones_compradas || 0) - sesionesRealizadas) : 0
 
   return (
-    <div className="space-y-6 max-w-5xl">
-      <div className="flex items-center gap-4">
-        <Link href={backTo} className="p-2 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors">
+    <div className="space-y-6">
+      <div className="flex items-start gap-3">
+        <Link href={backTo} aria-label="Volver" className="mt-0.5 inline-grid h-9 w-9 shrink-0 place-items-center rounded-lg text-gris transition-colors hover:bg-suave hover:text-tinta">
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Detalle de Cuenta</h1>
-          <p className="text-zinc-500 text-sm">Información y pagos de la cuenta por cobrar.</p>
+          <h1 className="text-2xl font-semibold tracking-[-0.01em] text-tinta md:text-[1.75rem]">Detalle de Cuenta</h1>
+          <p className="mt-1 text-sm text-gris">Información y pagos de la cuenta por cobrar.</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Resumen de la Cuenta */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-[rgb(var(--surface-1))] p-6 rounded-xl border border-[rgb(var(--border))] shadow-sm">
+          <div className="rounded-2xl border border-linea bg-panel p-5 md:p-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
               <div>
-                <h2 className="text-lg font-semibold text-[rgb(var(--text-primary))]">{cuenta.concepto}</h2>
-                <p className="text-[rgb(var(--text-muted))] text-sm">Asistente: {cuenta.asistentes?.nombre}</p>
+                <h2 className="text-lg font-semibold text-tinta">{cuenta.concepto}</h2>
+                <p className="text-gris text-sm">Asistente: {cuenta.asistentes?.nombre}</p>
               </div>
-              <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium 
-                ${cuenta.estado === 'pagado' ? 'bg-[rgba(var(--success),0.15)] text-[rgb(var(--success))]' : 
-                  cuenta.estado === 'parcial' ? 'bg-[rgba(var(--warning),0.18)] text-[rgb(var(--warning))]' : 
-                  'bg-[rgba(var(--danger),0.15)] text-[rgb(var(--danger-strong))]'}`}>
-                {cuenta.estado.toUpperCase()}
+              <span className={`inline-flex items-center self-start rounded-full px-3 py-1 text-sm font-semibold ${
+                cuenta.estado === 'pagado' ? 'bg-verde/12 text-verde' :
+                cuenta.estado === 'parcial' ? 'bg-ambar/12 text-ambar' :
+                'bg-rojo/12 text-rojo'}`}>
+                {cuenta.estado.charAt(0).toUpperCase() + cuenta.estado.slice(1)}
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 py-4 border-y border-zinc-100">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 py-4 border-y border-linea">
               <div>
-                <p className="text-sm text-[rgb(var(--text-muted))]">Valor Total</p>
+                <p className="text-sm text-gris">Valor Total</p>
                 <div className="flex items-center gap-2">
-                  <p className="text-xl font-semibold text-[rgb(var(--text-primary))]">{pesos(Number(saldos.valor_total))}</p>
+                  <p className="text-xl font-semibold text-tinta">{pesos(Number(saldos.valor_total))}</p>
                   {isAdmin && <EditValorModal cuentaId={cuenta.id} valorActual={Number(saldos.valor_total)} />}
                 </div>
               </div>
               <div>
-                <p className="text-sm text-[rgb(var(--text-muted))]">Total Abonado</p>
-                <p className="text-xl font-semibold text-[rgb(var(--success))]">{pesos(Number(saldos.total_abonado))}</p>
+                <p className="text-sm text-gris">Total Abonado</p>
+                <p className="text-xl font-semibold text-verde">{pesos(Number(saldos.total_abonado))}</p>
               </div>
               <div>
-                <p className="text-sm text-[rgb(var(--text-muted))]">Saldo Pendiente</p>
-                <p className="text-xl font-semibold text-[rgb(var(--danger-strong))]">{pesos(Number(saldos.monto_pendiente))}</p>
+                <p className="text-sm text-gris">Saldo Pendiente</p>
+                <p className={`text-xl font-semibold ${Number(saldos.monto_pendiente) > 0 ? "text-ambar" : "text-gris"}`}>{pesos(Number(saldos.monto_pendiente))}</p>
               </div>
             </div>
-            <div className="mt-4 text-sm text-[rgb(var(--text-muted))]">
+            <div className="mt-4 text-sm text-gris">
               Fecha de emisión: {formatearFechaIso(cuenta.fecha_emision)}
             </div>
           </div>
 
           {paquete && (
-            <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
+            <div className="rounded-2xl border border-linea bg-panel p-5 md:p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <HeartHandshake className="w-5 h-5 text-emerald-600" />
-                  <h3 className="text-lg font-semibold text-zinc-900">Paquete coach</h3>
+                  <HeartHandshake className="w-5 h-5 text-gris" />
+                  <h3 className="text-lg font-semibold text-tinta">Paquete coach</h3>
                 </div>
-                <span className="text-xs text-zinc-500">Sesiones registradas solo desde este módulo (no retroactivas)</span>
+                <span className="text-xs text-gris">Sesiones registradas solo desde este módulo (no retroactivas)</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-                <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
-                  <p className="text-xs text-zinc-500">Compradas</p>
-                  <p className="text-2xl font-bold text-zinc-900">{paquete.sesiones_compradas}</p>
+                <div className="rounded-xl bg-suave p-3">
+                  <p className="text-sm text-gris">Compradas</p>
+                  <p className="text-2xl font-semibold text-tinta">{paquete.sesiones_compradas}</p>
                 </div>
-                <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
-                  <p className="text-xs text-zinc-500">Realizadas</p>
-                  <p className="text-2xl font-bold text-emerald-700">{sesionesRealizadas}</p>
+                <div className="rounded-xl bg-suave p-3">
+                  <p className="text-sm text-gris">Realizadas</p>
+                  <p className="text-2xl font-semibold text-tinta">{sesionesRealizadas}</p>
                 </div>
-                <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
-                  <p className="text-xs text-zinc-500">Restantes</p>
-                  <p className="text-2xl font-bold text-red-600">{sesionesRestantes}</p>
+                <div className="rounded-xl bg-suave p-3">
+                  <p className="text-sm text-gris">Restantes</p>
+                  <p className={`text-2xl font-semibold ${sesionesRestantes > 0 ? "text-acento" : "text-gris"}`}>{sesionesRestantes}</p>
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-                  <h4 className="text-sm font-semibold text-zinc-900 mb-2">Registrar sesión</h4>
+                <div className="rounded-xl bg-suave p-4">
+                  <h4 className="text-sm font-semibold text-tinta mb-2">Registrar sesión</h4>
                   <RegisterCoachSessionForm paqueteId={paquete.id} disabled={sesionesRestantes <= 0} />
-                  {sesionesRestantes <= 0 && <p className="text-xs text-red-600 mt-2">No quedan sesiones disponibles.</p>}
+                  {sesionesRestantes <= 0 && <p className="text-xs text-rojo mt-2">No quedan sesiones disponibles.</p>}
                 </div>
-                <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-                  <h4 className="text-sm font-semibold text-zinc-900 mb-2">Exportar PDF</h4>
+                <div className="rounded-xl bg-suave p-4">
+                  <h4 className="text-sm font-semibold text-tinta mb-2">Exportar PDF</h4>
                   <CoachSessionsPdf
                     asistenteNombre={cuenta.asistentes?.nombre || ''}
                     sesionesCompradas={paquete.sesiones_compradas}
@@ -195,20 +195,20 @@ export default async function DetalleCuentaPage({
                 </div>
               </div>
               <div className="mt-4">
-                <h4 className="text-sm font-semibold text-[rgb(var(--text-primary))] mb-2">Historial de sesiones</h4>
-                <div className="divide-y divide-[rgb(var(--border))] border border-[rgb(var(--border))] rounded-lg overflow-hidden bg-[rgb(var(--surface-1))]">
+                <h4 className="text-sm font-semibold text-tinta mb-2">Historial de sesiones</h4>
+                <div className="divide-y divide-linea rounded-xl border border-linea">
                   {paquete.coach_sesiones?.length ? paquete.coach_sesiones
                     .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
                     .map((s) => (
                       <div key={s.id} className="px-4 py-3 text-sm flex justify-between items-start gap-3">
                         <div className="space-y-1">
-                          <span className="block text-[rgb(var(--text-primary))]">{formatearFechaIso(s.fecha)}</span>
-                          <span className="block text-[rgb(var(--text-muted))] truncate max-w-[260px]">{s.notas || 'Sin notas'}</span>
+                          <span className="block text-tinta">{formatearFechaIso(s.fecha)}</span>
+                          <span className="block text-gris truncate max-w-[260px]">{s.notas || 'Sin notas'}</span>
                         </div>
                         {isAdmin && <CoachSessionActions sesionId={s.id} fecha={s.fecha} notas={s.notas} />}
                       </div>
                     )) : (
-                    <div className="px-4 py-4 text-sm text-[rgb(var(--text-muted))]">Aún no hay sesiones registradas.</div>
+                    <div className="px-4 py-4 text-sm text-gris">Aún no hay sesiones registradas.</div>
                   )}
                 </div>
               </div>
@@ -216,13 +216,13 @@ export default async function DetalleCuentaPage({
           )}
 
           {/* Historial de Abonos */}
-            <div className="bg-[rgb(var(--surface-1))] rounded-xl border border-[rgb(var(--border))] shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-[rgb(var(--border))] bg-[rgb(var(--surface-2))]">
-              <h3 className="font-semibold text-[rgb(var(--text-primary))]">Historial de Abonos</h3>
+            <div className="rounded-2xl border border-linea bg-panel overflow-hidden">
+            <div className="px-5 py-4 border-b border-linea">
+              <h3 className="font-semibold text-tinta">Historial de Abonos</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left whitespace-nowrap">
-                <thead className="bg-[rgb(var(--surface-2))] border-b border-[rgb(var(--border))] text-[rgb(var(--text-muted))] font-medium">
+                <thead className="border-b border-linea">
                   <tr>
                     <th className="px-4 py-3">Fecha</th>
                     <th className="px-4 py-3">Método</th>
@@ -230,16 +230,16 @@ export default async function DetalleCuentaPage({
                     <th className="px-4 py-3">Notas</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[rgb(var(--border))]">
+                <tbody className="divide-y divide-linea">
                   {abonos.map((abono) => {
                     const anulado = abono.estado === 'anulado' || (abono.notas || '').includes('[ANULADO]')
                     return (
-                    <tr key={abono.id} className={`hover:bg-[rgb(var(--surface-2))] ${anulado ? 'opacity-60' : ''}`}>
-                      <td className="px-4 py-3 text-[rgb(var(--text-primary))]">{formatearFechaIso(abono.fecha_pago)}</td>
-                      <td className="px-4 py-3 text-[rgb(var(--text-muted))]">
+                    <tr key={abono.id} className={`hover:bg-suave ${anulado ? 'opacity-60' : ''}`}>
+                      <td className="px-4 py-3 text-tinta">{formatearFechaIso(abono.fecha_pago)}</td>
+                      <td className="px-4 py-3 text-gris">
                         {abono.origen_fondos === 'saldo_a_favor' ? 'Saldo a favor' : metodoPagoLegible(abono.metodo_pago)}
                       </td>
-                      <td className={`px-4 py-3 text-right font-medium ${anulado ? 'text-[rgb(var(--text-muted))]' : 'text-emerald-600'}`}>
+                      <td className={`px-4 py-3 text-right font-medium ${anulado ? 'text-gris' : 'text-verde'}`}>
                         <div className="flex items-center justify-end gap-2">
                           <span className={anulado ? 'line-through' : ''}>{pesos(Number(abono.monto))}</span>
                           {/* Un abono anulado ya no se corrige: el servidor lo rechazaria. */}
@@ -255,7 +255,7 @@ export default async function DetalleCuentaPage({
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-[rgb(var(--text-muted))] text-xs truncate max-w-[180px]" title={notaLegible(abono.notas)}>
+                      <td className="px-4 py-3 text-gris text-xs truncate max-w-[180px]" title={notaLegible(abono.notas)}>
                         {notaLegible(abono.notas) || '-'}
                       </td>
                     </tr>
@@ -263,7 +263,7 @@ export default async function DetalleCuentaPage({
                   })}
                   {!abonos.length && (
                     <tr>
-                      <td colSpan={4} className="px-4 py-8 text-center text-[rgb(var(--text-muted))]">
+                      <td colSpan={4} className="px-4 py-8 text-center text-gris">
                         No hay abonos registrados.
                       </td>
                     </tr>
@@ -277,17 +277,17 @@ export default async function DetalleCuentaPage({
         {/* Formulario de Nuevo Abono */}
         <div className="lg:col-span-1 space-y-6">
           {isAdmin && (
-            <div className="bg-[rgb(var(--surface-1))] p-6 rounded-xl border border-[rgb(var(--border))] shadow-sm">
-              <h3 className="font-semibold text-[rgb(var(--text-primary))] mb-3">Acciones (Admin)</h3>
+            <div className="rounded-2xl border border-linea bg-panel p-5 md:p-6">
+              <h3 className="font-semibold text-tinta mb-3">Acciones (Admin)</h3>
               <div className="space-y-3">
                 <div>
-                  <p className="text-sm text-[rgb(var(--text-muted))] mb-2">Editar valor de la cuenta</p>
+                  <p className="text-sm text-gris mb-2">Editar valor de la cuenta</p>
                   <EditValorModal cuentaId={cuenta.id} valorActual={Number(saldos.valor_total)} />
                 </div>
-                <div className="pt-2 border-t border-zinc-100">
-                  <p className="text-sm text-[rgb(var(--text-muted))] mb-2">Eliminar cuenta</p>
+                <div className="pt-2 border-t border-linea">
+                  <p className="text-sm text-gris mb-2">Eliminar cuenta</p>
                   <DeleteCuentaButton cuentaId={cuenta.id} />
-                  <p className="text-xs text-[rgb(var(--text-muted))] mt-2">
+                  <p className="text-xs text-gris mt-2">
                     Solo se puede eliminar si no tiene pagos, aplicaciones de saldo a favor ni sesiones coach registradas.
                   </p>
                 </div>
@@ -298,12 +298,12 @@ export default async function DetalleCuentaPage({
           {cuenta.estado !== 'pagado' ? (
             <>
               {saldoAFavor > 0 && asistenteId && (
-                <div className="bg-[rgba(var(--success),0.12)] p-6 rounded-xl border border-[rgba(var(--success),0.3)] shadow-sm">
+                <div className="rounded-2xl border border-verde/30 bg-verde/8 p-5 md:p-6">
                   <div className="flex items-center gap-2 mb-2">
-                    <Wallet className="w-5 h-5 text-emerald-600" />
-                    <h3 className="font-semibold text-[rgb(var(--text-primary))]">Saldo a Favor Disponible</h3>
+                    <Wallet className="w-5 h-5 text-verde" />
+                    <h3 className="font-semibold text-tinta">Saldo a Favor Disponible</h3>
                   </div>
-                  <p className="text-2xl font-bold text-[rgb(var(--success))] mb-4">{pesos(saldoAFavor)}</p>
+                  <p className="mb-4 text-2xl font-semibold text-verde">{pesos(saldoAFavor)}</p>
                   <AplicarSaldoForm 
                     cuentaId={cuenta.id} 
                     asistenteId={asistenteId}
@@ -312,52 +312,52 @@ export default async function DetalleCuentaPage({
                 </div>
               )}
 
-              <div className="bg-[rgb(var(--surface-1))] p-6 rounded-xl border border-[rgb(var(--border))] shadow-sm sticky top-6">
+              <div className="rounded-2xl border border-linea bg-panel p-5 md:p-6 sticky top-6">
                 <div className="flex items-center gap-2 mb-4">
-                  <CreditCard className="w-5 h-5 text-zinc-400" />
-                  <h3 className="font-semibold text-[rgb(var(--text-primary))]">Registrar Abono</h3>
+                  <CreditCard className="w-5 h-5 text-gris" />
+                  <h3 className="font-semibold text-tinta">Registrar Abono</h3>
                 </div>
                 <AbonoForm cuentaId={cuenta.id} maxMonto={saldos.monto_pendiente} />
               </div>
             </>
           ) : (
-            <div className="bg-[rgba(var(--success),0.12)] p-6 rounded-xl border border-[rgba(var(--success),0.3)] text-center">
-              <h3 className="font-semibold text-[rgb(var(--success))] mb-2">Cuenta Pagada</h3>
-              <p className="text-sm text-[rgb(var(--text-primary))]">Esta cuenta no tiene saldo pendiente.</p>
+            <div className="rounded-2xl border border-verde/30 bg-verde/8 p-6 text-center">
+              <h3 className="font-semibold text-verde mb-2">Cuenta Pagada</h3>
+              <p className="text-sm text-tinta">Esta cuenta no tiene saldo pendiente.</p>
             </div>
           )}
         </div>
       </div>
 
       {isAdmin && auditoria && auditoria.length > 0 && (
-        <div className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden mt-6">
-          <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50">
-            <h3 className="font-medium text-zinc-900">Historial de cambios (Admin)</h3>
+        <div className="rounded-2xl border border-linea bg-panel overflow-hidden mt-6">
+          <div className="px-5 py-4 border-b border-linea">
+            <h3 className="font-semibold text-tinta">Historial de cambios (Admin)</h3>
           </div>
-          <div className="divide-y divide-zinc-100">
+          <div className="divide-y divide-linea">
             {auditoria.map((aud) => {
               const linea = describirAccionAuditoria(aud.accion)
               return (
                 <div key={aud.id} className="p-4 text-sm">
                   <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 mb-1">
-                    <span className="font-medium text-zinc-900">{linea.titulo}</span>
-                    <span className="text-zinc-500">{formatearFechaHora(aud.fecha)}</span>
+                    <span className="font-medium text-tinta">{linea.titulo}</span>
+                    <span className="text-gris">{formatearFechaHora(aud.fecha)}</span>
                   </div>
-                  <div className="text-zinc-600 mb-1">
+                  <div className="text-gris mb-1">
                     {linea.tipo === 'nuevo' && (
-                      <>Valor: <span className="text-emerald-600 font-medium">{pesos(Number(aud.valor_nuevo))}</span></>
+                      <>Valor: <span className="text-verde font-medium">{pesos(Number(aud.valor_nuevo))}</span></>
                     )}
                     {linea.tipo === 'baja' && (
-                      <>Valor: <span className="line-through text-red-500">{pesos(Number(aud.valor_anterior))}</span></>
+                      <>Valor: <span className="line-through text-rojo">{pesos(Number(aud.valor_anterior))}</span></>
                     )}
                     {linea.tipo === 'cambio' && (
                       <>
-                        Antes <span className="line-through text-red-500">{pesos(Number(aud.valor_anterior))}</span>
-                        {' → '}ahora <span className="text-emerald-600 font-medium">{pesos(Number(aud.valor_nuevo))}</span>
+                        Antes <span className="line-through text-rojo">{pesos(Number(aud.valor_anterior))}</span>
+                        {' → '}ahora <span className="text-verde font-medium">{pesos(Number(aud.valor_nuevo))}</span>
                       </>
                     )}
                   </div>
-                  {aud.motivo && <div className="text-zinc-500 italic">Motivo: {notaLegible(aud.motivo)}</div>}
+                  {aud.motivo && <div className="text-gris italic">Motivo: {notaLegible(aud.motivo)}</div>}
                 </div>
               )
             })}

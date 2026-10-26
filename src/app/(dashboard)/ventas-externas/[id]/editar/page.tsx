@@ -12,8 +12,8 @@ export default async function EditarVentaExternaPage({ params }: { params: Promi
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Editar venta externa</h1>
-        <p className="text-zinc-500 text-sm">Modifica los datos del ingreso externo.</p>
+        <h1 className="text-2xl font-semibold tracking-[-0.01em] text-tinta md:text-[1.75rem]">Editar venta externa</h1>
+        <p className="text-gris text-sm">Modifica los datos del ingreso externo.</p>
       </div>
       <VentaExternaForm venta={venta} />
     </div>

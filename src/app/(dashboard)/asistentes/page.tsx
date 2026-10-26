@@ -70,12 +70,12 @@ export default async function AsistentesPage({ searchParams }: { searchParams: P
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[rgb(var(--text-primary))]">Asistentes</h1>
-          <p className="text-[rgb(var(--text-muted))] text-sm">Gestiona los asistentes y pacientes del centro.</p>
+          <h1 className="text-2xl font-semibold tracking-[-0.01em] text-tinta md:text-[1.75rem]">Asistentes</h1>
+          <p className="text-gris text-sm">Gestiona los asistentes y pacientes del centro.</p>
         </div>
         <Link
           href="/asistentes/nuevo"
-          className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors bg-[rgb(var(--surface-3))] text-[rgb(var(--text-primary))] border border-[rgb(var(--border))] hover:bg-[rgb(var(--surface-2))] h-10 px-4 py-2 w-full sm:w-auto"
+          className="inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-acento px-4 text-sm font-semibold text-sobre-acento transition-colors hover:bg-acento-fuerte sm:w-auto"
         >
           <Plus className="w-4 h-4" />
           Nuevo Asistente

@@ -27,8 +27,8 @@ export default async function NuevaCuentaPage({ searchParams }: { searchParams: 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Nueva Cuenta por Cobrar</h1>
-        <p className="text-zinc-500 text-sm">Registra una nueva deuda para un asistente.</p>
+        <h1 className="text-2xl font-semibold tracking-[-0.01em] text-tinta md:text-[1.75rem]">Nueva Cuenta por Cobrar</h1>
+        <p className="text-gris text-sm">Registra una nueva deuda para un asistente.</p>
       </div>
       <CuentaForm asistentes={asistentes || []} asistenteInicial={asistenteInicial} returnTo={returnTo} />
     </div>

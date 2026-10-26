@@ -19,8 +19,8 @@ export default async function MovimientosPage() {
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-[rgb(var(--text-primary))]">Historial General</h1>
-        <p className="text-[rgb(var(--text-muted))] mt-1">
+        <h1 className="text-2xl font-semibold tracking-[-0.01em] text-tinta md:text-[1.75rem]">Historial General</h1>
+        <p className="text-gris mt-1">
           Vista unificada de todos los movimientos financieros del sistema.
         </p>
       </div>

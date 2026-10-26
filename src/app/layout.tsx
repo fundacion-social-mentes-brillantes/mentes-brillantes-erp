@@ -1,13 +1,14 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Schibsted_Grotesk } from "next/font/google";
 import "./globals.css";
 import { hasEnvVars } from "@/lib/env";
 import { SetupSupabase } from "@/components/setup/SetupSupabase";
-import { ThemeProvider } from "@/components/theme/ThemeProvider";
+import { SCRIPT_APARIENCIA, ThemeProvider } from "@/components/theme/ThemeProvider";
 import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 
-const inter = Inter({ subsets: ["latin"] });
+// Una sola letra para todo: grotesca de periódico, directa y clara en cifras y botones.
+const letra = Schibsted_Grotesk({ subsets: ["latin", "latin-ext"], variable: "--letra", display: "swap" });
 
 export const metadata: Metadata = {
   applicationName: "Finanzas GEMB",
@@ -38,8 +39,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#fce8ef" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a1016" },
+    { media: "(prefers-color-scheme: light)", color: "#f2ecef" },
+    { media: "(prefers-color-scheme: dark)", color: "#181116" },
   ],
 };
 
@@ -49,8 +50,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" data-theme="pink">
-      <body className={inter.className}>
+    // suppressHydrationWarning: el script de la apariencia pone el modo y los colores
+    // en <html> antes de que React llegue, a propósito.
+    <html lang="es" className={letra.variable} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_APARIENCIA }} />
+      </head>
+      <body>
         <ThemeProvider>
           {!hasEnvVars() ? <SetupSupabase /> : children}
           <InstallPrompt />

@@ -75,9 +75,9 @@ export function CoachSessionsPdf({
 
   return (
     <div className="space-y-2">
-      <label className="text-xs font-medium text-[rgb(var(--text-muted))]">Observación (opcional)</label>
+      <label className="text-sm font-medium text-gris">Observación (opcional)</label>
       <textarea
-        className="w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--input-bg))] px-3 py-2 text-sm"
+        className="w-full rounded-md border border-linea bg-panel px-3 py-2 text-sm"
         rows={3}
         value={observacion}
         onChange={(e) => setObservacion(e.target.value)}
@@ -87,7 +87,7 @@ export function CoachSessionsPdf({
         type="button"
         onClick={handleExport}
         disabled={generating}
-        className="inline-flex items-center justify-center rounded-md bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))] px-4 py-2 text-sm font-medium hover:bg-[rgb(var(--accent-strong))] disabled:opacity-60"
+        className="inline-flex items-center justify-center rounded-md bg-acento text-sobre-acento px-4 py-2 text-sm font-medium hover:bg-acento-fuerte disabled:opacity-60"
       >
         {generating ? 'Generando PDF...' : 'Exportar PDF'}
       </button>

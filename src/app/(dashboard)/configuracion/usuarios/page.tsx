@@ -27,8 +27,8 @@ export default async function UsuariosConfigPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-[rgb(var(--text-primary))]">Usuarios</h1>
-        <p className="text-[rgb(var(--text-muted))] text-sm">
+        <h1 className="text-2xl font-semibold tracking-[-0.01em] text-tinta md:text-[1.75rem]">Usuarios</h1>
+        <p className="text-gris text-sm">
           Administra roles y, para rol consulta, asigna el asistente vinculado.
         </p>
       </div>

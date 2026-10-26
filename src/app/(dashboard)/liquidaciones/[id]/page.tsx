@@ -299,19 +299,19 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
     <div className="space-y-6 max-w-6xl">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Link href="/liquidaciones" className="p-2 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors">
+          <Link href="/liquidaciones" className="p-2 text-gris hover:text-tinta hover:bg-suave-2 rounded-lg transition-colors">
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold tracking-tight text-zinc-900">{periodo.nombre}</h1>
+              <h1 className="text-2xl font-semibold tracking-[-0.01em] text-tinta md:text-[1.75rem]">{periodo.nombre}</h1>
               <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium 
-                ${periodo.estado === 'abierto' ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-700'}`}>
+                ${periodo.estado === 'abierto' ? 'bg-verde/15 text-verde' : 'bg-suave-2 text-tinta'}`}>
                 {periodo.estado === 'cerrado' && <Lock className="w-3 h-3" />}
                 {periodo.estado.toUpperCase()}
               </span>
             </div>
-            <p className="text-zinc-500 text-sm mt-1">
+            <p className="text-gris text-sm mt-1">
               {formatearFechaIso(periodo.fecha_inicio)} - {formatearFechaIso(periodo.fecha_fin)}
             </p>
           </div>
@@ -343,25 +343,25 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
 
       {/* Resumen Financiero */}
       <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
-        <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
-          <p className="text-sm text-zinc-500">Ingresos cobrados (cartera)</p>
-          <p className="text-2xl font-semibold text-emerald-600 mt-2">{pesos(ingresos_cobrados)}</p>
+        <div className="rounded-2xl border border-linea bg-panel p-5 md:p-6">
+          <p className="text-sm text-gris">Ingresos cobrados (cartera)</p>
+          <p className="text-2xl font-semibold text-verde mt-2">{pesos(ingresos_cobrados)}</p>
         </div>
-        <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
-          <p className="text-sm text-zinc-500">Donaciones</p>
-          <p className="text-2xl font-semibold text-teal-600 mt-2">{pesos(donaciones_periodo)}</p>
+        <div className="rounded-2xl border border-linea bg-panel p-5 md:p-6">
+          <p className="text-sm text-gris">Donaciones</p>
+          <p className="text-2xl font-semibold text-verde mt-2">{pesos(donaciones_periodo)}</p>
         </div>
-        <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
-          <p className="text-sm text-zinc-500">Ingresos totales</p>
-          <p className="text-2xl font-semibold text-emerald-700 mt-2">{pesos(ingresos_operativos)}</p>
+        <div className="rounded-2xl border border-linea bg-panel p-5 md:p-6">
+          <p className="text-sm text-gris">Ingresos totales</p>
+          <p className="text-2xl font-semibold text-verde mt-2">{pesos(ingresos_operativos)}</p>
         </div>
-        <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
-          <p className="text-sm text-zinc-500">Egresos del Período</p>
-          <p className="text-2xl font-semibold text-red-600 mt-2">{pesos(egresos_periodo)}</p>
+        <div className="rounded-2xl border border-linea bg-panel p-5 md:p-6">
+          <p className="text-sm text-gris">Egresos del Período</p>
+          <p className="text-2xl font-semibold text-rojo mt-2">{pesos(egresos_periodo)}</p>
         </div>
-        <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
-          <p className="text-sm text-zinc-500">Utilidad Neta a Repartir</p>
-          <p className="text-2xl font-bold text-zinc-900 mt-2">{pesos(utilidad_neta)}</p>
+        <div className="rounded-2xl border border-linea bg-panel p-5 md:p-6">
+          <p className="text-sm text-gris">Utilidad Neta a Repartir</p>
+          <p className="text-2xl font-semibold tracking-[-0.01em] text-tinta md:text-[1.75rem] mt-2">{pesos(utilidad_neta)}</p>
         </div>
       </div>
 
@@ -382,28 +382,28 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
         {/* Columna Izquierda: Adelantos y Formulario */}
         <div className="lg:col-span-1 space-y-6">
           {periodo.estado === 'abierto' ? (
-            <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
+            <div className="rounded-2xl border border-linea bg-panel p-5 md:p-6">
               <div className="flex items-center gap-2 mb-4">
-                <Wallet className="w-5 h-5 text-zinc-400" />
-                <h3 className="font-semibold text-zinc-900">Registrar Adelanto</h3>
+                <Wallet className="w-5 h-5 text-gris" />
+                <h3 className="font-semibold text-tinta">Registrar Adelanto</h3>
               </div>
               <AdelantoForm periodoId={periodo.id} socios={socios || []} />
             </div>
           ) : (
-            <div className="bg-zinc-50 p-6 rounded-xl border border-zinc-200 text-center">
-              <Lock className="w-8 h-8 text-zinc-400 mx-auto mb-3" />
-              <h3 className="font-semibold text-zinc-900 mb-1">Período Cerrado</h3>
-              <p className="text-sm text-zinc-500">No se pueden registrar más adelantos en este Período.</p>
+            <div className="bg-suave p-6 rounded-xl border border-linea text-center">
+              <Lock className="w-8 h-8 text-gris mx-auto mb-3" />
+              <h3 className="font-semibold text-tinta mb-1">Período Cerrado</h3>
+              <p className="text-sm text-gris">No se pueden registrar más adelantos en este Período.</p>
             </div>
           )}
 
           {periodo.estado === 'abierto' && (
-            <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
+            <div className="rounded-2xl border border-linea bg-panel p-5 md:p-6">
               <div className="flex items-center gap-2 mb-1">
-                <Undo2 className="w-5 h-5 text-zinc-400" />
-                <h3 className="font-semibold text-zinc-900">Registrar Devolución</h3>
+                <Undo2 className="w-5 h-5 text-gris" />
+                <h3 className="font-semibold text-tinta">Registrar Devolución</h3>
               </div>
-              <p className="mb-4 text-xs text-zinc-500">
+              <p className="mb-4 text-xs text-gris">
                 Pones cuánto devolvió y el ERP lo reparte entre sus adelantos, del más antiguo al más nuevo.
               </p>
               <DevolucionAdelantoForm
@@ -417,10 +417,10 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
           )}
 
           {sociosParaImagen.length > 0 && (
-            <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
-              <div className="p-4 border-b border-zinc-200 bg-zinc-50">
-                <h3 className="font-semibold text-zinc-900">Estado por socio</h3>
-                <p className="mt-0.5 text-xs text-zinc-500">
+            <div className="rounded-2xl border border-linea bg-panel overflow-hidden">
+              <div className="p-4 border-b border-linea bg-suave">
+                <h3 className="font-semibold text-tinta">Estado por socio</h3>
+                <p className="mt-0.5 text-xs text-gris">
                   Descarga la imagen de una persona y se la mandas: explica sola cuánto se le adelantó, qué ha devuelto
                   y qué queda.
                 </p>
@@ -433,24 +433,24 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
             </div>
           )}
 
-          <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-zinc-200 bg-zinc-50">
-              <h3 className="font-semibold text-zinc-900">Adelantos Registrados</h3>
-              <p className="mt-0.5 text-xs text-zinc-500">
+          <div className="rounded-2xl border border-linea bg-panel overflow-hidden">
+            <div className="p-4 border-b border-linea bg-suave">
+              <h3 className="font-semibold text-tinta">Adelantos Registrados</h3>
+              <p className="mt-0.5 text-xs text-gris">
                 Uno por uno, con lo que ya devolvieron de cada uno.
               </p>
             </div>
-            <div className="divide-y divide-zinc-100 max-h-[500px] overflow-y-auto">
+            <div className="divide-y divide-linea max-h-[500px] overflow-y-auto">
               {adelantosConDevoluciones.map(({ adelanto, devoluciones, entregado, devuelto, pendiente }) => (
-                <div key={adelanto.id} className="p-4 hover:bg-zinc-50/50">
+                <div key={adelanto.id} className="p-4 hover:bg-suave/50">
                   <div className="flex justify-between items-start mb-1">
-                    <p className="font-medium text-zinc-900 text-sm">{adelanto.socios?.nombre}</p>
-                    <p className="font-semibold text-amber-600 text-sm">{pesos(entregado)}</p>
+                    <p className="font-medium text-tinta text-sm">{adelanto.socios?.nombre}</p>
+                    <p className="font-semibold text-ambar text-sm">{pesos(entregado)}</p>
                   </div>
-                  <div className="flex justify-between items-center text-xs text-zinc-500">
+                  <div className="flex justify-between items-center text-xs text-gris">
                     <p>{formatearFechaIso(adelanto.fecha)}</p>
                     <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600 border border-zinc-200">
+                      <span className="px-2 py-0.5 rounded-full bg-suave-2 text-gris border border-linea">
                         {adelanto.metodo_pago || 'otro'}
                       </span>
                       <p className="truncate max-w-[120px]">{adelanto.notas}</p>
@@ -458,13 +458,13 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                   </div>
 
                   {devuelto > 0 && (
-                    <div className="mt-2 rounded-lg bg-emerald-50 border border-emerald-200 p-2 space-y-1">
-                      <div className="flex justify-between text-xs font-medium text-emerald-700">
+                    <div className="mt-2 rounded-lg bg-verde/10 border border-verde/30 p-2 space-y-1">
+                      <div className="flex justify-between text-xs font-medium text-verde">
                         <span>Devuelto</span>
                         <span>{pesos(-(devuelto))}</span>
                       </div>
                       {devoluciones.map((devolucion) => (
-                        <div key={devolucion.id} className="flex justify-between text-[11px] text-emerald-700/80">
+                        <div key={devolucion.id} className="flex justify-between text-xs text-verde/80">
                           <span>
                             {formatearFechaIso(devolucion.fecha)} · {devolucion.metodo_pago || 'otro'}
                             {devolucion.notas ? ` · ${devolucion.notas}` : ''}
@@ -472,7 +472,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                           <span>{pesos(Math.abs(Number(devolucion.monto)))}</span>
                         </div>
                       ))}
-                      <div className="flex justify-between text-xs font-semibold text-zinc-700 pt-1 border-t border-emerald-200">
+                      <div className="flex justify-between text-xs font-semibold text-tinta pt-1 border-t border-verde/30">
                         <span>{pendiente > 0 ? 'Queda del adelanto' : 'Devuelto completo'}</span>
                         <span>{pesos(pendiente)}</span>
                       </div>
@@ -480,27 +480,27 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                   )}
 
                   {devuelto === 0 && periodo.estado === 'abierto' && (
-                    <p className="mt-1 text-[11px] text-zinc-400">Sin devoluciones todavía</p>
+                    <p className="mt-1 text-xs text-gris">Sin devoluciones todavía</p>
                   )}
                 </div>
               ))}
 
               {devolucionesHuerfanas.map((devolucion) => (
-                <div key={devolucion.id} className="p-4 bg-emerald-50/40">
+                <div key={devolucion.id} className="p-4 bg-verde/4">
                   <div className="flex justify-between items-start mb-1">
-                    <p className="font-medium text-zinc-900 text-sm">{devolucion.socios?.nombre}</p>
-                    <p className="font-semibold text-emerald-700 text-sm">
+                    <p className="font-medium text-tinta text-sm">{devolucion.socios?.nombre}</p>
+                    <p className="font-semibold text-verde text-sm">
                       {pesos(-(Math.abs(Number(devolucion.monto))))}
                     </p>
                   </div>
-                  <p className="text-xs text-zinc-500">
+                  <p className="text-xs text-gris">
                     Devolución del {formatearFechaIso(devolucion.fecha)} — su adelanto quedó en otro período.
                   </p>
                 </div>
               ))}
 
               {!adelantos.length && (
-                <div className="p-8 text-center text-sm text-zinc-500">
+                <div className="p-8 text-center text-sm text-gris">
                   No hay adelantos en este Período.
                 </div>
               )}
@@ -510,25 +510,25 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
 
         {/* Columna Derecha: Proyección / Liquidación Final */}
         <div className="lg:col-span-2">
-          <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden h-full flex flex-col">
-            <div className="p-6 border-b border-zinc-200 bg-zinc-50 flex items-center gap-2">
-              <Calculator className="w-5 h-5 text-zinc-400" />
-              <h3 className="font-semibold text-zinc-900">
+          <div className="rounded-2xl border border-linea bg-panel overflow-hidden h-full flex flex-col">
+            <div className="p-6 border-b border-linea bg-suave flex items-center gap-2">
+              <Calculator className="w-5 h-5 text-gris" />
+              <h3 className="font-semibold text-tinta">
                 {periodo.estado === 'abierto' ? 'Proyección de Liquidación' : 'Liquidación Final'}
               </h3>
             </div>
             <div className="p-6 flex-1 overflow-x-auto">
               <table className="w-full text-sm text-left whitespace-nowrap">
-                <thead className="text-zinc-500 font-medium border-b border-zinc-200">
+                <thead className="text-gris font-medium border-b border-linea">
                   <tr>
                     <th className="pb-3">Socio</th>
                     <th className="pb-3 text-right">%</th>
                     <th className="pb-3 text-right">Corresponde</th>
-                    <th className="pb-3 text-right text-amber-600">Adelantos</th>
-                    <th className="pb-3 text-right font-bold text-zinc-900">Neto a Pagar</th>
+                    <th className="pb-3 text-right text-ambar">Adelantos</th>
+                    <th className="pb-3 text-right font-bold text-tinta">Neto a Pagar</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-100">
+                <tbody className="divide-y divide-linea">
                   {periodo.estado === 'abierto' ? (
                     // Proyección en vivo
                     socios?.map(socio => {
@@ -540,11 +540,11 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
 
                       return (
                         <tr key={socio.id}>
-                          <td className="py-4 font-medium text-zinc-900">{socio.nombre}</td>
-                          <td className="py-4 text-right text-zinc-500">{porcentaje}%</td>
-                          <td className="py-4 text-right text-zinc-900">{pesos(corresponde)}</td>
-                          <td className={`py-4 text-right ${totalAdelantos > 0 ? 'text-amber-600' : 'text-zinc-400'}`}>{pesos(-(totalAdelantos))}</td>
-                          <td className={`py-4 text-right font-bold ${neto >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                          <td className="py-4 font-medium text-tinta">{socio.nombre}</td>
+                          <td className="py-4 text-right text-gris">{porcentaje}%</td>
+                          <td className="py-4 text-right text-tinta">{pesos(corresponde)}</td>
+                          <td className={`py-4 text-right ${totalAdelantos > 0 ? 'text-ambar' : 'text-gris'}`}>{pesos(-(totalAdelantos))}</td>
+                          <td className={`py-4 text-right font-bold ${neto >= 0 ? 'text-verde' : 'text-rojo'}`}>
                             {pesos(neto)}
                           </td>
                         </tr>
@@ -554,11 +554,11 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
                     // Liquidación Guardada
                     liquidaciones?.map((liq) => (
                       <tr key={liq.id}>
-                        <td className="py-4 font-medium text-zinc-900">{liq.socios?.nombre}</td>
-                        <td className="py-4 text-right text-zinc-500">{Number(liq.porcentaje_aplicado)}%</td>
-                        <td className="py-4 text-right text-zinc-900">{pesos(Number(liq.valor_correspondiente))}</td>
-                        <td className={`py-4 text-right ${Number(liq.adelantos_descontados) > 0 ? 'text-amber-600' : 'text-zinc-400'}`}>{pesos(-(Number(liq.adelantos_descontados)))}</td>
-                        <td className={`py-4 text-right font-bold ${Number(liq.valor_neto_pagar) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                        <td className="py-4 font-medium text-tinta">{liq.socios?.nombre}</td>
+                        <td className="py-4 text-right text-gris">{Number(liq.porcentaje_aplicado)}%</td>
+                        <td className="py-4 text-right text-tinta">{pesos(Number(liq.valor_correspondiente))}</td>
+                        <td className={`py-4 text-right ${Number(liq.adelantos_descontados) > 0 ? 'text-ambar' : 'text-gris'}`}>{pesos(-(Number(liq.adelantos_descontados)))}</td>
+                        <td className={`py-4 text-right font-bold ${Number(liq.valor_neto_pagar) >= 0 ? 'text-verde' : 'text-rojo'}`}>
                           {pesos(Number(liq.valor_neto_pagar))}
                         </td>
                       </tr>

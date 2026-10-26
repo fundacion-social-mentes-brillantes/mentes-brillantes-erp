@@ -34,12 +34,12 @@ export function GenerarLiquidacionBtn({ periodoId }: { periodoId: string }) {
       <Button
         onClick={handleGenerar}
         disabled={isPending}
-        className="w-full sm:w-auto bg-zinc-900 text-white hover:bg-zinc-800"
+        className="w-full sm:w-auto bg-acento text-sobre-acento hover:bg-acento-fuerte"
       >
         <Calculator className="w-4 h-4 mr-2" />
         {isPending ? 'Generando...' : 'Cerrar Período y Liquidar'}
       </Button>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-rojo">{error}</p>}
     </div>
   )
 }

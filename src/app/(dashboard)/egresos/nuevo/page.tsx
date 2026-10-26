@@ -6,8 +6,8 @@ export default async function NuevoEgresoPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Nuevo Egreso</h1>
-        <p className="text-zinc-500 text-sm">Registra un gasto operativo o administrativo.</p>
+        <h1 className="text-2xl font-semibold tracking-[-0.01em] text-tinta md:text-[1.75rem]">Nuevo Egreso</h1>
+        <p className="text-gris text-sm">Registra un gasto operativo o administrativo.</p>
       </div>
       <EgresoForm />
     </div>

@@ -125,15 +125,15 @@ export function AsistenteIAClient() {
   }
 
   return (
-    <div className="mx-auto grid h-[calc(100vh-8rem)] max-w-6xl grid-cols-1 overflow-hidden rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] shadow-sm md:grid-cols-[260px_1fr]">
-      <aside className="border-b border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] md:border-b-0 md:border-r">
-        <div className="flex items-center justify-between gap-2 border-b border-[rgb(var(--border))] px-4 py-3">
-          <span className="text-sm font-semibold text-[rgb(var(--text-primary))]">Chats</span>
+    <div className="mx-auto grid h-[calc(100vh-8rem)] max-w-6xl grid-cols-1 overflow-hidden rounded-lg border border-linea bg-panel md:grid-cols-[260px_1fr]">
+      <aside className="border-b border-linea bg-suave md:border-b-0 md:border-r">
+        <div className="flex items-center justify-between gap-2 border-b border-linea px-4 py-3">
+          <span className="text-sm font-semibold text-tinta">Chats</span>
           <button
             type="button"
             onClick={handleNewChat}
             disabled={isLoading}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] text-[rgb(var(--text-primary))] hover:bg-[rgb(var(--surface-2))]"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-linea bg-panel text-tinta hover:bg-suave"
             title="Nuevo chat"
           >
             <Plus className="h-4 w-4" />
@@ -147,8 +147,8 @@ export function AsistenteIAClient() {
                 onClick={() => loadConversations(conversation.id).catch((err) => setError(err.message))}
                 className={
                   conversation.id === activeConversationId
-                    ? "flex min-w-0 flex-1 items-center gap-2 rounded-md bg-[rgba(var(--accent),0.14)] px-2 py-2 text-left text-xs font-medium text-[rgb(var(--accent-strong))]"
-                    : "flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-left text-xs text-[rgb(var(--text-muted))] hover:bg-[rgb(var(--surface-1))]"
+                    ? "flex min-w-0 flex-1 items-center gap-2 rounded-md bg-acento/14 px-2 py-2 text-left text-xs font-medium text-acento-fuerte"
+                    : "flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-left text-xs text-gris hover:bg-panel"
                 }
               >
                 <MessageSquare className="h-3.5 w-3.5 shrink-0" />
@@ -157,7 +157,7 @@ export function AsistenteIAClient() {
               <button
                 type="button"
                 onClick={() => handleDeleteChat(conversation.id)}
-                className="hidden h-7 w-7 items-center justify-center rounded-md text-[rgb(var(--text-muted))] hover:bg-red-50 hover:text-red-600 group-hover:inline-flex"
+                className="hidden h-7 w-7 items-center justify-center rounded-md text-gris hover:bg-rojo/10 hover:text-rojo group-hover:inline-flex"
                 title="Borrar conversación"
               >
                 <Trash2 className="h-3.5 w-3.5" />
@@ -168,13 +168,13 @@ export function AsistenteIAClient() {
       </aside>
 
       <section className="flex min-h-0 flex-col">
-      <div className="flex items-center gap-3 border-b border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] px-5 py-4">
-        <div className="flex h-9 w-9 items-center justify-center rounded-md bg-[rgba(var(--accent),0.12)] text-[rgb(var(--accent-strong))]">
+      <div className="flex items-center gap-3 border-b border-linea bg-suave px-5 py-4">
+        <div className="flex h-9 w-9 items-center justify-center rounded-md bg-acento/12 text-acento-fuerte">
           <Bot className="h-5 w-5" />
         </div>
         <div>
-          <h1 className="text-lg font-semibold text-[rgb(var(--text-primary))]">Asistente IA</h1>
-          <p className="text-xs text-[rgb(var(--text-muted))]">Modo solo lectura para consultas internas.</p>
+          <h1 className="text-lg font-semibold text-tinta">Asistente IA</h1>
+          <p className="text-xs text-gris">Modo solo lectura para consultas internas.</p>
         </div>
       </div>
 
@@ -187,8 +187,8 @@ export function AsistenteIAClient() {
             <div
               className={
                 message.role === "user"
-                  ? "max-w-[80%] rounded-lg bg-[rgb(var(--accent))] px-4 py-3 text-sm text-[rgb(var(--accent-foreground))]"
-                  : "max-w-[80%] whitespace-pre-wrap rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] px-4 py-3 text-sm text-[rgb(var(--text-primary))]"
+                  ? "max-w-[80%] rounded-lg bg-acento px-4 py-3 text-sm text-sobre-acento"
+                  : "max-w-[80%] whitespace-pre-wrap rounded-lg border border-linea bg-suave px-4 py-3 text-sm text-tinta"
               }
             >
               {message.content}
@@ -196,24 +196,24 @@ export function AsistenteIAClient() {
           </div>
         ))}
         {isLoading && (
-          <div className="text-sm text-[rgb(var(--text-muted))]">Consultando datos internos y redactando respuesta...</div>
+          <div className="text-sm text-gris">Consultando datos internos y redactando respuesta...</div>
         )}
       </div>
 
-      <form onSubmit={handleSubmit} className="border-t border-[rgb(var(--border))] p-4">
-        {error && <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+      <form onSubmit={handleSubmit} className="border-t border-linea p-4">
+        {error && <div className="mb-3 rounded-md border border-rojo/30 bg-rojo/10 px-3 py-2 text-sm text-rojo">{error}</div>}
         <div className="flex gap-3">
           <textarea
             value={input}
             onChange={(event) => setInput(event.target.value)}
             placeholder="Ej: ¿Cuánto debe María Pérez y cuántas sesiones coach le quedan?"
-            className="min-h-[52px] flex-1 resize-none rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] px-3 py-2 text-sm text-[rgb(var(--text-primary))] outline-none focus:border-[rgb(var(--accent))] focus:ring-2 focus:ring-[rgba(var(--accent),0.15)]"
+            className="min-h-[52px] flex-1 resize-none rounded-md border border-linea bg-panel px-3 py-2 text-sm text-tinta outline-none focus:border-acento focus:ring-2 focus:ring-acento/15"
             rows={2}
           />
           <button
             type="submit"
             disabled={isLoading || !input.trim()}
-            className="inline-flex h-[52px] items-center justify-center gap-2 rounded-md bg-[rgb(var(--accent))] px-4 text-sm font-semibold text-[rgb(var(--accent-foreground))] transition-colors hover:bg-[rgb(var(--accent-strong))] disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-[52px] items-center justify-center gap-2 rounded-md bg-acento px-4 text-sm font-semibold text-sobre-acento transition-colors hover:bg-acento-fuerte disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Send className="h-4 w-4" />
             Enviar

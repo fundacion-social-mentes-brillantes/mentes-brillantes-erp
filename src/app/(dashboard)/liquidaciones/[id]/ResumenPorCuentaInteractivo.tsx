@@ -109,7 +109,7 @@ function ValorResumenButton({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center justify-end gap-1 rounded-md px-2 py-1 text-right font-medium transition-colors hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300 ${className}`}
+      className={`inline-flex items-center justify-end gap-1 rounded-md px-2 py-1 text-right font-medium transition-colors hover:bg-suave-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-acento ${className}`}
       title={label}
     >
       <Search className="h-3.5 w-3.5 opacity-70" />
@@ -149,22 +149,22 @@ export function ResumenPorCuentaInteractivo({
   }
 
   return (
-    <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
-      <div className="px-5 py-4 border-b border-zinc-200 bg-zinc-50 flex items-center justify-between">
+    <div className="rounded-2xl border border-linea bg-panel overflow-hidden">
+      <div className="px-5 py-4 border-b border-linea bg-suave flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Wallet className="w-4 h-4 text-zinc-400" />
-          <h3 className="font-semibold text-zinc-900">Resumen por cuenta</h3>
+          <Wallet className="w-4 h-4 text-gris" />
+          <h3 className="font-semibold text-tinta">Resumen por cuenta</h3>
         </div>
-        <span className="text-xs text-zinc-500">
+        <span className="text-xs text-gris">
           {periodo.estado === 'abierto' ? 'Proyeccion en vivo' : 'Datos congelados'}
         </span>
       </div>
-      <div className="px-5 py-3 border-b border-zinc-100 bg-zinc-50/60 text-xs text-zinc-500">
+      <div className="px-5 py-3 border-b border-linea bg-suave/60 text-xs text-gris">
         Total salidas y saldo neto del periodo usan solo egresos operativos. Los adelantos se muestran aparte y no reducen la utilidad.
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left">
-          <thead className="text-zinc-500 font-medium border-b border-zinc-200 bg-zinc-50">
+          <thead className="border-b border-linea">
             <tr>
               <th className="px-4 py-3">Metodo</th>
               <th className="px-4 py-3 text-right">Ingresos</th>
@@ -173,52 +173,52 @@ export function ResumenPorCuentaInteractivo({
               <th className="px-4 py-3 text-right">Saldo neto operativo</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100">
+          <tbody className="divide-y divide-linea">
             {resumenPorCuenta.map((row) => (
               <tr key={row.metodo_pago}>
-                <td className="px-4 py-3 font-medium text-zinc-900">{metodoLabels[row.metodo_pago]}</td>
-                <td className="px-4 py-3 text-right text-emerald-700">
+                <td className="px-4 py-3 font-medium text-tinta">{metodoLabels[row.metodo_pago]}</td>
+                <td className="px-4 py-3 text-right text-verde">
                   <ValorResumenButton
                     value={row.total_ingresos}
                     label={`Detalle de ingresos - ${metodoLabels[row.metodo_pago]}`}
                     onClick={() => openDetalle(row.metodo_pago, 'ingresos', row.total_ingresos)}
-                    className="text-emerald-700"
+                    className="text-verde"
                   />
                 </td>
-                <td className="px-4 py-3 text-right text-red-600">
+                <td className="px-4 py-3 text-right text-rojo">
                   <ValorResumenButton
                     value={row.total_salidas}
                     negative
                     label={`Detalle de egresos operativos - ${metodoLabels[row.metodo_pago]}`}
                     onClick={() => openDetalle(row.metodo_pago, 'egresos', row.total_salidas)}
-                    className="text-red-600"
+                    className="text-rojo"
                   />
                 </td>
-                <td className="px-4 py-3 text-right text-amber-600">
+                <td className="px-4 py-3 text-right text-ambar">
                   <ValorResumenButton
                     value={Number(row.salidas_adelantos ?? 0)}
                     negative
                     label={`Detalle de adelantos no operativos - ${metodoLabels[row.metodo_pago]}`}
                     onClick={() => openDetalle(row.metodo_pago, 'adelantos', Number(row.salidas_adelantos ?? 0))}
-                    className="text-amber-600"
+                    className="text-ambar"
                   />
                 </td>
-                <td className={`px-4 py-3 text-right font-semibold ${row.saldo_neto_periodo >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                <td className={`px-4 py-3 text-right font-semibold ${row.saldo_neto_periodo >= 0 ? 'text-verde' : 'text-rojo'}`}>
                   <ValorResumenButton
                     value={row.saldo_neto_periodo}
                     signed
                     label={`Detalle de saldo neto operativo - ${metodoLabels[row.metodo_pago]}`}
                     onClick={() => openDetalle(row.metodo_pago, 'saldo', row.saldo_neto_periodo)}
-                    className={row.saldo_neto_periodo >= 0 ? 'text-emerald-700' : 'text-red-600'}
+                    className={row.saldo_neto_periodo >= 0 ? 'text-verde' : 'text-rojo'}
                   />
                 </td>
               </tr>
             ))}
-            <tr className="bg-zinc-50 font-semibold">
+            <tr className="bg-suave font-semibold">
               <td className="px-4 py-3">Total</td>
-              <td className="px-4 py-3 text-right text-emerald-700">{formatMoney(resumenTotales.total_ingresos)}</td>
-              <td className="px-4 py-3 text-right text-red-600">{formatMoney(resumenTotales.total_salidas, { negative: true })}</td>
-              <td className="px-4 py-3 text-right text-amber-600">{formatMoney(adelantosPeriodo, { negative: true })}</td>
+              <td className="px-4 py-3 text-right text-verde">{formatMoney(resumenTotales.total_ingresos)}</td>
+              <td className="px-4 py-3 text-right text-rojo">{formatMoney(resumenTotales.total_salidas, { negative: true })}</td>
+              <td className="px-4 py-3 text-right text-ambar">{formatMoney(adelantosPeriodo, { negative: true })}</td>
               <td className="px-4 py-3 text-right">{formatMoney(resumenTotales.saldo_neto_periodo, { signed: true })}</td>
             </tr>
           </tbody>
@@ -226,15 +226,15 @@ export function ResumenPorCuentaInteractivo({
       </div>
 
       {seleccion && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="absolute inset-0" onClick={() => setSeleccion(null)} aria-label="Cerrar detalle" />
-          <div className="relative flex max-h-[86vh] w-full max-w-5xl flex-col rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] shadow-2xl">
-            <div className="flex items-start justify-between gap-4 border-b border-[rgb(var(--border))] p-4">
+          <div className="relative flex max-h-[86vh] w-full max-w-5xl flex-col rounded-2xl border border-linea bg-panel shadow-strong">
+            <div className="flex items-start justify-between gap-4 border-b border-linea p-4">
               <div>
-                <h3 className="font-semibold text-[rgb(var(--text-primary))]">
+                <h3 className="font-semibold text-tinta">
                   Detalle de {columnaLabels[seleccion.columna]} - {metodoLabels[seleccion.metodo]}
                 </h3>
-                <p className="mt-1 text-sm text-[rgb(var(--text-muted))]">
+                <p className="mt-1 text-sm text-gris">
                   {periodo.nombre}: {periodo.fecha_inicio} a {periodo.fecha_fin} | Total resumen: {formatMoney(seleccion.totalResumen, {
                     negative: seleccion.columna === 'egresos' || seleccion.columna === 'adelantos',
                     signed: seleccion.columna === 'saldo',
@@ -244,21 +244,21 @@ export function ResumenPorCuentaInteractivo({
               <button
                 type="button"
                 onClick={() => setSeleccion(null)}
-                className="text-[rgb(var(--text-muted))] transition-colors hover:text-[rgb(var(--text-primary))]"
+                className="text-gris transition-colors hover:text-tinta"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             {hayDiferencia && (
-              <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              <div className="border-b border-ambar/30 bg-ambar/10 px-4 py-3 text-sm text-ambar">
                 El detalle reconstruido no coincide con el total del resumen. Revisar filtros o movimientos anulados.
               </div>
             )}
 
             <div className="overflow-auto">
               <table className="w-full min-w-[760px] text-left text-sm">
-                <thead className="sticky top-0 bg-zinc-50 text-xs font-medium uppercase tracking-wide text-zinc-500">
+                <thead className="sticky top-0 bg-suave text-xs font-medium text-gris">
                   <tr>
                     <th className="px-4 py-3">Fecha</th>
                     <th className="px-4 py-3">Persona</th>
@@ -268,17 +268,17 @@ export function ResumenPorCuentaInteractivo({
                     <th className="px-4 py-3 text-right">Valor</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-100">
+                <tbody className="divide-y divide-linea">
                   {detallesSeleccionados.map((movimiento) => {
                     const valor = signedMonto(movimiento, seleccion.columna)
                     return (
                       <tr key={movimiento.id}>
-                        <td className="px-4 py-3 text-zinc-500">{movimiento.fecha || 'Sin fecha'}</td>
-                        <td className="px-4 py-3 font-medium text-zinc-900">{movimiento.persona}</td>
-                        <td className="px-4 py-3 text-zinc-600">{tipoLabels[movimiento.tipo]}</td>
-                        <td className="px-4 py-3 text-zinc-600">{movimiento.concepto}</td>
-                        <td className="px-4 py-3 text-zinc-600">{metodoLabels[movimiento.metodo_pago]}</td>
-                        <td className={`px-4 py-3 text-right font-medium ${valor >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                        <td className="px-4 py-3 text-gris">{movimiento.fecha || 'Sin fecha'}</td>
+                        <td className="px-4 py-3 font-medium text-tinta">{movimiento.persona}</td>
+                        <td className="px-4 py-3 text-gris">{tipoLabels[movimiento.tipo]}</td>
+                        <td className="px-4 py-3 text-gris">{movimiento.concepto}</td>
+                        <td className="px-4 py-3 text-gris">{metodoLabels[movimiento.metodo_pago]}</td>
+                        <td className={`px-4 py-3 text-right font-medium ${valor >= 0 ? 'text-verde' : 'text-rojo'}`}>
                           {formatMoney(valor, { signed: true })}
                         </td>
                       </tr>
@@ -286,7 +286,7 @@ export function ResumenPorCuentaInteractivo({
                   })}
                   {!detallesSeleccionados.length && (
                     <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-zinc-500">
+                      <td colSpan={6} className="px-4 py-8 text-center text-gris">
                         Sin movimientos para este filtro.
                       </td>
                     </tr>
@@ -295,7 +295,7 @@ export function ResumenPorCuentaInteractivo({
               </table>
             </div>
 
-            <div className="flex justify-end border-t border-[rgb(var(--border))] bg-zinc-50 px-4 py-3 text-sm font-semibold text-zinc-900">
+            <div className="flex justify-end border-t border-linea bg-suave px-4 py-3 text-sm font-semibold text-tinta">
               Total detalle: {formatMoney(totalDetalle, {
                 negative: seleccion.columna === 'egresos' || seleccion.columna === 'adelantos',
                 signed: seleccion.columna === 'saldo',

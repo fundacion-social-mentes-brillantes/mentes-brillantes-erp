@@ -1,20 +1,23 @@
-import { AlertCircle, Receipt, History, Banknote, ShoppingCart, TrendingUp, TrendingDown, Minus, Lock, Gift, Landmark, Sparkles } from "lucide-react";
+import { CalendarCheck, Minus, Plus, Receipt, TrendingDown, TrendingUp } from "lucide-react";
+import Link from "next/link";
 import { leerTodas } from "@/lib/supabase/paginar";
 import { createClient } from "@/lib/supabase/server";
-import Image from "next/image";
 import dynamic from "next/dynamic";
 import { PeriodSelector } from "./PeriodSelector";
-import { AnimatedNumber } from "./AnimatedNumber";
+import { BuscadorGlobal } from "@/components/layout/BuscadorGlobal";
+import { resumenCoach, type CoachPaquete } from "@/lib/utils/coach";
+import { fechaHoyBogota } from "@/lib/utils/fechas";
+import { Sellos } from "@/components/coach/Sellos";
 
 // La grafica (recharts) y el boton de PDF (jsPDF + html2canvas) son la mitad del
 // peso del tablero y ninguno hace falta para ver los numeros: la grafica va
 // DEBAJO de las tarjetas y el PDF solo se usa al oprimirlo. Cargandolos aparte,
 // el celular deja de bajar ~280 KB antes de mostrar nada.
 const BalanceChart = dynamic(() => import("./BalanceChart").then((m) => m.BalanceChart), {
-  loading: () => <div className="h-[300px] w-full animate-pulse rounded-xl bg-[rgb(var(--surface-2))]" />,
+  loading: () => <div className="h-[300px] w-full animate-pulse rounded-xl bg-suave" />,
 });
 const PdfReportButton = dynamic(() => import("./PdfReportButton").then((m) => m.PdfReportButton), {
-  loading: () => <div className="h-10 w-48 animate-pulse rounded-xl bg-[rgb(var(--surface-2))]" />,
+  loading: () => <div className="h-10 w-48 animate-pulse rounded-xl bg-suave" />,
 });
 import { filtrarIngresosOperativos, filtrarIngresosRealesSaldoAFavor, esAnuladoCompleto, filtrarPagosValidosCuentas, sumarMontos } from "@/lib/utils/contable";
 import { construirSerieDiaria } from "@/lib/utils/dashboard";
@@ -42,10 +45,10 @@ type Totales = {
 };
 
 // Insignia de tendencia vs período anterior (verde = favorable, rojo = desfavorable)
-function trendPill(trend: number, goodIsUp: boolean, klass = "text-[11px]") {
+function trendPill(trend: number, goodIsUp: boolean, klass = "text-xs") {
   if (trend === 0) {
     return (
-      <span className={`inline-flex items-center gap-1 ${klass} font-semibold text-[rgb(var(--text-muted))] bg-[rgb(var(--muted-surface))] px-2 py-0.5 rounded-full`}>
+      <span className={`inline-flex items-center gap-1 ${klass} font-semibold text-gris bg-suave px-2 py-0.5 rounded-full`}>
         <Minus className="w-3 h-3" /> 0%
       </span>
     );
@@ -53,14 +56,14 @@ function trendPill(trend: number, goodIsUp: boolean, klass = "text-[11px]") {
   const positive = trend > 0;
   const good = (positive && goodIsUp) || (!positive && !goodIsUp);
   return (
-    <span className={`inline-flex items-center gap-1 ${klass} font-semibold px-2 py-0.5 rounded-full ${good ? "text-[rgb(var(--success))] bg-[rgba(var(--success),0.14)]" : "text-[rgb(var(--danger))] bg-[rgba(var(--danger),0.14)]"}`}>
+    <span className={`inline-flex items-center gap-1 ${klass} font-semibold px-2 py-0.5 rounded-full ${good ? "text-verde bg-verde/12" : "text-rojo bg-rojo/12"}`}>
       {positive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
       {Math.abs(trend)}%
     </span>
   );
 }
 
-export async function Dashboard({ periodo: periodoId }: { periodo?: string }) {
+export async function Dashboard({ periodo: periodoId, nombre, rol }: { periodo?: string; nombre?: string; rol: string }) {
   const supabase = await createClient();
   if (!supabase) return null;
 
@@ -233,7 +236,7 @@ export async function Dashboard({ periodo: periodoId }: { periodo?: string }) {
   // ~671 y ~664 filas con sus abonos anidados, 99% de solapamiento, cruzando el
   // país dos veces para sacar dos números. Ahora se trae `fecha_emision` y la
   // parte vieja se separa aquí mismo, con el mismo criterio que usaba el filtro.
-  const [cur, prev, carteraTotalRes] = await Promise.all([
+  const [cur, prev, carteraTotalRes, deudasRes, coachRes] = await Promise.all([
     getTotales(rangeInicio, rangeFin, periodoEstado, selectedPeriodo?.id),
     prevPeriodo
       ? getTotales(prevPeriodo.fecha_inicio, prevPeriodo.fecha_fin, prevPeriodo.estado, prevPeriodo.id, { conGrafica: false })
@@ -248,6 +251,17 @@ export async function Dashboard({ periodo: periodoId }: { periodo?: string }) {
         .order("id")
         .range(desde, hasta)
     ).then((data) => ({ data })),
+    // Mostrador: las cuentas pendientes más recientes (la misma consulta de los avisos del encabezado)
+    supabase
+      .from("cuentas_por_cobrar")
+      .select("id, concepto, valor_total, fecha_emision, asistentes(nombre), pagos_abonos(monto, estado, notas)")
+      .in("estado", ["pendiente", "parcial"])
+      .order("fecha_emision", { ascending: false })
+      .limit(8),
+    // Mostrador: paquetes coach con sus sesiones, para ver a quién le quedan (misma regla: resumenCoach)
+    supabase
+      .from("coach_paquetes")
+      .select("id, asistente_id, sesiones_compradas, creado_en, asistentes(nombre), coach_sesiones(id, fecha)"),
   ]);
 
   const ingresosMes = cur.ingresosCartera;
@@ -291,146 +305,235 @@ export async function Dashboard({ periodo: periodoId }: { periodo?: string }) {
   });
   carteraAntigua = Math.round(carteraAntigua);
 
-  // KPIs del período (4 cápsulas)
-  const capsulas = [
-    { name: "Ingresos", value: ingresosTotales, trend: ingresosTotalesTrend, goodIsUp: true, icon: Banknote, color: "var(--success)" },
-    { name: "Egresos", value: egresosMes, trend: egresosTrend, goodIsUp: false, icon: ShoppingCart, color: "var(--danger)" },
-    { name: "Pendiente", value: pendienteMes, trend: pendienteTrend, goodIsUp: false, icon: AlertCircle, color: "var(--warning)" },
-    { name: "Facturado", value: facturadoMes, trend: facturadoTrend, goodIsUp: true, icon: Receipt, color: "var(--info)" },
-  ];
+  // --- Mostrador: quién debe y quién tiene sesiones por tomar ---
+  // Mismo cálculo de lo pendiente que el resto del ERP (pagos válidos, sin anulados).
+  const hoy = fechaHoyBogota();
+  const diasEntre = (desde: string, hasta: string) =>
+    Math.round((Date.parse(hasta + "T12:00:00") - Date.parse(desde + "T12:00:00")) / 86_400_000);
+  const quienDebe = (deudasRes.data ?? [])
+    .map((c) => {
+      const abonado = filtrarPagosValidosCuentas(c.pagos_abonos || []).reduce((s: number, p) => s + Number(p.monto), 0);
+      return {
+        id: c.id,
+        nombre: c.asistentes?.nombre || "Asistente",
+        concepto: c.concepto,
+        dias: c.fecha_emision ? diasEntre(c.fecha_emision, hoy) : null,
+        pendiente: Math.round(Number(c.valor_total) - abonado),
+      };
+    })
+    .filter((c) => c.pendiente > 0)
+    .slice(0, 4);
 
-  // Bento inferior: desglose del período + cartera general
-  const bento = [
-    { name: "Ingresos de cartera", value: ingresosMes, trend: ingresosTrend, goodIsUp: true, icon: Banknote, color: "var(--success)", caption: "del período" },
-    { name: "Donaciones", value: donacionesMes, trend: donacionesTrend, goodIsUp: true, icon: Gift, color: "var(--accent)", caption: "del período" },
-    { name: "Cartera total", value: carteraTotal, icon: Landmark, color: "var(--warning)", caption: "por cobrar (general)" },
-    { name: "Cartera antigua +30d", value: carteraAntigua, icon: History, color: "var(--danger)", caption: "deuda vencida (general)" },
-  ];
+  type FilaCoach = { asistenteId: string; nombre: string; paquetes: CoachPaquete[]; ultima: string };
+  const porAsistente = new Map<string, FilaCoach>();
+  for (const p of coachRes.data ?? []) {
+    if (!p.asistente_id) continue;
+    const fila = porAsistente.get(p.asistente_id) ?? { asistenteId: p.asistente_id, nombre: p.asistentes?.nombre || "Asistente", paquetes: [], ultima: "" };
+    fila.paquetes.push(p);
+    for (const s of p.coach_sesiones ?? []) if (s.fecha && s.fecha > fila.ultima) fila.ultima = s.fecha;
+    if (!fila.ultima && p.creado_en) fila.ultima = p.creado_en.slice(0, 10);
+    porAsistente.set(p.asistente_id, fila);
+  }
+  const conSesiones = [...porAsistente.values()]
+    .map((f) => ({ ...f, ...resumenCoach(f.paquetes) }))
+    .filter((f) => f.restantes > 0)
+    .sort((a, b) => (a.ultima < b.ultima ? 1 : a.ultima > b.ultima ? -1 : 0));
 
-  const utilColor = utilidadMes >= 0 ? "var(--warning)" : "var(--danger)";
+  const hora = Number(new Intl.DateTimeFormat("es-CO", { hour: "numeric", hourCycle: "h23", timeZone: "America/Bogota" }).format(now));
+  const saludo = hora < 12 ? "Buenos días" : hora < 19 ? "Buenas tardes" : "Buenas noches";
+  // Hasta dos palabras del nombre ("Juan Sebastián"), sin apellidos.
+  const primerNombre = (nombre || "").trim().split(/\s+/).slice(0, 2).join(" ");
+  const diasParaCerrar = periodoEstado === "abierto" && rangeFin >= hoy ? diasEntre(hoy, rangeFin) : null;
+
+  const utilColor = utilidadMes >= 0 ? "text-verde" : "text-rojo";
+  const totalMovido = Math.max(1, ingresosTotales + egresosMes);
+  const parteEntro = Math.round((ingresosTotales / totalMovido) * 1000) / 10;
+
+  const atajo = "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition-colors";
+  const atajoSecundario = `${atajo} border border-white/25 bg-white/10 text-sobre-campo hover:bg-white/20`;
 
   return (
-    <div id="dashboard-content" className="space-y-6 pb-8">
-      {/* HERO: controles + utilidad protagonista */}
-      <section className="premium-panel rounded-3xl p-5 md:p-7 overflow-hidden relative rise-in">
-        {/* Orbes de luz decorativos */}
-        <div className="absolute -top-28 -right-20 w-80 h-80 rounded-full pointer-events-none" style={{ background: `radial-gradient(circle, rgba(${utilColor},0.22), transparent 70%)` }} />
-        <div className="absolute -bottom-32 -left-24 w-80 h-80 rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, rgba(var(--accent),0.12), transparent 70%)" }} />
-        {/* Patrón de puntos sutil */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            backgroundImage: "radial-gradient(rgba(var(--text-muted),0.16) 1px, transparent 1.4px)",
-            backgroundSize: "24px 24px",
-            maskImage: "radial-gradient(ellipse 80% 70% at 50% 40%, black 20%, transparent 78%)",
-            WebkitMaskImage: "radial-gradient(ellipse 80% 70% at 50% 40%, black 20%, transparent 78%)",
-          }}
-        />
-        <div className="relative flex flex-col gap-6">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="relative hidden sm:block h-12 w-12 shrink-0 rounded-2xl border border-[rgba(var(--gold),0.34)] bg-[rgba(var(--surface-1),0.6)] shadow-soft overflow-hidden">
-                <Image src="/logo-mentes-brillantes.png" alt="Mentes Brillantes" fill className="object-contain p-1" sizes="48px" priority />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-xl md:text-2xl font-bold tracking-tight text-[rgb(var(--text-primary))]">Dashboard</h1>
-                  {periodoEstado && (
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${periodoEstado === "abierto" ? "bg-[rgba(var(--success),0.14)] text-[rgb(var(--success))]" : "bg-[rgba(var(--warning),0.16)] text-[rgb(var(--warning))]"}`}>
-                      {periodoEstado === "cerrado" ? <Lock className="w-3 h-3" /> : <Sparkles className="w-3 h-3" />}
-                      {periodoEstado === "abierto" ? "Abierto" : "Cerrado"}
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-[rgb(var(--text-muted))] truncate">{periodoLabel} · {periodoFechasLabel}</p>
-              </div>
-            </div>
-            {/* En celular los dos controles bajan de renglon en vez de salirse de la pantalla. */}
-            <div className="flex flex-wrap items-center gap-3 min-w-0">
-              <PdfReportButton displayMonthName={periodoLabel} />
-              <PeriodSelector periodos={periodos} currentId={selectedPeriodo?.id} />
-            </div>
-          </div>
-
-          <div className="relative rounded-2xl border border-[rgba(var(--border),0.5)] bg-[rgba(var(--surface-1),0.45)] px-6 py-8 text-center overflow-hidden">
-            <span className="absolute inset-x-10 top-0 h-[2px] rounded-full" style={{ background: `linear-gradient(90deg, transparent, rgba(${utilColor},0.75), transparent)` }} />
-            <p className="text-[10px] md:text-xs uppercase tracking-[0.28em] text-[rgb(var(--text-muted))] font-semibold">Utilidad neta del período</p>
-            <AnimatedNumber
-              value={utilidadMes}
-              className="mt-2 block text-5xl md:text-7xl font-black tracking-tight tabular-nums"
-              style={{ color: `rgb(${utilColor})`, textShadow: `0 10px 44px rgba(${utilColor},0.38)` }}
-            />
-            <div className="mt-3 flex items-center justify-center gap-3 flex-wrap text-xs text-[rgb(var(--text-muted))]">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-[rgb(var(--success))]" />
-                Ingresos <b className="text-[rgb(var(--success))] tabular-nums">{pesos(ingresosTotales)}</b>
-              </span>
-              <span className="opacity-60">−</span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-[rgb(var(--danger))]" />
-                Egresos <b className="text-[rgb(var(--danger))] tabular-nums">{pesos(egresosMes)}</b>
-              </span>
-            </div>
-            <div className="mt-3 flex items-center justify-center gap-2">
-              {trendPill(utilidadTrend, true, "text-xs")}
-              <span className="text-[11px] text-[rgb(var(--text-muted))]">vs período anterior</span>
-            </div>
-            {congelado && (
-              <p className="mt-2 text-[11px] text-[rgb(var(--text-muted))]">Valores congelados de la liquidación cerrada</p>
-            )}
-          </div>
+    <div className="space-y-6 pb-8">
+      {/* MOSTRADOR: la franja de color con el buscador y lo que más se hace */}
+      <section className="-mx-4 -mt-5 bg-campo px-4 pb-7 pt-2 text-sobre-campo md:-mx-8 md:-mt-7 md:px-8 md:pb-9">
+        <p className="text-sm text-sobre-campo-suave">
+          <b className="font-semibold text-sobre-campo">{periodoLabel}</b> · {periodoFechasLabel}
+          {periodoEstado && <> · {periodoEstado === "abierto" ? "abierto" : "cerrado"}</>}
+          {diasParaCerrar !== null && <> · {diasParaCerrar === 0 ? "cierra hoy" : diasParaCerrar === 1 ? "cierra mañana" : `cierra en ${diasParaCerrar} días`}</>}
+        </p>
+        <p className="mt-5 text-base text-sobre-campo-suave">
+          {saludo}
+          {primerNombre ? `, ${primerNombre}` : ""}
+        </p>
+        <h1 className="mt-1 text-[1.75rem] font-bold leading-tight tracking-[-0.01em] md:text-4xl">¿A quién vas a atender?</h1>
+        <div className="mt-5 max-w-3xl">
+          <BuscadorGlobal userRole={rol} variante="grande" />
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
+          <Link href="/cuentas" className={`${atajo} col-span-2 bg-sobre-campo text-campo hover:bg-sobre-campo/90 sm:col-span-1`}>
+            <Plus className="h-4 w-4" aria-hidden /> Registrar pago
+          </Link>
+          <Link href="/sesiones-coach" className={atajoSecundario}>
+            <CalendarCheck className="h-4 w-4" aria-hidden /> Registrar sesión
+          </Link>
+          <Link href="/cuentas/nueva" className={atajoSecundario}>
+            <Receipt className="h-4 w-4" aria-hidden /> Nueva cuenta
+          </Link>
+          <Link href="/egresos/nuevo" className={`${atajoSecundario} col-span-2 sm:col-span-1`}>
+            <TrendingDown className="h-4 w-4" aria-hidden /> Anotar un gasto
+          </Link>
         </div>
       </section>
 
-      {/* 4 CÁPSULAS KPI */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-        {capsulas.map((c, i) => (
-          <div
-            key={c.name}
-            className="premium-card relative overflow-hidden rounded-2xl p-4 md:p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-strong rise-in"
-            style={{ animationDelay: `${120 + i * 90}ms` }}
-          >
-            <span className="absolute inset-x-4 top-0 h-[2px] rounded-full" style={{ background: `linear-gradient(90deg, transparent, rgba(${c.color},0.85), transparent)` }} />
-            <div className="flex items-start justify-between gap-2">
-              <p className="text-[10px] md:text-xs font-semibold uppercase tracking-wide text-[rgb(var(--text-muted))]">{c.name}</p>
-              <span className="grid place-items-center h-8 w-8 rounded-xl" style={{ backgroundColor: `rgba(${c.color},0.13)`, color: `rgb(${c.color})`, boxShadow: `inset 0 0 0 1px rgba(${c.color},0.28)` }}>
-                <c.icon className="h-4 w-4" />
-              </span>
-            </div>
-            <p className="mt-2 text-xl md:text-2xl font-extrabold tracking-tight tabular-nums" style={{ color: `rgb(${c.color})` }}>{pesos(c.value)}</p>
-            <div className="mt-2">{trendPill(c.trend, c.goodIsUp)}</div>
+      <div className="grid gap-5 lg:grid-cols-2">
+        {/* QUIÉN DEBE */}
+        <section className="min-w-0 rounded-2xl border border-linea bg-panel p-5">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-lg font-semibold">Quién debe</h2>
+            <Link href="/cuentas?estado=pendiente" className="shrink-0 text-sm font-semibold text-acento underline-offset-4 hover:underline">Ver cuentas</Link>
           </div>
-        ))}
+          <p className="mt-0.5 text-sm text-gris">Lo más reciente primero · <span className="cifra">{pesos(carteraTotal)}</span> en total</p>
+          <ul className="mt-3 divide-y divide-linea">
+            {quienDebe.length === 0 && <li className="py-4 text-sm text-gris">Nadie debe nada por ahora.</li>}
+            {quienDebe.map((d) => (
+              <li key={d.id} className="flex items-center gap-3 py-3">
+                <span aria-hidden className={`h-2.5 w-2.5 shrink-0 rounded-full ${d.dias !== null && d.dias >= 30 ? "bg-rojo" : "bg-oro"}`} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">{d.nombre}</p>
+                  <p className="truncate text-sm text-gris">
+                    {d.concepto}
+                    {d.dias !== null && <> · {d.dias <= 0 ? "hoy" : d.dias === 1 ? "ayer" : `hace ${d.dias} días`}</>}
+                  </p>
+                </div>
+                <Link href={`/cuentas/${d.id}`} className="cifra shrink-0 rounded-lg border border-acento/30 px-3 py-1.5 text-sm font-semibold text-acento transition-colors hover:bg-acento/10">
+                  Cobrar {pesos(d.pendiente)}
+                </Link>
+              </li>
+            ))}
+            <li className="flex items-center gap-3 py-3">
+              <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full bg-rojo" />
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">Vencida (más de 30 días)</p>
+                <p className="text-sm text-gris">Cuentas viejas por revisar</p>
+              </div>
+              <span className="cifra shrink-0 font-semibold text-rojo">{pesos(carteraAntigua)}</span>
+            </li>
+          </ul>
+        </section>
+
+        {/* SESIONES COACH */}
+        <section className="min-w-0 rounded-2xl border border-linea bg-panel p-5">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-lg font-semibold">Sesiones coach</h2>
+            <Link href="/sesiones-coach" className="shrink-0 text-sm font-semibold text-acento underline-offset-4 hover:underline">Ver sesiones</Link>
+          </div>
+          <p className="mt-0.5 text-sm text-gris">
+            {conSesiones.length === 1 ? "1 persona tiene" : `${conSesiones.length} personas tienen`} sesiones por tomar
+          </p>
+          <ul className="mt-3 divide-y divide-linea">
+            {conSesiones.length === 0 && <li className="py-4 text-sm text-gris">Nadie tiene sesiones pendientes.</li>}
+            {conSesiones.slice(0, 4).map((f) => (
+              <li key={f.asistenteId} className="flex items-center gap-3 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">{f.nombre}</p>
+                  <p className="text-sm text-gris">
+                    {f.realizadas} de {f.compradas} · {f.restantes === 1 ? "le queda 1" : `le quedan ${f.restantes}`}
+                  </p>
+                  <Sellos tomadas={f.realizadas} total={f.compradas} className="mt-2" />
+                </div>
+                <Link href={`/asistentes/${f.asistenteId}`} className="shrink-0 rounded-lg border border-acento/30 px-3 py-1.5 text-sm font-semibold text-acento transition-colors hover:bg-acento/10">
+                  + Sesión
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </div>
+
+      {/* EL PERÍODO: lo que sale en el reporte PDF */}
+      <section data-reporte-pdf className="rounded-2xl border border-linea bg-panel p-5 md:p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">El período</h2>
+            <p className="mt-0.5 text-sm text-gris">
+              {periodoLabel} · {periodoFechasLabel}
+              {congelado && " · cifras congeladas de la liquidación cerrada"}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <PeriodSelector periodos={periodos} currentId={selectedPeriodo?.id} />
+            <PdfReportButton displayMonthName={periodoLabel} />
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] lg:gap-10">
+          <div>
+            <p className="text-sm font-medium text-gris">Utilidad del período</p>
+            <p className={`cifra mt-1 text-4xl font-bold tracking-[-0.01em] md:text-5xl ${utilColor}`}>{pesos(utilidadMes)}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gris">
+              {trendPill(utilidadTrend, true)}
+              <span>frente al período anterior</span>
+            </div>
+            {/* La balanza: cuánto del dinero movido entró y cuánto salió */}
+            <div className="mt-5" aria-hidden>
+              <div className="flex h-2.5 overflow-hidden rounded-full bg-suave-2">
+                <div className="bg-verde" style={{ width: `${parteEntro}%` }} />
+                <div className="bg-rojo" style={{ width: `${100 - parteEntro}%` }} />
+              </div>
+              <div className="mt-1.5 flex justify-between text-xs text-gris">
+                <span>Entró</span>
+                <span>Salió</span>
+              </div>
+            </div>
+          </div>
+
+          <dl className="divide-y divide-linea border-y border-linea">
+            {[
+              { nombre: "Entró", detalle: "cartera, donaciones y ventas", valor: ingresosTotales, color: "text-verde", trend: ingresosTotalesTrend, sube: true },
+              { nombre: "Salió", detalle: "egresos", valor: egresosMes, color: "text-rojo", trend: egresosTrend, sube: false },
+              { nombre: "Por cobrar del período", detalle: "lo facturado que falta", valor: pendienteMes, color: "text-ambar", trend: pendienteTrend, sube: false },
+              { nombre: "Facturado", detalle: "cuentas creadas en el período", valor: facturadoMes, color: "text-tinta", trend: facturadoTrend, sube: true },
+            ].map((f) => (
+              <div key={f.nombre} className="flex items-center justify-between gap-4 py-3">
+                <dt className="min-w-0">
+                  <span className="block font-medium">{f.nombre}</span>
+                  <span className="block text-sm text-gris">{f.detalle}</span>
+                </dt>
+                <dd className="flex shrink-0 items-center gap-3">
+                  <span className="hidden sm:inline">{trendPill(f.trend, f.sube)}</span>
+                  <span className={`cifra text-lg font-semibold ${f.color}`}>{pesos(f.valor)}</span>
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
       </section>
 
-      {/* GRÁFICA PROTAGONISTA */}
-      <section className="premium-panel rounded-3xl p-5 md:p-6 relative overflow-hidden rise-in" style={{ animationDelay: "220ms" }}>
-        <div className="absolute -top-24 -left-20 w-72 h-72 rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, rgba(var(--gold),0.10), transparent 70%)" }} />
+      <section data-reporte-pdf className="rounded-2xl border border-linea bg-panel p-5 md:p-6">
         <BalanceChart data={chartData} utilidadMes={utilidadMes} displayMonthName={periodoLabel} />
       </section>
 
-      {/* BENTO: desglose del período + cartera general */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-        {bento.map((b, i) => (
-          <div
-            key={b.name}
-            className="premium-card relative overflow-hidden rounded-2xl p-4 md:p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-strong rise-in"
-            style={{ animationDelay: `${300 + i * 90}ms` }}
-          >
-            <span className="absolute inset-x-4 top-0 h-[2px] rounded-full" style={{ background: `linear-gradient(90deg, transparent, rgba(${b.color},0.85), transparent)` }} />
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-[10px] md:text-xs font-semibold uppercase tracking-wide text-[rgb(var(--text-muted))] truncate">{b.name}</p>
-                <p className="text-[10px] text-[rgb(var(--text-muted))]">{b.caption}</p>
-              </div>
-              <span className="grid place-items-center h-8 w-8 rounded-xl shrink-0" style={{ backgroundColor: `rgba(${b.color},0.13)`, color: `rgb(${b.color})`, boxShadow: `inset 0 0 0 1px rgba(${b.color},0.28)` }}>
-                <b.icon className="h-4 w-4" />
-              </span>
+      <section data-reporte-pdf className="rounded-2xl border border-linea bg-panel">
+        <h2 className="sr-only">Cartera y desglose</h2>
+        <dl className="grid grid-cols-2 lg:grid-cols-4">
+          {[
+            { nombre: "Ingresos de cartera", detalle: "del período", valor: ingresosMes, color: "text-verde", trend: ingresosTrend as number | undefined },
+            { nombre: "Donaciones", detalle: "del período", valor: donacionesMes, color: "text-tinta", trend: donacionesTrend as number | undefined },
+            { nombre: "Cartera total", detalle: "todo lo que se debe", valor: carteraTotal, color: "text-ambar", trend: undefined },
+            { nombre: "Cartera vencida", detalle: "más de 30 días", valor: carteraAntigua, color: "text-rojo", trend: undefined },
+          ].map((b, i) => (
+            <div
+              key={b.nombre}
+              className={`p-5 ${i % 2 === 1 ? "border-l border-linea" : ""} ${i >= 2 ? "border-t border-linea lg:border-t-0" : ""} ${i === 2 ? "lg:border-l" : ""}`}
+            >
+              <dt className="text-sm font-medium text-gris">
+                {b.nombre} <span className="font-normal">· {b.detalle}</span>
+              </dt>
+              <dd className={`cifra mt-1 text-xl font-semibold md:text-2xl ${b.color}`}>{pesos(b.valor)}</dd>
+              {typeof b.trend === "number" && <div className="mt-1.5">{trendPill(b.trend, true)}</div>}
             </div>
-            <p className="mt-2 text-lg md:text-2xl font-extrabold tracking-tight tabular-nums" style={{ color: `rgb(${b.color})` }}>{pesos(b.value)}</p>
-            {typeof b.trend === "number" && <div className="mt-2">{trendPill(b.trend, b.goodIsUp ?? true)}</div>}
-          </div>
-        ))}
+          ))}
+        </dl>
       </section>
     </div>
   );

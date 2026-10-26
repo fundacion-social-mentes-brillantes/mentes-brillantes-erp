@@ -32,7 +32,7 @@ export function VentaExternaActions({ id, estado }: { id: string; estado: string
           type="button"
           onClick={anular}
           disabled={pending}
-          className="inline-flex p-2 text-zinc-400 hover:text-red-600 transition-colors rounded-md hover:bg-red-50 disabled:opacity-60"
+          className="inline-flex p-2 text-gris hover:text-rojo transition-colors rounded-md hover:bg-rojo/10 disabled:opacity-60"
           title="Anular"
         >
           <Ban className="w-4 h-4" />
@@ -42,7 +42,7 @@ export function VentaExternaActions({ id, estado }: { id: string; estado: string
         type="button"
         onClick={eliminar}
         disabled={pending}
-        className="inline-flex p-2 text-zinc-400 hover:text-red-600 transition-colors rounded-md hover:bg-red-50 disabled:opacity-60"
+        className="inline-flex p-2 text-gris hover:text-rojo transition-colors rounded-md hover:bg-rojo/10 disabled:opacity-60"
         title="Eliminar"
       >
         <Trash2 className="w-4 h-4" />

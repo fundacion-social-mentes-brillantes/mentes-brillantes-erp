@@ -2,6 +2,7 @@
 import { MigracionForm } from "./MigracionForm"
 import { EmpresaForm } from "@/components/configuracion/EmpresaForm"
 import { requireRoles } from "@/lib/utils/authz"
+import { EditorApariencia } from "@/components/theme/EditorApariencia"
 
 export default async function ConfiguracionPage() {
   const { supabase } = await requireRoles(["admin"])
@@ -42,24 +43,37 @@ export default async function ConfiguracionPage() {
   return (
     <div className="space-y-6 max-w-4xl">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Configuracion</h1>
-        <p className="text-zinc-500 text-sm">Ajustes del sistema y migracion de datos.</p>
+        <h1 className="text-2xl font-semibold tracking-[-0.01em] text-tinta md:text-[1.75rem]">Configuracion</h1>
+        <p className="text-gris text-sm">Ajustes del sistema y migracion de datos.</p>
       </div>
 
-      <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-zinc-200">
-          <h2 className="text-lg font-semibold text-zinc-900">Datos de la Fundacion</h2>
-          <p className="text-sm text-zinc-500 mt-1">Informacion que aparecera en los documentos exportados (PDF, PNG).</p>
+      <div className="rounded-2xl border border-linea bg-panel overflow-hidden">
+        <div className="p-6 border-b border-linea">
+          <h2 className="text-lg font-semibold text-tinta">Apariencia</h2>
+          <p className="text-sm text-gris mt-1">
+            Modo claro u oscuro y color principal del ERP. Se guarda en este aparato; también se cambia con el botón de
+            la paleta, arriba a la derecha.
+          </p>
+        </div>
+        <div className="p-6">
+          <EditorApariencia className="max-w-md" />
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-linea bg-panel overflow-hidden">
+        <div className="p-6 border-b border-linea">
+          <h2 className="text-lg font-semibold text-tinta">Datos de la Fundacion</h2>
+          <p className="text-sm text-gris mt-1">Informacion que aparecera en los documentos exportados (PDF, PNG).</p>
         </div>
         <div className="p-6">
           <EmpresaForm initialData={empresa} isAdmin={isAdmin} />
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-zinc-200">
-          <h2 className="text-lg font-semibold text-zinc-900">Migracion de Datos (AppSheet / CSV)</h2>
-          <p className="text-sm text-zinc-500 mt-1">
+      <div className="rounded-2xl border border-linea bg-panel overflow-hidden">
+        <div className="p-6 border-b border-linea">
+          <h2 className="text-lg font-semibold text-tinta">Migracion de Datos (AppSheet / CSV)</h2>
+          <p className="text-sm text-gris mt-1">
             Sube archivos CSV exportados desde AppSheet para importar los datos al nuevo sistema. El sistema evitara
             duplicados basandose en el &ldquo;Row ID&rdquo; original.
           </p>
@@ -69,23 +83,23 @@ export default async function ConfiguracionPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-zinc-200">
-          <h2 className="text-lg font-semibold text-zinc-900">Respaldo de datos</h2>
-          <p className="text-sm text-zinc-500 mt-1">
+      <div className="rounded-2xl border border-linea bg-panel overflow-hidden">
+        <div className="p-6 border-b border-linea">
+          <h2 className="text-lg font-semibold text-tinta">Respaldo de datos</h2>
+          <p className="text-sm text-gris mt-1">
             Exporta tablas en CSV o genera un backup completo (ZIP) con todos los datos y schema.sql. Solo disponible para
             administradores.
           </p>
         </div>
         <div className="p-6 space-y-4">
           <div>
-            <h3 className="text-sm font-semibold text-zinc-800 mb-2">Tablas principales (CSV)</h3>
+            <h3 className="text-sm font-semibold text-tinta mb-2">Tablas principales (CSV)</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
               {tables.map((table) => (
                 <Link
                   key={table}
                   href={`/api/backup/${table}`}
-                  className="inline-flex items-center justify-center rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] px-3 py-2 text-sm font-medium text-[rgb(var(--text-primary))] hover:bg-[rgb(var(--surface-3))] transition-colors"
+                  className="inline-flex items-center justify-center rounded-md border border-linea bg-suave px-3 py-2 text-sm font-medium text-tinta hover:bg-suave-2 transition-colors"
                 >
                   {table}.csv
                 </Link>
@@ -93,14 +107,14 @@ export default async function ConfiguracionPage() {
             </div>
           </div>
           <div className="pt-2">
-            <h3 className="text-sm font-semibold text-zinc-800 mb-2">Respaldo completo (ZIP)</h3>
+            <h3 className="text-sm font-semibold text-tinta mb-2">Respaldo completo (ZIP)</h3>
             <Link
               href="/api/backup/full"
-              className="inline-flex items-center justify-center rounded-md border border-transparent bg-[rgb(var(--accent))] px-3 py-2 text-sm font-semibold text-[rgb(var(--accent-foreground))] hover:bg-[rgb(var(--accent-strong))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--accent))] focus-visible:ring-offset-2 focus-visible:ring-offset-[rgb(var(--surface-1))] transition-colors"
+              className="inline-flex items-center justify-center rounded-md border border-transparent bg-acento px-3 py-2 text-sm font-semibold text-sobre-acento hover:bg-acento-fuerte focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-acento focus-visible:ring-offset-2 focus-visible:ring-offset-panel transition-colors"
             >
               Descargar backup completo (.zip)
             </Link>
-            <p className="text-xs text-zinc-500 mt-2">
+            <p className="text-xs text-gris mt-2">
               Incluye todos los CSV, schema.sql y README con fecha/hora y orden sugerido de restauracion. La tabla
               perfiles NO reemplaza auth.users; este backup no restaura usuarios ni contrasenas de Supabase Auth.
             </p>

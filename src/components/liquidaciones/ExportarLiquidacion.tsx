@@ -111,17 +111,17 @@ export function ExportarLiquidacion({ empresa: initialEmpresa, periodo, financie
         <button
           onClick={() => generateImage('pdf')}
           disabled={isExporting}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-[rgb(var(--text-primary))] bg-[rgba(var(--surface-1),0.78)] border border-[rgba(var(--border),0.68)] rounded-xl hover:bg-[rgba(var(--surface-2),0.82)] transition-colors disabled:opacity-50 shadow-soft"
+          className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-tinta bg-panel/78 border border-linea/68 rounded-xl hover:bg-suave/82 transition-colors disabled:opacity-50 shadow-soft"
         >
-          <FileText className="w-4 h-4 text-red-500" />
+          <FileText className="w-4 h-4 text-rojo" />
           PDF
         </button>
         <button
           onClick={() => generateImage('png')}
           disabled={isExporting}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-[rgb(var(--text-primary))] bg-[rgba(var(--surface-1),0.78)] border border-[rgba(var(--border),0.68)] rounded-xl hover:bg-[rgba(var(--surface-2),0.82)] transition-colors disabled:opacity-50 shadow-soft"
+          className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-tinta bg-panel/78 border border-linea/68 rounded-xl hover:bg-suave/82 transition-colors disabled:opacity-50 shadow-soft"
         >
-          <ImageIcon className="w-4 h-4 text-blue-500" />
+          <ImageIcon className="w-4 h-4 text-info" />
           PNG
         </button>
       </div>
@@ -129,7 +129,7 @@ export function ExportarLiquidacion({ empresa: initialEmpresa, periodo, financie
       {/* Hidden Printable Container */}
       <div className="absolute -left-[9999px] top-0">
         <div 
-          ref={printRef} 
+          ref={printRef} data-documento 
           className="p-10" 
           style={{ width: '800px', minHeight: '1131px', fontFamily: 'sans-serif', backgroundColor: '#ffffff', color: '#111827' }}
         >
@@ -142,7 +142,7 @@ export function ExportarLiquidacion({ empresa: initialEmpresa, periodo, financie
               alt="Gimnasio Emocional Mentes Brillantes"
               style={{ width: '170px', height: '86px', objectFit: 'contain', margin: '0 auto 12px auto' }}
             />
-            <h1 className="text-3xl font-bold uppercase tracking-wide mb-2" style={{ color: '#111827' }}>
+            <h1 className="text-3xl font-bold mb-2" style={{ color: '#111827' }}>
               {empresa.nombre}
             </h1>
             <p className="font-medium text-lg" style={{ color: '#4b5563' }}>NIT: {empresa.nit}</p>
@@ -158,7 +158,7 @@ export function ExportarLiquidacion({ empresa: initialEmpresa, periodo, financie
             <div>
               <h2 className="text-2xl font-bold mb-1" style={{ color: '#1f2937' }}>Reporte de Liquidación</h2>
               <p style={{ color: '#6b7280' }}>Período: <span className="font-semibold" style={{ color: '#374151' }}>{periodo.nombre}</span></p>
-              <p style={{ color: '#6b7280' }}>Estado: <span className="font-semibold uppercase" style={{ color: '#374151' }}>{periodo.estado}</span></p>
+              <p style={{ color: '#6b7280' }}>Estado: <span className="font-semibold" style={{ color: '#374151' }}>{periodo.estado}</span></p>
             </div>
             <div className="text-right">
               <p className="text-sm" style={{ color: '#6b7280' }}>Fecha de generación:</p>

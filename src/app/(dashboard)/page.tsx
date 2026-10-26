@@ -15,5 +15,5 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
   await requireRoles(['admin', 'caja'])
   const { periodo } = await searchParams;
-  return <Dashboard periodo={periodo} />
+  return <Dashboard periodo={periodo} nombre={perfil.nombre} rol={perfil.rol} />
 }

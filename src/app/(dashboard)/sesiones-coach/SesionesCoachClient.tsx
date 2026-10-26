@@ -2,7 +2,8 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, CalendarPlus, History, X, HeartHandshake, CheckCircle2 } from 'lucide-react'
+import { Sellos } from '@/components/coach/Sellos'
+import { Search, CalendarPlus, History, X, CheckCircle2 } from 'lucide-react'
 import { registrarSesionCoachAsistente, editarSesion, eliminarSesion } from '@/app/(dashboard)/coach/actions'
 import { estadoCoach } from '@/lib/utils/coach'
 import { coincideBusqueda } from '@/lib/utils/busqueda'
@@ -49,14 +50,14 @@ const fmtFecha = (f?: string | null) => {
 }
 
 const ESTADO_BADGE: Record<string, string> = {
-  disponible: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  ultima: 'bg-amber-100 text-amber-700 border-amber-200',
-  agotado: 'bg-zinc-200 text-zinc-600 border-zinc-300',
+  disponible: 'bg-verde/15 text-verde border-verde/30',
+  ultima: 'bg-ambar/15 text-ambar border-ambar/30',
+  agotado: 'bg-linea text-gris border-linea-fuerte',
 }
 const ESTADO_DOT: Record<string, string> = {
-  disponible: 'bg-emerald-500',
-  ultima: 'bg-amber-500',
-  agotado: 'bg-zinc-400',
+  disponible: 'bg-verde',
+  ultima: 'bg-ambar',
+  agotado: 'bg-linea-fuerte',
 }
 const ESTADO_TEXTO: Record<string, string> = {
   disponible: 'Disponible',
@@ -66,12 +67,12 @@ const ESTADO_TEXTO: Record<string, string> = {
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4">
       <div className="absolute inset-0" onClick={onClose} aria-label="Cerrar" />
-      <div className="relative w-full sm:max-w-lg bg-[rgb(var(--surface-1))] rounded-t-2xl sm:rounded-2xl shadow-2xl border border-[rgb(var(--border))] max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-4 border-b border-[rgb(var(--border))] sticky top-0 bg-[rgb(var(--surface-1))]">
-          <h3 className="font-semibold text-[rgb(var(--text-primary))]">{title}</h3>
-          <button onClick={onClose} className="text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))]" aria-label="Cerrar">
+      <div className="relative w-full sm:max-w-lg bg-panel rounded-t-2xl sm:rounded-2xl shadow-strong border border-linea max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-4 border-b border-linea sticky top-0 bg-panel">
+          <h3 className="font-semibold text-tinta">{title}</h3>
+          <button onClick={onClose} className="text-gris hover:text-tinta" aria-label="Cerrar">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -111,63 +112,63 @@ function RegistrarModal({
     <Modal title="Registrar sesión" onClose={onClose}>
       <div className="space-y-4">
         <div>
-          <p className="text-lg font-semibold text-[rgb(var(--text-primary))]">{asistente.nombre}</p>
-          {asistente.codigo && <p className="text-xs text-[rgb(var(--text-muted))]">Código {asistente.codigo}</p>}
+          <p className="text-lg font-semibold text-tinta">{asistente.nombre}</p>
+          {asistente.codigo && <p className="text-xs text-gris">Código {asistente.codigo}</p>}
         </div>
 
         <div className="grid grid-cols-3 gap-2 text-center">
-          <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] p-2">
-            <p className="text-[11px] text-[rgb(var(--text-muted))]">Compradas</p>
-            <p className="text-lg font-bold text-[rgb(var(--text-primary))]">{asistente.compradas}</p>
+          <div className="rounded-xl bg-suave p-2">
+            <p className="text-xs text-gris">Compradas</p>
+            <p className="text-lg font-bold text-tinta">{asistente.compradas}</p>
           </div>
-          <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] p-2">
-            <p className="text-[11px] text-[rgb(var(--text-muted))]">Tomadas</p>
-            <p className="text-lg font-bold text-emerald-600">{asistente.realizadas}</p>
+          <div className="rounded-xl bg-suave p-2">
+            <p className="text-xs text-gris">Tomadas</p>
+            <p className="text-lg font-bold text-verde">{asistente.realizadas}</p>
           </div>
-          <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] p-2">
-            <p className="text-[11px] text-[rgb(var(--text-muted))]">Restantes</p>
-            <p className="text-lg font-bold text-[rgb(var(--warning))]">{asistente.restantes}</p>
+          <div className="rounded-xl bg-suave p-2">
+            <p className="text-xs text-gris">Restantes</p>
+            <p className="text-lg font-bold text-ambar">{asistente.restantes}</p>
           </div>
         </div>
 
         {sinCupo ? (
-          <p className="rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-sm px-3 py-2">
+          <p className="rounded-md bg-ambar/10 border border-ambar/30 text-ambar text-sm px-3 py-2">
             Este asistente no tiene sesiones disponibles. No se puede registrar una nueva sesión.
           </p>
         ) : (
           <>
             <div className="space-y-1">
-              <label className="text-xs font-medium text-[rgb(var(--text-muted))]">Fecha de la sesión</label>
+              <label className="text-sm font-medium text-gris">Fecha de la sesión</label>
               <input
                 type="date"
                 value={fecha}
                 onChange={(e) => setFecha(e.target.value)}
-                className="w-full h-10 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--input-bg))] px-3 text-sm text-[rgb(var(--text-primary))]"
+                className="w-full h-10 rounded-2xl border border-linea bg-panel px-3 text-sm text-tinta"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-medium text-[rgb(var(--text-muted))]">Notas (opcional)</label>
+              <label className="text-sm font-medium text-gris">Notas (opcional)</label>
               <textarea
                 value={notas}
                 onChange={(e) => setNotas(e.target.value)}
                 rows={2}
                 placeholder="Observaciones breves"
-                className="w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--input-bg))] px-3 py-2 text-sm text-[rgb(var(--text-primary))]"
+                className="w-full rounded-2xl border border-linea bg-panel px-3 py-2 text-sm text-tinta"
               />
             </div>
           </>
         )}
 
-        {error && <p className="text-sm text-[rgb(var(--danger))] bg-red-50 border border-red-200 rounded-md px-3 py-2">{error}</p>}
+        {error && <p className="text-sm text-rojo bg-rojo/10 border border-rojo/30 rounded-md px-3 py-2">{error}</p>}
 
         <div className="flex justify-end gap-2 pt-1">
-          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-[rgb(var(--text-muted))] hover:bg-[rgb(var(--surface-2))] rounded-md">
+          <button onClick={onClose} className="h-10 rounded-xl px-4 text-sm font-semibold text-tinta hover:bg-suave">
             Cancelar
           </button>
           <button
             onClick={handleGuardar}
             disabled={sinCupo || isPending}
-            className="px-4 py-2 text-sm font-medium text-[rgb(var(--accent-foreground))] bg-[rgb(var(--accent))] hover:bg-[rgb(var(--accent-strong))] rounded-md disabled:opacity-50"
+            className="h-10 rounded-xl bg-acento px-4 text-sm font-semibold text-sobre-acento hover:bg-acento-fuerte disabled:opacity-50"
           >
             {isPending ? 'Guardando...' : 'Guardar sesión'}
           </button>
@@ -226,48 +227,48 @@ function HistorialModal({
     <Modal title="Historial de sesiones" onClose={onClose}>
       <div className="space-y-3">
         <div>
-          <p className="text-lg font-semibold text-[rgb(var(--text-primary))]">{asistente.nombre}</p>
-          <p className="text-xs text-[rgb(var(--text-muted))]">
+          <p className="text-lg font-semibold text-tinta">{asistente.nombre}</p>
+          <p className="text-xs text-gris">
             {asistente.realizadas} de {asistente.compradas} tomadas · {asistente.restantes} restantes
           </p>
         </div>
 
-        {error && <p className="text-sm text-[rgb(var(--danger))] bg-red-50 border border-red-200 rounded-md px-3 py-2">{error}</p>}
+        {error && <p className="text-sm text-rojo bg-rojo/10 border border-rojo/30 rounded-md px-3 py-2">{error}</p>}
 
         {/* Compra por compra, de la más nueva a la más vieja, con las sesiones que
             salieron de cada una. El total de arriba sigue estando; esto es para
             poder ver qué se compró y cuándo, sin que quede todo revuelto. */}
         {asistente.compras.length > 0 && (
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[rgb(var(--text-muted))]">
+            <p className="text-xs font-semibold text-gris">
               Paquetes comprados ({asistente.compras.length})
             </p>
             {asistente.compras.map((compra, i) => (
-              <div key={compra.id} className="rounded-lg border border-[rgb(var(--border))] overflow-hidden">
-                <div className="px-3 py-2 bg-[rgb(var(--surface-2))] space-y-0.5">
-                  <p className="text-sm font-medium text-[rgb(var(--text-primary))]">
+              <div key={compra.id} className="rounded-lg border border-linea overflow-hidden">
+                <div className="px-3 py-2 bg-suave space-y-0.5">
+                  <p className="text-sm font-medium text-tinta">
                     {compra.concepto || 'Paquete coach'}
                     {i === 0 && asistente.compras.length > 1 && (
-                      <span className="ml-2 text-[10px] font-bold uppercase text-[rgb(var(--accent))]">el último</span>
+                      <span className="ml-2 text-xs font-bold text-acento">el último</span>
                     )}
                   </p>
-                  <p className="text-xs text-[rgb(var(--text-muted))]">
+                  <p className="text-xs text-gris">
                     Comprado el {fmtFecha(compra.compradoEl)} · {compra.usadas} de {compra.compradas} tomadas ·{' '}
                     {compra.restantes} {compra.restantes === 1 ? 'queda' : 'quedan'}
                     {compra.valorTotal > 0 && <> · {pesos(compra.valorTotal)}</>}
                     {compra.pendiente > 0 && (
-                      <span className="text-[rgb(var(--warning))]"> · debe {pesos(compra.pendiente)}</span>
+                      <span className="text-ambar"> · debe {pesos(compra.pendiente)}</span>
                     )}
                   </p>
                 </div>
                 {compra.sesiones.length === 0 ? (
-                  <p className="px-3 py-2 text-xs text-[rgb(var(--text-muted))]">Sin sesiones tomadas todavía.</p>
+                  <p className="px-3 py-2 text-xs text-gris">Sin sesiones tomadas todavía.</p>
                 ) : (
-                  <ul className="divide-y divide-[rgb(var(--border))]">
+                  <ul className="divide-y divide-linea">
                     {compra.sesiones.map((s) => (
-                      <li key={s.id} className="px-3 py-1.5 text-xs text-[rgb(var(--text-primary))]">
+                      <li key={s.id} className="px-3 py-1.5 text-xs text-tinta">
                         {fmtFecha(s.fecha)}
-                        {s.notas && <span className="text-[rgb(var(--text-muted))]"> · {s.notas}</span>}
+                        {s.notas && <span className="text-gris"> · {s.notas}</span>}
                       </li>
                     ))}
                   </ul>
@@ -277,14 +278,14 @@ function HistorialModal({
           </div>
         )}
 
-        <p className="text-xs font-semibold uppercase tracking-wide text-[rgb(var(--text-muted))] pt-1">
+        <p className="text-xs font-semibold text-gris pt-1">
           Todas las sesiones
         </p>
 
         {asistente.sesiones.length === 0 ? (
-          <p className="text-sm text-[rgb(var(--text-muted))] py-6 text-center">Aún no hay sesiones registradas.</p>
+          <p className="text-sm text-gris py-6 text-center">Aún no hay sesiones registradas.</p>
         ) : (
-          <ul className="divide-y divide-[rgb(var(--border))] border border-[rgb(var(--border))] rounded-lg overflow-hidden">
+          <ul className="divide-y divide-linea border border-linea rounded-lg overflow-hidden">
             {asistente.sesiones.map((s) => (
               <li key={s.id} className="p-3 text-sm">
                 {editId === s.id ? (
@@ -293,20 +294,20 @@ function HistorialModal({
                       type="date"
                       value={editFecha}
                       onChange={(e) => setEditFecha(e.target.value)}
-                      className="w-full h-9 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--input-bg))] px-2 text-sm text-[rgb(var(--text-primary))]"
+                      className="w-full h-9 rounded-md border border-linea bg-panel px-2 text-sm text-tinta"
                     />
                     <textarea
                       value={editNotas}
                       onChange={(e) => setEditNotas(e.target.value)}
                       rows={2}
-                      className="w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--input-bg))] px-2 py-1 text-sm text-[rgb(var(--text-primary))]"
+                      className="w-full rounded-md border border-linea bg-panel px-2 py-1 text-sm text-tinta"
                     />
                     <div className="flex gap-2 justify-end">
-                      <button onClick={() => setEditId(null)} className="text-xs text-[rgb(var(--text-muted))] hover:underline">Cancelar</button>
+                      <button onClick={() => setEditId(null)} className="text-xs text-gris hover:underline">Cancelar</button>
                       <button
                         onClick={() => guardarEdicion(s.id)}
                         disabled={isPending}
-                        className="text-xs font-medium text-[rgb(var(--accent-foreground))] bg-[rgb(var(--accent))] hover:bg-[rgb(var(--accent-strong))] rounded-md px-3 py-1 disabled:opacity-50"
+                        className="text-xs font-medium text-sobre-acento bg-acento hover:bg-acento-fuerte rounded-md px-3 py-1 disabled:opacity-50"
                       >
                         {isPending ? 'Guardando...' : 'Guardar'}
                       </button>
@@ -315,8 +316,8 @@ function HistorialModal({
                 ) : (
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-medium text-[rgb(var(--text-primary))]">{fmtFecha(s.fecha)}</p>
-                      <p className="text-[rgb(var(--text-muted))] text-xs truncate">{s.notas || 'Sin notas'}</p>
+                      <p className="font-medium text-tinta">{fmtFecha(s.fecha)}</p>
+                      <p className="text-gris text-xs truncate">{s.notas || 'Sin notas'}</p>
                     </div>
                     {isAdmin && (
                       <div className="flex gap-3 shrink-0">
@@ -327,11 +328,11 @@ function HistorialModal({
                             setEditNotas(s.notas || '')
                             setError(null)
                           }}
-                          className="text-xs text-[rgb(var(--info))] hover:underline"
+                          className="text-xs text-info hover:underline"
                         >
                           Editar
                         </button>
-                        <button onClick={() => eliminar(s.id)} disabled={isPending} className="text-xs text-[rgb(var(--danger))] hover:underline disabled:opacity-50">
+                        <button onClick={() => eliminar(s.id)} disabled={isPending} className="text-xs text-rojo hover:underline disabled:opacity-50">
                           Eliminar
                         </button>
                       </div>
@@ -375,10 +376,11 @@ export function SesionesCoachClient({
   const filtroBtn = (value: Filtro, label: string) => (
     <button
       onClick={() => setFiltro(value)}
-      className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+      aria-pressed={filtro === value}
+      className={`h-9 rounded-full border px-3.5 text-sm font-semibold transition-colors ${
         filtro === value
-          ? 'bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))] border-[rgb(var(--accent))]'
-          : 'bg-[rgb(var(--surface-1))] text-[rgb(var(--text-muted))] border-[rgb(var(--border))] hover:text-[rgb(var(--text-primary))]'
+          ? 'border-acento bg-acento text-sobre-acento'
+          : 'border-linea bg-panel text-gris hover:text-tinta'
       }`}
     >
       {label}
@@ -386,25 +388,22 @@ export function SesionesCoachClient({
   )
 
   return (
-    <div className="space-y-5 max-w-5xl">
+    <div className="space-y-5">
       <div className="flex items-center gap-3">
-        <div className="grid h-11 w-11 place-items-center rounded-2xl border border-[rgba(var(--gold),0.34)] bg-[rgba(var(--surface-1),0.6)] text-[rgb(var(--warning))]">
-          <HeartHandshake className="w-5 h-5" />
-        </div>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[rgb(var(--text-primary))]">Sesiones Coach</h1>
-          <p className="text-[rgb(var(--text-muted))] text-sm">Sesiones de guía coach por asistente: compradas, tomadas y restantes.</p>
+          <h1 className="text-2xl font-semibold tracking-[-0.01em] text-tinta md:text-[1.75rem]">Sesiones Coach</h1>
+          <p className="mt-1 text-sm text-gris">Sesiones de guía coach por asistente: compradas, tomadas y restantes.</p>
         </div>
       </div>
 
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-3 h-4 w-4 text-[rgb(var(--text-muted))]" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gris" aria-hidden />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar por nombre, código o cédula..."
-            className="h-10 w-full rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] pl-9 pr-4 text-sm text-[rgb(var(--text-primary))] outline-none focus:border-[rgb(var(--accent))]"
+            className="h-10 w-full rounded-2xl border border-linea bg-panel pl-9 pr-4 text-sm text-tinta transition-colors placeholder:text-gris hover:border-linea-fuerte focus:border-acento"
           />
         </div>
         <div className="flex flex-wrap gap-2">
@@ -414,10 +413,10 @@ export function SesionesCoachClient({
         </div>
       </div>
 
-      <p className="text-xs text-[rgb(var(--text-muted))]">{filtrados.length} asistente(s) con paquete coach</p>
+      <p className="text-sm text-gris">{filtrados.length} asistente(s) con paquete coach</p>
 
       {filtrados.length === 0 ? (
-        <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] p-10 text-center text-sm text-[rgb(var(--text-muted))]">
+        <div className="rounded-2xl border border-linea bg-panel p-10 text-center text-sm text-gris">
           No hay asistentes que coincidan con la búsqueda o el filtro.
         </div>
       ) : (
@@ -425,55 +424,48 @@ export function SesionesCoachClient({
           {filtrados.map((a) => {
             const estado = estadoCoach(a.restantes)
             return (
-              <div key={a.asistenteId} className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] p-4 shadow-sm flex flex-col gap-3">
+              <div key={a.asistenteId} className="rounded-2xl border border-linea bg-panel p-4 flex flex-col gap-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="font-semibold text-[rgb(var(--text-primary))] truncate">{a.nombre}</p>
-                    <p className="text-xs text-[rgb(var(--text-muted))]">{a.codigo ? `Código ${a.codigo}` : 'Sin código'}</p>
+                    <p className="font-semibold text-tinta truncate">{a.nombre}</p>
+                    <p className="text-xs text-gris">{a.codigo ? `Código ${a.codigo}` : 'Sin código'}</p>
                   </div>
-                  <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[11px] font-medium border ${ESTADO_BADGE[estado]}`}>
+                  <span className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ${ESTADO_BADGE[estado]}`}>
                     <span className={`h-1.5 w-1.5 rounded-full ${ESTADO_DOT[estado]}`} />
                     {ESTADO_TEXTO[estado]}
                   </span>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div>
-                    <p className="text-[11px] text-[rgb(var(--text-muted))]">Compradas</p>
-                    <p className="text-xl font-bold text-[rgb(var(--text-primary))]">{a.compradas}</p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-[rgb(var(--text-muted))]">Tomadas</p>
-                    <p className="text-xl font-bold text-emerald-600">{a.realizadas}</p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-[rgb(var(--text-muted))]">Restantes</p>
-                    <p className={`text-xl font-bold ${estado === 'agotado' ? 'text-zinc-500' : 'text-[rgb(var(--warning))]'}`}>{a.restantes}</p>
-                  </div>
+                <div>
+                  <p className="text-sm text-gris">
+                    <span className={`text-2xl font-semibold ${estado === 'agotado' ? 'text-gris' : 'text-tinta'}`}>{a.restantes}</span>{' '}
+                    por tomar · {a.realizadas} de {a.compradas} tomadas
+                  </p>
+                  <Sellos tomadas={a.realizadas} total={a.compradas} className="mt-2" />
                 </div>
 
-                <p className="text-xs text-[rgb(var(--text-muted))] flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
+                <p className="text-sm text-gris flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4" />
                   Última sesión: {fmtFecha(a.ultimaSesion)}
                 </p>
 
                 {/* Cuál fue la última compra: sin esto los paquetes se leen revueltos. */}
                 {a.compras[0] && (
-                  <p className="text-xs text-[rgb(var(--text-muted))]">
-                    Último paquete: <span className="text-[rgb(var(--text-primary))]">{a.compras[0].concepto || 'Paquete coach'}</span>{' '}
+                  <p className="text-sm text-gris">
+                    Último paquete: <span className="text-tinta">{a.compras[0].concepto || 'Paquete coach'}</span>{' '}
                     · comprado el {fmtFecha(a.compras[0].compradoEl)} · {a.compras[0].usadas}/{a.compras[0].compradas}
                     {a.compras.length > 1 && <> · {a.compras.length} compras en total</>}
                     {a.compras[0].pendiente > 0 && (
-                      <span className="text-[rgb(var(--warning))]"> · debe {pesos(a.compras[0].pendiente)}</span>
+                      <span className="text-ambar"> · debe {pesos(a.compras[0].pendiente)}</span>
                     )}
                   </p>
                 )}
 
-                <div className="flex gap-2 pt-1">
+                <div className="mt-auto flex gap-2 pt-1">
                   <button
                     onClick={() => setRegistrar(a)}
                     disabled={a.restantes <= 0}
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-[rgb(var(--accent))] text-[rgb(var(--accent-foreground))] px-3 py-2 text-sm font-medium hover:bg-[rgb(var(--accent-strong))] disabled:opacity-50"
+                    className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-acento px-3 text-sm font-semibold text-sobre-acento transition-colors hover:bg-acento-fuerte disabled:opacity-50"
                     title={a.restantes <= 0 ? 'Sin sesiones disponibles' : 'Registrar sesión'}
                   >
                     <CalendarPlus className="w-4 h-4" />
@@ -481,7 +473,7 @@ export function SesionesCoachClient({
                   </button>
                   <button
                     onClick={() => setHistorial(a)}
-                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[rgb(var(--border))] px-3 py-2 text-sm font-medium text-[rgb(var(--text-primary))] hover:bg-[rgb(var(--surface-2))]"
+                    className="inline-flex h-10 items-center justify-center gap-1.5 rounded-2xl border border-linea bg-panel px-3 text-sm font-semibold text-tinta transition-colors hover:border-linea-fuerte hover:bg-suave"
                   >
                     <History className="w-4 h-4" />
                     Historial

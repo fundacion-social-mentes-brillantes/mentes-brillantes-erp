@@ -24,21 +24,21 @@ export function AplicarSaldoForm({ cuentaId, asistenteId, maxMonto }: { cuentaId
   return (
     <form ref={formRef} onSubmitCapture={recordarFormulario} action={formAction} className="space-y-4">
       {state?.error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-red-600">
+        <div className="p-3 bg-rojo/10 border border-rojo/30 rounded-lg flex items-start gap-3 text-rojo">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
           <p className="text-sm font-medium">{state.error}</p>
         </div>
       )}
       
       {state?.success && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-start gap-3 text-emerald-700">
+        <div className="p-3 bg-verde/10 border border-verde/30 rounded-lg flex items-start gap-3 text-verde">
           <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
           <p className="text-sm font-medium">Saldo aplicado correctamente.</p>
         </div>
       )}
 
       <div className="space-y-2">
-        <label className="text-sm font-medium text-zinc-900">Monto a aplicar ($)</label>
+        <label className="text-sm font-medium text-tinta">Monto a aplicar ($)</label>
         <Input 
           name="monto" 
           type="number" 
@@ -49,10 +49,10 @@ export function AplicarSaldoForm({ cuentaId, asistenteId, maxMonto }: { cuentaId
           required 
           disabled={isPending} 
         />
-        <p className="text-xs text-zinc-500">Máximo aplicable: {pesos(maxMonto)}</p>
+        <p className="text-xs text-gris">Máximo aplicable: {pesos(maxMonto)}</p>
       </div>
 
-      <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" disabled={isPending}>
+      <Button type="submit" className="w-full bg-verde text-fondo hover:bg-verde/90" disabled={isPending}>
         <Wallet className="w-4 h-4 mr-2" />
         {isPending ? 'Aplicando...' : 'Pagar con Saldo a Favor'}
       </Button>

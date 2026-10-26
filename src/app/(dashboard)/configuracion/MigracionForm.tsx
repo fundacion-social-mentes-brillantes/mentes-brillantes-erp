@@ -67,12 +67,12 @@ export function MigracionForm() {
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2">
-          <label className="text-sm font-medium text-zinc-900">Tipo de Datos a Migrar</label>
+          <label className="text-sm font-medium text-tinta">Tipo de Datos a Migrar</label>
           <select 
             name="tipo" 
             required 
             disabled={isPending}
-            className="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-10 w-full rounded-md border border-linea bg-panel px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-acento focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <option value="">Seleccione...</option>
             <option value="asistentes">1. Asistentes</option>
@@ -84,23 +84,23 @@ export function MigracionForm() {
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium text-zinc-900">Archivo CSV</label>
+          <label className="text-sm font-medium text-tinta">Archivo CSV</label>
           <input 
             type="file" 
             name="file" 
             accept=".csv"
             required 
             disabled={isPending}
-            className="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-10 w-full rounded-md border border-linea bg-panel px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-gris focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-acento focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           />
         </div>
       </div>
 
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex gap-3 text-blue-800 text-sm">
+      <div className="bg-info/10 border border-info/30 rounded-lg p-4 flex gap-3 text-info text-sm">
         <Info className="w-5 h-5 shrink-0 mt-0.5" />
         <div>
           <p className="font-semibold mb-1">Instrucciones de Mapeo (Columnas exactas de AppSheet):</p>
-          <ul className="list-disc pl-4 space-y-1 text-blue-700">
+          <ul className="list-disc pl-4 space-y-1 text-info">
             <li><strong>Asistentes:</strong> Row ID, Asistente Id, Codigo, Nombre, Cedula, Correo, Activo, Telefono</li>
             <li><strong>Socios:</strong> Row ID, Socio Id, Nombre, Porcentaje, Activo</li>
             <li><strong>Períodos:</strong> Fecha Inicio, Fecha Fin</li>
@@ -111,7 +111,7 @@ export function MigracionForm() {
       </div>
 
       {result?.message && !result.success && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-red-600">
+        <div className="p-4 bg-rojo/10 border border-rojo/30 rounded-lg flex items-start gap-3 text-rojo">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-medium">{result.message}</p>
@@ -125,7 +125,7 @@ export function MigracionForm() {
       )}
 
       {result?.success && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg flex items-start gap-3 text-emerald-700">
+        <div className="p-4 bg-verde/10 border border-verde/30 rounded-lg flex items-start gap-3 text-verde">
           <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-medium">{result.message}</p>
@@ -140,7 +140,7 @@ export function MigracionForm() {
             )}
 
             {result.errors && result.errors.length > 0 && (
-              <ul className="mt-2 text-xs list-disc pl-4 space-y-1 text-red-600">
+              <ul className="mt-2 text-xs list-disc pl-4 space-y-1 text-rojo">
                 {result.errors.map((err, i) => <li key={i}>{err}</li>)}
               </ul>
             )}
@@ -149,7 +149,7 @@ export function MigracionForm() {
       )}
 
       <div className="flex justify-end">
-        <Button type="submit" disabled={isPending} className="bg-zinc-900 text-white hover:bg-zinc-800">
+        <Button type="submit" disabled={isPending} className="bg-acento text-sobre-acento hover:bg-acento-fuerte">
           <Upload className="w-4 h-4 mr-2" />
           {isPending ? 'Procesando...' : 'Iniciar Migración'}
         </Button>

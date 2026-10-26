@@ -1,601 +1,427 @@
 @import "tailwindcss";
 
-@theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+/* El modo oscuro lo decide la apariencia escogida (data-modo), no solo el aparato. */
+@custom-variant dark (&:where([data-modo="oscuro"], [data-modo="oscuro"] *));
+
+/* ============================================================
+   Colores con nombre para las clases (bg-panel, text-gris, border-linea...).
+   Cada uno lee una variable de la apariencia: así el modo y el color principal
+   que escoja cada quien cambian toda la app. "inline" hace que la clase lea la
+   variable donde se usa (el reporte PDF pone sus propios colores en una copia).
+   ============================================================ */
+@theme inline {
+  --font-sans: var(--letra), ui-sans-serif, system-ui, sans-serif;
+
+  --color-fondo: rgb(var(--bg));
+  --color-panel: rgb(var(--surface-1));
+  --color-suave: rgb(var(--surface-2));
+  --color-suave-2: rgb(var(--surface-3));
+  --color-linea: rgb(var(--border));
+  --color-linea-fuerte: rgb(var(--border-strong));
+  --color-tinta: rgb(var(--text-primary));
+  --color-gris: rgb(var(--text-muted));
+  --color-acento: rgb(var(--accent));
+  --color-acento-fuerte: rgb(var(--accent-strong));
+  --color-sobre-acento: rgb(var(--accent-foreground));
+  --color-campo: rgb(var(--campo));
+  --color-sobre-campo: rgb(var(--on-campo));
+  --color-sobre-campo-suave: rgb(var(--on-campo-muted));
+  --color-verde: rgb(var(--success));
+  --color-rojo: rgb(var(--danger));
+  --color-rojo-fuerte: rgb(var(--danger-strong));
+  --color-ambar: rgb(var(--warning));
+  --color-info: rgb(var(--info));
+  --color-oro: rgb(var(--gold));
+
+  /* Tres tamaños de esquina para todo (antes había cinco mezclados). */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-3xl: 1rem;
 }
 
+@utility shadow-soft {
+  box-shadow: var(--shadow-soft);
+}
+@utility shadow-strong {
+  box-shadow: var(--shadow-strong);
+}
+
+/* ============================================================
+   Valores de entrada (color principal: vino Mentes Brillantes #8f2453).
+   Son los mismos que calcula src/lib/tema/apariencia.ts; con otro color,
+   la apariencia los reemplaza en <html>. Van como "r, g, b" para servir
+   igual en rgb(var(--x)) y en rgba(var(--x), 0.5).
+   ============================================================ */
 :root {
   color-scheme: light;
-  --bg: 245 247 242;
-  --surface-1: 255 255 252;
-  --surface-2: 239 242 235;
-  --surface-3: 226 231 221;
-  --muted-surface: 244 242 232;
-  --border: 219 211 191;
-  --text-primary: 25 30 27;
-  --text-muted: 101 110 103;
-  --accent: 21 148 112;
-  --accent-strong: 13 116 91;
-  --accent-foreground: 255 255 255;
-  --ring-color: 191 149 63;
-  --success: 21 148 112;
-  --danger: 202 63 63;
-  --danger-strong: 180 43 52;
-  --warning: 191 149 63;
-  --info: 49 111 163;
-  --gold: 191 149 63;
-  --gold-soft: 241 217 154;
-  --emerald-soft: 211 244 232;
-  --shadow-soft: 0 16px 40px rgba(43, 37, 24, 0.09);
-  --shadow-strong: 0 24px 70px rgba(43, 37, 24, 0.18);
-  --input-bg: 255 255 252;
-  --sidebar-backdrop: 19 28 35;
-  --glass-highlight: 255 255 255;
-
-  /* Tailwind color bridges so existing utility classes respect the theme */
-  --color-white: 255 255 255;
-  --color-black: 0 0 0;
-  --color-zinc-50: 250 249 244;
-  --color-zinc-100: 244 242 232;
-  --color-zinc-200: 226 221 207;
-  --color-zinc-300: 207 199 181;
-  --color-zinc-400: 157 150 134;
-  --color-zinc-500: 101 110 103;
-  --color-zinc-600: 76 84 78;
-  --color-zinc-700: 50 58 53;
-  --color-zinc-800: 34 42 38;
-  --color-zinc-900: 25 30 27;
-  --color-zinc-950: 10 13 12;
-  --color-emerald-500: 21 148 112;
+  --bg: 242, 236, 239;
+  --surface-1: 255, 255, 255;
+  --surface-2: 249, 244, 246;
+  --surface-3: 244, 233, 238;
+  --muted-surface: 249, 244, 246;
+  --border: 221, 206, 214;
+  --border-strong: 189, 173, 181;
+  --text-primary: 44, 21, 31;
+  --text-muted: 107, 81, 94;
+  --accent: 143, 36, 83;
+  --accent-strong: 120, 30, 70;
+  --accent-foreground: 255, 255, 255;
+  --ring-color: 143, 36, 83;
+  --campo: 143, 36, 83;
+  --on-campo: 255, 255, 255;
+  --on-campo-muted: 233, 211, 221;
+  --success: 17, 118, 79;
+  --danger: 179, 48, 63;
+  --danger-strong: 150, 38, 52;
+  --warning: 139, 91, 14;
+  --info: 46, 95, 143;
+  --gold: 184, 138, 46;
+  --input-bg: 255, 255, 255;
+  --shadow-soft: 0 1px 2px rgba(40, 18, 30, 0.06), 0 4px 14px rgba(40, 18, 30, 0.05);
+  --shadow-strong: 0 16px 40px rgba(40, 18, 30, 0.16);
 }
 
-[data-theme="dark"] {
+/* Oscuro: cuando se escoge, o cuando el aparato está en oscuro y aún no se ha
+   escogido nada (antes de que cargue la apariencia). */
+:root[data-modo="oscuro"] {
   color-scheme: dark;
-  --bg: 5 10 16;
-  --surface-1: 13 21 27;
-  --surface-2: 9 16 23;
-  --surface-3: 23 34 42;
-  --muted-surface: 22 31 37;
-  --border: 57 65 58;
-  --text-primary: 241 246 240;
-  --text-muted: 163 176 166;
-  --accent: 50 211 150;
-  --accent-strong: 28 178 128;
-  --accent-foreground: 3 26 18;
-  --ring-color: 221 178 87;
-  --success: 50 211 150;
-  --danger: 251 113 133;
-  --danger-strong: 244 63 94;
-  --warning: 221 178 87;
-  --info: 116 192 220;
-  --gold: 221 178 87;
-  --gold-soft: 86 66 28;
-  --emerald-soft: 20 70 54;
-  --shadow-soft: 0 22px 55px rgba(0, 0, 0, 0.42);
-  --shadow-strong: 0 32px 90px rgba(0, 0, 0, 0.62);
-  --input-bg: 9 16 23;
-  --sidebar-backdrop: 4 9 14;
-  --glass-highlight: 255 242 190;
-
-  --color-white: 13 21 27;
-  --color-black: 0 0 0;
-  --color-zinc-50: 12 20 26;
-  --color-zinc-100: 18 28 35;
-  --color-zinc-200: 31 43 50;
-  --color-zinc-300: 47 60 67;
-  --color-zinc-400: 92 108 105;
-  --color-zinc-500: 150 164 158;
-  --color-zinc-600: 178 190 184;
-  --color-zinc-700: 209 218 212;
-  --color-zinc-800: 231 237 232;
-  --color-zinc-900: 244 248 243;
-  --color-zinc-950: 3 7 10;
-  --color-emerald-500: 50 211 150;
+  --bg: 24, 17, 22;
+  --surface-1: 35, 25, 31;
+  --surface-2: 45, 31, 39;
+  --surface-3: 55, 39, 48;
+  --muted-surface: 45, 31, 39;
+  --border: 70, 50, 61;
+  --border-strong: 105, 88, 97;
+  --text-primary: 244, 238, 241;
+  --text-muted: 182, 162, 172;
+  --accent: 186, 120, 149;
+  --accent-strong: 198, 144, 168;
+  --accent-foreground: 43, 15, 28;
+  --ring-color: 186, 120, 149;
+  --campo: 103, 26, 60;
+  --on-campo: 255, 255, 255;
+  --on-campo-muted: 217, 198, 206;
+  --success: 76, 195, 138;
+  --danger: 255, 123, 138;
+  --danger-strong: 255, 92, 111;
+  --warning: 229, 180, 90;
+  --info: 127, 182, 230;
+  --gold: 214, 173, 85;
+  --input-bg: 35, 25, 31;
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.35), 0 6px 18px rgba(0, 0, 0, 0.28);
+  --shadow-strong: 0 18px 44px rgba(0, 0, 0, 0.55);
 }
-
-/* ============================================================
-   Tema ROSA CREMA PASTEL (femenino) — reemplaza al blanco.
-   Mantiene verde=ingresos, rojo=egresos y el dorado de marca.
-   ============================================================ */
-[data-theme="pink"] {
-  color-scheme: light;
-  --bg: 252 235 242;
-  --surface-1: 255 248 251;
-  --surface-2: 250 230 239;
-  --surface-3: 245 214 227;
-  --muted-surface: 251 232 240;
-  --border: 236 198 214;
-  --text-primary: 60 26 44;
-  --text-muted: 146 100 120;
-  --accent: 216 76 124;
-  --accent-strong: 190 50 100;
-  --accent-foreground: 255 255 255;
-  --ring-color: 216 76 124;
-  --success: 19 138 104;
-  --danger: 200 56 70;
-  --danger-strong: 176 38 56;
-  --warning: 188 142 60;
-  --info: 156 72 138;
-  --gold: 191 149 63;
-  --gold-soft: 247 220 186;
-  --emerald-soft: 215 240 230;
-  --shadow-soft: 0 16px 40px rgba(120, 40, 75, 0.10);
-  --shadow-strong: 0 24px 70px rgba(120, 40, 75, 0.20);
-  --input-bg: 255 248 251;
-  --sidebar-backdrop: 247 220 232;
-  --glass-highlight: 255 255 255;
-
-  --color-white: 255 255 255;
-  --color-black: 0 0 0;
-  --color-zinc-50: 252 240 245;
-  --color-zinc-100: 250 233 240;
-  --color-zinc-200: 240 214 225;
-  --color-zinc-300: 224 194 208;
-  --color-zinc-400: 168 130 148;
-  --color-zinc-500: 146 100 120;
-  --color-zinc-600: 110 72 92;
-  --color-zinc-700: 84 50 66;
-  --color-zinc-800: 60 34 48;
-  --color-zinc-900: 50 24 40;
-  --color-zinc-950: 30 14 24;
-  --color-emerald-500: 21 148 112;
-}
-
-/* En el tema rosa, las tarjetas blancas y grises se tiñen de rosa para coherencia */
-[data-theme="pink"] .bg-white {
-  background-color: rgb(var(--surface-1)) !important;
-}
-[data-theme="pink"] .bg-zinc-50,
-[data-theme="pink"] .hover\:bg-zinc-50:hover,
-[data-theme="pink"] .hover\:bg-zinc-50\/50:hover {
-  background-color: rgba(var(--surface-2), 0.7) !important;
-}
-[data-theme="pink"] .bg-zinc-100 {
-  background-color: rgba(var(--surface-3), 0.7) !important;
-}
-[data-theme="pink"] .border-zinc-100,
-[data-theme="pink"] .border-zinc-200,
-[data-theme="pink"] .border-zinc-300 {
-  border-color: rgba(var(--border), 0.75) !important;
-}
-[data-theme="pink"] .text-zinc-900,
-[data-theme="pink"] .text-zinc-800,
-[data-theme="pink"] .text-zinc-700 {
-  color: rgb(var(--text-primary)) !important;
-}
-[data-theme="pink"] .text-zinc-600,
-[data-theme="pink"] .text-zinc-500,
-[data-theme="pink"] .text-zinc-400 {
-  color: rgb(var(--text-muted)) !important;
-}
-/* Botones oscuros (bg-zinc-900 text-zinc-50) → rosa primario en el tema rosa */
-[data-theme="pink"] .bg-zinc-900 {
-  background-color: rgb(var(--accent)) !important;
-}
-[data-theme="pink"] .bg-zinc-900.text-zinc-50,
-[data-theme="pink"] .bg-zinc-900 .text-zinc-50 {
-  color: #fff !important;
-}
-/* Texto secundario y chips de codigo sobre header oscuro (bg-zinc-900 -> rosa) en el tema rosa */
-[data-theme="pink"] .bg-zinc-900.text-zinc-400,
-[data-theme="pink"] .bg-zinc-900 .text-zinc-400 {
-  color: rgba(255, 255, 255, 0.8) !important;
-}
-[data-theme="pink"] .bg-zinc-900.text-emerald-400,
-[data-theme="pink"] .bg-zinc-900 .text-emerald-400 {
-  color: #fff !important;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  min-height: 100vh;
-  background:
-    radial-gradient(circle at top left, rgba(var(--gold), 0.16), transparent 28rem),
-    linear-gradient(135deg, rgba(var(--bg), 1), rgba(var(--surface-2), 0.92));
-  color: rgb(var(--text-primary));
-  font-family: var(--font-sans);
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-::selection {
-  background: rgba(var(--accent), 0.38);
-  color: rgb(var(--text-primary));
-}
-/* En oscuro el resaltado era casi invisible; usamos dorado bien visible con texto oscuro */
-[data-theme="dark"] ::selection {
-  background: rgba(var(--gold), 0.55);
-  color: rgb(10 14 20);
-}
-
-button:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-  outline: 2px solid rgba(var(--ring-color), 0.62);
-  outline-offset: 2px;
-}
-
-.card-surface {
-  background:
-    linear-gradient(145deg, rgba(var(--surface-1), 0.92), rgba(var(--surface-2), 0.78));
-  border: 1px solid rgba(var(--border), 0.72);
-  box-shadow: var(--shadow-soft);
-  color: rgb(var(--text-primary));
-}
-
-.premium-panel {
-  background:
-    linear-gradient(145deg, rgba(var(--surface-1), 0.82), rgba(var(--surface-2), 0.66)),
-    linear-gradient(90deg, rgba(var(--gold), 0.08), transparent 42%, rgba(var(--accent), 0.06));
-  border: 1px solid rgba(var(--border), 0.68);
-  box-shadow: var(--shadow-soft);
-  backdrop-filter: blur(18px);
-}
-
-.premium-card {
-  position: relative;
-  overflow: hidden;
-  background:
-    linear-gradient(150deg, rgba(var(--surface-1), 0.9), rgba(var(--surface-2), 0.72)),
-    linear-gradient(120deg, rgba(var(--gold), 0.08), transparent 48%, rgba(var(--accent), 0.06));
-  border: 1px solid rgba(var(--border), 0.66);
-  box-shadow: var(--shadow-soft);
-  backdrop-filter: blur(16px);
-}
-
-.premium-card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(180deg, rgba(var(--glass-highlight), 0.12), transparent 38%);
-}
-
-.premium-card > * {
-  position: relative;
-  z-index: 1;
-}
-
-.premium-divider {
-  border-color: rgba(var(--border), 0.58);
-}
-
-.premium-badge {
-  border: 1px solid rgba(var(--gold), 0.36);
-  background: linear-gradient(135deg, rgba(var(--gold), 0.16), rgba(var(--accent), 0.08));
-  color: rgb(var(--text-primary));
-}
-
-.muted-surface {
-  background-color: rgb(var(--muted-surface));
-}
-
-.text-muted {
-  color: rgb(var(--text-muted));
-}
-
-.shadow-soft {
-  box-shadow: var(--shadow-soft);
-}
-
-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-}
-
-th,
-td {
-  border-color: rgb(var(--border));
-}
-
-thead th {
-  background: rgba(var(--surface-2), 0.74);
-  color: rgb(var(--text-muted));
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-tbody tr {
-  transition: background-color 160ms ease, box-shadow 160ms ease;
-}
-
-tbody tr:hover {
-  background: rgba(var(--gold), 0.055);
-}
-
-input,
-select,
-textarea {
-  accent-color: rgb(var(--accent));
-}
-
-input,
-select,
-textarea,
-.form-control {
-  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
-}
-
-input:hover,
-select:hover,
-textarea:hover {
-  border-color: rgba(var(--gold), 0.52);
-}
-
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, rgba(var(--gold), 0.5), rgba(var(--accent), 0.42));
-  border-radius: 999px;
-}
-
-::-webkit-scrollbar-track {
-  background: rgba(var(--surface-2), 0.72);
-}
-.visible-scrollbar {
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(var(--text-muted), 0.45) rgba(var(--surface-2), 0.75);
-}
-.visible-scrollbar::-webkit-scrollbar {
-  width: 10px;
-}
-.visible-scrollbar::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, rgba(var(--gold), 0.5), rgba(var(--accent), 0.42));
-  border-radius: 999px;
-}
-.visible-scrollbar::-webkit-scrollbar-track {
-  background: rgba(var(--surface-2), 0.85);
-}
-
-[data-theme="dark"] .bg-white {
-  background-color: rgba(var(--surface-1), 0.9) !important;
-}
-
-[data-theme="dark"] .bg-zinc-50,
-[data-theme="dark"] .hover\:bg-zinc-50:hover,
-[data-theme="dark"] .hover\:bg-zinc-50\/50:hover {
-  background-color: rgba(var(--surface-2), 0.74) !important;
-}
-
-[data-theme="dark"] .bg-zinc-100 {
-  background-color: rgba(var(--surface-3), 0.74) !important;
-}
-
-[data-theme="dark"] .bg-zinc-900 {
-  background-color: rgb(var(--surface-3)) !important;
-}
-
-[data-theme="dark"] .border-zinc-100,
-[data-theme="dark"] .border-zinc-200,
-[data-theme="dark"] .border-zinc-300 {
-  border-color: rgba(var(--border), 0.62) !important;
-}
-
-[data-theme="dark"] .text-zinc-900,
-[data-theme="dark"] .text-zinc-800,
-[data-theme="dark"] .text-zinc-700 {
-  color: rgb(var(--text-primary)) !important;
-}
-
-[data-theme="dark"] .text-zinc-600,
-[data-theme="dark"] .text-zinc-500,
-[data-theme="dark"] .text-zinc-400 {
-  color: rgb(var(--text-muted)) !important;
-}
-
-[data-theme="dark"] .text-white,
-[data-theme="dark"] .text-zinc-50 {
-  color: rgb(255 255 255) !important;
-}
-
-/* ============================================================
-   Optimizaciones móviles (no afectan la vista de escritorio)
-   ============================================================ */
-
-/* Áreas seguras del dispositivo (notch superior, barra inferior) */
-:root {
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-left: env(safe-area-inset-left, 0px);
-  --safe-right: env(safe-area-inset-right, 0px);
-}
-
-html {
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
-}
-
-/* Evita el desplazamiento horizontal accidental en móvil.
-   Usamos "clip" (no "hidden") para no romper los encabezados sticky. */
-html,
-body {
-  max-width: 100%;
-  overflow-x: clip;
-}
-
-/* Sensación de app: sin "rebote" del documento solo cuando está instalada */
-@media (display-mode: standalone) {
-  html,
-  body {
-    overscroll-behavior-y: none;
+@media (prefers-color-scheme: dark) {
+  :root:not([data-modo]) {
+    color-scheme: dark;
+    --bg: 24, 17, 22;
+    --surface-1: 35, 25, 31;
+    --surface-2: 45, 31, 39;
+    --surface-3: 55, 39, 48;
+    --muted-surface: 45, 31, 39;
+    --border: 70, 50, 61;
+    --border-strong: 105, 88, 97;
+    --text-primary: 244, 238, 241;
+    --text-muted: 182, 162, 172;
+    --accent: 186, 120, 149;
+    --accent-strong: 198, 144, 168;
+    --accent-foreground: 43, 15, 28;
+    --ring-color: 186, 120, 149;
+    --campo: 103, 26, 60;
+    --on-campo: 255, 255, 255;
+    --on-campo-muted: 217, 198, 206;
+    --success: 76, 195, 138;
+    --danger: 255, 123, 138;
+    --danger-strong: 255, 92, 111;
+    --warning: 229, 180, 90;
+    --info: 127, 182, 230;
+    --gold: 214, 173, 85;
+    --input-bg: 35, 25, 31;
+    --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.35), 0 6px 18px rgba(0, 0, 0, 0.28);
+    --shadow-strong: 0 18px 44px rgba(0, 0, 0, 0.55);
   }
 }
 
-/* Evita el zoom automático de iOS al enfocar un campo (necesita >= 16px) */
-@media (max-width: 640px) {
+/* Todo lo de abajo va en la capa "base": así cualquier clase (text-acento, bg-panel...)
+   le gana a estas reglas generales. Antes iban sueltas y, por ejemplo, la regla de los
+   enlaces le quitaba el color a todos los enlaces que lo tenían. */
+@layer base {
+  /* ============================================================
+     Base
+     ============================================================ */
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    min-height: 100dvh;
+    background: rgb(var(--bg));
+    color: rgb(var(--text-primary));
+    font-family: var(--font-sans);
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  ::selection {
+    background: rgba(var(--accent), 0.24);
+    color: rgb(var(--text-primary));
+  }
+
+  /* Un solo anillo de foco para todo lo que se puede tocar con el teclado. */
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid rgb(var(--ring-color));
+    outline-offset: 2px;
+  }
+
   input,
   select,
   textarea {
-    font-size: 16px;
+    accent-color: rgb(var(--accent));
+    caret-color: rgb(var(--accent));
   }
-}
 
-/* Desplazamiento horizontal suave en tablas y contenedores desbordables */
-.overflow-x-auto {
-  -webkit-overflow-scrolling: touch;
-}
-
-@media (max-width: 768px) {
-  .overflow-x-auto::-webkit-scrollbar {
-    height: 6px;
+  input::placeholder,
+  textarea::placeholder {
+    color: rgb(var(--text-muted));
+    opacity: 0.85;
   }
-}
 
-/* Mejor respuesta táctil: sin destello azul al tocar */
-@media (pointer: coarse) {
-  a,
-  button,
-  [role="button"] {
-    -webkit-tap-highlight-color: transparent;
+  /* Las cajas de fecha y los selectores nativos toman el modo de la página. */
+  select,
+  input[type="date"],
+  input[type="month"],
+  input[type="time"] {
+    color-scheme: inherit;
   }
-}
 
-/* Espacio inferior para que la barra de navegación móvil no tape el contenido */
-.has-mobile-nav {
-  padding-bottom: calc(4.5rem + var(--safe-bottom));
-}
-@media (min-width: 768px) {
+  /* Tarjetas de antes: ahora son una superficie lisa, sin brillos. */
+  .card-surface,
+  .premium-panel,
+  .premium-card {
+    background: rgb(var(--surface-1));
+    border: 1px solid rgb(var(--border));
+    box-shadow: var(--shadow-soft);
+    color: rgb(var(--text-primary));
+  }
+
+  .premium-divider {
+    border-color: rgb(var(--border));
+  }
+
+  .premium-badge {
+    border: 1px solid rgba(var(--gold), 0.4);
+    background: rgba(var(--gold), 0.12);
+    color: rgb(var(--text-primary));
+  }
+
+  .muted-surface {
+    background-color: rgb(var(--muted-surface));
+  }
+
+  .text-muted {
+    color: rgb(var(--text-muted));
+  }
+
+  /* Montos. Sin cifras de ancho fijo: en esta letra también ensanchan el punto de miles
+     y "$ 57.664.000" se veía "$ 57 . 664 . 000". */
+  .cifra {
+    font-variant-numeric: lining-nums;
+    white-space: nowrap;
+  }
+
+  /* ============================================================
+     Tablas
+     ============================================================ */
+  table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  th,
+  td {
+    border-color: rgb(var(--border));
+  }
+
+  thead th {
+    color: rgb(var(--text-muted));
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  /* Fondo de los títulos de tabla, menos en los documentos que se exportan como imagen
+     (esos van siempre en blanco, sin los colores de la apariencia). */
+  thead th:not([data-documento] th) {
+    background: rgb(var(--surface-2));
+  }
+
+  tbody tr {
+    transition: background-color 150ms ease;
+  }
+
+  tbody tr:hover {
+    background: rgb(var(--surface-2));
+  }
+
+  /* Listas largas (cientos de personas o cuentas): el navegador solo dibuja lo que
+     está a la vista y deja el resto para cuando se baja. */
+  .fila-larga {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 72px;
+  }
+
+  /* ============================================================
+     Barras de desplazamiento con los colores de la página
+     ============================================================ */
+  * {
+    scrollbar-color: rgb(var(--border-strong)) transparent;
+    scrollbar-width: thin;
+  }
+
+  .visible-scrollbar {
+    scrollbar-gutter: stable;
+  }
+
+  /* ============================================================
+     Celular
+     ============================================================ */
+  :root {
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  /* Evita el desplazamiento horizontal accidental en móvil.
+     Usamos "clip" (no "hidden") para no romper los encabezados pegados arriba. */
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
+  /* Sensación de app: sin "rebote" del documento solo cuando está instalada */
+  @media (display-mode: standalone) {
+    html,
+    body {
+      overscroll-behavior-y: none;
+    }
+  }
+
+  /* Evita el zoom automático de iOS al enfocar un campo (necesita >= 16px) */
+  @media (max-width: 640px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
+
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Sin destello azul al tocar */
+  @media (pointer: coarse) {
+    a,
+    button,
+    [role="button"] {
+      -webkit-tap-highlight-color: transparent;
+    }
+  }
+
+  /* Espacio inferior para que la barra de navegación móvil no tape el contenido */
   .has-mobile-nav {
-    padding-bottom: 0;
+    padding-bottom: calc(5rem + var(--safe-bottom));
   }
-}
+  @media (min-width: 768px) {
+    .has-mobile-nav {
+      padding-bottom: 0;
+    }
+  }
 
-/* ============================================================
-   Modo oscuro: chips, textos y bordes de color legibles.
-   (las utilidades de Tailwind con tonos claros no se adaptaban)
-   ============================================================ */
-[data-theme="dark"] .bg-emerald-50,
-[data-theme="dark"] .bg-emerald-100 { background-color: rgba(50, 211, 150, 0.15) !important; }
-[data-theme="dark"] .bg-red-50,
-[data-theme="dark"] .bg-red-100 { background-color: rgba(251, 113, 133, 0.15) !important; }
-[data-theme="dark"] .bg-amber-50,
-[data-theme="dark"] .bg-amber-100 { background-color: rgba(221, 178, 87, 0.16) !important; }
-[data-theme="dark"] .bg-blue-50,
-[data-theme="dark"] .bg-blue-100 { background-color: rgba(116, 192, 220, 0.16) !important; }
-[data-theme="dark"] .bg-teal-50 { background-color: rgba(94, 234, 212, 0.14) !important; }
-[data-theme="dark"] .bg-yellow-50 { background-color: rgba(234, 179, 8, 0.16) !important; }
-[data-theme="dark"] .bg-rose-100 { background-color: rgba(251, 113, 133, 0.16) !important; }
+  /* ============================================================
+     Pantalla de carga al cambiar de sección (CargandoSeccion):
+     el ícono de la app flota, sus luces se mueven y el punto respira.
+     ============================================================ */
+  @keyframes carga-aparece {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes carga-aparece-quieta {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes carga-flota {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+  }
+  @keyframes carga-halo {
+    0%, 100% { opacity: 0.45; transform: scale(0.92); }
+    50% { opacity: 0.85; transform: scale(1.05); }
+  }
+  @keyframes carga-luz-a {
+    0%, 100% { transform: translate(0, 0); }
+    50% { transform: translate(48px, -36px); }
+  }
+  @keyframes carga-luz-b {
+    0%, 100% { transform: translate(0, 0); }
+    50% { transform: translate(-48px, 36px); }
+  }
+  @keyframes carga-punto {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 1; }
+  }
+  /* El retraso de 0,12 s evita que en los cambios rápidos alcance a parpadear. */
+  .carga-seccion { animation: carga-aparece 0.35s ease-out 0.12s both; }
+  .carga-seccion-icono { animation: carga-flota 3.2s ease-in-out infinite; }
+  .carga-seccion-halo {
+    background:
+      radial-gradient(circle at 28% 72%, rgba(255, 122, 46, 0.38), transparent 62%),
+      radial-gradient(circle at 76% 28%, rgba(43, 85, 255, 0.38), transparent 62%);
+    filter: blur(18px);
+    animation: carga-halo 3.2s ease-in-out infinite;
+  }
+  .carga-seccion-luz-a { animation: carga-luz-a 6s ease-in-out infinite; }
+  .carga-seccion-luz-b { animation: carga-luz-b 7s ease-in-out infinite; }
+  .carga-seccion-punto { animation: carga-punto 1.6s ease-in-out infinite; }
 
-[data-theme="dark"] .hover\:bg-red-50:hover { background-color: rgba(251, 113, 133, 0.2) !important; }
-[data-theme="dark"] .hover\:bg-emerald-50:hover { background-color: rgba(50, 211, 150, 0.2) !important; }
-[data-theme="dark"] .hover\:bg-blue-50:hover { background-color: rgba(116, 192, 220, 0.2) !important; }
-[data-theme="dark"] .hover\:bg-amber-50:hover { background-color: rgba(221, 178, 87, 0.2) !important; }
+  /* Entrada corta de un panel o una lista que aparece (por ejemplo, el menú del celular). */
+  @keyframes entra-abajo {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+  }
+  .entra {
+    animation: entra-abajo 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
 
-[data-theme="dark"] .text-emerald-600,
-[data-theme="dark"] .text-emerald-700,
-[data-theme="dark"] .text-emerald-800 { color: rgb(110 231 183) !important; }
-[data-theme="dark"] .text-red-600,
-[data-theme="dark"] .text-red-700 { color: rgb(252 165 165) !important; }
-[data-theme="dark"] .text-amber-600,
-[data-theme="dark"] .text-amber-700,
-[data-theme="dark"] .text-amber-800,
-[data-theme="dark"] .text-amber-900 { color: rgb(252 211 77) !important; }
-[data-theme="dark"] .text-blue-600,
-[data-theme="dark"] .text-blue-700,
-[data-theme="dark"] .text-blue-800 { color: rgb(147 197 253) !important; }
-[data-theme="dark"] .text-teal-600,
-[data-theme="dark"] .text-teal-700 { color: rgb(94 234 212) !important; }
-[data-theme="dark"] .text-yellow-800,
-[data-theme="dark"] .text-yellow-900 { color: rgb(253 224 71) !important; }
-
-[data-theme="dark"] .hover\:text-red-600:hover { color: rgb(252 165 165) !important; }
-[data-theme="dark"] .hover\:text-blue-600:hover { color: rgb(147 197 253) !important; }
-[data-theme="dark"] .hover\:text-emerald-600:hover { color: rgb(110 231 183) !important; }
-
-[data-theme="dark"] .border-emerald-200,
-[data-theme="dark"] .border-emerald-500 { border-color: rgba(50, 211, 150, 0.35) !important; }
-[data-theme="dark"] .border-red-200 { border-color: rgba(251, 113, 133, 0.35) !important; }
-[data-theme="dark"] .border-amber-200,
-[data-theme="dark"] .border-amber-300 { border-color: rgba(221, 178, 87, 0.35) !important; }
-[data-theme="dark"] .border-blue-200 { border-color: rgba(116, 192, 220, 0.35) !important; }
-[data-theme="dark"] .border-teal-200 { border-color: rgba(94, 234, 212, 0.35) !important; }
-[data-theme="dark"] .border-yellow-200 { border-color: rgba(234, 179, 8, 0.35) !important; }
-
-/* ============================================================
-   Dashboard premium: animaciones y brillos
-   ============================================================ */
-@keyframes rise-in {
-  from { opacity: 0; transform: translateY(16px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.rise-in {
-  animation: rise-in 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) both;
-}
-@media (prefers-reduced-motion: reduce) {
-  .rise-in { animation: none; }
-}
-
-/* ============================================================
-   Pantalla de carga al cambiar de sección (CargandoSeccion):
-   el ícono flota, sus luces se mueven y el punto respira.
-   ============================================================ */
-@keyframes carga-aparece {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: none; }
-}
-@keyframes carga-aparece-quieta {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-@keyframes carga-flota {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
-}
-@keyframes carga-halo {
-  0%, 100% { opacity: 0.45; transform: scale(0.92); }
-  50% { opacity: 0.85; transform: scale(1.05); }
-}
-@keyframes carga-luz-a {
-  0%, 100% { transform: translate(0, 0); }
-  50% { transform: translate(48px, -36px); }
-}
-@keyframes carga-luz-b {
-  0%, 100% { transform: translate(0, 0); }
-  50% { transform: translate(-48px, 36px); }
-}
-@keyframes carga-punto {
-  0%, 100% { opacity: 0.7; }
-  50% { opacity: 1; }
-}
-/* El retraso de 0,12 s evita que en los cambios rápidos alcance a parpadear. */
-.carga-seccion { animation: carga-aparece 0.35s ease-out 0.12s both; }
-.carga-seccion-icono { animation: carga-flota 3.2s ease-in-out infinite; }
-.carga-seccion-halo {
-  background:
-    radial-gradient(circle at 28% 72%, rgba(255, 122, 46, 0.38), transparent 62%),
-    radial-gradient(circle at 76% 28%, rgba(43, 85, 255, 0.38), transparent 62%);
-  filter: blur(18px);
-  animation: carga-halo 3.2s ease-in-out infinite;
-}
-.carga-seccion-luz-a { animation: carga-luz-a 6s ease-in-out infinite; }
-.carga-seccion-luz-b { animation: carga-luz-b 7s ease-in-out infinite; }
-.carga-seccion-punto { animation: carga-punto 1.6s ease-in-out infinite; }
-@media (prefers-reduced-motion: reduce) {
-  .carga-seccion { animation-name: carga-aparece-quieta; }
-  .carga-seccion-icono,
-  .carga-seccion-halo,
-  .carga-seccion-luz-a,
-  .carga-seccion-luz-b,
-  .carga-seccion-punto { animation: none; }
-}
-
-/* Brillo dorado de la línea de utilidad en la gráfica del dashboard */
-#dashboard-content .recharts-line-curve {
-  filter: drop-shadow(0 0 6px rgba(var(--warning), 0.45));
+  @media (prefers-reduced-motion: reduce) {
+    .carga-seccion { animation-name: carga-aparece-quieta; }
+    .carga-seccion-icono,
+    .carga-seccion-halo,
+    .carga-seccion-luz-a,
+    .carga-seccion-luz-b,
+    .carga-seccion-punto,
+    .entra { animation: none; }
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0.01ms !important;
+    }
+  }
 }

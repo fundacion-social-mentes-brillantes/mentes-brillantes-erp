@@ -27,12 +27,12 @@ function UsuarioRow({ perfil, asistentes }: { perfil: Perfil; asistentes: Asiste
       className="hidden md:grid grid-cols-12 items-center gap-2 px-4 py-3 text-sm"
     >
       <input type="hidden" name="id" value={perfil.id} />
-      <span className="col-span-4 text-[rgb(var(--text-primary))] font-medium">{perfil.nombre}</span>
+      <span className="col-span-4 text-tinta font-medium">{perfil.nombre}</span>
 
       <select
         name="rol"
         defaultValue={perfil.rol}
-        className="col-span-3 h-9 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] px-2 text-[rgb(var(--text-primary))]"
+        className="col-span-3 h-9 rounded-md border border-linea bg-suave px-2 text-tinta"
       >
         <option value="admin">admin</option>
         <option value="caja">caja</option>
@@ -42,7 +42,7 @@ function UsuarioRow({ perfil, asistentes }: { perfil: Perfil; asistentes: Asiste
       <select
         name="asistente_id"
         defaultValue={perfil.asistente_id || ''}
-        className="col-span-4 h-9 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] px-2 text-[rgb(var(--text-primary))]"
+        className="col-span-4 h-9 rounded-md border border-linea bg-suave px-2 text-tinta"
       >
         <option value="">-- Sin asignar --</option>
         {asistentes.map((a) => (
@@ -55,17 +55,17 @@ function UsuarioRow({ perfil, asistentes }: { perfil: Perfil; asistentes: Asiste
       <div className="col-span-1 text-right">
         <button
           type="submit"
-          className="inline-flex items-center justify-center rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] px-3 py-1 text-xs font-medium text-[rgb(var(--text-primary))] hover:bg-[rgb(var(--surface-3))]"
+          className="inline-flex items-center justify-center rounded-md border border-linea bg-suave px-3 py-1 text-xs font-medium text-tinta hover:bg-suave-2"
         >
           Guardar
         </button>
       </div>
 
       {state?.error && (
-        <div className="col-span-12 text-xs text-[rgb(var(--danger))] mt-1">{state.error}</div>
+        <div className="col-span-12 text-xs text-rojo mt-1">{state.error}</div>
       )}
       {state?.success && (
-        <div className="col-span-12 text-xs text-[rgb(var(--accent-strong))] mt-1">Actualizado</div>
+        <div className="col-span-12 text-xs text-acento-fuerte mt-1">Actualizado</div>
       )}
     </form>
   )
@@ -78,23 +78,23 @@ export default function UsuariosTable({ perfiles, asistentes }: Props) {
       <form
         key={perfil.id}
         action={formAction}
-        className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] p-4 shadow-soft space-y-3 text-sm"
+        className="rounded-lg border border-linea bg-panel p-4 shadow-soft space-y-3 text-sm"
       >
         <input type="hidden" name="id" value={perfil.id} />
         <div className="flex items-start justify-between gap-2">
           <div>
-            <p className="text-[rgb(var(--text-primary))] font-semibold leading-snug">{perfil.nombre}</p>
-            <p className="text-[11px] text-[rgb(var(--text-muted))]">Edición rápida</p>
+            <p className="text-tinta font-semibold leading-snug">{perfil.nombre}</p>
+            <p className="text-xs text-gris">Edición rápida</p>
           </div>
         </div>
 
         <div className="space-y-1">
-          <label className="text-xs font-medium text-[rgb(var(--text-muted))]">Rol</label>
+          <label className="text-sm font-medium text-gris">Rol</label>
           <select
             name="rol"
             defaultValue={perfil.rol}
             disabled={pending}
-            className="w-full h-9 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] px-2 text-[rgb(var(--text-primary))]"
+            className="w-full h-9 rounded-md border border-linea bg-suave px-2 text-tinta"
           >
             <option value="admin">admin</option>
             <option value="caja">caja</option>
@@ -103,12 +103,12 @@ export default function UsuariosTable({ perfiles, asistentes }: Props) {
         </div>
 
         <div className="space-y-1">
-          <label className="text-xs font-medium text-[rgb(var(--text-muted))]">Asistente vinculado (solo consulta)</label>
+          <label className="text-sm font-medium text-gris">Asistente vinculado (solo consulta)</label>
           <select
             name="asistente_id"
             defaultValue={perfil.asistente_id || ''}
             disabled={pending}
-            className="w-full h-9 rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] px-2 text-[rgb(var(--text-primary))]"
+            className="w-full h-9 rounded-md border border-linea bg-suave px-2 text-tinta"
           >
             <option value="">-- Sin asignar --</option>
             {asistentes.map((a) => (
@@ -123,12 +123,12 @@ export default function UsuariosTable({ perfiles, asistentes }: Props) {
           <button
             type="submit"
             disabled={pending}
-            className="w-full inline-flex items-center justify-center rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] px-3 py-2 text-sm font-semibold text-[rgb(var(--text-primary))] hover:bg-[rgb(var(--surface-3))] transition-colors"
+            className="w-full inline-flex items-center justify-center rounded-md border border-linea bg-suave px-3 py-2 text-sm font-semibold text-tinta hover:bg-suave-2 transition-colors"
           >
             {pending ? 'Guardando...' : 'Guardar cambios'}
           </button>
-          {state?.error && <span className="text-xs text-[rgb(var(--danger))]">{state.error}</span>}
-          {state?.success && <span className="text-xs text-[rgb(var(--accent-strong))]">Actualizado</span>}
+          {state?.error && <span className="text-xs text-rojo">{state.error}</span>}
+          {state?.success && <span className="text-xs text-acento-fuerte">Actualizado</span>}
         </div>
       </form>
     )
@@ -137,14 +137,14 @@ export default function UsuariosTable({ perfiles, asistentes }: Props) {
   return (
     <div className="space-y-4">
       {/* Desktop table */}
-      <div className="hidden md:block rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] shadow-soft overflow-hidden">
-        <div className="grid grid-cols-12 px-4 py-3 text-sm font-medium text-[rgb(var(--text-muted))] border-b border-[rgb(var(--border))]">
+      <div className="hidden md:block rounded-lg border border-linea bg-panel shadow-soft overflow-hidden">
+        <div className="grid grid-cols-12 px-4 py-3 text-sm font-medium text-gris border-b border-linea">
           <span className="col-span-4">Nombre</span>
           <span className="col-span-3">Rol</span>
           <span className="col-span-4">Asistente vinculado (solo consulta)</span>
           <span className="col-span-1 text-right">Guardar</span>
         </div>
-        <div className="divide-y divide-[rgb(var(--border))]">
+        <div className="divide-y divide-linea">
           {perfiles.map((perfil) => (
             <UsuarioRow key={perfil.id} perfil={perfil} asistentes={asistentes} />
           ))}

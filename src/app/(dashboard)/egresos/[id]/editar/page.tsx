@@ -12,8 +12,8 @@ export default async function EditarEgresoPage({ params }: { params: Promise<{ i
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Editar Egreso</h1>
-        <p className="text-zinc-500 text-sm">Modifica los datos del gasto.</p>
+        <h1 className="text-2xl font-semibold tracking-[-0.01em] text-tinta md:text-[1.75rem]">Editar Egreso</h1>
+        <p className="text-gris text-sm">Modifica los datos del gasto.</p>
       </div>
       <EgresoForm egreso={egreso} />
     </div>

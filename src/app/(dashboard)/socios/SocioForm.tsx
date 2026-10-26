@@ -15,9 +15,9 @@ export function SocioForm({ socio }: { socio?: Tables<'socios'> | null }) {
   const recordarFormulario = useConservarSiFalla(state)
 
   return (
-    <form onSubmitCapture={recordarFormulario} action={formAction} className="space-y-6 max-w-2xl bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
+    <form onSubmitCapture={recordarFormulario} action={formAction} className="space-y-6 max-w-2xl rounded-2xl border border-linea bg-panel p-5 md:p-6">
       {state?.error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-red-600">
+        <div className="p-3 bg-rojo/10 border border-rojo/30 rounded-lg flex items-start gap-3 text-rojo">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
           <p className="text-sm font-medium">{state.error}</p>
         </div>
@@ -25,11 +25,11 @@ export function SocioForm({ socio }: { socio?: Tables<'socios'> | null }) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2">
-          <label className="text-sm font-medium text-zinc-900">Nombre del Socio *</label>
+          <label className="text-sm font-medium text-tinta">Nombre del Socio *</label>
           <Input name="nombre" defaultValue={socio?.nombre} required disabled={isPending} />
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-medium text-zinc-900">Porcentaje de Participación (%) *</label>
+          <label className="text-sm font-medium text-tinta">Porcentaje de Participación (%) *</label>
           <Input 
             name="porcentaje_participacion" 
             type="number" 
@@ -43,8 +43,8 @@ export function SocioForm({ socio }: { socio?: Tables<'socios'> | null }) {
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-4 pt-4 border-t border-zinc-100">
-        <Link href="/socios" className="text-sm font-medium text-zinc-500 hover:text-zinc-900">
+      <div className="flex items-center justify-end gap-4 pt-4 border-t border-linea">
+        <Link href="/socios" className="text-sm font-medium text-gris hover:text-tinta">
           Cancelar
         </Link>
         <Button type="submit" disabled={isPending}>

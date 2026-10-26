@@ -23,7 +23,7 @@ export function DeleteEgresoButton({ id }: { id: string }) {
       onClick={handleDelete}
       disabled={isPending}
       title="Eliminar egreso"
-      className="inline-flex p-2 transition-colors rounded-md text-zinc-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-50"
+      className="inline-flex p-2 transition-colors rounded-md text-gris hover:text-rojo hover:bg-rojo/10 disabled:opacity-50"
     >
       <Trash2 className="w-4 h-4" />
     </button>

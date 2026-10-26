@@ -14,7 +14,7 @@ export function LoginForm() {
   return (
     <form onSubmitCapture={recordarFormulario} action={formAction} className="space-y-4">
       <div className="space-y-2">
-        <label className="text-sm font-semibold text-[rgb(var(--text-primary))]" htmlFor="email">
+        <label className="text-sm font-semibold text-tinta" htmlFor="email">
           Correo electrónico
         </label>
         <Input
@@ -30,7 +30,7 @@ export function LoginForm() {
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <label className="text-sm font-semibold text-[rgb(var(--text-primary))]" htmlFor="password">
+          <label className="text-sm font-semibold text-tinta" htmlFor="password">
             Contraseña
           </label>
         </div>
@@ -49,7 +49,7 @@ export function LoginForm() {
       </Button>
 
       {state?.error && (
-        <div className="mt-4 p-3 bg-[rgba(var(--danger),0.1)] border border-[rgba(var(--danger),0.28)] rounded-xl flex items-start gap-3 text-[rgb(var(--danger-strong))]">
+        <div className="mt-4 p-3 bg-rojo/10 border border-rojo/28 rounded-xl flex items-start gap-3 text-rojo-fuerte">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
           <p className="text-sm font-medium">{state.error}</p>
         </div>

@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import { FileDown, Loader2 } from 'lucide-react'
+import { useApariencia } from '@/components/theme/ThemeProvider'
+import { variables } from '@/lib/tema/apariencia'
 
 // html2canvas y jsPDF NO se importan arriba a proposito: entre las dos pesan
 // ~174 KB comprimidos y solo hacen falta cuando alguien oprime el boton. Al
@@ -21,6 +23,7 @@ async function loadLogoDataUrl() {
 
 export function PdfReportButton({ displayMonthName }: { displayMonthName: string }) {
   const [isGenerating, setIsGenerating] = useState(false)
+  const { apariencia } = useApariencia()
 
   const handleGeneratePdf = async () => {
     let clone: HTMLElement | null = null;
@@ -34,38 +37,36 @@ export function PdfReportButton({ displayMonthName }: { displayMonthName: string
         import('jspdf'),
       ])
 
-      const dashboardElement = document.getElementById('dashboard-content')
-      if (!dashboardElement) {
+      // Las partes del Inicio que van en el reporte: el período, la gráfica y la cartera.
+      const partes = Array.from(document.querySelectorAll<HTMLElement>('[data-reporte-pdf]'))
+      if (!partes.length) {
         throw new Error('No se encontró el contenido del dashboard')
       }
 
-      // 1. Clonar el elemento
-      clone = dashboardElement.cloneNode(true) as HTMLElement
-      clone.setAttribute('data-theme', 'light')
-      const lightVars: Record<string, string> = {
-        '--bg': '255 255 255',
-        '--surface-1': '255 255 255',
-        '--surface-2': '243 244 246',
-        '--surface-3': '232 234 238',
-        '--muted-surface': '244 244 245',
-        '--border': '228 228 231',
-        '--text-primary': '24 24 27',
-        '--text-muted': '113 113 122',
-        '--accent': '16 185 129',
-        '--accent-foreground': '255 255 255'
-      } as const
+      // 1. Copiarlas una debajo de otra en una hoja aparte, siempre en modo claro
+      //    (con el color escogido) y con fondo blanco para imprimir.
+      clone = document.createElement('div')
+      clone.setAttribute('data-modo', 'claro')
+      clone.style.display = 'flex'
+      clone.style.flexDirection = 'column'
+      clone.style.gap = '16px'
+      clone.style.padding = '8px'
+      partes.forEach((parte) => clone!.appendChild(parte.cloneNode(true)))
+      const lightVars: Record<string, string> = { ...variables(apariencia.acento, 'claro'), '--bg': '255, 255, 255' }
       Object.entries(lightVars).forEach(([key, value]) => clone!.style.setProperty(key, value))
+      clone.style.backgroundColor = '#ffffff'
+      clone.style.color = `rgb(${lightVars['--text-primary']})`
       
       // 2. Preparar el clon: oculto del viewport pero ocupando espacio renderizable
       clone.style.position = 'absolute'
       clone.style.top = '0'
       clone.style.left = '-9999px' // Oculto fuera de pantalla
-      clone.style.width = `${dashboardElement.offsetWidth}px` // Mantener ancho
+      clone.style.width = `${Math.max(900, ...partes.map((p) => p.offsetWidth))}px` // Mantener ancho
       
       // 3. Remover clases problemáticas y forzar colores estándar
-      const elementsWithBlur = clone.querySelectorAll('.backdrop-blur-xl, .backdrop-blur-md, .backdrop-blur')
+      const elementsWithBlur = clone.querySelectorAll('., ., .')
       elementsWithBlur.forEach(el => {
-        el.classList.remove('backdrop-blur-xl', 'backdrop-blur-md', 'backdrop-blur')
+        el.classList.remove('', '', '')
       })
 
       // 4. Adjuntar al body para que el navegador lo pueda re-pintar y leer estilos computados
@@ -168,15 +169,14 @@ export function PdfReportButton({ displayMonthName }: { displayMonthName: string
     <button
       onClick={handleGeneratePdf}
       disabled={isGenerating}
-      className={`inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--ring-color))] disabled:pointer-events-none disabled:opacity-50
-        bg-[linear-gradient(135deg,rgb(var(--accent)),rgb(var(--accent-strong)))] text-[rgb(var(--accent-foreground))] shadow-soft hover:shadow-strong h-10 px-4 py-2 border border-[rgba(var(--accent),0.32)] ${isGenerating ? 'animate-pulse' : ''}`}
+      className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-2xl border border-linea bg-panel px-4 text-sm font-semibold text-tinta transition-colors hover:border-linea-fuerte hover:bg-suave disabled:pointer-events-none disabled:opacity-60"
     >
       {isGenerating ? (
         <Loader2 className="w-4 h-4 animate-spin" />
       ) : (
         <FileDown className="w-4 h-4" />
       )}
-      <span>{isGenerating ? 'Generando...' : 'Reporte Gerencial (PDF)'}</span>
+      <span>{isGenerating ? 'Generando…' : 'Reporte Gerencial (PDF)'}</span>
     </button>
   )
 }

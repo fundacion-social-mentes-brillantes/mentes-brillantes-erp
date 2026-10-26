@@ -23,9 +23,9 @@ export function AsistenteForm({ asistente, codigoSugerido, readOnlyDates = false
   )
 
   return (
-    <form onSubmitCapture={recordarFormulario} action={formAction} className="space-y-6 w-full max-w-2xl bg-white p-4 md:p-6 rounded-xl border border-zinc-200 shadow-sm">
+    <form onSubmitCapture={recordarFormulario} action={formAction} className="space-y-6 w-full max-w-2xl bg-panel p-4 md:p-6 rounded-xl border border-linea">
       {state?.error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-red-600">
+        <div className="p-3 bg-rojo/10 border border-rojo/30 rounded-lg flex items-start gap-3 text-rojo">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
           <p className="text-sm font-medium">{state.error}</p>
         </div>
@@ -33,23 +33,23 @@ export function AsistenteForm({ asistente, codigoSugerido, readOnlyDates = false
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
         <div className="space-y-2">
-          <label className="text-sm font-medium text-zinc-900">Nombre Completo *</label>
+          <label className="text-sm font-medium text-tinta">Nombre Completo *</label>
           <Input name="nombre" defaultValue={asistente?.nombre} required disabled={isPending} />
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-medium text-zinc-900">Cédula</label>
+          <label className="text-sm font-medium text-tinta">Cédula</label>
           <Input name="cedula" defaultValue={asistente?.cedula ?? ''} disabled={isPending} />
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-medium text-zinc-900">Correo Electrónico</label>
+          <label className="text-sm font-medium text-tinta">Correo Electrónico</label>
           <Input name="correo" type="email" defaultValue={asistente?.correo ?? ''} disabled={isPending} />
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-medium text-zinc-900">Teléfono</label>
+          <label className="text-sm font-medium text-tinta">Teléfono</label>
           <Input name="telefono" defaultValue={asistente?.telefono ?? ''} disabled={isPending} />
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-medium text-zinc-900">Código Interno</label>
+          <label className="text-sm font-medium text-tinta">Código Interno</label>
           <Input
             name="codigo"
             value={codigoInterno}
@@ -58,7 +58,7 @@ export function AsistenteForm({ asistente, codigoSugerido, readOnlyDates = false
           />
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-medium text-zinc-900">Fecha de registro</label>
+          <label className="text-sm font-medium text-tinta">Fecha de registro</label>
           <Input
             name="fecha_registro"
             type="date"
@@ -67,7 +67,7 @@ export function AsistenteForm({ asistente, codigoSugerido, readOnlyDates = false
           />
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-medium text-zinc-900">Fecha de inicio de proceso</label>
+          <label className="text-sm font-medium text-tinta">Fecha de inicio de proceso</label>
           <Input
             name="fecha_inicio_proceso"
             type="date"
@@ -77,8 +77,8 @@ export function AsistenteForm({ asistente, codigoSugerido, readOnlyDates = false
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 sm:gap-4 pt-4 border-t border-zinc-100">
-        <Link href="/asistentes" className="text-sm font-medium text-center text-zinc-500 hover:text-zinc-900">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 sm:gap-4 pt-4 border-t border-linea">
+        <Link href="/asistentes" className="text-sm font-medium text-center text-gris hover:text-tinta">
           Cancelar
         </Link>
         <Button type="submit" disabled={isPending} className="w-full sm:w-auto justify-center">

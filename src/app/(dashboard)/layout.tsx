@@ -20,12 +20,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // Alto fijo tambien en celular: solo se desplaza <main> y el encabezado (con
   // el boton de menu) no se va con la pagina.
   return (
-    <div className="flex h-[100dvh] md:h-screen bg-[rgb(var(--bg))] text-[rgb(var(--text-primary))] overflow-hidden transition-colors">
+    <div className="flex h-[100dvh] overflow-hidden bg-fondo text-tinta">
       <Sidebar role={perfil.rol} />
-      <div className="flex-1 flex flex-col overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(var(--gold),0.13),transparent_24rem),linear-gradient(135deg,rgba(var(--surface-2),0.98),rgba(var(--bg),0.94))]">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Header userEmail={user.email ?? perfil.nombre} userRole={perfil.rol} />
-        <main className={`flex-1 overflow-y-auto p-4 md:p-6 ${showBottomNav ? "has-mobile-nav" : ""}`}>
-          {children}
+        <main id="contenido" className={`flex-1 overflow-y-auto ${showBottomNav ? "has-mobile-nav" : ""}`}>
+          <div className="mx-auto w-full max-w-[1400px] px-4 py-5 md:px-8 md:py-7">{children}</div>
         </main>
       </div>
       <MobileBottomNav role={perfil.rol} />

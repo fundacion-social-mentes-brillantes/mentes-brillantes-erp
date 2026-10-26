@@ -41,46 +41,46 @@ export default async function MiEstadoPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-[rgb(var(--text-primary))]">Mi estado</h1>
-        <p className="text-[rgb(var(--text-muted))]">Resumen personal de cuentas y pagos.</p>
+        <h1 className="text-2xl font-semibold tracking-[-0.01em] text-tinta md:text-[1.75rem]">Mi estado</h1>
+        <p className="text-gris">Resumen personal de cuentas y pagos.</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-        <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] p-4 shadow-soft">
-          <p className="text-sm text-[rgb(var(--text-muted))]">Asistente</p>
-          <p className="text-lg font-semibold text-[rgb(var(--text-primary))]">{asistente?.nombre}</p>
+        <div className="rounded-lg border border-linea bg-panel p-4 shadow-soft">
+          <p className="text-sm text-gris">Asistente</p>
+          <p className="text-lg font-semibold text-tinta">{asistente?.nombre}</p>
         </div>
-        <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] p-4 shadow-soft">
-          <p className="text-sm text-[rgb(var(--text-muted))]">Total abonado</p>
-          <p className="text-lg font-semibold text-[rgb(var(--text-primary))]">{pesos(resumen.totalAbonado)}</p>
+        <div className="rounded-lg border border-linea bg-panel p-4 shadow-soft">
+          <p className="text-sm text-gris">Total abonado</p>
+          <p className="text-lg font-semibold text-tinta">{pesos(resumen.totalAbonado)}</p>
         </div>
-        <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] p-4 shadow-soft">
-          <p className="text-sm text-[rgb(var(--text-muted))]">Saldo pendiente</p>
-          <p className="text-lg font-semibold text-[rgb(var(--text-primary))]">{pesos(resumen.totalPendiente)}</p>
+        <div className="rounded-lg border border-linea bg-panel p-4 shadow-soft">
+          <p className="text-sm text-gris">Saldo pendiente</p>
+          <p className="text-lg font-semibold text-tinta">{pesos(resumen.totalPendiente)}</p>
         </div>
       </div>
 
-      <div className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] p-4 shadow-soft">
+      <div className="rounded-lg border border-linea bg-panel p-4 shadow-soft">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold text-[rgb(var(--text-primary))]">Cuentas por cobrar</h2>
-          <span className="text-sm text-[rgb(var(--text-muted))]">{(cuentas ?? []).length} registros</span>
+          <h2 className="text-lg font-semibold text-tinta">Cuentas por cobrar</h2>
+          <span className="text-sm text-gris">{(cuentas ?? []).length} registros</span>
         </div>
-        <div className="divide-y divide-[rgb(var(--border))]">
+        <div className="divide-y divide-linea">
           {(cuentas ?? []).map((cuenta) => {
             const pagosValidos = filtrarPagosValidos(cuenta.pagos_abonos ?? []);
             const abonado = sumarMontos(pagosValidos);
             const pendiente = Math.max(0, Number(cuenta.valor_total) - abonado);
             return (
               <div key={cuenta.id} className="py-3">
-                <div className="flex justify-between text-[rgb(var(--text-primary))]">
+                <div className="flex justify-between text-tinta">
                   <div>
                     <p className="font-medium">{cuenta.concepto}</p>
-                    <p className="text-sm text-[rgb(var(--text-muted))] capitalize">{cuenta.estado}</p>
+                    <p className="text-sm text-gris capitalize">{cuenta.estado}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm text-[rgb(var(--text-muted))]">Valor: {pesos(Number(cuenta.valor_total))}</p>
-                    <p className="text-sm text-[rgb(var(--text-muted))]">Abonado: {pesos(abonado)}</p>
-                    <p className="text-sm font-semibold text-[rgb(var(--text-primary))]">Pendiente: {pesos(pendiente)}</p>
+                    <p className="text-sm text-gris">Valor: {pesos(Number(cuenta.valor_total))}</p>
+                    <p className="text-sm text-gris">Abonado: {pesos(abonado)}</p>
+                    <p className="text-sm font-semibold text-tinta">Pendiente: {pesos(pendiente)}</p>
                   </div>
                 </div>
               </div>

@@ -26,7 +26,7 @@ export function RevertAbonoConSaldoButton({ cuentaId, abonoId }: { cuentaId: str
       onClick={handleClick}
       disabled={isPending}
       title="Anular abono y revertir su saldo a favor"
-      className="p-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50"
+      className="p-1.5 text-gris hover:text-rojo hover:bg-rojo/10 rounded-md transition-colors disabled:opacity-50"
     >
       <RotateCcw className="w-3.5 h-3.5" />
     </button>

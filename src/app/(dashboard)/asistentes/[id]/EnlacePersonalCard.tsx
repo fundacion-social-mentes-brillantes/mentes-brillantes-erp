@@ -18,9 +18,9 @@ type Props = {
 }
 
 const boton =
-  "inline-flex items-center justify-center gap-2 rounded-md border border-[rgb(var(--border))] px-3 py-2 text-sm font-medium text-[rgb(var(--text-primary))] hover:bg-[rgb(var(--surface-2))] transition-colors disabled:opacity-50"
+  "inline-flex items-center justify-center gap-2 rounded-md border border-linea px-3 py-2 text-sm font-medium text-tinta hover:bg-suave transition-colors disabled:opacity-50"
 const botonPrincipal =
-  "inline-flex items-center justify-center gap-2 rounded-md bg-[rgb(var(--accent))] px-3 py-2 text-sm font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+  "inline-flex items-center justify-center gap-2 rounded-md bg-acento px-3 py-2 text-sm font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-50"
 
 export function EnlacePersonalCard({ asistenteId, primerNombre, whatsappPersona, url: urlInicial, ultimoAcceso, configurado }: Props) {
   const [url, setUrl] = useState(urlInicial)
@@ -51,7 +51,7 @@ export function EnlacePersonalCard({ asistenteId, primerNombre, whatsappPersona,
 
   if (!configurado) {
     return (
-      <p className="text-sm text-amber-700">
+      <p className="text-sm text-ambar">
         Los enlaces personales todavía no están listos en el servidor. Avísale al administrador.
       </p>
     )
@@ -66,7 +66,7 @@ export function EnlacePersonalCard({ asistenteId, primerNombre, whatsappPersona,
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[rgb(var(--text-muted))]">
+      <p className="text-sm text-gris">
         Un enlace privado para que {primerNombre} vea sus sesiones y sus pagos desde el celular, sin contraseña. Solo
         sirve para mirar.
       </p>
@@ -83,7 +83,7 @@ export function EnlacePersonalCard({ asistenteId, primerNombre, whatsappPersona,
             value={url}
             aria-label="Enlace personal"
             onFocus={(e) => e.currentTarget.select()}
-            className="w-full truncate rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] px-3 py-2 text-xs text-[rgb(var(--text-primary))]"
+            className="w-full truncate rounded-md border border-linea bg-suave px-3 py-2 text-xs text-tinta"
           />
           <div className="grid grid-cols-2 gap-2">
             <button type="button" className={boton} onClick={copiar}>
@@ -99,11 +99,11 @@ export function EnlacePersonalCard({ asistenteId, primerNombre, whatsappPersona,
               Ver su página
             </a>
           </div>
-          <p className="text-xs text-[rgb(var(--text-muted))]">
+          <p className="text-xs text-gris">
             {ultimoAcceso ? `La abrió por última vez el ${ultimoAcceso}.` : "Todavía no la ha abierto."}
             {!whatsappPersona && " No tiene celular en su ficha: al compartir, eliges a quién enviarlo."}
           </p>
-          <div className="flex flex-wrap gap-2 border-t border-[rgb(var(--border))] pt-3">
+          <div className="flex flex-wrap gap-2 border-t border-linea pt-3">
             <button
               type="button"
               className={boton}
@@ -134,7 +134,7 @@ export function EnlacePersonalCard({ asistenteId, primerNombre, whatsappPersona,
         </>
       )}
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-rojo">{error}</p>}
     </div>
   )
 }

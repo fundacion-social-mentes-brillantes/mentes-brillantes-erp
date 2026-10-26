@@ -15,16 +15,16 @@ export function EgresoForm({ egreso }: { egreso?: Tables<'egresos'> | null }) {
   const recordarFormulario = useConservarSiFalla(state)
 
   const selectClass =
-    'flex h-10 w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--input-bg))] px-3 py-2 text-sm text-[rgb(var(--text-primary))] ring-offset-[rgb(var(--surface-1))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--accent))] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:[color-scheme:dark]'
+    'flex h-10 w-full rounded-md border border-linea bg-panel px-3 py-2 text-sm text-tinta ring-offset-panel focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-acento focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:[color-scheme:dark]'
 
   return (
     <form
       onSubmitCapture={recordarFormulario}
       action={formAction}
-      className="space-y-6 max-w-2xl bg-[rgb(var(--surface-1))] p-6 rounded-xl border border-[rgb(var(--border))] shadow-sm text-[rgb(var(--text-primary))]"
+      className="space-y-6 max-w-2xl rounded-2xl border border-linea bg-panel p-5 md:p-6 text-tinta"
     >
       {state?.error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-red-600">
+        <div className="p-3 bg-rojo/10 border border-rojo/30 rounded-lg flex items-start gap-3 text-rojo">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
           <p className="text-sm font-medium">{state.error}</p>
         </div>
@@ -32,19 +32,19 @@ export function EgresoForm({ egreso }: { egreso?: Tables<'egresos'> | null }) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2 md:col-span-2">
-          <label className="text-sm font-medium text-[rgb(var(--text-primary))]">Concepto *</label>
+          <label className="text-sm font-medium text-tinta">Concepto *</label>
           <Input
             name="concepto"
             defaultValue={egreso?.concepto}
             placeholder="Ej: Pago de arriendo"
             required
             disabled={isPending}
-            className="bg-[rgb(var(--input-bg))] text-[rgb(var(--text-primary))]"
+            className="bg-panel text-tinta"
           />
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium text-[rgb(var(--text-primary))]">Monto ($) *</label>
+          <label className="text-sm font-medium text-tinta">Monto ($) *</label>
           <Input
             name="monto"
             type="number"
@@ -53,24 +53,24 @@ export function EgresoForm({ egreso }: { egreso?: Tables<'egresos'> | null }) {
             defaultValue={egreso?.monto}
             required
             disabled={isPending}
-            className="bg-[rgb(var(--input-bg))] text-[rgb(var(--text-primary))]"
+            className="bg-panel text-tinta"
           />
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium text-[rgb(var(--text-primary))]">Fecha *</label>
+          <label className="text-sm font-medium text-tinta">Fecha *</label>
           <Input
             name="fecha"
             type="date"
             defaultValue={egreso?.fecha || new Date().toISOString().split('T')[0]}
             required
             disabled={isPending}
-            className="bg-[rgb(var(--input-bg))] text-[rgb(var(--text-primary))] dark:[color-scheme:dark]"
+            className="bg-panel text-tinta dark:[color-scheme:dark]"
           />
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium text-[rgb(var(--text-primary))]">Categoría *</label>
+          <label className="text-sm font-medium text-tinta">Categoría *</label>
           <select name="categoria" defaultValue={egreso?.categoria || ''} required disabled={isPending} className={selectClass}>
             <option value="">Seleccione...</option>
             <option value="Operativo">Operativo</option>
@@ -83,7 +83,7 @@ export function EgresoForm({ egreso }: { egreso?: Tables<'egresos'> | null }) {
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium text-[rgb(var(--text-primary))]">Método de Pago *</label>
+          <label className="text-sm font-medium text-tinta">Método de Pago *</label>
           <select
             name="metodo_pago"
             defaultValue={egreso?.metodo_pago || 'efectivo'}
@@ -99,21 +99,21 @@ export function EgresoForm({ egreso }: { egreso?: Tables<'egresos'> | null }) {
         </div>
 
         <div className="space-y-2 md:col-span-2">
-          <label className="text-sm font-medium text-[rgb(var(--text-primary))]">Notas (Opcional)</label>
+          <label className="text-sm font-medium text-tinta">Notas (Opcional)</label>
           <Input
             name="notas"
             defaultValue={egreso?.notas ?? ''}
             placeholder="Referencia o detalle adicional"
             disabled={isPending}
-            className="bg-[rgb(var(--input-bg))] text-[rgb(var(--text-primary))]"
+            className="bg-panel text-tinta"
           />
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-4 pt-4 border-t border-[rgb(var(--border))]">
+      <div className="flex items-center justify-end gap-4 pt-4 border-t border-linea">
         <Link
           href="/egresos"
-          className="text-sm font-medium text-[rgb(var(--text-muted))] hover:text-[rgb(var(--text-primary))]"
+          className="text-sm font-medium text-gris hover:text-tinta"
         >
           Cancelar
         </Link>

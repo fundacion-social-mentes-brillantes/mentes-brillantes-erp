@@ -14,8 +14,8 @@ export default async function EditarAsistentePage({ params }: { params: Promise<
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Editar Asistente</h1>
-        <p className="text-zinc-500">Modifica los datos del asistente.</p>
+        <h1 className="text-2xl font-semibold tracking-[-0.01em] text-tinta md:text-[1.75rem]">Editar Asistente</h1>
+        <p className="text-gris">Modifica los datos del asistente.</p>
       </div>
       <AsistenteForm asistente={asistente} readOnlyDates={perfil.rol === 'caja'} />
     </div>

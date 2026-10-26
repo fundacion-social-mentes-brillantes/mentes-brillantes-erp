@@ -67,16 +67,16 @@ export function ImagenAdelantosSocio({
 
   return (
     <>
-      <div className="divide-y divide-zinc-100">
+      <div className="divide-y divide-linea">
         {socios.map((socio) => (
           <div key={socio.socioId} className="p-4">
             <div className="flex justify-between items-start mb-1">
-              <p className="font-medium text-zinc-900 text-sm">{socio.nombre}</p>
-              <p className={`font-semibold text-sm ${socio.pendiente > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+              <p className="font-medium text-tinta text-sm">{socio.nombre}</p>
+              <p className={`font-semibold text-sm ${socio.pendiente > 0 ? 'text-ambar' : 'text-verde'}`}>
                 {socio.pendiente > 0 ? `Debe ${pesos(socio.pendiente)}` : 'Al día'}
               </p>
             </div>
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-gris">
               Se le adelantó {pesos(socio.entregado)} en {socio.adelantos.length} movimiento(s) · ha devuelto{' '}
               {pesos(socio.devuelto)}
             </p>
@@ -84,7 +84,7 @@ export function ImagenAdelantosSocio({
               type="button"
               onClick={() => descargar(socio)}
               disabled={generando === socio.socioId}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 disabled:opacity-60"
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-info/30 bg-info/10 px-3 py-2 text-xs font-semibold text-info transition hover:bg-info/15 disabled:opacity-60"
             >
               <ImageDown className="w-4 h-4" />
               {generando === socio.socioId ? 'Generando...' : 'Descargar imagen para enviarle'}
@@ -98,6 +98,7 @@ export function ImagenAdelantosSocio({
         {socios.map((socio) => (
           <div
             key={socio.socioId}
+            data-documento
             ref={(el) => {
               refs.current[socio.socioId] = el
             }}
@@ -110,7 +111,7 @@ export function ImagenAdelantosSocio({
             }}
           >
             <div style={{ borderBottom: '2px solid #374151', paddingBottom: '16px', marginBottom: '24px' }}>
-              <p style={{ margin: 0, fontSize: '13px', letterSpacing: '2px', color: '#6b7280', textTransform: 'uppercase' }}>
+              <p style={{ margin: 0, fontSize: '13px', letterSpacing: '2px', color: '#6b7280', textTransform: '' }}>
                 {empresa.nombre}
               </p>
               <h1 style={{ margin: '6px 0 0 0', fontSize: '28px', fontWeight: 800 }}>Adelantos de {socio.nombre}</h1>

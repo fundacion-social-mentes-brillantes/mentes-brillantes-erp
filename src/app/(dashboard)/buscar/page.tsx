@@ -66,8 +66,8 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
   if (!q) {
     return (
       <div className="max-w-5xl mx-auto py-10 space-y-4">
-        <h1 className="text-2xl font-bold text-[rgb(var(--text-primary))]">Búsqueda global</h1>
-        <p className="text-[rgb(var(--text-muted))]">Escribe un término en el buscador superior para ver resultados.</p>
+        <h1 className="text-2xl font-semibold tracking-[-0.01em] text-tinta md:text-[1.75rem]">Búsqueda global</h1>
+        <p className="text-gris">Escribe un término en el buscador superior para ver resultados.</p>
       </div>
     );
   }
@@ -78,8 +78,8 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
   if (!hasResults) {
     return (
       <div className="max-w-5xl mx-auto py-10 space-y-4">
-        <h1 className="text-2xl font-bold text-[rgb(var(--text-primary))]">Búsqueda global</h1>
-        <p className="text-[rgb(var(--text-muted))]">Sin resultados para “{q}”.</p>
+        <h1 className="text-2xl font-semibold tracking-[-0.01em] text-tinta md:text-[1.75rem]">Búsqueda global</h1>
+        <p className="text-gris">Sin resultados para “{q}”.</p>
       </div>
     );
   }
@@ -87,18 +87,18 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
   return (
     <div className="max-w-5xl mx-auto py-10 space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-[rgb(var(--text-primary))]">Resultados para “{q}”</h1>
-        <p className="text-[rgb(var(--text-muted))]">Asistentes, cuentas y movimientos relevantes.</p>
+        <h1 className="text-2xl font-semibold tracking-[-0.01em] text-tinta md:text-[1.75rem]">Resultados para “{q}”</h1>
+        <p className="text-gris">Asistentes, cuentas y movimientos relevantes.</p>
       </div>
 
       {results.asistentes.length > 0 && (
         <section className="space-y-2">
-          <h2 className="text-lg font-semibold text-[rgb(var(--text-primary))]">Asistentes</h2>
-          <div className="divide-y divide-[rgb(var(--border))] rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] overflow-hidden">
+          <h2 className="text-lg font-semibold text-tinta">Asistentes</h2>
+          <div className="divide-y divide-linea rounded-2xl border border-linea bg-panel overflow-hidden">
             {results.asistentes.map((a) => (
-              <Link key={a.id} href={`/asistentes/${a.id}`} prefetch={false} className="block px-4 py-3 hover:bg-[rgb(var(--surface-2))] transition-colors">
-                <p className="font-medium text-[rgb(var(--text-primary))]">{a.nombre}</p>
-                <p className="text-xs text-[rgb(var(--text-muted))] flex gap-2">
+              <Link key={a.id} href={`/asistentes/${a.id}`} prefetch={false} className="block px-4 py-3 hover:bg-suave transition-colors">
+                <p className="font-medium text-tinta">{a.nombre}</p>
+                <p className="text-xs text-gris flex gap-2">
                   {a.codigo && <span>Cod: {a.codigo}</span>}
                   {perfil.rol === "admin" && a.cedula && <span>CC: {a.cedula}</span>}
                 </p>
@@ -110,15 +110,15 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
 
       {results.cuentas.length > 0 && (
         <section className="space-y-2">
-          <h2 className="text-lg font-semibold text-[rgb(var(--text-primary))]">Cuentas por cobrar</h2>
-          <div className="divide-y divide-[rgb(var(--border))] rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] overflow-hidden">
+          <h2 className="text-lg font-semibold text-tinta">Cuentas por cobrar</h2>
+          <div className="divide-y divide-linea rounded-2xl border border-linea bg-panel overflow-hidden">
             {results.cuentas.map((c) => (
-              <Link key={c.id} href={`/cuentas/${c.id}`} prefetch={false} className="block px-4 py-3 hover:bg-[rgb(var(--surface-2))] transition-colors">
+              <Link key={c.id} href={`/cuentas/${c.id}`} prefetch={false} className="block px-4 py-3 hover:bg-suave transition-colors">
                 <div className="flex items-center justify-between">
-                  <p className="font-medium text-[rgb(var(--text-primary))]">{c.concepto}</p>
-                  <span className="text-sm text-[rgb(var(--text-muted))]">{pesos(Number(c.valor_total))}</span>
+                  <p className="font-medium text-tinta">{c.concepto}</p>
+                  <span className="text-sm text-gris">{pesos(Number(c.valor_total))}</span>
                 </div>
-                <p className="text-xs text-[rgb(var(--text-muted))]">
+                <p className="text-xs text-gris">
                   {c.asistentes?.nombre || "Asistente"} • {c.estado}
                 </p>
               </Link>
@@ -129,15 +129,15 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
 
       {results.movimientos.length > 0 && (
         <section className="space-y-2">
-          <h2 className="text-lg font-semibold text-[rgb(var(--text-primary))]">Movimientos</h2>
-          <div className="divide-y divide-[rgb(var(--border))] rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] overflow-hidden">
+          <h2 className="text-lg font-semibold text-tinta">Movimientos</h2>
+          <div className="divide-y divide-linea rounded-2xl border border-linea bg-panel overflow-hidden">
             {results.movimientos.map((m) => (
               <div key={m.id} className="px-4 py-3">
-                <p className="font-medium text-[rgb(var(--text-primary))]">Abono {pesos(Number(m.monto))}</p>
-                <p className="text-xs text-[rgb(var(--text-muted))]">
+                <p className="font-medium text-tinta">Abono {pesos(Number(m.monto))}</p>
+                <p className="text-xs text-gris">
                   {m.cuentas_por_cobrar?.concepto || "Cuenta"} • {m.metodo_pago} • {m.fecha_pago}
                 </p>
-                {m.notas && <p className="text-xs text-[rgb(var(--text-muted))] mt-1">{m.notas}</p>}
+                {m.notas && <p className="text-xs text-gris mt-1">{m.notas}</p>}
               </div>
             ))}
           </div>

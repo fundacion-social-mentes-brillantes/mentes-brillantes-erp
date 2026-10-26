@@ -13,7 +13,7 @@ import { useConservarSiFalla } from '@/lib/hooks/use-conservar-si-falla'
 type ModalidadCobro = 'normal' | 'cortesia' | 'cubierto_por_otro_proceso'
 
 const selectClassName =
-  'flex h-10 w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--surface-2))] px-3 py-2 text-sm text-[rgb(var(--text-primary))] ring-offset-[rgb(var(--surface-1))] file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-[rgb(var(--text-muted))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--accent))] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50'
+  'flex h-10 w-full rounded-md border border-linea bg-suave px-3 py-2 text-sm text-tinta ring-offset-panel file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-gris focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-acento focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50'
 
 const PREFIJO_MODALIDAD: Record<ModalidadCobro, string> = {
   normal: '',
@@ -84,10 +84,10 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
   }
 
   return (
-    <form onSubmitCapture={recordarFormulario} action={formAction} className="space-y-6 w-full max-w-2xl bg-white p-4 md:p-6 rounded-xl border border-zinc-200 shadow-sm">
+    <form onSubmitCapture={recordarFormulario} action={formAction} className="space-y-6 w-full max-w-2xl bg-panel p-4 md:p-6 rounded-xl border border-linea">
       {returnTo && <input type="hidden" name="return_to" value={returnTo} />}
       {state?.error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-red-600">
+        <div className="p-3 bg-rojo/10 border border-rojo/30 rounded-lg flex items-start gap-3 text-rojo">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
           <p className="text-sm font-medium">{state.error}</p>
         </div>
@@ -95,13 +95,13 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
         <div className="space-y-2 md:col-span-2">
-          <label className="text-sm font-medium text-zinc-900">Asistente *</label>
+          <label className="text-sm font-medium text-tinta">Asistente *</label>
           <SearchableAsistenteSelect asistentes={asistentes} disabled={isPending} initialSelectedId={asistenteInicialLimpio} />
         </div>
 
         <div className="space-y-2 md:col-span-2">
-          <label className="text-sm font-medium text-zinc-900">Tipo de cuenta *</label>
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 text-sm text-zinc-700">
+          <label className="text-sm font-medium text-tinta">Tipo de cuenta *</label>
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 text-sm text-tinta">
             <label className="flex items-center gap-2">
               <input
                 type="radio"
@@ -130,7 +130,7 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
 
         {tipo === 'coach' && (
           <div className="space-y-2 md:col-span-2">
-            <label className="text-sm font-medium text-zinc-900">Modalidad de cobro</label>
+            <label className="text-sm font-medium text-tinta">Modalidad de cobro</label>
             <select
               name="modalidad_cobro"
               value={modalidadCobro}
@@ -143,11 +143,11 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
               <option value="cubierto_por_otro_proceso">Cubierto por otro proceso/familiar</option>
             </select>
             {modalidadValorCero ? (
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-gris">
                 Esta modalidad se registra con valor total 0, sin abono inicial, y la cuenta queda pagada.
               </p>
             ) : (
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-gris">
                 Usa normal para paquetes coach cobrados como cualquier cuenta.
               </p>
             )}
@@ -155,7 +155,7 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
         )}
 
         <div className="space-y-2 md:col-span-2">
-          <label className="text-sm font-medium text-zinc-900">Concepto *</label>
+          <label className="text-sm font-medium text-tinta">Concepto *</label>
           <Input
             name="concepto"
             placeholder="Ej: Tratamiento mensual"
@@ -165,14 +165,14 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
             onChange={(e) => setConcepto(e.target.value)}
           />
           {tipo === 'coach' && (
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-gris">
               Se autogenera como &ldquo;{conceptoCoachPara(sesiones, modalidadCobro)}&rdquo;, puedes ajustarlo si lo necesitas.
             </p>
           )}
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium text-zinc-900">Valor Total ($) *</label>
+          <label className="text-sm font-medium text-tinta">Valor Total ($) *</label>
           <Input
             name="valor_total"
             type="text"
@@ -187,14 +187,14 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium text-zinc-900">Fecha de emisión *</label>
+          <label className="text-sm font-medium text-tinta">Fecha de emisión *</label>
           <Input name="fecha_emision" type="date" defaultValue={new Date().toISOString().split('T')[0]} required disabled={isPending} />
         </div>
 
         {tipo === 'coach' && (
           <>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-zinc-900">Sesiones compradas *</label>
+              <label className="text-sm font-medium text-tinta">Sesiones compradas *</label>
               <Input
                 name="sesiones_coach"
                 type="number"
@@ -206,27 +206,27 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
               />
             </div>
             <div className="space-y-2 md:col-span-2">
-              <label className="text-sm font-medium text-zinc-900">Fecha de sesión coach (opcional)</label>
+              <label className="text-sm font-medium text-tinta">Fecha de sesión coach (opcional)</label>
               <Input
                 name="fecha_sesion_coach"
                 type="date"
                 disabled={isPending}
               />
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-gris">
                 Si esta cuenta corresponde a una sesión ya tomada, puedes registrarla aquí. Si no conoces la fecha ahora, déjalo vacío y agrégala después desde el asistente o el detalle de la cuenta.
               </p>
             </div>
             <div className="space-y-1 md:col-span-2">
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-gris">
                 El valor total es pactado libremente; no se calcula por sesión. El paquete puede tener saldo pendiente aunque todas las sesiones no se hayan usado.
               </p>
             </div>
           </>
         )}
 
-        <div className="space-y-2 pt-4 border-t border-zinc-100 md:col-span-2">
-          <h3 className="text-sm font-semibold text-zinc-900">Pago Inicial (Opcional)</h3>
-          <p className="text-xs text-zinc-500">
+        <div className="space-y-2 pt-4 border-t border-linea md:col-span-2">
+          <h3 className="text-sm font-semibold text-tinta">Pago Inicial (Opcional)</h3>
+          <p className="text-xs text-gris">
             {modalidadValorCero
               ? 'Las cuentas de valor 0 no admiten abono inicial.'
               : 'Si el asistente realizó un abono en este momento, regístralo aquí.'}
@@ -234,7 +234,7 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium text-zinc-900">Abono Inicial ($)</label>
+          <label className="text-sm font-medium text-tinta">Abono Inicial ($)</label>
           <Input
             name="abono_inicial"
             type="text"
@@ -247,7 +247,7 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium text-zinc-900">Fecha de pago inicial</label>
+          <label className="text-sm font-medium text-tinta">Fecha de pago inicial</label>
           <Input
             name="fecha_pago_inicial"
             type="date"
@@ -258,7 +258,7 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium text-zinc-900">Método de Pago</label>
+          <label className="text-sm font-medium text-tinta">Método de Pago</label>
           <select
             name="metodo_pago"
             disabled={isPending || modalidadValorCero}
@@ -272,8 +272,8 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 sm:gap-4 pt-4 border-t border-zinc-100">
-        <Link href="/cuentas" className="text-sm font-medium text-center text-zinc-500 hover:text-zinc-900">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 sm:gap-4 pt-4 border-t border-linea">
+        <Link href="/cuentas" className="text-sm font-medium text-center text-gris hover:text-tinta">
           Cancelar
         </Link>
         <Button type="submit" disabled={isPending} className="w-full sm:w-auto justify-center">

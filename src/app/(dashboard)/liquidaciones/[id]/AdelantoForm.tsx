@@ -15,7 +15,7 @@ export function AdelantoForm({ periodoId, socios }: { periodoId: string, socios:
   const recordarFormulario = useConservarSiFalla(state)
   const formRef = useRef<HTMLFormElement>(null)
   const selectClass =
-    "flex h-10 w-full rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--input-bg))] px-3 py-2 text-sm text-[rgb(var(--text-primary))] ring-offset-[rgb(var(--surface-1))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--accent))] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:[color-scheme:dark]"
+    "flex h-10 w-full rounded-md border border-linea bg-panel px-3 py-2 text-sm text-tinta ring-offset-panel focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-acento focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:[color-scheme:dark]"
 
   // Limpiar el formulario despues de guardar. Va en un efecto: hacerlo
   // durante el render lo repetia en cada render mientras durara el exito.
@@ -26,21 +26,21 @@ export function AdelantoForm({ periodoId, socios }: { periodoId: string, socios:
   return (
     <form ref={formRef} onSubmitCapture={recordarFormulario} action={formAction} className="space-y-4">
       {state?.error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-red-600">
+        <div className="p-3 bg-rojo/10 border border-rojo/30 rounded-lg flex items-start gap-3 text-rojo">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
           <p className="text-sm font-medium">{state.error}</p>
         </div>
       )}
       
       {state?.success && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-start gap-3 text-emerald-700">
+        <div className="p-3 bg-verde/10 border border-verde/30 rounded-lg flex items-start gap-3 text-verde">
           <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
           <p className="text-sm font-medium">Adelanto registrado.</p>
         </div>
       )}
 
       <div className="space-y-2">
-        <label className="text-sm font-medium text-[rgb(var(--text-primary))]">Socio *</label>
+        <label className="text-sm font-medium text-tinta">Socio *</label>
         <select
           name="socio_id"
           required
@@ -55,19 +55,19 @@ export function AdelantoForm({ periodoId, socios }: { periodoId: string, socios:
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium text-[rgb(var(--text-primary))]">Monto ($) *</label>
+        <label className="text-sm font-medium text-tinta">Monto ($) *</label>
         <MoneyInput name="monto" required disabled={isPending}
-          className="bg-[rgb(var(--input-bg))] text-[rgb(var(--text-primary))]" />
+          className="bg-panel text-tinta" />
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium text-[rgb(var(--text-primary))]">Fecha *</label>
+        <label className="text-sm font-medium text-tinta">Fecha *</label>
         <Input name="fecha" type="date" defaultValue={new Date().toISOString().split('T')[0]} required disabled={isPending}
-          className="bg-[rgb(var(--input-bg))] text-[rgb(var(--text-primary))] dark:[color-scheme:dark]" />
+          className="bg-panel text-tinta dark:[color-scheme:dark]" />
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium text-[rgb(var(--text-primary))]">Método de Pago *</label>
+        <label className="text-sm font-medium text-tinta">Método de Pago *</label>
         <select
           name="metodo_pago"
           required
@@ -82,9 +82,9 @@ export function AdelantoForm({ periodoId, socios }: { periodoId: string, socios:
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium text-[rgb(var(--text-primary))]">Notas</label>
+        <label className="text-sm font-medium text-tinta">Notas</label>
         <Input name="notas" placeholder="Opcional" disabled={isPending}
-          className="bg-[rgb(var(--input-bg))] text-[rgb(var(--text-primary))]" />
+          className="bg-panel text-tinta" />
       </div>
 
       <Button type="submit" className="w-full" disabled={isPending}>

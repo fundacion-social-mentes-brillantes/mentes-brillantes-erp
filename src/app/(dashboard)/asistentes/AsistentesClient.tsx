@@ -19,7 +19,7 @@ type Asistente = {
   ultima_actividad: string | Date | null
 }
 
-const cardBase = 'rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] shadow-sm'
+const cardBase = 'rounded-2xl border border-linea bg-panel'
 
 const fmtActividad = (valor: string | Date | null) =>
   valor ? new Date(valor).toLocaleDateString('es-CO', { timeZone: 'UTC' }) : 'Sin actividad'
@@ -27,20 +27,18 @@ const fmtActividad = (valor: string | Date | null) =>
 function EstadoBadge({ activo }: { activo: boolean }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${
-        activo
-          ? 'bg-[rgba(var(--accent),0.14)] text-[rgb(var(--accent))] border-[rgba(var(--accent),0.35)]'
-          : 'bg-[rgba(var(--danger),0.14)] text-[rgb(var(--danger))] border-[rgba(var(--danger),0.35)]'
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+        activo ? 'bg-verde/12 text-verde' : 'bg-suave-2 text-gris'
       }`}
     >
-      <span className={`h-1.5 w-1.5 rounded-full ${activo ? 'bg-[rgb(var(--accent))]' : 'bg-[rgb(var(--danger))]'}`} />
+      <span className={`h-1.5 w-1.5 rounded-full ${activo ? 'bg-verde' : 'bg-gris/60'}`} />
       {activo ? 'Activo' : 'Inactivo'}
     </span>
   )
 }
 
 const iconBtn =
-  'inline-flex p-2 rounded-md text-[rgb(var(--text-muted))] hover:text-[rgb(var(--accent))] hover:bg-[rgb(var(--surface-2))] transition-colors'
+  'inline-grid h-9 w-9 place-items-center rounded-lg text-gris transition-colors hover:bg-suave hover:text-tinta'
 
 function AccionesAsistente({ a }: { a: Asistente }) {
   return (
@@ -55,8 +53,8 @@ function AccionesAsistente({ a }: { a: Asistente }) {
         <button
           type="submit"
           title={a.activo ? 'Desactivar asistente' : 'Activar asistente'}
-          className={`inline-flex p-2 rounded-md transition-colors text-[rgb(var(--text-muted))] hover:bg-[rgb(var(--surface-2))] ${
-            a.activo ? 'hover:text-[rgb(var(--warning))]' : 'hover:text-[rgb(var(--accent))]'
+          className={`inline-grid h-9 w-9 place-items-center rounded-lg transition-colors text-gris hover:bg-suave ${
+            a.activo ? 'hover:text-ambar' : 'hover:text-acento'
           }`}
         >
           {a.activo ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
@@ -89,64 +87,64 @@ export function AsistentesClient({
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="relative w-full sm:max-w-sm">
-          <Search className="absolute left-3 top-3 h-4 w-4 text-[rgb(var(--text-muted))]" />
+        <div className="relative w-full sm:max-w-md">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gris" aria-hidden />
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar por código, nombre o cédula..."
             aria-label="Buscar asistentes"
-            className="h-10 w-full rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--surface-1))] pl-9 pr-4 text-sm text-[rgb(var(--text-primary))] outline-none focus:border-[rgb(var(--accent))]"
+            className="h-10 w-full rounded-2xl border border-linea bg-panel pl-9 pr-4 text-sm text-tinta transition-colors placeholder:text-gris hover:border-linea-fuerte focus:border-acento"
           />
         </div>
-        <p className="text-xs text-[rgb(var(--text-muted))] shrink-0">{filtrados.length} asistente(s)</p>
+        <p className="shrink-0 text-sm text-gris">{filtrados.length} asistente(s)</p>
       </div>
 
       {/* Tabla en escritorio */}
       <div className={`hidden md:block ${cardBase} overflow-hidden`}>
         <div className="overflow-x-auto max-h-[70vh] overflow-y-auto visible-scrollbar">
           <table className="w-full text-sm text-left">
-            <thead className="bg-[rgb(var(--surface-2))] border-b border-[rgb(var(--border))] text-[rgb(var(--text-muted))] font-medium sticky top-0 z-10">
+            <thead className="sticky top-0 z-10 border-b border-linea">
               <tr>
-                <th className="px-6 py-4">Código</th>
-                <th className="px-6 py-4">Nombre</th>
-                <th className="px-6 py-4">Cédula</th>
-                <th className="px-6 py-4">Contacto</th>
-                <th className="px-6 py-4">Estado</th>
-                <th className="px-6 py-4 text-right">Acciones</th>
+                <th className="px-5 py-3">Código</th>
+                <th className="px-5 py-3">Nombre</th>
+                <th className="px-5 py-3">Cédula</th>
+                <th className="px-5 py-3">Contacto</th>
+                <th className="px-5 py-3">Estado</th>
+                <th className="px-5 py-3 text-right">Acciones</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[rgb(var(--border))]">
+            <tbody className="divide-y divide-linea">
               {filtrados.map((a) => (
-                <tr key={a.id} className="hover:bg-[rgb(var(--surface-2))] transition-colors">
-                  <td className="px-6 py-4 font-medium text-[rgb(var(--text-primary))]">{a.codigo || '-'}</td>
-                  <td className="px-6 py-4 font-medium">
-                    <Link href={`/asistentes/${a.id}`} prefetch={false} className="text-[rgb(var(--accent))] hover:underline">
+                <tr key={a.id} className="hover:bg-suave transition-colors">
+                  <td className="px-5 py-3 text-gris">{a.codigo || '-'}</td>
+                  <td className="px-5 py-3 font-medium">
+                    <Link href={`/asistentes/${a.id}`} prefetch={false} className="text-tinta underline-offset-4 hover:text-acento hover:underline">
                       {a.nombre}
                     </Link>
                   </td>
-                  <td className="px-6 py-4 text-[rgb(var(--text-muted))]">{a.cedula || '-'}</td>
-                  <td className="px-6 py-4 text-[rgb(var(--text-muted))]">
+                  <td className="px-5 py-3 text-gris">{a.cedula || '-'}</td>
+                  <td className="px-5 py-3 text-gris">
                     <div>{a.correo || '-'}</div>
                     <div className="text-xs">{a.telefono || ''}</div>
                   </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col gap-1">
+                  <td className="px-5 py-3">
+                    <div className="flex flex-col items-start gap-1">
                       <EstadoBadge activo={a.activo_visible} />
-                      <span className="text-[11px] text-[rgb(var(--text-muted))]">
+                      <span className="whitespace-nowrap text-xs text-gris">
                         Última actividad: {fmtActividad(a.ultima_actividad)}
                       </span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-right whitespace-nowrap space-x-1">
+                  <td className="whitespace-nowrap px-3 py-2 text-right">
                     <AccionesAsistente a={a} />
                   </td>
                 </tr>
               ))}
               {filtrados.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-[rgb(var(--text-muted))]">
+                  <td colSpan={6} className="px-5 py-10 text-center text-gris">
                     {vacioTexto}
                   </td>
                 </tr>
@@ -157,31 +155,31 @@ export function AsistentesClient({
       </div>
 
       {/* Tarjetas en móvil: cada asistente es un bloque separado */}
-      <div className="md:hidden space-y-3">
+      <div className={`md:hidden ${cardBase} divide-y divide-linea overflow-hidden`}>
         {filtrados.length === 0 ? (
-          <div className={`${cardBase} p-8 text-center text-[rgb(var(--text-muted))]`}>{vacioTexto}</div>
+          <div className="p-8 text-center text-gris">{vacioTexto}</div>
         ) : (
           filtrados.map((a) => (
-            <div key={a.id} className={`${cardBase} p-4 space-y-3`}>
+            <div key={a.id} className="fila-larga space-y-2 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-xs font-semibold text-[rgb(var(--text-muted))] shrink-0">#{a.codigo || '-'}</span>
-                    <Link href={`/asistentes/${a.id}`} prefetch={false} className="font-medium text-[rgb(var(--accent))] hover:underline truncate">
+                    <span className="shrink-0 text-sm text-gris">#{a.codigo || '-'}</span>
+                    <Link href={`/asistentes/${a.id}`} prefetch={false} className="truncate font-medium text-tinta underline-offset-4 hover:text-acento hover:underline">
                       {a.nombre}
                     </Link>
                   </div>
-                  {a.cedula && <p className="text-xs text-[rgb(var(--text-muted))] mt-0.5">C.C. {a.cedula}</p>}
+                  {a.cedula && <p className="text-xs text-gris mt-0.5">C.C. {a.cedula}</p>}
                   {(a.correo || a.telefono) && (
-                    <p className="text-xs text-[rgb(var(--text-muted))] mt-0.5 break-words">
+                    <p className="text-xs text-gris mt-0.5 break-words">
                       {[a.correo, a.telefono].filter(Boolean).join(' · ')}
                     </p>
                   )}
                 </div>
                 <EstadoBadge activo={a.activo_visible} />
               </div>
-              <div className="flex items-center justify-between pt-2 border-t border-[rgb(var(--border))]">
-                <span className="text-[11px] text-[rgb(var(--text-muted))]">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gris">
                   Última actividad: {fmtActividad(a.ultima_actividad)}
                 </span>
                 <div className="flex items-center gap-0.5">

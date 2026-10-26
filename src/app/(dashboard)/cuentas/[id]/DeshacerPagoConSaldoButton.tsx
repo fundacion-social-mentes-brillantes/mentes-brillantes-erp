@@ -28,7 +28,7 @@ export function DeshacerPagoConSaldoButton({ cuentaId, abonoId }: { cuentaId: st
       disabled={isPending}
       title="Deshacer el pago y devolver el saldo a favor"
       aria-label="Deshacer el pago y devolver el saldo a favor"
-      className="p-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50"
+      className="p-1.5 text-gris hover:text-rojo hover:bg-rojo/10 rounded-md transition-colors disabled:opacity-50"
     >
       <Undo2 className="w-3.5 h-3.5" />
     </button>

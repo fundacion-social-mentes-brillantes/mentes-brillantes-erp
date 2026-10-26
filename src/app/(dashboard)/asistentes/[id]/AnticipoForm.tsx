@@ -29,31 +29,31 @@ export function AnticipoForm({ asistenteId, disabled = false }: AnticipoFormProp
   return (
     <form ref={formRef} onSubmitCapture={recordarFormulario} action={formAction} className="space-y-4">
       {state?.error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-red-600">
+        <div className="p-3 bg-rojo/10 border border-rojo/30 rounded-lg flex items-start gap-3 text-rojo">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
           <p className="text-sm font-medium">{state.error}</p>
         </div>
       )}
 
       {state?.success && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-start gap-3 text-emerald-700">
+        <div className="p-3 bg-verde/10 border border-verde/30 rounded-lg flex items-start gap-3 text-verde">
           <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
           <p className="text-sm font-medium">Anticipo registrado correctamente.</p>
         </div>
       )}
 
       <div className="space-y-2">
-        <label className="text-sm font-medium text-zinc-900">Monto ($) *</label>
+        <label className="text-sm font-medium text-tinta">Monto ($) *</label>
         <Input name="monto" type="number" step="0.01" min="0.01" required disabled={isLocked} />
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium text-zinc-900">Método de Pago *</label>
+        <label className="text-sm font-medium text-tinta">Método de Pago *</label>
         <select
           name="metodo_pago"
           required
           disabled={isLocked}
-          className="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex h-10 w-full rounded-md border border-linea bg-panel px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-acento focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <option value="efectivo">Efectivo</option>
           <option value="nequi">Nequi</option>
@@ -63,7 +63,7 @@ export function AnticipoForm({ asistenteId, disabled = false }: AnticipoFormProp
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium text-zinc-900">Fecha *</label>
+        <label className="text-sm font-medium text-tinta">Fecha *</label>
         <Input
           name="fecha"
           type="date"
@@ -74,12 +74,12 @@ export function AnticipoForm({ asistenteId, disabled = false }: AnticipoFormProp
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium text-zinc-900">Notas (Opcional)</label>
+        <label className="text-sm font-medium text-tinta">Notas (Opcional)</label>
         <Input name="notas" placeholder="Razón del anticipo" disabled={isLocked} />
       </div>
 
       {disabled && (
-        <p className="text-[11px] text-[rgb(var(--text-muted))]">Solo administradores pueden registrar anticipos.</p>
+        <p className="text-xs text-gris">Solo administradores pueden registrar anticipos.</p>
       )}
 
       <Button type="submit" className="w-full" disabled={isLocked}>
