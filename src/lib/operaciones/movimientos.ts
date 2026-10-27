@@ -59,6 +59,8 @@ export type CrearEgresoParams = {
   metodoPago: string
   fecha: string
   notas?: string | null
+  /** Si el gasto es de un taller: asi se ve en las cuentas de ese taller. */
+  tallerId?: string | null
 }
 
 export async function crearEgreso(supabase: DbClient, actor: ActorErp, params: CrearEgresoParams) {
@@ -87,6 +89,7 @@ export async function crearEgreso(supabase: DbClient, actor: ActorErp, params: C
         fecha,
         notas,
         usuario_id: actor.userId || null,
+        ...(params.tallerId ? { taller_id: params.tallerId } : {}),
       },
     ])
     .select("id")
@@ -107,6 +110,8 @@ export type CrearVentaExternaParams = {
   metodoPago: string
   fecha: string
   notas?: string | null
+  /** Si es el pago de un inscrito a un taller (ver talleres.ts). */
+  tallerInscripcionId?: string | null
 }
 
 export async function crearVentaExterna(supabase: DbClient, actor: ActorErp, params: CrearVentaExternaParams) {
@@ -132,6 +137,7 @@ export async function crearVentaExterna(supabase: DbClient, actor: ActorErp, par
         fecha,
         notas,
         usuario_id: actor.userId || null,
+        ...(params.tallerInscripcionId ? { taller_inscripcion_id: params.tallerInscripcionId } : {}),
       },
     ])
     .select("id")

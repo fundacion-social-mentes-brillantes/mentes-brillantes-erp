@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { fechaLocalISO, fechaHoyBogota, ZONA_HORARIA } from './fechas'
+import { fechaLocalISO, fechaHoyBogota, formatearFechaEvento, valorFechaHoraLocal, ZONA_HORARIA } from './fechas'
 
 describe('fechaLocalISO (America/Bogota)', () => {
   it('una hora nocturna en UTC se mantiene en el dia local de Colombia (UTC-5)', () => {
@@ -19,5 +19,14 @@ describe('fechaLocalISO (America/Bogota)', () => {
   it('fechaHoyBogota devuelve formato YYYY-MM-DD', () => {
     expect(fechaHoyBogota()).toMatch(/^\d{4}-\d{2}-\d{2}$/)
     expect(ZONA_HORARIA).toBe('America/Bogota')
+  })
+})
+
+describe('formatearFechaEvento', () => {
+  it('muestra el dia y la hora de Colombia sin el "de"', () => {
+    expect(formatearFechaEvento('2026-11-22T09:00:00-05:00')).toMatch(/^dom 22 nov · 9:00/)
+    expect(formatearFechaEvento('2026-11-22T09:00:00-05:00', '', true)).toMatch(/^dom 22 nov 2026 · 9:00/)
+    expect(formatearFechaEvento(null)).toBe('Sin fecha')
+    expect(valorFechaHoraLocal('2026-11-22T14:00:00Z')).toBe('2026-11-22T09:00')
   })
 })

@@ -1,6 +1,7 @@
 // Supabase en memoria para probar las operaciones sin base de datos.
 //
 // Entiende lo que usa el ERP: select (con { count, head }), eq/neq/in/is,
+// not(col, "is", null),
 // gt/gte/lt/lte, ilike (con %), or("col.op.valor,..."), order (varias
 // columnas, en orden), limit, range, single/maybeSingle,
 // insert(...).select().single(), update(...).eq(...), delete().eq(...) y rpc.
@@ -18,7 +19,7 @@ export type Escritura =
   | { tipo: "delete"; tabla: string; filtros: Array<[string, any]> }
   | { tipo: "rpc"; funcion: string; args: Fila }
 
-type Operador = "eq" | "neq" | "in" | "is" | "gt" | "gte" | "lt" | "lte" | "ilike"
+type Operador = "eq" | "neq" | "in" | "is" | "isnot" | "gt" | "gte" | "lt" | "lte" | "ilike"
 type Filtro = [string, any, Operador]
 
 export type OpcionesFalso = {
@@ -49,6 +50,8 @@ function cumpleUno(fila: Fila, [col, valor, op]: Filtro): boolean {
       return (valor as any[]).includes(actual)
     case "is":
       return (actual ?? null) === valor
+    case "isnot":
+      return (actual ?? null) !== valor
     case "gt":
       return actual > valor
     case "gte":
@@ -158,6 +161,10 @@ export function supabaseFalso(tablas: Record<string, Fila[]>, opciones: Opciones
         neq: filtro("neq"),
         in: filtro("in"),
         is: filtro("is"),
+        not: (col: string, op: string, valor: any) => {
+          if (op !== "is") throw new Error(`not.${op} no simulado`)
+          return filtro("isnot")(col, valor)
+        },
         gt: filtro("gt"),
         gte: filtro("gte"),
         lt: filtro("lt"),

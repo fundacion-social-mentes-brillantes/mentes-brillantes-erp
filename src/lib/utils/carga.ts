@@ -31,6 +31,7 @@ const SECCIONES: Record<string, string> = {
   cuentas: "Cuentas por cobrar",
   "sesiones-coach": "Sesiones coach",
   coach: "Coach",
+  talleres: "Talleres",
   "ventas-externas": "Ventas externas",
   egresos: "Egresos",
   socios: "Socios y adelantos",

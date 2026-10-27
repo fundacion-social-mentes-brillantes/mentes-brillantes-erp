@@ -57,3 +57,41 @@ export function formatearFechaIso(fecha?: string | null, alterno = '—'): strin
   if (!anio || !mes || !dia) return String(fecha)
   return `${dia}/${mes}/${anio}`
 }
+
+/**
+ * Fecha y hora de un evento, corta y en hora de Colombia: "sáb 22 nov · 9:00 a. m.".
+ * Con `conAnio` agrega el año ("sáb 22 nov 2026 · 9:00 a. m.").
+ */
+export function formatearFechaEvento(instante?: string | Date | null, alterno = 'Sin fecha', conAnio = false): string {
+  if (!instante) return alterno
+  const d = instante instanceof Date ? instante : new Date(instante)
+  if (Number.isNaN(d.getTime())) return alterno
+  const partes = (opciones: Intl.DateTimeFormatOptions) =>
+    new Intl.DateTimeFormat('es-CO', { timeZone: ZONA_HORARIA, ...opciones }).format(d).replace(/\./g, '')
+  const dia = partes({ weekday: 'short', day: 'numeric', month: 'short', ...(conAnio ? { year: 'numeric' } : {}) })
+    .replace(/,/g, '')
+    .replace(/ de /g, ' ')
+  const hora = new Intl.DateTimeFormat('es-CO', { timeZone: ZONA_HORARIA, hour: 'numeric', minute: '2-digit' }).format(d)
+  return `${dia} · ${hora}`
+}
+
+/** El valor de un <input type="datetime-local"> para un instante, en hora de Colombia. */
+export function valorFechaHoraLocal(instante?: string | null): string {
+  if (!instante) return ''
+  const d = new Date(instante)
+  if (Number.isNaN(d.getTime())) return ''
+  const partes = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: ZONA_HORARIA,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(d)
+      .map((p) => [p.type, p.value])
+  )
+  return `${partes.year}-${partes.month}-${partes.day}T${partes.hour}:${partes.minute}`
+}

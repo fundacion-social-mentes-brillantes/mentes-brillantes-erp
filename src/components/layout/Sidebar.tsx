@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   Bot,
+  CalendarHeart,
   Calculator,
   HeartHandshake,
   History,
@@ -34,14 +35,15 @@ const movimientos: Item = { icon: History, label: "Movimientos", corto: "Movim."
 const cuentas: Item = { icon: Receipt, label: "Cuentas por Cobrar", corto: "Cuentas", href: "/cuentas" };
 const asistentes: Item = { icon: Users, label: "Asistentes", corto: "Asistentes", href: "/asistentes" };
 const coach: Item = { icon: HeartHandshake, label: "Sesiones Coach", corto: "Coach", href: "/sesiones-coach" };
+const talleres: Item = { icon: CalendarHeart, label: "Talleres", corto: "Talleres", href: "/talleres" };
 const ventas: Item = { icon: ShoppingBag, label: "Ventas Externas", corto: "Ventas", href: "/ventas-externas" };
 const egresos: Item = { icon: TrendingDown, label: "Egresos", corto: "Egresos", href: "/egresos" };
 const socios: Item = { icon: Scale, label: "Socios & Adelantos", corto: "Socios", href: "/socios" };
 const liquidaciones: Item = { icon: Calculator, label: "Liquidaciones", corto: "Liquidar", href: "/liquidaciones" };
 const ia: Item = { icon: Bot, label: "Asistente IA", corto: "IA", href: "/asistente-ia" };
 
-const adminNav = [inicio, movimientos, cuentas, asistentes, coach, ventas, egresos, socios, liquidaciones, ia];
-const cajaNav = [inicio, movimientos, cuentas, asistentes, coach, ventas, egresos, ia];
+const adminNav = [inicio, movimientos, cuentas, asistentes, coach, talleres, ventas, egresos, socios, liquidaciones, ia];
+const cajaNav = [inicio, movimientos, cuentas, asistentes, coach, talleres, ventas, egresos, ia];
 const consultaNav: Item[] = [{ icon: Home, label: "Mi Estado", corto: "Mi estado", href: "/mi-estado" }];
 
 const EVENTO_ABRIR = "mb:abrir-menu";
@@ -85,7 +87,7 @@ export function Sidebar({ role = "consulta" }: SidebarProps) {
 
   const itemRiel = (activo: boolean) =>
     cn(
-      "flex w-full flex-col items-center gap-1 rounded-xl px-1 py-2 text-xs font-medium transition-colors",
+      "flex w-full flex-col items-center gap-1 rounded-xl px-1 py-1.5 text-xs font-medium transition-colors",
       activo ? "bg-acento/12 text-acento" : "text-gris hover:bg-suave hover:text-tinta"
     );
 
@@ -132,7 +134,7 @@ export function Sidebar({ role = "consulta" }: SidebarProps) {
               type="submit"
               title="Cerrar Sesión"
               aria-label="Cerrar Sesión"
-              className="flex w-full flex-col items-center gap-1 rounded-xl px-1 py-2 text-xs font-medium text-gris transition-colors hover:bg-rojo/10 hover:text-rojo"
+              className="flex w-full flex-col items-center gap-1 rounded-xl px-1 py-1.5 text-xs font-medium text-gris transition-colors hover:bg-rojo/10 hover:text-rojo"
             >
               <LogOut className="h-5 w-5" aria-hidden />
               <span>Salir</span>

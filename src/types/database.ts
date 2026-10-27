@@ -560,6 +560,7 @@ export type Database = {
           metodo_pago: Database["public"]["Enums"]["metodo_pago"]
           monto: number
           notas: string | null
+          taller_id: string | null
           usuario_id: string | null
         }
         Insert: {
@@ -573,6 +574,7 @@ export type Database = {
           metodo_pago: Database["public"]["Enums"]["metodo_pago"]
           monto: number
           notas?: string | null
+          taller_id?: string | null
           usuario_id?: string | null
         }
         Update: {
@@ -586,6 +588,7 @@ export type Database = {
           metodo_pago?: Database["public"]["Enums"]["metodo_pago"]
           monto?: number
           notas?: string | null
+          taller_id?: string | null
           usuario_id?: string | null
         }
         Relationships: []
@@ -1089,6 +1092,147 @@ export type Database = {
           },
         ]
       }
+      taller_inscripciones: {
+        Row: {
+          actualizado_en: string
+          asistente_id: string | null
+          asistio: boolean
+          autorizo_datos_en: string | null
+          codigo_boleta: string
+          comprobante_en: string | null
+          comprobante_ruta: string | null
+          correo: string | null
+          creado_en: string
+          creado_por: string | null
+          documento: string | null
+          estado: string
+          hora_llegada: string | null
+          id: string
+          nombre: string
+          notas: string | null
+          origen: string
+          respuestas: Json
+          taller_id: string
+          telefono: string | null
+          valor_acordado: number
+        }
+        Insert: {
+          actualizado_en?: string
+          asistente_id?: string | null
+          asistio?: boolean
+          autorizo_datos_en?: string | null
+          codigo_boleta?: string
+          comprobante_en?: string | null
+          comprobante_ruta?: string | null
+          correo?: string | null
+          creado_en?: string
+          creado_por?: string | null
+          documento?: string | null
+          estado?: string
+          hora_llegada?: string | null
+          id?: string
+          nombre: string
+          notas?: string | null
+          origen?: string
+          respuestas?: Json
+          taller_id: string
+          telefono?: string | null
+          valor_acordado?: number
+        }
+        Update: {
+          actualizado_en?: string
+          asistente_id?: string | null
+          asistio?: boolean
+          autorizo_datos_en?: string | null
+          codigo_boleta?: string
+          comprobante_en?: string | null
+          comprobante_ruta?: string | null
+          correo?: string | null
+          creado_en?: string
+          creado_por?: string | null
+          documento?: string | null
+          estado?: string
+          hora_llegada?: string | null
+          id?: string
+          nombre?: string
+          notas?: string | null
+          origen?: string
+          respuestas?: Json
+          taller_id?: string
+          telefono?: string | null
+          valor_acordado?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "taller_inscripciones_asistente_id_fkey"
+            columns: ["asistente_id"]
+            isOneToOne: false
+            referencedRelation: "asistentes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "taller_inscripciones_taller_id_fkey"
+            columns: ["taller_id"]
+            isOneToOne: false
+            referencedRelation: "talleres"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      talleres: {
+        Row: {
+          actualizado_en: string
+          creado_en: string
+          creado_por: string | null
+          cupo: number | null
+          descripcion: string | null
+          estado: string
+          fecha_inicio: string | null
+          id: string
+          instrucciones_pago: string | null
+          lugar: string | null
+          nombre: string
+          precio: number
+          preguntas: Json
+          slug: string
+          tipo: string
+        }
+        Insert: {
+          actualizado_en?: string
+          creado_en?: string
+          creado_por?: string | null
+          cupo?: number | null
+          descripcion?: string | null
+          estado?: string
+          fecha_inicio?: string | null
+          id?: string
+          instrucciones_pago?: string | null
+          lugar?: string | null
+          nombre: string
+          precio?: number
+          preguntas?: Json
+          slug: string
+          tipo?: string
+        }
+        Update: {
+          actualizado_en?: string
+          creado_en?: string
+          creado_por?: string | null
+          cupo?: number | null
+          descripcion?: string | null
+          estado?: string
+          fecha_inicio?: string | null
+          id?: string
+          instrucciones_pago?: string | null
+          lugar?: string | null
+          nombre?: string
+          precio?: number
+          preguntas?: Json
+          slug?: string
+          tipo?: string
+        }
+        Relationships: []
+      }
       telegram_bot_sessions: {
         Row: {
           channel: string
@@ -1146,6 +1290,7 @@ export type Database = {
           metodo_pago: Database["public"]["Enums"]["metodo_pago"]
           monto: number
           notas: string | null
+          taller_inscripcion_id: string | null
           usuario_id: string | null
         }
         Insert: {
@@ -1159,6 +1304,7 @@ export type Database = {
           metodo_pago: Database["public"]["Enums"]["metodo_pago"]
           monto: number
           notas?: string | null
+          taller_inscripcion_id?: string | null
           usuario_id?: string | null
         }
         Update: {
@@ -1172,6 +1318,7 @@ export type Database = {
           metodo_pago?: Database["public"]["Enums"]["metodo_pago"]
           monto?: number
           notas?: string | null
+          taller_inscripcion_id?: string | null
           usuario_id?: string | null
         }
         Relationships: []

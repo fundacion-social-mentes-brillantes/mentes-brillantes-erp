@@ -22,6 +22,7 @@ import { calcularSaldoFavorDisponible, esAnuladoCompleto, filtrarPagosValidos, s
 import { DonacionForm } from "./DonacionForm"
 import { DonacionActionsMenu } from "./DonacionActionsMenu"
 import { RevertAnticipoButton } from "./RevertAnticipoButton"
+import { TalleresDePersona } from "./TalleresDePersona"
 import { RegisterCoachSessionForm } from "@/components/coach/RegisterCoachSessionForm"
 import { CoachSessionsPdf } from "@/components/coach/CoachSessionsPdf"
 import { CoachSessionActions } from "@/components/coach/CoachSessionActions"
@@ -335,6 +336,12 @@ export default async function AsistenteDetallePage({ params }: { params: Promise
               )}
             </div>
           </div>
+
+          <TalleresDePersona
+            supabase={supabase}
+            persona={{ id: asistente.id, cedula: asistente.cedula }}
+            className={cardContainer}
+          />
 
           <div className={cardContainer}>
             <div className={cardHeader + " flex items-center"}>
