@@ -48,7 +48,7 @@ export const OPERACIONES_CORRECCIONES: DefinicionOperacion[] = [
     riesgo: "destructiva",
     schema: {
       tipo: z.enum(TIPOS_ANULABLES),
-      movimiento_id: z.string().uuid().describe("Id del movimiento a anular"),
+      movimiento_id: z.string().guid().describe("Id del movimiento a anular"),
     },
     previsualizar: async (admin, _actor, args) => {
       const datos = { tipo: args.tipo, movimientoId: args.movimiento_id }
@@ -84,7 +84,7 @@ export const OPERACIONES_CORRECCIONES: DefinicionOperacion[] = [
     riesgo: "destructiva",
     schema: {
       tipo: z.enum(TIPOS_ANULABLES),
-      movimiento_id: z.string().uuid(),
+      movimiento_id: z.string().guid(),
     },
     previsualizar: async (admin, _actor, args) => {
       const datos = { tipo: args.tipo, movimientoId: args.movimiento_id }
@@ -121,7 +121,7 @@ export const OPERACIONES_CORRECCIONES: DefinicionOperacion[] = [
     riesgo: "destructiva",
     schema: {
       tipo: z.enum(TIPOS_EDITABLES),
-      movimiento_id: z.string().uuid(),
+      movimiento_id: z.string().guid(),
       monto: z.coerce.number().positive().max(100_000_000).optional(),
       fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       concepto: z.string().trim().min(2).max(200).optional(),
@@ -165,7 +165,7 @@ export const OPERACIONES_CORRECCIONES: DefinicionOperacion[] = [
     roles: ["admin"],
     riesgo: "destructiva",
     schema: {
-      cuenta_id: z.string().uuid(),
+      cuenta_id: z.string().guid(),
       valor_nuevo: z.coerce.number().min(0).max(100_000_000),
       motivo: z.string().trim().max(300).optional(),
     },
@@ -206,7 +206,7 @@ export const OPERACIONES_CORRECCIONES: DefinicionOperacion[] = [
       "ni sesiones coach ya dictadas.",
     roles: ["admin"],
     riesgo: "destructiva",
-    schema: { cuenta_id: z.string().uuid() },
+    schema: { cuenta_id: z.string().guid() },
     previsualizar: async (admin, _actor, args) => {
       const datos = { cuentaId: String(args.cuenta_id) }
       const previa = await previsualizarEliminacionCuenta(admin, datos.cuentaId)
@@ -238,8 +238,8 @@ export const OPERACIONES_CORRECCIONES: DefinicionOperacion[] = [
     roles: ["admin"],
     riesgo: "destructiva",
     schema: {
-      cuenta_id: z.string().uuid(),
-      abono_id: z.string().uuid(),
+      cuenta_id: z.string().guid(),
+      abono_id: z.string().guid(),
     },
     previsualizar: async (admin, _actor, args) => {
       const datos = { cuentaId: String(args.cuenta_id), abonoId: String(args.abono_id) }
@@ -275,7 +275,7 @@ export const OPERACIONES_CORRECCIONES: DefinicionOperacion[] = [
     riesgo: "destructiva",
     schema: {
       persona: z.string().trim().min(1).max(160),
-      anticipo_id: z.string().uuid(),
+      anticipo_id: z.string().guid(),
     },
     previsualizar: async (admin, _actor, args) => {
       const persona = await resolverPersona(admin, String(args.persona))
@@ -315,8 +315,8 @@ export const OPERACIONES_CORRECCIONES: DefinicionOperacion[] = [
     roles: ["admin"],
     riesgo: "destructiva",
     schema: {
-      cuenta_id: z.string().uuid(),
-      abono_id: z.string().uuid(),
+      cuenta_id: z.string().guid(),
+      abono_id: z.string().guid(),
       monto_nuevo: z.coerce.number().positive().max(100_000_000),
     },
     previsualizar: async (admin, _actor, args) => {

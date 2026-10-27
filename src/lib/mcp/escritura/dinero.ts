@@ -43,7 +43,7 @@ export const OPERACIONES_DINERO: DefinicionOperacion[] = [
       persona: z.string().trim().min(1).max(160).describe("Nombre o codigo de quien paga"),
       monto: z.coerce.number().positive().max(100_000_000),
       metodo_pago: z.enum(METODOS_PAGO),
-      cuenta_id: z.string().uuid().optional().describe("Id de la cuenta; si se omite se busca por concepto"),
+      cuenta_id: z.string().guid().optional().describe("Id de la cuenta; si se omite se busca por concepto"),
       concepto: z.string().trim().max(160).optional().describe("Concepto de la cuenta a abonar"),
       fecha_pago: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       notas: z.string().trim().max(300).optional(),
@@ -450,7 +450,7 @@ export const OPERACIONES_DINERO: DefinicionOperacion[] = [
     schema: {
       persona: z.string().trim().min(1).max(160),
       monto: z.coerce.number().positive().max(100_000_000),
-      cuenta_id: z.string().uuid().optional().describe("Cuenta a la que se aplica; si se omite se busca por concepto"),
+      cuenta_id: z.string().guid().optional().describe("Cuenta a la que se aplica; si se omite se busca por concepto"),
       concepto: z.string().trim().max(160).optional(),
     },
     previsualizar: async (admin, _actor, args) => {

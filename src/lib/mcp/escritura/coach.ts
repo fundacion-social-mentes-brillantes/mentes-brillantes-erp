@@ -83,7 +83,7 @@ export const OPERACIONES_COACH: DefinicionOperacion[] = [
     roles: ["admin"],
     riesgo: "destructiva",
     schema: {
-      sesion_id: z.string().uuid(),
+      sesion_id: z.string().guid(),
       fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       notas: z.string().trim().max(300).optional(),
     },
@@ -113,7 +113,7 @@ export const OPERACIONES_COACH: DefinicionOperacion[] = [
       "Borra una sesion coach registrada por error. La sesion vuelve a quedar disponible en el paquete de la persona.",
     roles: ["admin"],
     riesgo: "destructiva",
-    schema: { sesion_id: z.string().uuid() },
+    schema: { sesion_id: z.string().guid() },
     previsualizar: async (admin, _actor, args) => {
       const datos = { sesionId: String(args.sesion_id) }
       const previa = await previsualizarEliminacionSesion(admin, datos.sesionId)
