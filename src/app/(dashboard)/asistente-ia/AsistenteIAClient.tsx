@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react"
 import { Bot, MessageSquare, Plus, Send, Trash2 } from "lucide-react"
+import { partirNegrita } from "@/lib/utils/formato-respuesta"
 
 type Message = {
   role: "user" | "assistant"
@@ -191,7 +192,11 @@ export function AsistenteIAClient() {
                   : "max-w-[80%] whitespace-pre-wrap rounded-lg border border-linea bg-suave px-4 py-3 text-sm text-tinta"
               }
             >
-              {message.content}
+              {message.role === "user"
+                ? message.content
+                : partirNegrita(message.content).map((pedazo, i) =>
+                    pedazo.negrita ? <strong key={i} className="font-semibold">{pedazo.texto}</strong> : <span key={i}>{pedazo.texto}</span>
+                  )}
             </div>
           </div>
         ))}
