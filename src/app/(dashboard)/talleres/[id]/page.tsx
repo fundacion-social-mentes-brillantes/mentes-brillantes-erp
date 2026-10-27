@@ -1,8 +1,9 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, CalendarDays, Edit2, MapPin, Ticket, Users } from 'lucide-react'
+import { ArrowLeft, CalendarDays, Edit2, ExternalLink, MapPin, Ticket, Users } from 'lucide-react'
 import { requireRoles } from '@/lib/utils/authz'
 import { cargarTaller } from '@/lib/operaciones/talleres'
+import { enlaceInvitacion } from '@/lib/integraciones/talleres-publico'
 import { fechaHoyBogota, formatearFechaEvento } from '@/lib/utils/fechas'
 import { pesos } from '@/lib/utils/pesos'
 import { objeto } from '@/lib/utils/lectura'
@@ -119,8 +120,18 @@ export default async function TallerPage({
             </ul>
           </div>
         </div>
-        {isAdmin && (
-          <div className="flex flex-wrap items-center gap-2 pl-12 lg:justify-end lg:pl-0">
+        <div className="flex flex-wrap items-center gap-2 pl-12 lg:justify-end lg:pl-0">
+          <a
+            href={enlaceInvitacion(taller.slug, taller.estado)}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-9 items-center gap-2 rounded-xl border border-linea bg-panel px-3 text-sm font-semibold text-tinta transition-colors hover:bg-suave"
+          >
+            <ExternalLink className="h-4 w-4" />
+            {taller.estado === 'abierto' ? 'Ver invitación' : 'Vista previa de la invitación'}
+          </a>
+          {isAdmin && (
+            <>
             <EstadoTallerBotones tallerId={taller.id} estado={taller.estado} />
             <Link
               href={`/talleres/${taller.id}/editar`}
@@ -130,8 +141,9 @@ export default async function TallerPage({
               <Edit2 className="h-4 w-4" />
               Editar
             </Link>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       <section aria-label="Cuentas del taller" className="grid grid-cols-2 overflow-hidden rounded-2xl border border-linea bg-panel lg:grid-cols-4">

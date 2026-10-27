@@ -192,3 +192,14 @@ describe("rutas de la invitacion de talleres", () => {
     expect(tipoDeComprobante(new TextEncoder().encode("GIF89a"))).toBeNull()
   })
 })
+
+describe("enlace de la invitación desde el ERP", () => {
+  it("un taller abierto va sin firma; un borrador lleva la firma de vista previa", async () => {
+    const { enlaceInvitacion, firmaVistaPrevia } = await import("@/lib/integraciones/talleres-publico")
+    expect(enlaceInvitacion("gratitud", "abierto")).toBe("https://talleres.gimnasioemocionalmb.com/gratitud/")
+    const firma = firmaVistaPrevia("gratitud")
+    expect(firma).toMatch(/^[0-9a-f]{32}$/)
+    expect(enlaceInvitacion("gratitud", "borrador")).toBe(`https://talleres.gimnasioemocionalmb.com/gratitud/?vista=${firma}`)
+    expect(firmaVistaPrevia("otro")).not.toBe(firma)
+  })
+})

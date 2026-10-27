@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto"
 import type { DbClient } from "@/lib/supabase/types"
 import { OperacionError } from "@/lib/operaciones/errores"
 import { inscribirEnTaller, preguntasGuardadas, resumirTaller, type Taller } from "@/lib/operaciones/talleres"
@@ -17,6 +18,30 @@ export function secretoTalleresValido(req: Request): boolean {
 }
 
 export const CABECERAS_SIN_CACHE = { "Cache-Control": "no-store" } as const
+
+/** Dirección pública de las invitaciones (Cloudflare Pages). */
+export function urlSitioTalleres(): string {
+  return (process.env.TALLERES_SITIO_URL || "https://talleres.gimnasioemocionalmb.com").replace(/\/+$/, "")
+}
+
+/**
+ * Firma de la vista previa de un borrador: HMAC-SHA256 de «vista:<slug>» con la clave
+ * compartida, en hex (32 caracteres). La página de invitaciones la comprueba antes de
+ * mostrar un taller que no está abierto. Sin clave configurada no hay vista previa.
+ */
+export function firmaVistaPrevia(slug: string): string | null {
+  const clave = process.env.TALLERES_SHARED_SECRET
+  if (!clave) return null
+  return createHmac("sha256", clave).update(`vista:${slug}`).digest("hex").slice(0, 32)
+}
+
+/** El enlace de la invitación para el equipo: con firma si el taller aún no está abierto. */
+export function enlaceInvitacion(slug: string, estado: string): string {
+  const base = `${urlSitioTalleres()}/${slug}/`
+  if (estado === "abierto") return base
+  const firma = firmaVistaPrevia(slug)
+  return firma ? `${base}?vista=${firma}` : base
+}
 
 export function respuestaNoAutorizada() {
   return Response.json({ error: "no_autorizado" }, { status: 401, headers: CABECERAS_SIN_CACHE })
