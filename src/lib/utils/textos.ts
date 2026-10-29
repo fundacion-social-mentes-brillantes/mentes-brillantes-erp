@@ -5,19 +5,11 @@
 // el ERP sepa que movimiento genero cual. Esas marcas se siguen guardando (las
 // usan las reglas contables); aqui solo se quitan de lo que se muestra.
 
-const METODOS: Record<string, string> = {
-  efectivo: "Efectivo",
-  nequi: "Nequi",
-  daviplata: "Daviplata",
-  otro: "Otro",
-  saldo_a_favor: "Saldo a favor",
-  transferencia: "Transferencia",
-}
+import { nombreMedio } from "@/lib/medios-pago"
 
+/** El nombre de la cuenta tal como lo puso el admin (ver @/lib/medios-pago). */
 export function metodoPagoLegible(metodo: string | null | undefined, alterno = "—"): string {
-  if (!metodo) return alterno
-  const clave = String(metodo).trim().toLowerCase()
-  return METODOS[clave] ?? capitalizar(clave.replace(/_/g, " "))
+  return nombreMedio(metodo, alterno)
 }
 
 export function estadoLegible(estado: string | null | undefined, alterno = "—"): string {

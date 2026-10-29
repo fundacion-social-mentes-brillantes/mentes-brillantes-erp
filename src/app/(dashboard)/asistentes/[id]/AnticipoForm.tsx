@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { AlertCircle, CheckCircle2 } from 'lucide-react'
 import { useConservarSiFalla } from '@/lib/hooks/use-conservar-si-falla'
+import { OpcionesMedioPago } from '@/components/medios-pago/MediosPago'
 
 type AnticipoFormProps = {
   asistenteId: string
@@ -55,10 +56,7 @@ export function AnticipoForm({ asistenteId, disabled = false }: AnticipoFormProp
           disabled={isLocked}
           className="flex h-10 w-full rounded-md border border-linea bg-panel px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-acento focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <option value="efectivo">Efectivo</option>
-          <option value="nequi">Nequi</option>
-          <option value="daviplata">Daviplata</option>
-          <option value="otro">Otro</option>
+          <OpcionesMedioPago />
         </select>
       </div>
 

@@ -4,10 +4,12 @@ import {
   esAnuladoCompleto,
   toSafeNumber,
 } from "./contable"
+import { mediosConocidos } from "@/lib/medios-pago"
 
-export type MetodoPago = "efectivo" | "nequi" | "daviplata" | "otro"
-export type CategoriaResumenDetalle = "ingreso" | "egreso" | "adelanto"
-export type TipoResumenDetalle = "abono" | "saldo_favor" | "donacion" | "venta_externa" | "egreso" | "adelanto"
+/** La clave de una cuenta de dinero (efectivo, nequi, banco_caja_social... ver medios_pago). */
+export type MetodoPago = string
+export type CategoriaResumenDetalle = "ingreso" | "egreso" | "adelanto" | "traslado"
+export type TipoResumenDetalle = "abono" | "saldo_favor" | "donacion" | "venta_externa" | "egreso" | "adelanto" | "traslado"
 
 /** Algo con nombre, embebido por PostgREST (persona, socio). */
 type ConNombre = { nombre?: string | null }
@@ -56,14 +58,38 @@ export type ResumenMetodo = {
   ingresos_ventas_externas?: number
   salidas_egresos?: number
   salidas_adelantos?: number
+  /** Plata que llego de otra cuenta de la fundacion (no es ingreso). */
+  traslados_entrada?: number
+  /** Plata que salio hacia otra cuenta de la fundacion (no es gasto). */
+  traslados_salida?: number
 }
 
-export const METODOS_PAGO_RESUMEN: MetodoPago[] = ["efectivo", "nequi", "daviplata", "otro"]
+/** Un traslado entre cuentas propias (tabla traslados_cuentas). */
+export type TrasladoCuentas = {
+  id?: string
+  fecha?: string | null
+  monto?: number | string
+  metodo_origen?: string | null
+  metodo_destino?: string | null
+  notas?: string | null
+  estado?: string | null
+}
+
+/** Las cuentas de siempre; las vigentes salen de medios_pago (mediosConocidos). */
+export const METODOS_PAGO_RESUMEN: MetodoPago[] = ["efectivo", "nequi", "daviplata", "banco_caja_social", "otro"]
+
+/** Todas las cuentas que puede tener el resumen: las de medios_pago (tambien las ocultas). */
+export function metodosDelResumen(): MetodoPago[] {
+  const claves = mediosConocidos().map((m) => m.clave)
+  return claves.length > 0 ? claves : METODOS_PAGO_RESUMEN
+}
 
 export const normalizarMetodo = (m?: string | null): MetodoPago => {
-  const v = (m || "").toLowerCase().trim() as MetodoPago
-  return METODOS_PAGO_RESUMEN.includes(v) ? v : "otro"
+  const v = (m || "").toLowerCase().trim()
+  return v && v !== "saldo_a_favor" && metodosDelResumen().includes(v) ? v : "otro"
 }
+
+const trasladoVigente = (t: TrasladoCuentas) => (t.estado || "activo") !== "anulado"
 
 const firstRecord = <T>(value: Embebido<T> | undefined): T | null | undefined =>
   Array.isArray(value) ? value[0] : value
@@ -151,6 +177,7 @@ export function construirDetallesResumenPorCuenta({
   egresos = [],
   adelantos = [],
   ingresosSaldoFavor = [],
+  traslados = [],
 }: {
   abonos?: Movimiento[]
   donaciones?: Movimiento[]
@@ -158,8 +185,36 @@ export function construirDetallesResumenPorCuenta({
   egresos?: Movimiento[]
   adelantos?: Movimiento[]
   ingresosSaldoFavor?: Movimiento[]
+  traslados?: TrasladoCuentas[]
 }): MovimientoResumenDetalle[] {
   const detalles: MovimientoResumenDetalle[] = []
+
+  // Cada traslado son dos filas: sale de una cuenta (negativo) y entra a la otra (positivo).
+  traslados.filter(trasladoVigente).forEach((t, index) => {
+    const monto = toSafeNumber(t.monto)
+    const fecha = t.fecha || ""
+    const concepto = fallbackText(t.notas, "Traslado entre cuentas")
+    detalles.push({
+      id: detalleId("traslado", index, `${t.id || index}-sale`),
+      fecha,
+      metodo_pago: normalizarMetodo(t.metodo_origen),
+      categoria: "traslado",
+      tipo: "traslado",
+      persona: "Fundación",
+      concepto,
+      monto: -monto,
+    })
+    detalles.push({
+      id: detalleId("traslado", index, `${t.id || index}-entra`),
+      fecha,
+      metodo_pago: normalizarMetodo(t.metodo_destino),
+      categoria: "traslado",
+      tipo: "traslado",
+      persona: "Fundación",
+      concepto,
+      monto,
+    })
+  })
 
   filtrarIngresosOperativos(abonos).forEach((p, index) => {
     const cuenta = firstRecord(p.cuentas_por_cobrar)
@@ -313,6 +368,7 @@ export function agruparPorMetodo({
   egresos = [],
   adelantos = [],
   ingresosSaldoFavor = [],
+  traslados = [],
 }: {
   abonos?: Movimiento[]
   donaciones?: Movimiento[]
@@ -320,8 +376,10 @@ export function agruparPorMetodo({
   egresos?: Movimiento[]
   adelantos?: Movimiento[]
   ingresosSaldoFavor?: Movimiento[]
+  traslados?: TrasladoCuentas[]
 }): { resumen: ResumenMetodo[]; totales: ResumenMetodo } {
-  const base = METODOS_PAGO_RESUMEN.reduce<Record<MetodoPago, ResumenMetodo>>(
+  const metodos = metodosDelResumen()
+  const base = metodos.reduce<Record<MetodoPago, ResumenMetodo>>(
     (acc, m) => ({
       ...acc,
       [m]: {
@@ -334,6 +392,8 @@ export function agruparPorMetodo({
         ingresos_ventas_externas: 0,
         salidas_egresos: 0,
         salidas_adelantos: 0,
+        traslados_entrada: 0,
+        traslados_salida: 0,
       },
     }),
     {} as Record<MetodoPago, ResumenMetodo>
@@ -375,12 +435,23 @@ export function agruparPorMetodo({
     base[key].salidas_adelantos = (base[key].salidas_adelantos || 0) + Number(a.monto || 0)
   })
 
-  const resumen = METODOS_PAGO_RESUMEN.map((m) => {
+  // Un traslado no es ingreso ni gasto: solo mueve el saldo de una cuenta a otra
+  // (igual que en fn_cerrar_liquidacion_impl).
+  traslados.filter(trasladoVigente).forEach((t) => {
+    const monto = Number(t.monto || 0)
+    const sale = normalizarMetodo(t.metodo_origen)
+    const entra = normalizarMetodo(t.metodo_destino)
+    base[sale].traslados_salida = (base[sale].traslados_salida || 0) + monto
+    base[entra].traslados_entrada = (base[entra].traslados_entrada || 0) + monto
+  })
+
+  const resumen = metodos.map((m) => {
     const item = base[m]
     item.total_ingresos =
       (item.ingresos_abonos || 0) + (item.ingresos_donaciones || 0) + (item.ingresos_ventas_externas || 0)
     item.total_salidas = item.salidas_egresos || 0
-    item.saldo_neto_periodo = item.total_ingresos - item.total_salidas
+    item.saldo_neto_periodo =
+      item.total_ingresos - item.total_salidas + (item.traslados_entrada || 0) - (item.traslados_salida || 0)
     return item
   })
 
@@ -396,6 +467,8 @@ export function agruparPorMetodo({
         (acc.ingresos_ventas_externas || 0) + (r.ingresos_ventas_externas || 0),
       salidas_egresos: (acc.salidas_egresos || 0) + (r.salidas_egresos || 0),
       salidas_adelantos: (acc.salidas_adelantos || 0) + (r.salidas_adelantos || 0),
+      traslados_entrada: (acc.traslados_entrada || 0) + (r.traslados_entrada || 0),
+      traslados_salida: (acc.traslados_salida || 0) + (r.traslados_salida || 0),
     }),
     {
       metodo_pago: "otro",
@@ -407,6 +480,8 @@ export function agruparPorMetodo({
       ingresos_ventas_externas: 0,
       salidas_egresos: 0,
       salidas_adelantos: 0,
+      traslados_entrada: 0,
+      traslados_salida: 0,
     }
   )
 

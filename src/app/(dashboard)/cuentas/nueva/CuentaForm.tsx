@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { SearchableAsistenteSelect } from '@/components/SearchableAsistenteSelect'
 import type { AsistenteOpcion } from '@/components/SearchableAsistenteSelect'
 import { useConservarSiFalla } from '@/lib/hooks/use-conservar-si-falla'
+import { OpcionesMedioPago } from '@/components/medios-pago/MediosPago'
 
 type ModalidadCobro = 'normal' | 'cortesia' | 'cubierto_por_otro_proceso'
 
@@ -264,10 +265,7 @@ export function CuentaForm({ asistentes, asistenteInicial, returnTo }: { asisten
             disabled={isPending || modalidadValorCero}
             className={selectClassName}
           >
-            <option value="efectivo">Efectivo</option>
-            <option value="nequi">Nequi</option>
-            <option value="daviplata">Daviplata</option>
-            <option value="otro">Otro</option>
+            <OpcionesMedioPago />
           </select>
         </div>
       </div>

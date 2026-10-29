@@ -29,6 +29,8 @@ export function looksLikeCajeroRequest(text: string) {
     "transferencia",
     "nequi",
     "daviplata",
+    "banco",
+    "caja social",
     "efectivo",
     "coach",
     "sesion",

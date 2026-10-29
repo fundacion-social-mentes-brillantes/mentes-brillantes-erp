@@ -245,6 +245,7 @@ export async function procesarMigracion(tipo: string, rows: FilaCsv[]) {
         if (metodoRaw.includes('efectivo')) metodo = 'efectivo'
         else if (metodoRaw.includes('nequi')) metodo = 'nequi'
         else if (metodoRaw.includes('daviplata')) metodo = 'daviplata'
+        else if (metodoRaw.includes('caja social')) metodo = 'banco_caja_social'
 
         // Validar Asistente (Búsqueda estricta por legacy_asistente_id)
         let asistente_id = null;

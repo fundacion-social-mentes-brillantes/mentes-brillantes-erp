@@ -607,6 +607,8 @@ export type Database = {
           salidas_egresos: number
           total_ingresos: number
           total_salidas: number
+          traslados_entrada: number
+          traslados_salida: number
           updated_at: string
         }
         Insert: {
@@ -622,6 +624,8 @@ export type Database = {
           salidas_egresos?: number
           total_ingresos?: number
           total_salidas?: number
+          traslados_entrada?: number
+          traslados_salida?: number
           updated_at?: string
         }
         Update: {
@@ -637,6 +641,8 @@ export type Database = {
           salidas_egresos?: number
           total_ingresos?: number
           total_salidas?: number
+          traslados_entrada?: number
+          traslados_salida?: number
           updated_at?: string
         }
         Relationships: [
@@ -850,6 +856,33 @@ export type Database = {
           resultado?: Json | null
           resumen?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      medios_pago: {
+        Row: {
+          activo: boolean
+          actualizado_en: string
+          clave: string
+          creado_en: string
+          nombre: string
+          orden: number
+        }
+        Insert: {
+          activo?: boolean
+          actualizado_en?: string
+          clave: string
+          creado_en?: string
+          nombre: string
+          orden?: number
+        }
+        Update: {
+          activo?: boolean
+          actualizado_en?: string
+          clave?: string
+          creado_en?: string
+          nombre?: string
+          orden?: number
         }
         Relationships: []
       }
@@ -1278,6 +1311,51 @@ export type Database = {
         }
         Relationships: []
       }
+      traslados_cuentas: {
+        Row: {
+          anulado_en: string | null
+          anulado_por: string | null
+          creado_en: string
+          estado: string
+          fecha: string
+          id: string
+          metodo_destino: Database["public"]["Enums"]["metodo_pago"]
+          metodo_origen: Database["public"]["Enums"]["metodo_pago"]
+          monto: number
+          motivo_anulacion: string | null
+          notas: string | null
+          usuario_id: string | null
+        }
+        Insert: {
+          anulado_en?: string | null
+          anulado_por?: string | null
+          creado_en?: string
+          estado?: string
+          fecha: string
+          id?: string
+          metodo_destino: Database["public"]["Enums"]["metodo_pago"]
+          metodo_origen: Database["public"]["Enums"]["metodo_pago"]
+          monto: number
+          motivo_anulacion?: string | null
+          notas?: string | null
+          usuario_id?: string | null
+        }
+        Update: {
+          anulado_en?: string | null
+          anulado_por?: string | null
+          creado_en?: string
+          estado?: string
+          fecha?: string
+          id?: string
+          metodo_destino?: Database["public"]["Enums"]["metodo_pago"]
+          metodo_origen?: Database["public"]["Enums"]["metodo_pago"]
+          monto?: number
+          motivo_anulacion?: string | null
+          notas?: string | null
+          usuario_id?: string | null
+        }
+        Relationships: []
+      }
       ventas_externas: {
         Row: {
           comprador_nombre: string | null
@@ -1399,6 +1477,10 @@ export type Database = {
         Args: { p_periodo_id: string }
         Returns: undefined
       }
+      fn_crear_medio_pago: {
+        Args: { p_nombre: string }
+        Returns: string
+      }
       mb_current_asistente_id: { Args: never; Returns: string }
       mb_current_role: {
         Args: never
@@ -1459,7 +1541,13 @@ export type Database = {
     Enums: {
       estado_cuenta: "pendiente" | "parcial" | "pagado"
       estado_periodo: "abierto" | "cerrado"
-      metodo_pago: "efectivo" | "nequi" | "daviplata" | "otro" | "saldo_a_favor"
+      metodo_pago:
+        | "efectivo"
+        | "nequi"
+        | "daviplata"
+        | "otro"
+        | "saldo_a_favor"
+        | "banco_caja_social"
       rol_usuario: "admin" | "caja" | "consulta"
     }
     CompositeTypes: {
@@ -1590,7 +1678,7 @@ export const Constants = {
     Enums: {
       estado_cuenta: ["pendiente", "parcial", "pagado"],
       estado_periodo: ["abierto", "cerrado"],
-      metodo_pago: ["efectivo", "nequi", "daviplata", "otro", "saldo_a_favor"],
+      metodo_pago: ["efectivo", "nequi", "daviplata", "otro", "saldo_a_favor", "banco_caja_social"],
       rol_usuario: ["admin", "caja", "consulta"],
     },
   },

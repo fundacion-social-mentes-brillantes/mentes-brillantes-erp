@@ -8,6 +8,7 @@ import { AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import type { Tables } from '@/lib/supabase/types'
 import { useConservarSiFalla } from '@/lib/hooks/use-conservar-si-falla'
+import { OpcionesMedioPago } from '@/components/medios-pago/MediosPago'
 
 export function EgresoForm({ egreso }: { egreso?: Tables<'egresos'> | null }) {
   const actionWithId = saveEgreso.bind(null, egreso?.id || null)
@@ -91,10 +92,7 @@ export function EgresoForm({ egreso }: { egreso?: Tables<'egresos'> | null }) {
             disabled={isPending}
             className={selectClass}
           >
-            <option value="efectivo">Efectivo</option>
-            <option value="nequi">Nequi</option>
-            <option value="daviplata">Daviplata</option>
-            <option value="otro">Otro</option>
+            <OpcionesMedioPago />
           </select>
         </div>
 

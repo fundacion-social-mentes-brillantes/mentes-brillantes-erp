@@ -3,6 +3,7 @@
 import { useFormState, useFormStatus } from 'react-dom'
 import { crearDonacion } from '../donacionesActions'
 import { useConservarSiFalla } from '@/lib/hooks/use-conservar-si-falla'
+import { OpcionesMedioPago } from '@/components/medios-pago/MediosPago'
 
 function SubmitButton({ disabled = false }: { disabled?: boolean }) {
   const { pending } = useFormStatus()
@@ -51,10 +52,7 @@ export function DonacionForm({ asistenteId, disabled = false }: DonacionFormProp
           disabled={disabled}
           className="w-full h-10 rounded-md border border-linea bg-panel px-3 text-sm text-tinta focus:border-acento focus:ring-1 focus:ring-acento"
         >
-          <option value="efectivo">Efectivo</option>
-          <option value="nequi">Nequi</option>
-          <option value="daviplata">Daviplata</option>
-          <option value="otro">Otro</option>
+          <OpcionesMedioPago />
         </select>
       </div>
       <div className="space-y-1">

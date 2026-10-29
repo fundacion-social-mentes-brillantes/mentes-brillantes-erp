@@ -25,7 +25,7 @@ import {
 } from "@/lib/operaciones/configuracion"
 import { OperacionMcpError } from "../operaciones"
 import {
-  METODOS_PAGO,
+  METODO_PAGO,
   money,
   operacion,
   type DefinicionOperacion,
@@ -219,7 +219,7 @@ export const OPERACIONES_ADMINISTRACION: DefinicionOperacion[] = [
       socio: z.string().trim().min(2).max(160),
       monto: z.coerce.number().positive().max(100_000_000),
       fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-      metodo_pago: z.enum(METODOS_PAGO).optional(),
+      metodo_pago: METODO_PAGO.optional(),
       notas: z.string().trim().max(300).optional(),
     },
     previsualizar: async (admin, _actor, args) => {
@@ -267,7 +267,7 @@ export const OPERACIONES_ADMINISTRACION: DefinicionOperacion[] = [
       monto: z.coerce.number().positive().max(100_000_000),
       fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       adelanto_id: z.string().guid().optional(),
-      metodo_pago: z.enum(METODOS_PAGO).optional(),
+      metodo_pago: METODO_PAGO.optional(),
       notas: z.string().trim().max(300).optional(),
     },
     previsualizar: async (admin, _actor, args) => {

@@ -33,6 +33,7 @@ import {
   SheetTitle,
   SheetDescription
 } from '@/components/ui/sheet'
+import { OpcionesMedioPago, useMediosPago } from '@/components/medios-pago/MediosPago'
 
 type Asistente = {
   id: string
@@ -106,6 +107,8 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
   const [tipoFiltro, setTipoFiltro] = useState('todos')
   const [asistenteFiltro, setAsistenteFiltro] = useState('todos')
   const [metodoFiltro, setMetodoFiltro] = useState('todos')
+  // Todas las cuentas (tambien las ocultas): en el filtro sirven para buscar pagos viejos.
+  const mediosPago = useMediosPago()
   const [mostrarAplicaciones, setMostrarAplicaciones] = useState(false)
 
   // Sheet State
@@ -444,11 +447,12 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
             <label className="text-sm font-medium text-gris">Método de Pago</label>
             <select value={metodoFiltro} onChange={(e) => setMetodoFiltro(e.target.value)} className="w-full h-10 rounded-2xl border border-linea bg-panel px-3 text-sm text-tinta focus:border-acento focus:outline-none focus:ring-2 focus:ring-acento/35">
               <option className="bg-suave text-tinta" value="todos">Todos los métodos</option>
-              <option className="bg-suave text-tinta" value="efectivo">Efectivo</option>
-              <option className="bg-suave text-tinta" value="nequi">Nequi</option>
-              <option className="bg-suave text-tinta" value="daviplata">Daviplata</option>
+              {mediosPago.map((m) => (
+                <option key={m.clave} className="bg-suave text-tinta" value={m.clave}>
+                  {m.nombre}
+                </option>
+              ))}
               {mostrarAplicaciones && <option className="bg-suave text-tinta" value="saldo_a_favor">Saldo a Favor</option>}
-              <option className="bg-suave text-tinta" value="otro">Otro</option>
             </select>
           </div>
 
@@ -793,10 +797,7 @@ export function MovimientosClient({ asistentes, isAdmin = false }: { asistentes:
                           onChange={e => setEditForm({ ...editForm, metodo_pago: e.target.value })}
                           className="w-full h-10 rounded-md border border-linea-fuerte px-3 text-sm focus:border-acento focus:ring-1 focus:ring-acento"
                         >
-                          <option value="efectivo">Efectivo</option>
-                          <option value="nequi">Nequi</option>
-                          <option value="daviplata">Daviplata</option>
-                          <option value="otro">Otro</option>
+                          <OpcionesMedioPago />
                         </select>
                       </div>
                     )}

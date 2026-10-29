@@ -42,9 +42,3 @@ export const claseArea =
 
 export const claseEtiqueta = 'text-sm font-medium text-tinta'
 
-export const METODOS = [
-  { valor: 'nequi', nombre: 'Nequi' },
-  { valor: 'efectivo', nombre: 'Efectivo' },
-  { valor: 'daviplata', nombre: 'Daviplata' },
-  { valor: 'otro', nombre: 'Otro' },
-] as const

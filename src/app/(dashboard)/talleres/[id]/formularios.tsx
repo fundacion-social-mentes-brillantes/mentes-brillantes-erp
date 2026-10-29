@@ -15,7 +15,8 @@ import {
   registrarPagoTallerAction,
   type TallerState,
 } from '../actions'
-import { METODOS, claseArea, claseEtiqueta, claseSelect } from '../piezas'
+import { claseArea, claseEtiqueta, claseSelect } from '../piezas'
+import { OpcionesMedioPago } from '@/components/medios-pago/MediosPago'
 
 // Formularios de la pagina de un taller. Todos avisan con `alTerminar` cuando
 // la accion salio bien, para que quien los abrio los cierre.
@@ -51,11 +52,7 @@ function CamposMetodoYFecha({ hoy, deshabilitado, metodo = 'nequi', prefijo = ''
           Cómo pagó
         </label>
         <select id={`${prefijo}metodo`} name={nombreMetodo} defaultValue={metodo} className={claseSelect} disabled={deshabilitado}>
-          {METODOS.map((m) => (
-            <option key={m.valor} value={m.valor}>
-              {m.nombre}
-            </option>
-          ))}
+          <OpcionesMedioPago actual={metodo} />
         </select>
       </div>
       <div className="space-y-1.5">

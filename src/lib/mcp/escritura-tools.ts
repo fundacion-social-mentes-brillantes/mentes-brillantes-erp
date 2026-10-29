@@ -31,6 +31,8 @@ import { OPERACIONES_COACH } from "./escritura/coach"
 import { OPERACIONES_PERSONAS } from "./escritura/personas"
 import { OPERACIONES_CORRECCIONES } from "./escritura/correcciones"
 import { OPERACIONES_ADMINISTRACION } from "./escritura/administracion"
+import { OPERACIONES_TRASLADOS } from "./escritura/traslados"
+import { OPERACIONES_TALLERES } from "./escritura/talleres"
 
 // Herramientas de ESCRITURA del MCP.
 //
@@ -40,7 +42,7 @@ import { OPERACIONES_ADMINISTRACION } from "./escritura/administracion"
 // borrador de un solo uso, caducidad, aviso de duplicado y auditoria.
 //
 // Las operaciones viven por tema en ./escritura/ (dinero, coach, personas,
-// correcciones, administracion); aqui se juntan en el orden en que el MCP las
+// correcciones, administracion, traslados, talleres); aqui se juntan en el orden en que el MCP las
 // ofrece y se registran.
 
 const ORDEN: OperacionEscritura[] = [
@@ -77,6 +79,15 @@ const ORDEN: OperacionEscritura[] = [
   "corregir_monto_pago",
   "pagar_deudas_con_saldo",
   "configuracion_empresa",
+  "traslado",
+  "anular_traslado",
+  "cuenta_de_dinero",
+  "inscripcion_taller",
+  "pago_taller",
+  "gasto_taller",
+  "llegada_taller",
+  "estado_taller",
+  "cancelar_inscripcion_taller",
 ]
 
 const TODAS = new Map<string, DefinicionOperacion>(
@@ -86,6 +97,8 @@ const TODAS = new Map<string, DefinicionOperacion>(
     ...OPERACIONES_PERSONAS,
     ...OPERACIONES_CORRECCIONES,
     ...OPERACIONES_ADMINISTRACION,
+    ...OPERACIONES_TRASLADOS,
+    ...OPERACIONES_TALLERES,
   ].map((o) => [o.nombre, o])
 )
 

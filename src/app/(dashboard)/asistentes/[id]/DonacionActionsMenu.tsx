@@ -4,6 +4,7 @@ import { useActionState, useState } from 'react'
 import { EllipsisVertical, Pencil, Ban, Trash2 } from 'lucide-react'
 import { anularDonacionForm, editarDonacionForm, eliminarDonacionForm } from '../donacionesActions'
 import { useConservarSiFalla } from '@/lib/hooks/use-conservar-si-falla'
+import { OpcionesMedioPago } from '@/components/medios-pago/MediosPago'
 
 type Props = {
   donacion: {
@@ -107,10 +108,7 @@ function MenuDonacion({ donacion }: { donacion: Props['donacion'] }) {
                   defaultValue={donacion.metodo_pago}
                   className="w-full h-9 rounded-md border border-linea bg-panel px-2 text-sm text-tinta focus:border-acento focus:ring-1 focus:ring-acento"
                 >
-                  <option value="efectivo">Efectivo</option>
-                  <option value="nequi">Nequi</option>
-                  <option value="daviplata">Daviplata</option>
-                  <option value="otro">Otro</option>
+                  <OpcionesMedioPago />
                 </select>
               </div>
               <div className="space-y-1">

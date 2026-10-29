@@ -13,7 +13,7 @@ import { registrarAbono } from "@/lib/operaciones/abonos"
 import { registrarAuditoria, type FilaAuditoria } from "@/lib/operaciones/auditoria"
 import { editarValorCuenta, eliminarCuenta } from "@/lib/operaciones/cuentas"
 import { editarMontoAbono } from "@/lib/operaciones/editar-abono"
-import { OperacionError, exigirMetodoPago } from "@/lib/operaciones/errores"
+import { OperacionError, exigirMedioPago } from "@/lib/operaciones/errores"
 import {
   aplicarSaldoAFavor,
   deshacerPagoConSaldo as deshacerPagoConSaldoOp,
@@ -323,7 +323,7 @@ export async function saveCuenta(prevState: ActionState, formData: FormData): Pr
       return { error: "No se puede registrar abono inicial en una cuenta de valor 0." }
     }
     if (abonoInicialValue > 0 && !metodoPagoTexto) return { error: "Debes indicar el método de pago del abono inicial." }
-    const metodoPago = metodoPagoTexto ? exigirMetodoPago(metodoPagoTexto, "El método de pago del abono inicial") : null
+    const metodoPago = metodoPagoTexto ? await exigirMedioPago(supabase, metodoPagoTexto, "El método de pago del abono inicial") : null
     if (abonoInicialValue > 0 && !fechaPagoInicial) {
       return { error: "Debes indicar la fecha de pago inicial." }
     }

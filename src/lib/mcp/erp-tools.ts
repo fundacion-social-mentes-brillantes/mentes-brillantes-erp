@@ -37,6 +37,7 @@ import { leerConfiguracionEmpresa } from "@/lib/operaciones/configuracion"
 import { consultarEnlace } from "@/lib/enlaces-personales/enlaces"
 import { secretoEnlaces } from "@/lib/enlaces-personales/token"
 import { MCP_PRIMARY_SCOPE } from "./constants"
+import { vistaMediosPago, vistaTaller, vistaTalleres, vistaTraslados } from "./talleres-mcp"
 
 type ToolOutput = {
   content: Array<{ type: "text"; text: string }>
@@ -747,6 +748,42 @@ export function registerErpTools(server: McpServer) {
         ciudad: empresa.ciudad,
       }
     }
+  )
+  register(
+    server,
+    "cuentas_de_dinero",
+    "Cuentas de dinero",
+    "Las cuentas donde entra y sale la plata de la fundación (efectivo, Nequi, Daviplata, Banco Caja Social...), con su clave para metodo_pago y si están activas.",
+    {},
+    (s) => vistaMediosPago(s)
+  )
+  register(
+    server,
+    "traslados",
+    "Traslados entre cuentas",
+    "Plata que se pasó de una cuenta de la fundación a otra (p. ej. de Nequi al Banco Caja Social). No es ingreso ni gasto.",
+    {
+      desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      hasta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      limite: z.coerce.number().int().min(1).max(100).optional(),
+    },
+    (s, args) => vistaTraslados(s, { desde: args.desde, hasta: args.hasta, limite: args.limite || 30 })
+  )
+  register(
+    server,
+    "talleres",
+    "Talleres",
+    "Todos los talleres y eventos (Cena de la Gratitud, talleres...) con su estado, inscritos, lo recaudado, lo que falta por cobrar y los gastos.",
+    {},
+    (s) => vistaTalleres(s)
+  )
+  register(
+    server,
+    "taller",
+    "Detalle de un taller",
+    "Un taller con sus inscritos (cuánto debe pagar cada uno, cuánto pagó, cuánto le falta, si llegó), sus pagos y sus gastos. Sirve para tomar el inscripcion_id.",
+    { taller: z.string().trim().min(2).max(160).describe("Nombre, enlace o id del taller") },
+    (s, args) => vistaTaller(s, String(args.taller))
   )
   registerRangeTool(server, "resumen_periodo", "Resumen de un período", "Ingresos operativos, egresos y utilidad estimada.", (s, from, to) => getSummary(s, from, to))
   registerRangeTool(server, "egresos", "Egresos por período", "Egresos activos de un rango.", (s, from, to) => getExpenses(s, from, to))

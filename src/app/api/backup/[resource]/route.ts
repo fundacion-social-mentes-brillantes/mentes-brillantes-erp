@@ -31,6 +31,7 @@ const TABLES = [
   "perfiles",
   "liquidaciones_socios",
   "liquidaciones_resumen_cuentas",
+  "traslados_cuentas",
 ] as const
 
 type TablaRespaldo = (typeof TABLES)[number]

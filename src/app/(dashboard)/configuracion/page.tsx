@@ -3,6 +3,8 @@ import { MigracionForm } from "./MigracionForm"
 import { EmpresaForm } from "@/components/configuracion/EmpresaForm"
 import { requireRoles } from "@/lib/utils/authz"
 import { EditorApariencia } from "@/components/theme/EditorApariencia"
+import { CuentasDinero } from "./CuentasDinero"
+import { cargarMediosPago } from "@/lib/medios-pago"
 
 export default async function ConfiguracionPage() {
   const { supabase } = await requireRoles(["admin"])
@@ -20,6 +22,7 @@ export default async function ConfiguracionPage() {
   }
 
   const empresa = empresaData || defaultEmpresa
+  const medios = await cargarMediosPago(supabase, { forzar: true })
 
   const tables = [
     "configuracion_empresa",
@@ -38,6 +41,7 @@ export default async function ConfiguracionPage() {
     "perfiles",
     "liquidaciones_socios",
     "liquidaciones_resumen_cuentas",
+    "traslados_cuentas",
   ]
 
   return (
@@ -57,6 +61,19 @@ export default async function ConfiguracionPage() {
         </div>
         <div className="p-6">
           <EditorApariencia className="max-w-md" />
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-linea bg-panel overflow-hidden">
+        <div className="p-6 border-b border-linea">
+          <h2 className="text-lg font-semibold text-tinta">Cuentas de dinero</h2>
+          <p className="text-sm text-gris mt-1">
+            Donde entra y sale la plata de la fundación: efectivo, Nequi, bancos. Puedes cambiarle el nombre a una cuenta,
+            agregar otra u ocultar la que ya no se use. Los pagos de antes no cambian: cada uno sigue en su cuenta.
+          </p>
+        </div>
+        <div className="p-6">
+          <CuentasDinero medios={medios} />
         </div>
       </div>
 

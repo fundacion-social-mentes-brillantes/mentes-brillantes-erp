@@ -19,7 +19,7 @@ import {
 } from "@/lib/operaciones/saldo-favor"
 import { OperacionMcpError } from "../operaciones"
 import {
-  METODOS_PAGO,
+  METODO_PAGO,
   FECHA,
   money,
   operacion,
@@ -42,7 +42,7 @@ export const OPERACIONES_DINERO: DefinicionOperacion[] = [
     schema: {
       persona: z.string().trim().min(1).max(160).describe("Nombre o codigo de quien paga"),
       monto: z.coerce.number().positive().max(100_000_000),
-      metodo_pago: z.enum(METODOS_PAGO),
+      metodo_pago: METODO_PAGO,
       cuenta_id: z.string().guid().optional().describe("Id de la cuenta; si se omite se busca por concepto"),
       concepto: z.string().trim().max(160).optional().describe("Concepto de la cuenta a abonar"),
       fecha_pago: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -166,7 +166,7 @@ export const OPERACIONES_DINERO: DefinicionOperacion[] = [
             "Las dos ultimas solo para paquetes coach y con valor_total 0: la cuenta nace pagada y no genera deuda."
         ),
       abono_inicial: z.coerce.number().positive().max(100_000_000).optional().describe("Lo que ya pago al crearla"),
-      metodo_pago: z.enum(METODOS_PAGO).optional().describe("Obligatorio si hay abono_inicial"),
+      metodo_pago: METODO_PAGO.optional().describe("Obligatorio si hay abono_inicial"),
       fecha_pago_inicial: FECHA.optional().describe("Fecha del abono inicial; por defecto, la de emision"),
       notas_pago: z.string().trim().max(300).optional(),
       fecha_sesion: FECHA.optional().describe("Si la primera sesion coach ya se dicto, su fecha"),
@@ -280,7 +280,7 @@ export const OPERACIONES_DINERO: DefinicionOperacion[] = [
       concepto: z.string().trim().min(2).max(200),
       monto: z.coerce.number().positive().max(100_000_000),
       categoria: z.enum(CATEGORIAS_EGRESO),
-      metodo_pago: z.enum(METODOS_PAGO),
+      metodo_pago: METODO_PAGO,
       fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       notas: z.string().trim().max(300).optional(),
     },
@@ -325,7 +325,7 @@ export const OPERACIONES_DINERO: DefinicionOperacion[] = [
     schema: {
       concepto: z.string().trim().min(2).max(200),
       monto: z.coerce.number().positive().max(100_000_000),
-      metodo_pago: z.enum(METODOS_PAGO),
+      metodo_pago: METODO_PAGO,
       comprador_nombre: z.string().trim().max(160).optional(),
       fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       notas: z.string().trim().max(300).optional(),
@@ -368,7 +368,7 @@ export const OPERACIONES_DINERO: DefinicionOperacion[] = [
     schema: {
       persona: z.string().trim().min(1).max(160),
       monto: z.coerce.number().positive().max(100_000_000),
-      metodo_pago: z.enum(METODOS_PAGO),
+      metodo_pago: METODO_PAGO,
       fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       notas: z.string().trim().max(300).optional(),
     },
@@ -408,7 +408,7 @@ export const OPERACIONES_DINERO: DefinicionOperacion[] = [
     schema: {
       persona: z.string().trim().min(1).max(160),
       monto: z.coerce.number().positive().max(100_000_000),
-      metodo_pago: z.enum(METODOS_PAGO),
+      metodo_pago: METODO_PAGO,
       fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       notas: z.string().trim().max(300).optional(),
     },

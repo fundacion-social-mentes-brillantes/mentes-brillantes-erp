@@ -7,6 +7,7 @@ import { toSafeNumber } from "@/lib/utils/contable"
 import { mensajeDeError } from "@/lib/utils/errores"
 import { filas, lista, objeto } from "@/lib/utils/lectura"
 import { PENSAR_DEEPSEEK } from "@/lib/deepseek-modelo"
+import { metodoPagoLegible } from "@/lib/utils/textos"
 
 function formatCop(value: unknown) {
   return `$${Math.round(toSafeNumber(value)).toLocaleString("es-CO")}`
@@ -98,7 +99,7 @@ function describePayments(item: ToolExecutionItem) {
   const rows = filas(item.result?.data)
   const name = item.person?.nombre || "la persona"
   if (!rows.length) return `No veo pagos validos recientes para ${name}.`
-  return [`Ultimos pagos de ${name}:`, ...rows.slice(0, 6).map((pago) => `- ${pago.fecha_pago}: ${formatCop(pago.monto)} ${pago.metodo_pago || ""} | ${pago.concepto || ""}`)].join("\n")
+  return [`Ultimos pagos de ${name}:`, ...rows.slice(0, 6).map((pago) => `- ${pago.fecha_pago}: ${formatCop(pago.monto)} ${metodoPagoLegible(String(pago.metodo_pago ?? ""), "")} | ${pago.concepto || ""}`)].join("\n")
 }
 
 function describeCoach(item: ToolExecutionItem) {
@@ -177,7 +178,7 @@ function describeDonations(item: ToolExecutionItem) {
   if (!donaciones.length) return `No veo donaciones registradas de ${name}.`
   return [
     `Donaciones de ${name}: ${formatCop(data.total)} en ${data.cantidad || donaciones.length} registro(s).`,
-    ...donaciones.slice(0, 8).map((d) => `- ${d.fecha}: ${formatCop(d.monto)} ${d.metodo_pago || ""}`.trim()),
+    ...donaciones.slice(0, 8).map((d) => `- ${d.fecha}: ${formatCop(d.monto)} ${metodoPagoLegible(String(d.metodo_pago ?? ""), "")}`.trim()),
   ].join("\n")
 }
 

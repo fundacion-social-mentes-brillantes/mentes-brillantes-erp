@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { Tables } from '@/lib/supabase/types'
 import { useConservarSiFalla } from '@/lib/hooks/use-conservar-si-falla'
+import { OpcionesMedioPago } from '@/components/medios-pago/MediosPago'
 
 export function VentaExternaForm({ venta }: { venta?: Tables<'ventas_externas'> | null }) {
   const action = venta?.id ? editarVentaExterna.bind(null, venta.id) : crearVentaExterna
@@ -61,10 +62,7 @@ export function VentaExternaForm({ venta }: { venta?: Tables<'ventas_externas'> 
         <div className="space-y-2">
           <label className="text-sm font-medium text-tinta">Método de Pago *</label>
           <select name="metodo_pago" defaultValue={venta?.metodo_pago || 'efectivo'} required disabled={isPending} className={selectClass}>
-            <option value="efectivo">Efectivo</option>
-            <option value="nequi">Nequi</option>
-            <option value="daviplata">Daviplata</option>
-            <option value="otro">Otro</option>
+            <OpcionesMedioPago />
           </select>
         </div>
 

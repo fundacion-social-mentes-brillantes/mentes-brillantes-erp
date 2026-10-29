@@ -6,7 +6,7 @@ import {
 } from "@/lib/utils/contable"
 import { assertFechaEditable } from "@/lib/utils/periodos"
 import { registrarAuditoria } from "./auditoria"
-import { OperacionError, exigirMetodoPago, type MetodoPago } from "./errores"
+import { OperacionError, exigirMedioPago, type MetodoPago } from "./errores"
 
 // Nucleo contable de "registrar abono", compartido por la web (server action)
 // y por el MCP. Vive aparte a proposito: si cada canal reimplementara estas
@@ -72,8 +72,8 @@ function validarMonto(monto: number) {
  * debe existir. Se admite saldo_a_favor porque corregirMontoPago vuelve a
  * registrar un pago con el metodo que ya tenia.
  */
-function metodoOpcional(valor: string | null): MetodoPago | null {
-  return valor ? exigirMetodoPago(valor, "El metodo de pago", { permitirSaldoAFavor: true }) : null
+async function metodoOpcional(supabase: DbClient, valor: string | null): Promise<MetodoPago | null> {
+  return valor ? exigirMedioPago(supabase, valor, "El metodo de pago", { permitirSaldoAFavor: true }) : null
 }
 
 const SIN_PERSONA_PARA_EXCEDENTE =
@@ -88,7 +88,7 @@ export async function previsualizarAbono(
   params: RegistrarAbonoParams
 ): Promise<PrevisualizacionAbono> {
   validarMonto(params.monto)
-  metodoOpcional(params.metodoPago)
+  await metodoOpcional(supabase, params.metodoPago)
 
   const periodoError = await assertFechaEditable(supabase, params.fechaPago, "Registrar el abono")
   if (periodoError) throw new OperacionError(periodoError)
@@ -146,7 +146,7 @@ export async function registrarAbono(
   params: RegistrarAbonoParams
 ): Promise<ResultadoAbono> {
   validarMonto(params.monto)
-  const metodoPago = metodoOpcional(params.metodoPago)
+  const metodoPago = await metodoOpcional(supabase, params.metodoPago)
 
   const periodoError = await assertFechaEditable(supabase, params.fechaPago, "Registrar el abono")
   if (periodoError) throw new OperacionError(periodoError)

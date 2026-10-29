@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Search, Wallet, X } from 'lucide-react'
 import type { MetodoPago, MovimientoResumenDetalle, ResumenMetodo } from '@/lib/utils/liquidaciones'
+import { metodoPagoLegible } from '@/lib/utils/textos'
 
-type ColumnaDetalle = 'ingresos' | 'egresos' | 'adelantos' | 'saldo'
+type ColumnaDetalle = 'ingresos' | 'egresos' | 'adelantos' | 'traslados' | 'saldo'
 
 type ResumenPorCuentaInteractivoProps = {
   periodo: {
@@ -29,17 +30,14 @@ type SeleccionDetalle = {
   totalResumen: number
 }
 
-const metodoLabels: Record<MetodoPago, string> = {
-  efectivo: 'Efectivo',
-  nequi: 'Nequi',
-  daviplata: 'Daviplata',
-  otro: 'Otro',
-}
+// El nombre de cada cuenta sale de medios_pago (el admin lo puede cambiar).
+const nombreCuenta = (metodo: MetodoPago) => metodoPagoLegible(metodo)
 
 const columnaLabels: Record<ColumnaDetalle, string> = {
   ingresos: 'ingresos',
   egresos: 'egresos operativos',
   adelantos: 'adelantos no operativos',
+  traslados: 'traslados entre cuentas',
   saldo: 'saldo neto operativo',
 }
 
@@ -50,6 +48,7 @@ const tipoLabels: Record<MovimientoResumenDetalle['tipo'], string> = {
   venta_externa: 'Venta externa',
   egreso: 'Egreso',
   adelanto: 'Adelanto',
+  traslado: 'Traslado entre cuentas',
 }
 
 const currency = new Intl.NumberFormat('es-CO', {
@@ -65,6 +64,8 @@ const formatMoney = (value: number, opts: { negative?: boolean; signed?: boolean
 }
 
 const signedMonto = (movimiento: MovimientoResumenDetalle, columna: ColumnaDetalle) => {
+  // Un traslado ya trae su signo: negativo en la cuenta de donde sale, positivo en la que recibe.
+  if (movimiento.categoria === 'traslado') return movimiento.monto
   if (columna === 'egresos' || columna === 'adelantos') return -movimiento.monto
   if (columna === 'saldo' && movimiento.categoria === 'egreso') return -movimiento.monto
   return movimiento.monto
@@ -82,7 +83,8 @@ function filtrarDetalles(detalles: MovimientoResumenDetalle[], metodo: MetodoPag
     if (columna === 'ingresos') return movimiento.categoria === 'ingreso'
     if (columna === 'egresos') return movimiento.categoria === 'egreso'
     if (columna === 'adelantos') return movimiento.categoria === 'adelanto'
-    return movimiento.categoria === 'ingreso' || movimiento.categoria === 'egreso'
+    if (columna === 'traslados') return movimiento.categoria === 'traslado'
+    return movimiento.categoria === 'ingreso' || movimiento.categoria === 'egreso' || movimiento.categoria === 'traslado'
   })
 }
 
@@ -160,7 +162,7 @@ export function ResumenPorCuentaInteractivo({
         </span>
       </div>
       <div className="px-5 py-3 border-b border-linea bg-suave/60 text-xs text-gris">
-        Total salidas y saldo neto del periodo usan solo egresos operativos. Los adelantos se muestran aparte y no reducen la utilidad.
+        Total salidas y saldo neto del periodo usan solo egresos operativos. Los adelantos se muestran aparte y no reducen la utilidad. Los traslados entre cuentas de la fundación mueven el saldo de cada cuenta, pero no son ingreso ni gasto.
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left">
@@ -170,17 +172,18 @@ export function ResumenPorCuentaInteractivo({
               <th className="px-4 py-3 text-right">Ingresos</th>
               <th className="px-4 py-3 text-right">Egresos operativos</th>
               <th className="px-4 py-3 text-right">Adelantos no operativos</th>
+              <th className="px-4 py-3 text-right">Traslados</th>
               <th className="px-4 py-3 text-right">Saldo neto operativo</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-linea">
             {resumenPorCuenta.map((row) => (
               <tr key={row.metodo_pago}>
-                <td className="px-4 py-3 font-medium text-tinta">{metodoLabels[row.metodo_pago]}</td>
+                <td className="px-4 py-3 font-medium text-tinta">{nombreCuenta(row.metodo_pago)}</td>
                 <td className="px-4 py-3 text-right text-verde">
                   <ValorResumenButton
                     value={row.total_ingresos}
-                    label={`Detalle de ingresos - ${metodoLabels[row.metodo_pago]}`}
+                    label={`Detalle de ingresos - ${nombreCuenta(row.metodo_pago)}`}
                     onClick={() => openDetalle(row.metodo_pago, 'ingresos', row.total_ingresos)}
                     className="text-verde"
                   />
@@ -189,7 +192,7 @@ export function ResumenPorCuentaInteractivo({
                   <ValorResumenButton
                     value={row.total_salidas}
                     negative
-                    label={`Detalle de egresos operativos - ${metodoLabels[row.metodo_pago]}`}
+                    label={`Detalle de egresos operativos - ${nombreCuenta(row.metodo_pago)}`}
                     onClick={() => openDetalle(row.metodo_pago, 'egresos', row.total_salidas)}
                     className="text-rojo"
                   />
@@ -198,16 +201,27 @@ export function ResumenPorCuentaInteractivo({
                   <ValorResumenButton
                     value={Number(row.salidas_adelantos ?? 0)}
                     negative
-                    label={`Detalle de adelantos no operativos - ${metodoLabels[row.metodo_pago]}`}
+                    label={`Detalle de adelantos no operativos - ${nombreCuenta(row.metodo_pago)}`}
                     onClick={() => openDetalle(row.metodo_pago, 'adelantos', Number(row.salidas_adelantos ?? 0))}
                     className="text-ambar"
+                  />
+                </td>
+                <td className="px-4 py-3 text-right text-gris">
+                  <ValorResumenButton
+                    value={Number(row.traslados_entrada ?? 0) - Number(row.traslados_salida ?? 0)}
+                    signed
+                    label={`Detalle de traslados - ${nombreCuenta(row.metodo_pago)}`}
+                    onClick={() =>
+                      openDetalle(row.metodo_pago, 'traslados', Number(row.traslados_entrada ?? 0) - Number(row.traslados_salida ?? 0))
+                    }
+                    className="text-tinta"
                   />
                 </td>
                 <td className={`px-4 py-3 text-right font-semibold ${row.saldo_neto_periodo >= 0 ? 'text-verde' : 'text-rojo'}`}>
                   <ValorResumenButton
                     value={row.saldo_neto_periodo}
                     signed
-                    label={`Detalle de saldo neto operativo - ${metodoLabels[row.metodo_pago]}`}
+                    label={`Detalle de saldo neto operativo - ${nombreCuenta(row.metodo_pago)}`}
                     onClick={() => openDetalle(row.metodo_pago, 'saldo', row.saldo_neto_periodo)}
                     className={row.saldo_neto_periodo >= 0 ? 'text-verde' : 'text-rojo'}
                   />
@@ -219,6 +233,7 @@ export function ResumenPorCuentaInteractivo({
               <td className="px-4 py-3 text-right text-verde">{formatMoney(resumenTotales.total_ingresos)}</td>
               <td className="px-4 py-3 text-right text-rojo">{formatMoney(resumenTotales.total_salidas, { negative: true })}</td>
               <td className="px-4 py-3 text-right text-ambar">{formatMoney(adelantosPeriodo, { negative: true })}</td>
+              <td className="px-4 py-3 text-right text-gris">{formatMoney(0)}</td>
               <td className="px-4 py-3 text-right">{formatMoney(resumenTotales.saldo_neto_periodo, { signed: true })}</td>
             </tr>
           </tbody>
@@ -232,7 +247,7 @@ export function ResumenPorCuentaInteractivo({
             <div className="flex items-start justify-between gap-4 border-b border-linea p-4">
               <div>
                 <h3 className="font-semibold text-tinta">
-                  Detalle de {columnaLabels[seleccion.columna]} - {metodoLabels[seleccion.metodo]}
+                  Detalle de {columnaLabels[seleccion.columna]} - {nombreCuenta(seleccion.metodo)}
                 </h3>
                 <p className="mt-1 text-sm text-gris">
                   {periodo.nombre}: {periodo.fecha_inicio} a {periodo.fecha_fin} | Total resumen: {formatMoney(seleccion.totalResumen, {
@@ -277,7 +292,7 @@ export function ResumenPorCuentaInteractivo({
                         <td className="px-4 py-3 font-medium text-tinta">{movimiento.persona}</td>
                         <td className="px-4 py-3 text-gris">{tipoLabels[movimiento.tipo]}</td>
                         <td className="px-4 py-3 text-gris">{movimiento.concepto}</td>
-                        <td className="px-4 py-3 text-gris">{metodoLabels[movimiento.metodo_pago]}</td>
+                        <td className="px-4 py-3 text-gris">{nombreCuenta(movimiento.metodo_pago)}</td>
                         <td className={`px-4 py-3 text-right font-medium ${valor >= 0 ? 'text-verde' : 'text-rojo'}`}>
                           {formatMoney(valor, { signed: true })}
                         </td>

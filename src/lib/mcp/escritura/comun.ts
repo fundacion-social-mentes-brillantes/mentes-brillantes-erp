@@ -29,7 +29,22 @@ export const ANOTACIONES_ESCRITURA = {
   openWorldHint: false,
 } as const
 
-export const METODOS_PAGO = ["efectivo", "nequi", "daviplata", "otro"] as const
+export const METODOS_PAGO = ["efectivo", "nequi", "daviplata", "banco_caja_social", "otro"] as const
+
+/**
+ * La cuenta de dinero de un movimiento. No es una lista cerrada porque el admin
+ * puede agregar cuentas en Configuracion: se valida contra medios_pago al
+ * preparar (exigirMedioPago), que tambien acepta el nombre de la cuenta.
+ */
+export const METODO_PAGO = z
+  .string()
+  .trim()
+  .min(2)
+  .max(60)
+  .describe(
+    "Cuenta de dinero: efectivo, nequi, daviplata, banco_caja_social u otro (tambien sirve el nombre, p. ej. \"Banco Caja Social\"). " +
+      "Las cuentas vigentes, incluidas las que agregue el admin, salen de la herramienta cuentas_de_dinero."
+  )
 
 export type Rol = "admin" | "caja"
 export type Actor = { userId: string; role: Rol; email: string }

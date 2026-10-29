@@ -49,6 +49,7 @@ import { isClearlySocialText, shouldProcessDedicatedGroupText } from "@/lib/tele
 import { planWithAi } from "@/lib/telegram-cajero/ai-planner"
 import { executeAiToolPlan } from "@/lib/telegram-cajero/tool-executor"
 import { writeAiResponse } from "@/lib/telegram-cajero/ai-response-writer"
+import { metodoPagoLegible } from "@/lib/utils/textos"
 
 export const dynamic = "force-dynamic"
 
@@ -895,7 +896,7 @@ export async function buildEstadoResponse(supabase: SupabaseReader, asistente: A
     "",
     "Pagos recientes:",
     pagosRecientes.length
-      ? pagosRecientes.map((pago) => `- ${pago.fecha_pago}: ${formatCop(pago.monto)} ${pago.metodo_pago || ""} | ${pago.concepto}`).join("\n")
+      ? pagosRecientes.map((pago) => `- ${pago.fecha_pago}: ${formatCop(pago.monto)} ${metodoPagoLegible(pago.metodo_pago, "")} | ${pago.concepto}`).join("\n")
       : "- No veo pagos recientes.",
     "",
     `Saldo a favor usable: ${formatCop(saldoFavor)}`,
@@ -1032,10 +1033,10 @@ export async function buildEstadoCompletoPersonaResponse(supabase: SupabaseReade
       : "Cuentas pendientes: no veo saldo pendiente.",
     "",
     lastPayment
-      ? `Último pago: ${lastPayment.fecha_pago} | ${formatCop(lastPayment.monto)} | ${lastPayment.metodo_pago || "sin método"} | ${compactLine(lastPayment.concepto)}`
+      ? `Último pago: ${lastPayment.fecha_pago} | ${formatCop(lastPayment.monto)} | ${metodoPagoLegible(lastPayment.metodo_pago, "sin método")} | ${compactLine(lastPayment.concepto)}`
       : "Último pago: no veo pagos recientes.",
     pagosData.length > 1
-      ? `Pagos recientes:\n${pagosData.slice(0, 4).map((p) => `- ${p.fecha_pago}: ${formatCop(p.monto)} ${p.metodo_pago || ""} | ${compactLine(p.concepto)}`).join("\n")}`
+      ? `Pagos recientes:\n${pagosData.slice(0, 4).map((p) => `- ${p.fecha_pago}: ${formatCop(p.monto)} ${metodoPagoLegible(p.metodo_pago, "")} | ${compactLine(p.concepto)}`).join("\n")}`
       : "",
     "",
     comprasData.length
@@ -1177,7 +1178,7 @@ async function buildPagosPersonaResponse(supabase: SupabaseReader, asistente: As
   if (pagosRecientes.length === 0) return `Listo. No veo pagos registrados para ${asistente.nombre}.`
   return [
     `Listo. Ultimos pagos de ${asistente.nombre}:`,
-    ...pagosRecientes.map((pago) => `- ${pago.fecha_pago}: ${formatCop(pago.monto)} via ${pago.metodo_pago || "desconocido"}. Concepto: ${pago.concepto}`),
+    ...pagosRecientes.map((pago) => `- ${pago.fecha_pago}: ${formatCop(pago.monto)} via ${metodoPagoLegible(pago.metodo_pago, "desconocido")}. Concepto: ${pago.concepto}`),
   ].join("\n")
 }
 
@@ -1187,7 +1188,7 @@ async function buildUltimoPagoPersonaResponse(supabase: SupabaseReader, asistent
   if (result.status === "error") return `No pude consultar pagos de ${asistente.nombre}. ${result.userSafeErrors.join(" ")}`
   if (pagosRecientes.length === 0) return `Listo. No veo pagos registrados para ${asistente.nombre}.`
   const ultimo = pagosRecientes[0]
-  return `Listo. El ultimo pago que veo de ${asistente.nombre} fue el ${ultimo.fecha_pago} por ${formatCop(ultimo.monto)} via ${ultimo.metodo_pago || "desconocido"}, concepto: ${ultimo.concepto}.`
+  return `Listo. El ultimo pago que veo de ${asistente.nombre} fue el ${ultimo.fecha_pago} por ${formatCop(ultimo.monto)} via ${metodoPagoLegible(ultimo.metodo_pago, "desconocido")}, concepto: ${ultimo.concepto}.`
 }
 
 export async function buildCuentasPendientesPersonaResponse(supabase: SupabaseReader, asistente: AsistenteResuelto) {

@@ -79,7 +79,8 @@ async function pagosDeInscripciones(supabase: DbClient, ids: string[]): Promise<
   return (data ?? []) as PagoLeido[]
 }
 
-async function totalPagado(supabase: DbClient, inscripcionId: string): Promise<number> {
+/** Lo que ya pago un inscrito (sin contar pagos anulados). */
+export async function totalPagado(supabase: DbClient, inscripcionId: string): Promise<number> {
   const pagos = await pagosDeInscripciones(supabase, [inscripcionId])
   return pagos.filter((p) => !esAnuladoCompleto(p)).reduce((total, p) => total + Number(p.monto || 0), 0)
 }

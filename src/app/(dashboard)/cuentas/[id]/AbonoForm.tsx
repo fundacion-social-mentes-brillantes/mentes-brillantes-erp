@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { AlertCircle, CheckCircle2 } from 'lucide-react'
 import { pesos } from '@/lib/utils/pesos'
 import { useConservarSiFalla } from '@/lib/hooks/use-conservar-si-falla'
+import { OpcionesMedioPago } from '@/components/medios-pago/MediosPago'
 
 export type AbonoActionState = Awaited<ReturnType<typeof saveAbono>>
 
@@ -63,10 +64,7 @@ export function AbonoForm({ cuentaId, maxMonto }: { cuentaId: string; maxMonto: 
           disabled={isPending}
           className="flex h-10 w-full rounded-2xl border border-linea bg-panel px-3 py-2 text-sm text-tinta ring-offset-panel focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-acento focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:[color-scheme:dark]"
         >
-          <option value="efectivo">Efectivo</option>
-          <option value="nequi">Nequi</option>
-          <option value="daviplata">Daviplata</option>
-          <option value="otro">Otro</option>
+          <OpcionesMedioPago />
         </select>
       </div>
 

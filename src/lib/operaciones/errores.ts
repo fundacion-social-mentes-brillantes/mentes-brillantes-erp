@@ -1,3 +1,5 @@
+import type { DbClient } from "@/lib/supabase/types"
+import { cargarMediosPago, esClaveDeMedio, mediosActivos, resolverClaveMedio } from "@/lib/medios-pago"
 import { Constants, type Enums } from "@/types/database"
 
 /**
@@ -39,8 +41,14 @@ export function exigirMontoPositivo(monto: unknown, etiqueta = "El monto"): numb
 export type MetodoPago = Enums<"metodo_pago">
 const METODOS_PAGO_VALIDOS: readonly string[] = Constants.public.Enums.metodo_pago
 
+/** Vale una clave del tipo metodo_pago o una cuenta de medios_pago (las que agrega el admin). */
 export function esMetodoPago(valor: unknown): valor is MetodoPago {
-  return typeof valor === "string" && METODOS_PAGO_VALIDOS.includes(valor)
+  return typeof valor === "string" && (METODOS_PAGO_VALIDOS.includes(valor) || esClaveDeMedio(valor))
+}
+
+function listaDeCuentas(): string {
+  const claves = mediosActivos().map((m) => m.clave)
+  return claves.length > 1 ? `${claves.slice(0, -1).join(", ")} u ${claves[claves.length - 1]}` : claves.join("")
 }
 
 /**
@@ -59,9 +67,32 @@ export function exigirMetodoPago(
   const limpio = String(valor ?? "").trim()
   if (!limpio) throw new OperacionError(`${etiqueta} es obligatorio.`)
   if (!esMetodoPago(limpio) || (limpio === "saldo_a_favor" && !opciones.permitirSaldoAFavor)) {
-    throw new OperacionError(`${etiqueta} "${limpio}" no sirve aqui. Usa efectivo, nequi, daviplata u otro.`)
+    throw new OperacionError(`${etiqueta} "${limpio}" no sirve aqui. Usa ${listaDeCuentas()}.`)
   }
   return limpio
+}
+
+/**
+ * Igual que exigirMetodoPago, pero antes lee las cuentas de la base: asi una
+ * cuenta que el admin acaba de agregar en Configuracion ya sirve, aunque este
+ * servidor no la haya visto todavia.
+ */
+export async function exigirMedioPago(
+  supabase: DbClient,
+  valor: unknown,
+  etiqueta = "El metodo de pago",
+  opciones: { permitirSaldoAFavor?: boolean } = {}
+): Promise<MetodoPago> {
+  const limpio = String(valor ?? "").trim()
+  await cargarMediosPago(supabase)
+  // Tambien sirve el nombre de la cuenta ("Banco Caja Social"): se traduce a su clave.
+  let clave = resolverClaveMedio(limpio) ?? limpio
+  if (clave && !esMetodoPago(clave)) {
+    // Puede ser una cuenta recien creada que este servidor aun no conoce.
+    await cargarMediosPago(supabase, { forzar: true })
+    clave = resolverClaveMedio(limpio) ?? limpio
+  }
+  return exigirMetodoPago(clave, etiqueta, opciones)
 }
 
 export function exigirFechaIso(fecha: unknown, etiqueta = "La fecha"): string {

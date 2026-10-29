@@ -236,3 +236,56 @@ describe('devoluciones de adelantos', () => {
     expect(devolucionesHuerfanas).toHaveLength(1)
   })
 })
+
+describe('traslados entre cuentas en el resumen por cuenta', () => {
+  const pagos = [
+    { monto: 100000, metodo_pago: 'nequi', notas: 'Pago directo' },
+    { monto: 30000, metodo_pago: 'efectivo', notas: 'Pago directo' },
+  ]
+
+  it('mueven el saldo de cada cuenta sin cambiar ingresos ni gastos', () => {
+    const sin = agruparPorMetodo({ abonos: pagos })
+    const con = agruparPorMetodo({
+      abonos: pagos,
+      traslados: [{ id: 't1', monto: 50000, metodo_origen: 'nequi', metodo_destino: 'banco_caja_social', estado: 'activo' }],
+    })
+
+    const cuenta = (r: typeof con, m: string) => r.resumen.find((x) => x.metodo_pago === m)!
+    expect(cuenta(con, 'nequi').saldo_neto_periodo).toBe(50000)
+    expect(cuenta(con, 'nequi').traslados_salida).toBe(50000)
+    expect(cuenta(con, 'banco_caja_social').saldo_neto_periodo).toBe(50000)
+    expect(cuenta(con, 'banco_caja_social').traslados_entrada).toBe(50000)
+    expect(cuenta(con, 'banco_caja_social').total_ingresos).toBe(0)
+
+    expect(con.totales.total_ingresos).toBe(sin.totales.total_ingresos)
+    expect(con.totales.total_salidas).toBe(sin.totales.total_salidas)
+    expect(con.totales.saldo_neto_periodo).toBe(sin.totales.saldo_neto_periodo)
+  })
+
+  it('un traslado anulado no cuenta', () => {
+    const { resumen } = agruparPorMetodo({
+      abonos: pagos,
+      traslados: [{ monto: 50000, metodo_origen: 'nequi', metodo_destino: 'efectivo', estado: 'anulado' }],
+    })
+    expect(resumen.find((x) => x.metodo_pago === 'nequi')!.saldo_neto_periodo).toBe(100000)
+  })
+
+  it('en el detalle sale como dos filas: lo que sale de una cuenta y lo que llega a la otra', () => {
+    const detalles = construirDetallesResumenPorCuenta({
+      traslados: [{ id: 't1', fecha: '2026-10-29', monto: 50000, metodo_origen: 'nequi', metodo_destino: 'banco_caja_social' }],
+    })
+    const filas = detalles.filter((d) => d.tipo === 'traslado')
+    expect(filas).toHaveLength(2)
+    expect(filas.map((d) => [d.metodo_pago, d.monto])).toEqual(
+      expect.arrayContaining([
+        ['nequi', -50000],
+        ['banco_caja_social', 50000],
+      ])
+    )
+  })
+
+  it('los pagos por Banco Caja Social entran como ingreso de esa cuenta', () => {
+    const { resumen } = agruparPorMetodo({ abonos: [{ monto: 20000, metodo_pago: 'banco_caja_social', notas: 'Pago directo' }] })
+    expect(resumen.find((x) => x.metodo_pago === 'banco_caja_social')!.total_ingresos).toBe(20000)
+  })
+})

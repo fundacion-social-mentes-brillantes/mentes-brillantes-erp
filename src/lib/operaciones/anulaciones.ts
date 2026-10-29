@@ -1,6 +1,6 @@
 import type { DbClient } from "@/lib/supabase/types"
 import { assertFechaEditable } from "@/lib/utils/periodos"
-import { OperacionError, SinCambiosError, exigirFechaIso, exigirMetodoPago } from "./errores"
+import { OperacionError, SinCambiosError, exigirFechaIso, exigirMedioPago } from "./errores"
 import { registrarAuditoria } from "./auditoria"
 import { recalcularEstadoCuenta } from "./estado-cuenta"
 import type { ActorErp } from "./abonos"
@@ -338,7 +338,7 @@ export async function previsualizarEdicion(supabase: DbClient, params: EditarMov
     throw new OperacionError(`Tipo de movimiento no soportado para edicion: ${params.tipo}.`)
   }
   exigirCampoAplicable(params)
-  const metodoPago = params.metodoPago !== undefined ? exigirMetodoPago(params.metodoPago) : undefined
+  const metodoPago = params.metodoPago !== undefined ? await exigirMedioPago(supabase, params.metodoPago) : undefined
 
   const mov = await leerMovimiento(supabase, params.tipo, params.movimientoId)
   if (!mov) throw new OperacionError("No encontré ese movimiento.")
@@ -351,7 +351,7 @@ export async function previsualizarEdicion(supabase: DbClient, params: EditarMov
     // Un pago hecho con saldo a favor no es dinero nuevo: si se le cambiara el
     // metodo a "nequi" contaria como ingreso aunque el saldo ya se gasto, y la
     // plata quedaria contada dos veces. (Pasar algo A saldo a favor ya lo
-    // bloquea exigirMetodoPago.)
+    // bloquea exigirMedioPago.)
     if (metodoPago !== undefined && metodoPago !== mov.metodoPago && esPagoConSaldo(mov)) {
       throw new OperacionError(METODO_PAGO_CON_SALDO_BLOQUEADO)
     }

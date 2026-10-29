@@ -2,7 +2,7 @@ import type { DbClient } from "@/lib/supabase/types"
 import { assertFechaEditable } from "@/lib/utils/periodos"
 import type { Enums } from "@/types/database"
 import { registrarAuditoria } from "./auditoria"
-import { OperacionError, exigir, exigirFechaIso, exigirMetodoPago, exigirMontoPositivo } from "./errores"
+import { OperacionError, exigir, exigirFechaIso, exigirMedioPago, exigirMontoPositivo } from "./errores"
 import { registrarAbono, type ActorErp, type ResultadoAbono } from "./abonos"
 import { registrarSesionCoach } from "./coach"
 
@@ -25,7 +25,8 @@ export const CATEGORIAS_EGRESO = [
   "Otros",
 ] as const
 
-export const METODOS_PAGO = ["efectivo", "nequi", "daviplata", "otro"] as const
+/** Las cuentas de siempre. Las vigentes salen de medios_pago (ver @/lib/medios-pago). */
+export const METODOS_PAGO = ["efectivo", "nequi", "daviplata", "banco_caja_social", "otro"] as const
 
 /** Rastro de la creacion; el motivo por defecto evita el insert fallido (ver auditoria.ts). */
 async function auditar(
@@ -73,7 +74,7 @@ export async function crearEgreso(supabase: DbClient, actor: ActorErp, params: C
   // restringirlo aqui rechazaria altas que hoy funcionan desde la web. La
   // lista cerrada se aplica en el esquema del MCP, que si controla su entrada.
   exigir(String(params.categoria || "").trim(), "La categoria es obligatoria.")
-  const metodoPago = exigirMetodoPago(params.metodoPago)
+  const metodoPago = await exigirMedioPago(supabase, params.metodoPago)
 
   await exigirPeriodoAbierto(supabase, fecha, "Crear el egreso")
 
@@ -119,7 +120,7 @@ export async function crearVentaExterna(supabase: DbClient, actor: ActorErp, par
   exigir(concepto, "El concepto de la venta es obligatorio.")
   const monto = exigirMontoPositivo(params.monto)
   const fecha = exigirFechaIso(params.fecha)
-  const metodoPago = exigirMetodoPago(params.metodoPago)
+  const metodoPago = await exigirMedioPago(supabase, params.metodoPago)
 
   await exigirPeriodoAbierto(supabase, fecha, "Crear la venta externa")
 
@@ -163,7 +164,7 @@ export async function crearDonacion(supabase: DbClient, actor: ActorErp, params:
   exigir(params.asistenteId, "Falta la persona que dona.")
   const monto = exigirMontoPositivo(params.monto)
   const fecha = exigirFechaIso(params.fecha)
-  const metodoPago = exigirMetodoPago(params.metodoPago)
+  const metodoPago = await exigirMedioPago(supabase, params.metodoPago)
 
   await exigirPeriodoAbierto(supabase, fecha, "Crear la donación")
 
@@ -359,7 +360,7 @@ export async function validarCuentaCompleta(supabase: DbClient, params: CrearCue
       throw new OperacionError("No se puede registrar un abono inicial en una cuenta de valor 0.")
     }
     const monto = exigirMontoPositivo(params.abonoInicial.monto, "El abono inicial")
-    const metodoPago = exigirMetodoPago(params.abonoInicial.metodoPago, "El metodo de pago del abono inicial")
+    const metodoPago = await exigirMedioPago(supabase, params.abonoInicial.metodoPago, "El metodo de pago del abono inicial")
     const fechaPago = exigirFechaIso(params.abonoInicial.fechaPago, "La fecha del abono inicial")
     await exigirPeriodoAbierto(supabase, fechaPago, "Registrar el abono inicial")
     const montoAplicado = Math.min(monto, cuenta.valorTotal)
@@ -455,7 +456,7 @@ export async function crearAnticipo(supabase: DbClient, actor: ActorErp, params:
   exigir(params.asistenteId, "Falta la persona del anticipo.")
   const monto = exigirMontoPositivo(params.monto)
   const fecha = exigirFechaIso(params.fecha)
-  const metodoPago = exigirMetodoPago(params.metodoPago)
+  const metodoPago = await exigirMedioPago(supabase, params.metodoPago)
 
   await exigirPeriodoAbierto(supabase, fecha, "Registrar el anticipo")
 

@@ -57,6 +57,21 @@ const PERMISOS_ESPERADOS: Record<string, Array<"admin" | "caja">> = {
 
   // Datos de la fundacion: en la web es requireAdmin
   configuracion_empresa: ["admin"],
+
+  // Traslados entre cuentas y la lista de cuentas de dinero: solo admin
+  // (movimientos/traslados-actions.ts y configuracion/cuentas-dinero-actions.ts)
+  traslado: ["admin"],
+  anular_traslado: ["admin"],
+  cuenta_de_dinero: ["admin"],
+
+  // Talleres (talleres/actions.ts): inscribir, cobrar, llegada y cancelar
+  // tambien la cajera; gastos y estado del taller, solo admin.
+  inscripcion_taller: ["admin", "caja"],
+  pago_taller: ["admin", "caja"],
+  llegada_taller: ["admin", "caja"],
+  cancelar_inscripcion_taller: ["admin", "caja"],
+  gasto_taller: ["admin"],
+  estado_taller: ["admin"],
 }
 
 describe("permisos de escritura del MCP", () => {

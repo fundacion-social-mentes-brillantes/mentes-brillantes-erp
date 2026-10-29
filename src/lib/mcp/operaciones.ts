@@ -47,6 +47,15 @@ export type OperacionEscritura =
   | "corregir_monto_pago"
   | "pagar_deudas_con_saldo"
   | "configuracion_empresa"
+  | "traslado"
+  | "anular_traslado"
+  | "cuenta_de_dinero"
+  | "inscripcion_taller"
+  | "pago_taller"
+  | "gasto_taller"
+  | "llegada_taller"
+  | "estado_taller"
+  | "cancelar_inscripcion_taller"
 
 export type BorradorOperacion = {
   id: string

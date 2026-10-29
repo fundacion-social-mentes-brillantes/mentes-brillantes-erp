@@ -8,6 +8,7 @@ import { MoneyInput } from '@/components/ui/money-input'
 import { AlertCircle, CheckCircle2 } from 'lucide-react'
 import type { Tables } from '@/lib/supabase/types'
 import { useConservarSiFalla } from '@/lib/hooks/use-conservar-si-falla'
+import { OpcionesMedioPago } from '@/components/medios-pago/MediosPago'
 
 export function AdelantoForm({ periodoId, socios }: { periodoId: string, socios: Array<Pick<Tables<'socios'>, 'id' | 'nombre' | 'porcentaje_participacion'>> }) {
   const actionWithId = saveAdelanto.bind(null, periodoId)
@@ -74,10 +75,7 @@ export function AdelantoForm({ periodoId, socios }: { periodoId: string, socios:
           disabled={isPending}
           className={selectClass}
         >
-          <option value="efectivo">Efectivo</option>
-          <option value="nequi">Nequi</option>
-          <option value="daviplata">Daviplata</option>
-          <option value="otro">Otro</option>
+          <OpcionesMedioPago />
         </select>
       </div>
 

@@ -2,7 +2,7 @@ import type { DbClient } from "@/lib/supabase/types"
 import { assertNoPeriodOverlap, assertPeriodoAbierto } from "@/lib/utils/periodos"
 import { agruparAdelantosConDevoluciones } from "@/lib/utils/liquidaciones"
 import { registrarAuditoria } from "./auditoria"
-import { OperacionError, exigir, exigirFechaIso, exigirMetodoPago, exigirMontoPositivo } from "./errores"
+import { OperacionError, exigir, exigirFechaIso, exigirMedioPago, exigirMontoPositivo } from "./errores"
 import type { ActorErp } from "./abonos"
 
 // Operaciones administrativas: socios, periodos contables, adelantos y el
@@ -211,7 +211,7 @@ export async function validarAdelanto(supabase: DbClient, datos: DatosAdelanto) 
   exigir(datos.socioId, "Falta indicar el socio.")
   const monto = exigirMontoPositivo(datos.monto)
   const fecha = exigirFechaIso(datos.fecha)
-  const metodoPago = exigirMetodoPago(datos.metodoPago || "otro")
+  const metodoPago = await exigirMedioPago(supabase, datos.metodoPago || "otro")
 
   const { error, periodo } = await assertPeriodoAbierto(supabase, datos.periodoId, "Registrar el adelanto")
   if (error || !periodo) throw new OperacionError(error || "No se encontró el período contable.")
@@ -286,7 +286,7 @@ export async function validarDevolucionAdelanto(supabase: DbClient, datos: Datos
   exigir(datos.adelantoId, "Falta indicar de cual adelanto es la devolucion.")
   const monto = exigirMontoPositivo(datos.monto, "El monto devuelto")
   const fecha = exigirFechaIso(datos.fecha)
-  const metodoPago = exigirMetodoPago(datos.metodoPago || "otro")
+  const metodoPago = await exigirMedioPago(supabase, datos.metodoPago || "otro")
 
   const { data: adelanto, error: adelantoError } = await supabase
     .from("adelantos_socios")
@@ -394,7 +394,7 @@ export async function planearDevolucionSocio(supabase: DbClient, datos: DatosDev
   exigir(datos.socioId, "Falta indicar el socio.")
   const monto = exigirMontoPositivo(datos.monto, "El monto devuelto")
   const fecha = exigirFechaIso(datos.fecha)
-  const metodoPago = exigirMetodoPago(datos.metodoPago || "otro")
+  const metodoPago = await exigirMedioPago(supabase, datos.metodoPago || "otro")
 
   const { periodo, pendientes, totalPendiente } = await cargarAdelantosPendientes(supabase, datos.socioId)
 

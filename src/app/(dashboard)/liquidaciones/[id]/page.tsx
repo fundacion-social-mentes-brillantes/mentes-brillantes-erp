@@ -9,7 +9,8 @@ import { GenerarLiquidacionBtn } from './GenerarLiquidacionBtn'
 import { ResumenPorCuentaInteractivo } from './ResumenPorCuentaInteractivo'
 import { ExportarLiquidacion } from '@/components/liquidaciones/ExportarLiquidacion'
 import { ImagenAdelantosSocio } from './ImagenAdelantosSocio'
-import { agruparAdelantosConDevoluciones, agruparAdelantosPorSocio, agruparPorMetodo, construirDetallesResumenPorCuenta, MetodoPago, METODOS_PAGO_RESUMEN } from '@/lib/utils/liquidaciones'
+import { agruparAdelantosConDevoluciones, agruparAdelantosPorSocio, agruparPorMetodo, construirDetallesResumenPorCuenta, MetodoPago, metodosDelResumen } from '@/lib/utils/liquidaciones'
+import { cargarMediosPago, mediosConocidos } from '@/lib/medios-pago'
 import { fechaHoyBogota } from '@/lib/utils/fechas'
 import { esAnuladoCompleto, filtrarIngresosOperativos, filtrarIngresosRealesSaldoAFavor, sumarMontos } from '@/lib/utils/contable'
 import type { PagoRecord } from '@/lib/utils/contable'
@@ -112,6 +113,16 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
     .lte('fecha', periodo.fecha_fin)
   if (egresosError) console.error('Error al consultar egresos:', egresosError)
 
+  // Traslados entre cuentas propias: no son ingreso ni gasto, solo mueven el saldo de cada cuenta.
+  const { data: rawTraslados, error: trasladosError } = await supabase
+    .from('traslados_cuentas')
+    .select('id, fecha, monto, metodo_origen, metodo_destino, notas, estado')
+    .gte('fecha', periodo.fecha_inicio)
+    .lte('fecha', periodo.fecha_fin)
+  if (trasladosError) console.error('Error al consultar traslados:', trasladosError)
+  const trasladosPeriodo = rawTraslados || []
+  await cargarMediosPago(supabase)
+
   const abonosPeriodo = rawAbonos || []
   const saldoFavorPeriodo = rawSaldoFavor || []
   const donacionesPeriodo = rawDonaciones || []
@@ -124,6 +135,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
     ventasExternas: ventasExternasPeriodo,
     egresos: egresosPeriodoRaw,
     adelantos,
+    traslados: trasladosPeriodo,
   })
 
   // Cálculos en vivo si está abierto
@@ -147,6 +159,8 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
     ingresos_ventas_externas?: number
     salidas_egresos?: number
     salidas_adelantos?: number
+    traslados_entrada?: number
+    traslados_salida?: number
   }[] = []
   let resumenTotales = { total_ingresos: 0, total_salidas: 0, saldo_neto_periodo: 0 }
 
@@ -192,6 +206,7 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
       ventasExternas: ventasExternasValidas,
       egresos: egresosData,
       adelantos,
+      traslados: trasladosPeriodo,
     })
     resumenPorCuenta = resumen
     resumenTotales = {
@@ -211,7 +226,11 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
       .order('metodo_pago')
     if (resumenError) console.error('Error al consultar resumen congelado:', resumenError)
 
-    const base = METODOS_PAGO_RESUMEN.map((m) => ({
+    // Las cuentas de hoy y cualquier otra que haya quedado congelada en el cierre.
+    const metodosCierre = Array.from(
+      new Set([...metodosDelResumen(), ...(resumenDb || []).map((r) => String(r.metodo_pago))])
+    )
+    const base = metodosCierre.map((m) => ({
       metodo_pago: m,
       total_ingresos: 0,
       total_salidas: 0,
@@ -230,6 +249,8 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
             ingresos_ventas_externas: Number(row.ingresos_ventas_externas ?? 0),
             salidas_egresos: Number(row.salidas_egresos ?? 0),
             salidas_adelantos: Number(row.salidas_adelantos ?? 0),
+            traslados_entrada: Number(row.traslados_entrada ?? 0),
+            traslados_salida: Number(row.traslados_salida ?? 0),
           }
         : item
     })
@@ -251,6 +272,16 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
       { total_ingresos: 0, total_salidas: 0, saldo_neto_periodo: 0 }
     )
   }
+
+  // Se muestran las cuentas activas y, de las ocultas, solo las que tuvieron movimiento.
+  const activas = new Set(mediosConocidos().filter((m) => m.activo).map((m) => m.clave))
+  resumenPorCuenta = resumenPorCuenta.filter(
+    (r) =>
+      activas.has(r.metodo_pago) ||
+      [r.total_ingresos, r.total_salidas, r.salidas_adelantos, r.traslados_entrada, r.traslados_salida].some(
+        (v) => Math.abs(Number(v ?? 0)) > 0.005
+      )
+  )
 
   const utilidad_neta = Math.round(ingresos_operativos - egresos_periodo)
 

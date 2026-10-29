@@ -8,6 +8,7 @@ import { MoneyInput } from '@/components/ui/money-input'
 import { AlertCircle, CheckCircle2, Undo2 } from 'lucide-react'
 import { pesos } from '@/lib/utils/pesos'
 import { useConservarSiFalla } from '@/lib/hooks/use-conservar-si-falla'
+import { OpcionesMedioPago } from '@/components/medios-pago/MediosPago'
 
 type SocioConSaldo = { id: string; nombre: string; pendiente: number }
 
@@ -112,10 +113,7 @@ export function DevolucionAdelantoForm({
       <div className="space-y-2">
         <label className="text-sm font-medium text-tinta">¿Cómo devolvió? *</label>
         <select name="metodo_pago" required disabled={isPending} className={selectClass}>
-          <option value="efectivo">Efectivo</option>
-          <option value="nequi">Nequi</option>
-          <option value="daviplata">Daviplata</option>
-          <option value="otro">Otro</option>
+          <OpcionesMedioPago />
         </select>
       </div>
 
