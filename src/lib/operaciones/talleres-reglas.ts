@@ -71,6 +71,29 @@ export function normalizarTelefono(valor: unknown): string | null {
   return sinPais
 }
 
+const CODIGO_BOLETA = /^[0-9a-f]{32}$/i
+
+/**
+ * El codigo de la boleta (32 caracteres hexadecimales) en lo que leyo el lector
+ * de QR de la puerta. Entiende la direccion que lleva el QR de la boleta
+ * (https://talleres.gimnasioemocionalmb.com/entrada/<codigo>), la de la pagina
+ * de llegada del ERP (/talleres/llegada/<codigo>), la boleta en pantalla
+ * (?boleta=<codigo>) y el codigo solo. Null si no es una entrada.
+ */
+export function codigoDeBoleta(leido: unknown): string | null {
+  if (typeof leido !== "string") return null
+  const texto = leido.trim()
+  if (CODIGO_BOLETA.test(texto)) return texto.toLowerCase()
+  let url: URL
+  try {
+    url = new URL(texto)
+  } catch {
+    return null
+  }
+  const codigo = url.pathname.match(/\/(?:entrada|llegada)\/([0-9a-f]{32})\/?$/i)?.[1] ?? url.searchParams.get("boleta") ?? ""
+  return CODIGO_BOLETA.test(codigo) ? codigo.toLowerCase() : null
+}
+
 export function normalizarCorreo(valor: unknown): string | null {
   const correo = String(valor ?? "")
     .trim()

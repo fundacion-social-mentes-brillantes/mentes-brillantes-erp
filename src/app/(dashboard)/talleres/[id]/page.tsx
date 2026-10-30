@@ -20,9 +20,9 @@ export default async function TallerPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ ver?: string; inscribir?: string }>
+  searchParams: Promise<{ ver?: string; inscribir?: string; escanear?: string }>
 }) {
-  const [{ id }, { ver, inscribir }] = await Promise.all([params, searchParams])
+  const [{ id }, { ver, inscribir, escanear }] = await Promise.all([params, searchParams])
   const { supabase, perfil } = await requireRoles(['admin', 'caja'])
   const isAdmin = perfil.rol === 'admin'
 
@@ -188,7 +188,15 @@ export default async function TallerPage({
         />
       )}
       {pestana === 'puerta' && (
-        <PuertaTaller tallerId={taller.id} precio={precio} preguntas={preguntas} filas={filas} hoy={hoy} isAdmin={isAdmin} />
+        <PuertaTaller
+          tallerId={taller.id}
+          precio={precio}
+          preguntas={preguntas}
+          filas={filas}
+          hoy={hoy}
+          isAdmin={isAdmin}
+          escanear={escanear === '1'}
+        />
       )}
       {pestana === 'gastos' && isAdmin && (
         <GastosTaller

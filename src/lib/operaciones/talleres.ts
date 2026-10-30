@@ -575,17 +575,116 @@ export async function editarInscripcion(
 export async function marcarAsistencia(supabase: DbClient, inscripcionId: string, asistio: boolean) {
   const actual = await leerInscripcion(supabase, inscripcionId)
   if (actual.estado === "cancelado") throw new OperacionError("Esa inscripción está cancelada.")
+  const horaLlegada = asistio ? actual.hora_llegada || new Date().toISOString() : null
   const { error } = await supabase
     .from("taller_inscripciones")
-    .update({
-      asistio,
-      hora_llegada: asistio ? actual.hora_llegada || new Date().toISOString() : null,
-      actualizado_en: new Date().toISOString(),
-    })
+    .update({ asistio, hora_llegada: horaLlegada, actualizado_en: new Date().toISOString() })
     .eq("id", inscripcionId)
   if (error) throw new OperacionError(error.message || "No se pudo marcar la asistencia.")
-  return { id: inscripcionId, asistio }
+  return { id: inscripcionId, asistio, horaLlegada }
 }
+
+// ------------------------------------------------------------- la entrada (QR de la boleta) en la puerta
+
+/**
+ * La entrada de una persona, leida del QR de su boleta: su taller, su numero de
+ * entrada (el mismo que ve en su boleta), si ya llego y como va su pago. Null si
+ * el codigo no es de ninguna inscripcion.
+ */
+export async function entradaPorCodigo(supabase: DbClient, codigo: string) {
+  if (!/^[0-9a-f]{32}$/.test(codigo)) return null
+  const { data, error } = await supabase
+    .from("taller_inscripciones")
+    .select(COLUMNAS_INSCRIPCION)
+    .eq("codigo_boleta", codigo)
+    .maybeSingle()
+  if (error) throw new OperacionError("No se pudo leer la entrada.")
+  if (!data) return null
+  const inscripcion = data as InscripcionTaller
+
+  const [tallerLeido, pagos, anteriores] = await Promise.all([
+    supabase.from("talleres").select("id, nombre, slug, tipo, fecha_inicio, lugar").eq("id", inscripcion.taller_id).maybeSingle(),
+    pagosDeInscripciones(supabase, [inscripcion.id]),
+    // El numero de entrada es el puesto entre los que siguen inscritos, como en la boleta.
+    supabase
+      .from("taller_inscripciones")
+      .select("id")
+      .eq("taller_id", inscripcion.taller_id)
+      .neq("estado", "cancelado")
+      .lte("creado_en", inscripcion.creado_en),
+  ])
+  if (tallerLeido.error || anteriores.error) throw new OperacionError("No se pudo leer la entrada.")
+  if (!tallerLeido.data) return null
+
+  const [fila] = resumirTaller({ inscripciones: [inscripcion], pagos, gastos: [] }).filas
+  const cancelada = inscripcion.estado === "cancelado"
+  return {
+    taller: tallerLeido.data,
+    inscripcion: {
+      id: inscripcion.id,
+      nombre: inscripcion.nombre,
+      documento: inscripcion.documento,
+      estado: inscripcion.estado,
+      asistio: inscripcion.asistio,
+      horaLlegada: inscripcion.hora_llegada,
+    },
+    numero: cancelada ? null : (anteriores.data ?? []).length,
+    cancelada,
+    valor: Number(inscripcion.valor_acordado || 0),
+    pagado: fila.pagado,
+    pendiente: fila.pendiente,
+    estadoPago: fila.estadoPago,
+  }
+}
+
+export type EntradaTaller = NonNullable<Awaited<ReturnType<typeof entradaPorCodigo>>>
+
+/** Cuantos de los inscritos de un taller (sin contar los cancelados) ya llegaron. */
+export async function conteoLlegadas(supabase: DbClient, tallerId: string) {
+  const { data, error } = await supabase
+    .from("taller_inscripciones")
+    .select("id, asistio")
+    .eq("taller_id", tallerId)
+    .neq("estado", "cancelado")
+  if (error) throw new OperacionError("No se pudo contar quién llegó.")
+  const filas = data ?? []
+  return { llegaron: filas.filter((f) => f.asistio).length, total: filas.length }
+}
+
+/**
+ * Registra la llegada de quien muestra el QR de su boleta. Si ya habia llegado
+ * no cambia nada y lo dice, con la hora de entonces: asi nadie entra dos veces
+ * con la misma boleta. Con `tallerId`, la entrada tiene que ser de ese taller
+ * (en la puerta de un taller no vale la boleta de otro).
+ */
+export async function registrarLlegadaPorCodigo(supabase: DbClient, codigo: string, opciones: { tallerId?: string | null } = {}) {
+  const entrada = await entradaPorCodigo(supabase, codigo)
+  if (!entrada) throw new OperacionError("Esa entrada no existe. Revisa que sea la boleta de un taller de la fundación.")
+  if (opciones.tallerId && entrada.taller.id !== opciones.tallerId) {
+    throw new OperacionError(`Esa entrada es de otro taller: ${entrada.taller.nombre}.`)
+  }
+  if (entrada.cancelada) throw new OperacionError(`La inscripción de ${entrada.inscripcion.nombre} está cancelada.`)
+
+  const yaHabiaLlegado = entrada.inscripcion.asistio
+  const horaLlegada = yaHabiaLlegado
+    ? entrada.inscripcion.horaLlegada
+    : (await marcarAsistencia(supabase, entrada.inscripcion.id, true)).horaLlegada
+  const conteo = await conteoLlegadas(supabase, entrada.taller.id)
+
+  return {
+    yaHabiaLlegado,
+    horaLlegada,
+    inscripcionId: entrada.inscripcion.id,
+    nombre: entrada.inscripcion.nombre,
+    numero: entrada.numero,
+    pendiente: entrada.pendiente,
+    tallerId: entrada.taller.id,
+    tallerNombre: entrada.taller.nombre,
+    ...conteo,
+  }
+}
+
+export type LlegadaRegistrada = Awaited<ReturnType<typeof registrarLlegadaPorCodigo>>
 
 /**
  * Cancela una inscripcion (no vendra y no debe nada). Si ya pago algo no se

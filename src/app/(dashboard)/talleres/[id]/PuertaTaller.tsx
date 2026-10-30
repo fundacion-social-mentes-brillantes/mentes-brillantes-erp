@@ -1,17 +1,19 @@
 'use client'
 
 import { useMemo, useOptimistic, useState, useTransition } from 'react'
-import { Check, Search, UserPlus } from 'lucide-react'
+import { Check, ScanLine, Search, UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { pesos } from '@/lib/utils/pesos'
 import type { PreguntaTaller } from '@/lib/operaciones/talleres-reglas'
 import { marcarAsistenciaAction } from '../actions'
+import { EscanerQr, prepararSonido } from './EscanerQr'
 import { FormularioInscripcion, FormularioPago } from './formularios'
 import type { FilaInscrito } from './InscritosTaller'
 
-// La vista del dia del taller, pensada para el celular en la puerta: buscar a
-// la persona, tocar «llego» y, si debe, cobrarle ahi mismo.
+// La vista del dia del taller, pensada para el celular en la puerta: leer el QR
+// de la boleta (o buscar a la persona), tocar «llego» y, si debe, cobrarle ahi
+// mismo.
 
 const sinTildes = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 
@@ -22,6 +24,7 @@ export function PuertaTaller({
   filas,
   hoy,
   isAdmin,
+  escanear = false,
 }: {
   tallerId: string
   precio: number
@@ -29,6 +32,8 @@ export function PuertaTaller({
   filas: FilaInscrito[]
   hoy: string
   isAdmin: boolean
+  /** Abre el lector de QR de una vez (?escanear=1, desde la pagina de una entrada). */
+  escanear?: boolean
 }) {
   const activas = useMemo(
     () => filas.filter((f) => f.estado !== 'cancelado').sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')),
@@ -43,6 +48,17 @@ export function PuertaTaller({
   const [cobrando, setCobrando] = useState<string | null>(null)
   const [nueva, setNueva] = useState(false)
   const [aviso, setAviso] = useState<{ texto: string; error?: boolean } | null>(null)
+  const [escaneando, setEscaneando] = useState(escanear)
+
+  const cerrarLector = () => {
+    setEscaneando(false)
+    // que al recargar la pagina no se vuelva a abrir solo
+    const url = new URL(window.location.href)
+    if (url.searchParams.has('escanear')) {
+      url.searchParams.delete('escanear')
+      window.history.replaceState(window.history.state, '', url)
+    }
+  }
 
   const llegaron = activas.filter((f) => llegadas.get(f.id)).length
   const b = sinTildes(busqueda.trim())
@@ -73,6 +89,18 @@ export function PuertaTaller({
           <div className="h-full rounded-full bg-verde transition-[width] duration-300" style={{ width: `${activas.length ? (llegaron / activas.length) * 100 : 0}%` }} />
         </div>
       </div>
+
+      <Button
+        className="h-12 w-full text-base"
+        onClick={() => {
+          prepararSonido()
+          setEscaneando(true)
+        }}
+      >
+        <ScanLine className="h-5 w-5" />
+        Escanear QR de las entradas
+      </Button>
+      {escaneando && <EscanerQr tallerId={tallerId} llegaron={llegaron} total={activas.length} alCerrar={cerrarLector} />}
 
       {aviso && (
         <p

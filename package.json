@@ -24,6 +24,7 @@
     "html2canvas": "^1.4.1",
     "jose": "^6.2.4",
     "jspdf": "^4.2.1",
+    "jsqr": "1.4.0",
     "jszip": "^3.10.1",
     "lucide-react": "^0.446.0",
     "mcp-handler": "^1.1.0",

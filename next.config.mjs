@@ -51,8 +51,13 @@ const CABECERAS_SEGURIDAD = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   {
+    // La camara solo para el ERP mismo (camera=(self)): el lector de QR de la
+    // puerta de los talleres la usa. Va en todas las paginas porque el permiso es
+    // de la pagina que se abrio primero: si se entra por el inicio y se llega a la
+    // puerta sin recargar, vale el de la pagina del inicio. Nada de afuera la puede
+    // pedir (ni un iframe de otro sitio).
     key: "Permissions-Policy",
-    value: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()",
+    value: "camera=(self), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()",
   },
   { key: "Content-Security-Policy-Report-Only", value: CSP },
 ];

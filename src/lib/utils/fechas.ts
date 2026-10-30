@@ -44,6 +44,14 @@ export function formatearFechaHora(instante?: string | Date | null, alterno = ''
   }).format(d)
 }
 
+/** Solo la hora de un instante, en hora de Colombia: "6:05 p. m.". */
+export function formatearHora(instante?: string | Date | null, alterno = ''): string {
+  if (!instante) return alterno
+  const d = instante instanceof Date ? instante : new Date(instante)
+  if (Number.isNaN(d.getTime())) return alterno
+  return new Intl.DateTimeFormat('es-CO', { timeZone: ZONA_HORARIA, hour: 'numeric', minute: '2-digit' }).format(d)
+}
+
 /**
  * Muestra una fecha DATE ('AAAA-MM-DD') tal cual, sin pasarla por new Date().
  *

@@ -10,6 +10,7 @@ import { anularMovimiento } from '@/lib/operaciones/anulaciones'
 import {
   cambiarEstadoTaller,
   cancelarInscripcion,
+  codigoDeBoleta,
   crearTaller,
   editarInscripcion,
   editarTaller,
@@ -17,8 +18,10 @@ import {
   inscribirEnTaller,
   marcarAsistencia,
   registrarGastoTaller,
+  registrarLlegadaPorCodigo,
   registrarPagoTaller,
   type DatosTaller,
+  type LlegadaRegistrada,
 } from '@/lib/operaciones/talleres'
 
 // Talleres. Todo pasa por lib/operaciones/talleres.ts, que guarda la plata
@@ -202,6 +205,27 @@ export async function marcarAsistenciaAction(tallerId: string, inscripcionId: st
   }
   revalidarTaller(tallerId)
   return { success: true }
+}
+
+export type LlegadaQrState = { error?: string; llegada?: LlegadaRegistrada }
+
+/**
+ * La llegada de quien muestra el QR de su boleta: desde el lector de la puerta
+ * (con `tallerId`, solo vale una entrada de ese taller) o desde la pagina que
+ * abre la camara normal del celular al leer el QR (sin taller).
+ */
+export async function registrarLlegadaQrAction(tallerId: string | null, leido: string): Promise<LlegadaQrState> {
+  let llegada: LlegadaRegistrada
+  try {
+    const { supabase } = await actorConRol(['admin', 'caja'])
+    const codigo = codigoDeBoleta(leido)
+    if (!codigo) return { error: 'Ese QR no es una entrada de un taller.' }
+    llegada = await registrarLlegadaPorCodigo(supabase, codigo, { tallerId })
+  } catch (e) {
+    return errorDeAccion(e, 'No se pudo registrar la llegada.', 'talleres')
+  }
+  if (!llegada.yaHabiaLlegado) revalidarTaller(llegada.tallerId)
+  return { llegada }
 }
 
 export async function editarInscripcionAction(
