@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { formatearFechaHora, formatearFechaIso } from '@/lib/utils/fechas'
 import { pesos } from '@/lib/utils/pesos'
 import { metodoPagoLegible } from '@/lib/utils/textos'
-import type { EstadoPagoTaller, PreguntaTaller } from '@/lib/operaciones/talleres-reglas'
+import { documentoLegible, type EstadoPagoTaller, type PreguntaTaller } from '@/lib/operaciones/talleres-reglas'
 import { anularMovimientoTallerAction, cancelarInscripcionAction, marcarAsistenciaAction } from '../actions'
 import { ChipEstadoPago } from '../piezas'
 import { FormularioEditarInscripcion, FormularioInscripcion, FormularioPago } from './formularios'
@@ -50,7 +50,7 @@ function coincide(fila: FilaInscrito, busqueda: string) {
   if (!busqueda) return true
   const b = busqueda.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
   const nombre = fila.nombre.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
-  return nombre.includes(b) || (fila.documento ?? '').includes(b) || (fila.telefono ?? '').includes(b.replace(/\D/g, '') || '~')
+  return nombre.includes(b) || (fila.documento ?? '').toLowerCase().includes(b) || (fila.telefono ?? '').includes(b.replace(/\D/g, '') || '~')
 }
 
 export function InscritosTaller({
@@ -201,7 +201,7 @@ export function InscritosTaller({
                           <button type="button" onClick={() => setAbierta(expandida ? null : fila.id)} className="text-left">
                             <span className="font-semibold text-tinta hover:text-acento">{fila.nombre}</span>
                             <span className="block text-xs text-gris">
-                              {[fila.documento && `CC ${fila.documento}`, fila.telefono].filter(Boolean).join(' · ') || 'Sin datos de contacto'}
+                              {[fila.documento && documentoLegible(fila.documento), fila.telefono].filter(Boolean).join(' · ') || 'Sin datos de contacto'}
                             </span>
                           </button>
                         </td>
@@ -373,7 +373,7 @@ function DetalleInscrito({
           <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
             <div>
               <dt className="text-xs text-gris">Cédula</dt>
-              <dd className="text-tinta">{fila.documento || '—'}</dd>
+              <dd className="text-tinta">{fila.documento ? documentoLegible(fila.documento) : '—'}</dd>
             </div>
             <div>
               <dt className="text-xs text-gris">Celular</dt>

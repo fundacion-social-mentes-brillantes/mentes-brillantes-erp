@@ -5,7 +5,7 @@ import { Check, ScanLine, Search, UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { pesos } from '@/lib/utils/pesos'
-import type { PreguntaTaller } from '@/lib/operaciones/talleres-reglas'
+import { documentoLegible, type PreguntaTaller } from '@/lib/operaciones/talleres-reglas'
 import { marcarAsistenciaAction } from '../actions'
 import { EscanerQr, prepararSonido } from './EscanerQr'
 import { FormularioInscripcion, FormularioPago } from './formularios'
@@ -63,7 +63,7 @@ export function PuertaTaller({
   const llegaron = activas.filter((f) => llegadas.get(f.id)).length
   const b = sinTildes(busqueda.trim())
   const visibles = b
-    ? activas.filter((f) => sinTildes(f.nombre).includes(b) || (f.documento ?? '').includes(b) || (f.telefono ?? '').includes(b))
+    ? activas.filter((f) => sinTildes(f.nombre).includes(b) || sinTildes(f.documento ?? '').includes(b) || (f.telefono ?? '').includes(b))
     : activas
 
   const alternar = (fila: FilaInscrito) => {
@@ -154,7 +154,7 @@ export function PuertaTaller({
                       ) : (
                         'Sin costo'
                       )}
-                      {fila.documento ? ` · CC ${fila.documento}` : ''}
+                      {fila.documento ? ` · ${documentoLegible(fila.documento)}` : ''}
                     </p>
                   </div>
                   {fila.pendiente > 0 && cobrando !== fila.id && (

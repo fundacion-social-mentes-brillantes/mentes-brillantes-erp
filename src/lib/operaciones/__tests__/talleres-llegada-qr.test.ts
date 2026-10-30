@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { codigoDeBoleta, entradaPorCodigo, registrarLlegadaPorCodigo } from "../talleres"
+import { codigoDeBoleta, documentoLegible, entradaPorCodigo, registrarLlegadaPorCodigo } from "../talleres"
 import { supabaseFalso } from "./supabase-falso"
 
 // La puerta de un taller con el QR de las boletas: de que se saca el codigo,
@@ -51,6 +51,8 @@ describe("el codigo que trae el QR", () => {
     expect(codigoDeBoleta(`https://talleres.gimnasioemocionalmb.com/entrada/${CODIGO}/`)).toBe(CODIGO)
     expect(codigoDeBoleta(`https://mentes-brillantes-erp.vercel.app/talleres/llegada/${CODIGO}`)).toBe(CODIGO)
     expect(codigoDeBoleta(`https://talleres.gimnasioemocionalmb.com/gratitud-2026/?boleta=${CODIGO}`)).toBe(CODIGO)
+    expect(codigoDeBoleta(`https://talleres.gimnasioemocionalmb.com/gratitud-2026/boleta/?c=${CODIGO}`)).toBe(CODIGO)
+    expect(codigoDeBoleta(`https://talleres.gimnasioemocionalmb.com/boleta/?c=${CODIGO}`)).toBe(CODIGO)
     expect(codigoDeBoleta(`  ${CODIGO}\n`)).toBe(CODIGO)
     expect(codigoDeBoleta(CODIGO.toUpperCase())).toBe(CODIGO)
   })
@@ -63,6 +65,16 @@ describe("el codigo que trae el QR", () => {
     expect(codigoDeBoleta("hola")).toBeNull()
     expect(codigoDeBoleta("")).toBeNull()
     expect(codigoDeBoleta(null)).toBeNull()
+  })
+})
+
+describe("el documento en pantalla", () => {
+  it("la cedula sale con CC y la tarjeta de identidad de un menor con TI", () => {
+    expect(documentoLegible("1020304050")).toBe("CC 1020304050")
+    expect(documentoLegible("TI1029384756")).toBe("TI 1029384756")
+    expect(documentoLegible("ti1029384756")).toBe("TI 1029384756")
+    expect(documentoLegible(null)).toBe("")
+    expect(documentoLegible("")).toBe("")
   })
 })
 

@@ -60,6 +60,19 @@ export function normalizarDocumento(valor: unknown): string | null {
   return limpio
 }
 
+/**
+ * El documento como se lee en pantalla. Se guarda en un solo campo: la cedula
+ * va sola ("1020304050" -> "CC 1020304050") y otro tipo lleva sus letras
+ * adelante, como la tarjeta de identidad de un menor ("TI1029384756" ->
+ * "TI 1029384756", asi lo manda la invitacion de la Cena de la Gratitud).
+ */
+export function documentoLegible(documento: string | null | undefined): string {
+  const limpio = String(documento ?? "").trim()
+  if (!limpio) return ""
+  const [, letras, resto] = limpio.match(/^([A-Za-z]{1,4})(\d.*)$/) ?? []
+  return letras ? `${letras.toUpperCase()} ${resto}` : `CC ${limpio}`
+}
+
 /** Celular solo con numeros; "+57 300 123 4567" y "3001234567" son el mismo. */
 export function normalizarTelefono(valor: unknown): string | null {
   const digitos = String(valor ?? "").replace(/\D/g, "")
@@ -77,8 +90,9 @@ const CODIGO_BOLETA = /^[0-9a-f]{32}$/i
  * El codigo de la boleta (32 caracteres hexadecimales) en lo que leyo el lector
  * de QR de la puerta. Entiende la direccion que lleva el QR de la boleta
  * (https://talleres.gimnasioemocionalmb.com/entrada/<codigo>), la de la pagina
- * de llegada del ERP (/talleres/llegada/<codigo>), la boleta en pantalla
- * (?boleta=<codigo>) y el codigo solo. Null si no es una entrada.
+ * de llegada del ERP (/talleres/llegada/<codigo>), la pagina de la boleta
+ * (/boleta/?c=<codigo> o ?boleta=<codigo>) y el codigo solo. Null si no es una
+ * entrada.
  */
 export function codigoDeBoleta(leido: unknown): string | null {
   if (typeof leido !== "string") return null
@@ -90,7 +104,11 @@ export function codigoDeBoleta(leido: unknown): string | null {
   } catch {
     return null
   }
-  const codigo = url.pathname.match(/\/(?:entrada|llegada)\/([0-9a-f]{32})\/?$/i)?.[1] ?? url.searchParams.get("boleta") ?? ""
+  const codigo =
+    url.pathname.match(/\/(?:entrada|llegada)\/([0-9a-f]{32})\/?$/i)?.[1] ??
+    url.searchParams.get("boleta") ??
+    url.searchParams.get("c") ??
+    ""
   return CODIGO_BOLETA.test(codigo) ? codigo.toLowerCase() : null
 }
 
