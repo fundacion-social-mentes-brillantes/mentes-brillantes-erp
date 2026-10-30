@@ -139,6 +139,7 @@ export async function inscribirAction(tallerId: string, _prev: TallerState, form
       tallerId,
       nombre: texto(formData, 'nombre'),
       documento: texto(formData, 'documento') || null,
+      edad: texto(formData, 'edad') || null,
       telefono: texto(formData, 'telefono') || null,
       correo: texto(formData, 'correo') || null,
       respuestas,
@@ -247,6 +248,7 @@ export async function editarInscripcionAction(
     await editarInscripcion(supabase, actor, inscripcionId, {
       nombre: texto(formData, 'nombre'),
       documento: texto(formData, 'documento') || null,
+      edad: texto(formData, 'edad') || null,
       telefono: texto(formData, 'telefono') || null,
       correo: texto(formData, 'correo') || null,
       notas: texto(formData, 'notas') || null,

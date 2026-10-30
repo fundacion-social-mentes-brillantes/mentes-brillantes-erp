@@ -37,6 +37,7 @@ export default async function TallerPage({
     id: f.id,
     nombre: f.nombre,
     documento: f.documento,
+    edad: f.edad,
     telefono: f.telefono,
     correo: f.correo,
     respuestas: Object.fromEntries(Object.entries(objeto(f.respuestas)).map(([k, v]) => [k, String(v ?? '')])),

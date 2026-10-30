@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { ArrowLeft, CalendarDays, CircleAlert, DoorOpen, ScanLine, Ticket } from 'lucide-react'
 import { requireRoles } from '@/lib/utils/authz'
-import { codigoDeBoleta, documentoLegible, entradaPorCodigo } from '@/lib/operaciones/talleres'
+import { codigoDeBoleta, documentoLegible, edadLegible, entradaPorCodigo } from '@/lib/operaciones/talleres'
 import { formatearFechaEvento } from '@/lib/utils/fechas'
 import { pesos } from '@/lib/utils/pesos'
 import { RegistrarLlegada } from './RegistrarLlegada'
@@ -59,6 +59,7 @@ export default async function LlegadaPage({ params }: { params: Promise<{ codigo
             <Ticket className="h-4 w-4" aria-hidden />
             {entrada.numero ? `Entrada N.º ${entrada.numero}` : 'Inscripción cancelada'}
             {inscripcion.documento ? ` · ${documentoLegible(inscripcion.documento)}` : ''}
+            {inscripcion.edad !== null ? ` · ${edadLegible(inscripcion.edad)}` : ''}
           </li>
           <li className="flex items-center gap-2">
             <CalendarDays className="h-4 w-4" aria-hidden />

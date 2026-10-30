@@ -132,6 +132,7 @@ export async function vistaTaller(supabase: DbClient, texto: string) {
       inscripcion_id: f.id,
       nombre: f.nombre,
       identificacion: f.documento ? enmascarar(f.documento) : null,
+      edad: f.edad,
       contacto_movil: f.telefono ? enmascarar(f.telefono) : null,
       estado: f.estado === "cancelado" ? "Cancelada" : "Inscrita",
       llego: f.asistio,

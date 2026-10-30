@@ -18,6 +18,7 @@ import {
   ETIQUETA_ESTADO_TALLER,
   normalizarCorreo,
   normalizarDocumento,
+  normalizarEdad,
   normalizarTelefono,
   preguntasGuardadas,
   validarRespuestas,
@@ -71,7 +72,8 @@ export const OPERACIONES_TALLERES: DefinicionOperacion[] = [
     schema: {
       taller: TALLER,
       nombre: z.string().trim().min(2).max(120),
-      cedula: z.string().trim().max(30).optional(),
+      cedula: z.string().trim().max(30).optional().describe("Cedula, o TI y el numero si es una tarjeta de identidad"),
+      edad: z.coerce.number().int().min(0).max(120).optional().describe("Anos cumplidos"),
       celular: z.string().trim().max(30).optional(),
       correo: z.string().trim().max(160).optional(),
       valor_acordado: z.coerce.number().min(0).max(100_000_000).optional().describe("Solo admin: lo que pagara si no es el precio del taller"),
@@ -88,6 +90,7 @@ export const OPERACIONES_TALLERES: DefinicionOperacion[] = [
       if (taller.estado === "cancelado") throw new OperacionMcpError("Este taller está cancelado.")
 
       const documento = normalizarDocumento(args.cedula)
+      const edad = normalizarEdad(args.edad)
       const telefono = normalizarTelefono(args.celular)
       const correo = normalizarCorreo(args.correo)
       const respuestas = validarRespuestas(preguntasGuardadas(taller.preguntas), args.respuestas ?? {})
@@ -129,6 +132,7 @@ export const OPERACIONES_TALLERES: DefinicionOperacion[] = [
         tallerNombre: taller.nombre,
         nombre: args.nombre,
         documento,
+        edad,
         telefono,
         correo,
         respuestas,
@@ -147,6 +151,7 @@ export const OPERACIONES_TALLERES: DefinicionOperacion[] = [
           taller: taller.nombre,
           nombre: args.nombre,
           identificacion: documento ? enmascarar(documento) : null,
+          edad,
           contacto_movil: telefono ? enmascarar(telefono) : null,
           contacto_mail: correo ? enmascarar(correo) : null,
           valor_a_pagar: valorAcordado,
@@ -168,6 +173,7 @@ export const OPERACIONES_TALLERES: DefinicionOperacion[] = [
         tallerId: d.tallerId,
         nombre: d.nombre,
         documento: d.documento,
+        edad: d.edad,
         telefono: d.telefono,
         correo: d.correo,
         respuestas: d.respuestas,

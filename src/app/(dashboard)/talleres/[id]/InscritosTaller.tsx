@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { formatearFechaHora, formatearFechaIso } from '@/lib/utils/fechas'
 import { pesos } from '@/lib/utils/pesos'
 import { metodoPagoLegible } from '@/lib/utils/textos'
-import { documentoLegible, type EstadoPagoTaller, type PreguntaTaller } from '@/lib/operaciones/talleres-reglas'
+import { documentoLegible, edadLegible, type EstadoPagoTaller, type PreguntaTaller } from '@/lib/operaciones/talleres-reglas'
 import { anularMovimientoTallerAction, cancelarInscripcionAction, marcarAsistenciaAction } from '../actions'
 import { ChipEstadoPago } from '../piezas'
 import { FormularioEditarInscripcion, FormularioInscripcion, FormularioPago } from './formularios'
@@ -19,6 +19,7 @@ export type FilaInscrito = {
   id: string
   nombre: string
   documento: string | null
+  edad: number | null
   telefono: string | null
   correo: string | null
   respuestas: Record<string, string>
@@ -201,7 +202,7 @@ export function InscritosTaller({
                           <button type="button" onClick={() => setAbierta(expandida ? null : fila.id)} className="text-left">
                             <span className="font-semibold text-tinta hover:text-acento">{fila.nombre}</span>
                             <span className="block text-xs text-gris">
-                              {[fila.documento && documentoLegible(fila.documento), fila.telefono].filter(Boolean).join(' · ') || 'Sin datos de contacto'}
+                              {[fila.documento && documentoLegible(fila.documento), edadLegible(fila.edad), fila.telefono].filter(Boolean).join(' · ') || 'Sin datos de contacto'}
                             </span>
                           </button>
                         </td>
@@ -372,8 +373,12 @@ function DetalleInscrito({
         <>
           <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
             <div>
-              <dt className="text-xs text-gris">Cédula</dt>
+              <dt className="text-xs text-gris">Documento</dt>
               <dd className="text-tinta">{fila.documento ? documentoLegible(fila.documento) : '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-gris">Edad</dt>
+              <dd className="text-tinta">{edadLegible(fila.edad) || '—'}</dd>
             </div>
             <div>
               <dt className="text-xs text-gris">Celular</dt>

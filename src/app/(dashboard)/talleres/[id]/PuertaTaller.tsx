@@ -5,7 +5,7 @@ import { Check, ScanLine, Search, UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { pesos } from '@/lib/utils/pesos'
-import { documentoLegible, type PreguntaTaller } from '@/lib/operaciones/talleres-reglas'
+import { documentoLegible, edadLegible, type PreguntaTaller } from '@/lib/operaciones/talleres-reglas'
 import { marcarAsistenciaAction } from '../actions'
 import { EscanerQr, prepararSonido } from './EscanerQr'
 import { FormularioInscripcion, FormularioPago } from './formularios'
@@ -155,6 +155,7 @@ export function PuertaTaller({
                         'Sin costo'
                       )}
                       {fila.documento ? ` · ${documentoLegible(fila.documento)}` : ''}
+                      {fila.edad !== null ? ` · ${edadLegible(fila.edad)}` : ''}
                     </p>
                   </div>
                   {fila.pendiente > 0 && cobrando !== fila.id && (

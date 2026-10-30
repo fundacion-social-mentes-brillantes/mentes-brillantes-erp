@@ -1138,6 +1138,7 @@ export type Database = {
           creado_en: string
           creado_por: string | null
           documento: string | null
+          edad: number | null
           estado: string
           hora_llegada: string | null
           id: string
@@ -1161,6 +1162,7 @@ export type Database = {
           creado_en?: string
           creado_por?: string | null
           documento?: string | null
+          edad?: number | null
           estado?: string
           hora_llegada?: string | null
           id?: string
@@ -1184,6 +1186,7 @@ export type Database = {
           creado_en?: string
           creado_por?: string | null
           documento?: string | null
+          edad?: number | null
           estado?: string
           hora_llegada?: string | null
           id?: string

@@ -11,6 +11,7 @@ import {
   ORIGENES_INSCRIPCION,
   normalizarCorreo,
   normalizarDocumento,
+  normalizarEdad,
   normalizarTelefono,
   preguntasGuardadas,
   resumirTaller,
@@ -44,7 +45,7 @@ export * from "./talleres-reglas"
 // ------------------------------------------------------------- lecturas
 
 const COLUMNAS_INSCRIPCION =
-  "id, taller_id, nombre, documento, telefono, correo, respuestas, valor_acordado, estado, asistio, hora_llegada, origen, asistente_id, autorizo_datos_en, comprobante_ruta, comprobante_en, codigo_boleta, notas, creado_en, creado_por, actualizado_en"
+  "id, taller_id, nombre, documento, edad, telefono, correo, respuestas, valor_acordado, estado, asistio, hora_llegada, origen, asistente_id, autorizo_datos_en, comprobante_ruta, comprobante_en, codigo_boleta, notas, creado_en, creado_por, actualizado_en"
 const COLUMNAS_PAGO = "id, taller_inscripcion_id, monto, metodo_pago, fecha, estado, notas, creado_en"
 const COLUMNAS_GASTO = "id, concepto, monto, categoria, metodo_pago, fecha, estado, notas, taller_id"
 
@@ -369,6 +370,8 @@ export type DatosInscripcion = {
   tallerId: string
   nombre: string
   documento?: string | null
+  /** Años cumplidos (0 a 120). */
+  edad?: number | string | null
   telefono?: string | null
   correo?: string | null
   respuestas?: unknown
@@ -400,6 +403,7 @@ export async function inscribirEnTaller(supabase: DbClient, actor: ActorErp, dat
   exigir(nombre, "El nombre es obligatorio.")
   if (nombre.length > 120) throw new OperacionError("El nombre es muy largo (máximo 120 caracteres).")
   const documento = normalizarDocumento(datos.documento)
+  const edad = normalizarEdad(datos.edad)
   const telefono = normalizarTelefono(datos.telefono)
   const correo = normalizarCorreo(datos.correo)
   if (desdeInvitacion) {
@@ -456,6 +460,7 @@ export async function inscribirEnTaller(supabase: DbClient, actor: ActorErp, dat
         taller_id: taller.id,
         nombre,
         documento,
+        edad,
         telefono,
         correo,
         respuestas: respuestas as Json,
@@ -489,6 +494,7 @@ export async function inscribirEnTaller(supabase: DbClient, actor: ActorErp, dat
 export type CambiosInscripcion = {
   nombre?: string
   documento?: string | null
+  edad?: number | string | null
   telefono?: string | null
   correo?: string | null
   valorAcordado?: number | string | null
@@ -526,6 +532,7 @@ export async function editarInscripcion(
     }
     fila.documento = documento
   }
+  if (cambios.edad !== undefined) fila.edad = normalizarEdad(cambios.edad)
   if (cambios.telefono !== undefined) fila.telefono = normalizarTelefono(cambios.telefono)
   if (cambios.correo !== undefined) fila.correo = normalizarCorreo(cambios.correo)
   if (cambios.notas !== undefined) fila.notas = textoOpcional(cambios.notas, 1000, "La nota")
@@ -624,6 +631,7 @@ export async function entradaPorCodigo(supabase: DbClient, codigo: string) {
       id: inscripcion.id,
       nombre: inscripcion.nombre,
       documento: inscripcion.documento,
+      edad: inscripcion.edad,
       estado: inscripcion.estado,
       asistio: inscripcion.asistio,
       horaLlegada: inscripcion.hora_llegada,

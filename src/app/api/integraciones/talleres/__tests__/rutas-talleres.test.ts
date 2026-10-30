@@ -124,6 +124,7 @@ describe("rutas de la invitacion de talleres", () => {
         cuerpo: {
           nombre: "Ana Gómez",
           documento: "52.123.456",
+          edad: "15",
           telefono: "300 111 2233",
           correo: "ana@example.com",
           respuestas: { acompanante: "no" },
@@ -138,7 +139,7 @@ describe("rutas de la invitacion de talleres", () => {
     expect(cuerpo).toMatchObject({ valor: 25000, instruccionesPago: "Nequi de la fundación" })
     // (el codigo de la boleta lo pone la base; la de memoria no lo genera)
     expect(Object.keys(cuerpo).every((k) => ["codigoBoleta", "instruccionesPago", "valor"].includes(k))).toBe(true)
-    expect(base.tablas.taller_inscripciones.at(-1)).toMatchObject({ origen: "invitacion", valor_acordado: 25000 })
+    expect(base.tablas.taller_inscripciones.at(-1)).toMatchObject({ origen: "invitacion", valor_acordado: 25000, edad: 15 })
     expect(base.escrituras.some((e: any) => e.tabla === "asistentes" || e.tabla === "ventas_externas")).toBe(false)
   })
 

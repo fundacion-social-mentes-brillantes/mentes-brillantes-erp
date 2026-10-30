@@ -176,8 +176,12 @@ export function FormularioInscripcion({
           <Input name="nombre" required maxLength={120} autoComplete="off" disabled={enviando} />
         </label>
         <label className="block space-y-1.5">
-          <span className={claseEtiqueta}>Cédula</span>
-          <Input name="documento" inputMode="numeric" maxLength={30} autoComplete="off" disabled={enviando} />
+          <span className={claseEtiqueta}>Cédula o tarjeta de identidad</span>
+          <Input name="documento" maxLength={30} autoComplete="off" placeholder="1020304050 o TI1029384756" disabled={enviando} />
+        </label>
+        <label className="block space-y-1.5">
+          <span className={claseEtiqueta}>Edad</span>
+          <Input name="edad" type="number" inputMode="numeric" min={0} max={120} step={1} autoComplete="off" disabled={enviando} />
         </label>
         <label className="block space-y-1.5">
           <span className={claseEtiqueta}>Celular</span>
@@ -247,6 +251,7 @@ export type DatosEditables = {
   id: string
   nombre: string
   documento: string | null
+  edad: number | null
   telefono: string | null
   correo: string | null
   notas: string | null
@@ -279,8 +284,21 @@ export function FormularioEditarInscripcion({
           <Input name="nombre" required maxLength={120} defaultValue={inscripcion.nombre} disabled={enviando} />
         </label>
         <label className="block space-y-1.5">
-          <span className={claseEtiqueta}>Cédula</span>
-          <Input name="documento" inputMode="numeric" maxLength={30} defaultValue={inscripcion.documento ?? ''} disabled={enviando} />
+          <span className={claseEtiqueta}>Cédula o tarjeta de identidad</span>
+          <Input name="documento" maxLength={30} defaultValue={inscripcion.documento ?? ''} disabled={enviando} />
+        </label>
+        <label className="block space-y-1.5">
+          <span className={claseEtiqueta}>Edad</span>
+          <Input
+            name="edad"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={120}
+            step={1}
+            defaultValue={inscripcion.edad ?? ''}
+            disabled={enviando}
+          />
         </label>
         <label className="block space-y-1.5">
           <span className={claseEtiqueta}>Celular</span>

@@ -9,7 +9,9 @@ import {
   editarInscripcion,
   inscribirEnTaller,
   listarTalleres,
+  edadLegible,
   normalizarDocumento,
+  normalizarEdad,
   normalizarFechaTaller,
   normalizarTelefono,
   registrarGastoTaller,
@@ -74,6 +76,22 @@ describe("datos de la persona", () => {
     expect(normalizarTelefono("+57 300 123 4567")).toBe("3001234567")
     expect(normalizarTelefono("300-123-4567")).toBe("3001234567")
     expect(() => normalizarTelefono("123")).toThrow(/celular/)
+  })
+
+  it("la edad son años cumplidos de 0 a 120, y vacía queda sin dato", () => {
+    expect(normalizarEdad("15")).toBe(15)
+    expect(normalizarEdad(" 15 años ")).toBe(15)
+    expect(normalizarEdad(8)).toBe(8)
+    expect(normalizarEdad("0")).toBe(0)
+    expect(normalizarEdad("")).toBeNull()
+    expect(normalizarEdad(null)).toBeNull()
+    expect(() => normalizarEdad("121")).toThrow(/edad/)
+    expect(() => normalizarEdad("-3")).toThrow(/edad/)
+    expect(() => normalizarEdad("15.5")).toThrow(/edad/)
+    expect(() => normalizarEdad("quince")).toThrow(/edad/)
+    expect(edadLegible(15)).toBe("15 años")
+    expect(edadLegible(1)).toBe("1 año")
+    expect(edadLegible(null)).toBe("")
   })
 
   it("arma el enlace del taller sin tildes ni signos", () => {
@@ -233,6 +251,7 @@ describe("inscribir", () => {
     expect(r.valorAcordado).toBe(25000)
     expect(supabase.tablas.taller_inscripciones[0]).toMatchObject({
       documento: "52123456",
+      edad: null,
       telefono: "3001112233",
       origen: "invitacion",
       respuestas: { acompanante: "si" },
@@ -367,6 +386,9 @@ describe("cambios a una inscripcion", () => {
     await expect(editarInscripcion(supabase, ADMIN, "i-1", { valorAcordado: 15000 })).rejects.toThrow(/no puede quedar por debajo/)
     await editarInscripcion(supabase, ADMIN, "i-1", { valorAcordado: 20000 })
     expect(supabase.tablas.taller_inscripciones[0].valor_acordado).toBe(20000)
+    await editarInscripcion(supabase, ADMIN, "i-1", { edad: "12" })
+    expect(supabase.tablas.taller_inscripciones[0].edad).toBe(12)
+    await expect(editarInscripcion(supabase, ADMIN, "i-1", { edad: "200" })).rejects.toThrow(/edad/)
     expect(supabase.tablas.auditoria_financiera[0]).toMatchObject({
       accion: "editar_valor_inscripcion_taller",
       valor_anterior: 25000,

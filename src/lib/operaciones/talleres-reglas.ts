@@ -84,6 +84,25 @@ export function normalizarTelefono(valor: unknown): string | null {
   return sinPais
 }
 
+/**
+ * La edad en años cumplidos, de 0 a 120. Entiende "15", "15 años" y 15; vacía
+ * queda sin dato (las inscripciones de antes no la tienen).
+ */
+export function normalizarEdad(valor: unknown): number | null {
+  const texto = String(valor ?? "").trim()
+  if (!texto) return null
+  const numero = texto.match(/^(\d{1,3})(?:\s*(?:años?|anos?))?$/i)?.[1]
+  const edad = numero === undefined ? NaN : Number(numero)
+  if (!Number.isInteger(edad) || edad > 120) throw new OperacionError("La edad debe ser un número de años, de 0 a 120.")
+  return edad
+}
+
+/** La edad como se lee en pantalla: "15 años", "1 año". */
+export function edadLegible(edad: number | null | undefined): string {
+  if (edad === null || edad === undefined) return ""
+  return `${edad} ${edad === 1 ? "año" : "años"}`
+}
+
 const CODIGO_BOLETA = /^[0-9a-f]{32}$/i
 
 /**
