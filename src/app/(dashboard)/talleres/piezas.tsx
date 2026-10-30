@@ -1,11 +1,13 @@
 import {
   ETIQUETA_ESTADO_PAGO,
   ETIQUETA_ESTADO_TALLER,
+  EDAD_MAXIMA_NINO,
   ESTADOS_TALLER,
   kitLegible,
   type EstadoPagoTaller,
   type EstadoTaller,
 } from '@/lib/operaciones/talleres-reglas'
+import { pesos } from '@/lib/utils/pesos'
 
 // Piezas pequenas que comparten la lista y la pagina de cada taller.
 
@@ -39,6 +41,18 @@ export function ChipEstadoPago({ estado }: { estado: EstadoPagoTaller }) {
 export function ChipKit({ kit }: { kit: boolean | null | undefined }) {
   if (kit === null || kit === undefined) return null
   return <span className={`${CHIP} ${kit ? 'bg-acento/12 text-acento' : 'bg-suave-2 text-gris'}`}>{kitLegible(kit)}</span>
+}
+
+/** Lo que pagan los niños (hasta 15 años) con kit y sin kit, cuando el taller cobra distinto. */
+export type PreciosNinos = { conKit: number; sinKit: number }
+
+/** "$ 120.000 · niños hasta 15 años: con kit $ 60.000, sin kit gratis" */
+export function textoPrecios(precio: number, ninos: PreciosNinos | null | undefined): string {
+  const valor = (v: number) => (v > 0 ? pesos(v) : 'gratis')
+  const general = precio > 0 ? pesos(precio) : 'Gratis'
+  return ninos
+    ? `${general} · niños hasta ${EDAD_MAXIMA_NINO} años: con kit ${valor(ninos.conKit)}, sin kit ${valor(ninos.sinKit)}`
+    : general
 }
 
 export const claseSelect =

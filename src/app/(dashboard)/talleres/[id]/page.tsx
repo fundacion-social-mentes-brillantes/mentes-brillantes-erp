@@ -2,12 +2,12 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ArrowLeft, CalendarDays, Edit2, ExternalLink, MapPin, Ticket, Users } from 'lucide-react'
 import { requireRoles } from '@/lib/utils/authz'
-import { cargarTaller } from '@/lib/operaciones/talleres'
+import { cargarTaller, tienePreciosNinos } from '@/lib/operaciones/talleres'
 import { enlaceInvitacion } from '@/lib/integraciones/talleres-publico'
 import { fechaHoyBogota, formatearFechaEvento } from '@/lib/utils/fechas'
 import { pesos } from '@/lib/utils/pesos'
 import { objeto } from '@/lib/utils/lectura'
-import { ChipEstadoTaller } from '../piezas'
+import { ChipEstadoTaller, textoPrecios } from '../piezas'
 import { EstadoTallerBotones } from './EstadoTallerBotones'
 import { GastosTaller, type GastoFila } from './GastosTaller'
 import { InscritosTaller, type FilaInscrito } from './InscritosTaller'
@@ -32,6 +32,9 @@ export default async function TallerPage({
   const pestana: Pestana = ver === 'puerta' ? 'puerta' : ver === 'gastos' && isAdmin ? 'gastos' : 'inscritos'
   const hoy = fechaHoyBogota()
   const precio = Number(taller.precio || 0)
+  const preciosNinos = tienePreciosNinos(taller)
+    ? { conKit: Number(taller.precio_nino_con_kit), sinKit: Number(taller.precio_nino_sin_kit) }
+    : null
 
   const filas: FilaInscrito[] = resumen.filas.map((f) => ({
     id: f.id,
@@ -113,7 +116,7 @@ export default async function TallerPage({
               )}
               <li className="flex items-center gap-1.5">
                 <Ticket className="h-4 w-4" aria-hidden />
-                {precio > 0 ? `${pesos(precio)} por persona` : 'Gratis'}
+                {preciosNinos ? `Adultos ${textoPrecios(precio, preciosNinos)}` : precio > 0 ? `${pesos(precio)} por persona` : 'Gratis'}
               </li>
               <li className="flex items-center gap-1.5">
                 <Users className="h-4 w-4" aria-hidden />
@@ -182,6 +185,7 @@ export default async function TallerPage({
         <InscritosTaller
           tallerId={taller.id}
           precio={precio}
+          preciosNinos={preciosNinos}
           preguntas={preguntas}
           filas={filas}
           hoy={hoy}
@@ -193,6 +197,7 @@ export default async function TallerPage({
         <PuertaTaller
           tallerId={taller.id}
           precio={precio}
+          preciosNinos={preciosNinos}
           preguntas={preguntas}
           filas={filas}
           hoy={hoy}

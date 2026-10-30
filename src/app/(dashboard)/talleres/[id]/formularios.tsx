@@ -15,7 +15,7 @@ import {
   registrarPagoTallerAction,
   type TallerState,
 } from '../actions'
-import { claseArea, claseEtiqueta, claseSelect } from '../piezas'
+import { claseArea, claseEtiqueta, claseSelect, textoPrecios, type PreciosNinos } from '../piezas'
 import { OpcionesMedioPago } from '@/components/medios-pago/MediosPago'
 
 // Formularios de la pagina de un taller. Todos avisan con `alTerminar` cuando
@@ -146,6 +146,7 @@ function CampoPregunta({ pregunta, deshabilitado }: { pregunta: PreguntaTaller; 
 export function FormularioInscripcion({
   tallerId,
   precio,
+  preciosNinos = null,
   preguntas,
   hoy,
   isAdmin,
@@ -155,6 +156,7 @@ export function FormularioInscripcion({
 }: {
   tallerId: string
   precio: number
+  preciosNinos?: PreciosNinos | null
   preguntas: PreguntaTaller[]
   hoy: string
   isAdmin: boolean
@@ -202,13 +204,15 @@ export function FormularioInscripcion({
         {isAdmin ? (
           <label className="block space-y-1.5">
             <span className={claseEtiqueta}>Valor a pagar</span>
-            <MoneyInput name="valor_acordado" defaultValue={precio} disabled={enviando} />
-            <span className="block text-xs text-gris">Bájalo si tiene descuento; 0 si es cortesía.</span>
+            <MoneyInput name="valor_acordado" defaultValue="" placeholder="Lo del taller" disabled={enviando} />
+            <span className="block text-xs text-gris">
+              Vacío: {textoPrecios(precio, preciosNinos)}. Escribe otro valor si tiene descuento; 0 si es cortesía.
+            </span>
           </label>
         ) : (
           <div className="space-y-1.5">
             <span className={claseEtiqueta}>Valor a pagar</span>
-            <p className="flex h-10 items-center text-sm text-tinta">{precio > 0 ? pesos(precio) : 'Gratis'}</p>
+            <p className="flex min-h-10 items-center text-sm text-tinta">{textoPrecios(precio, preciosNinos)}</p>
           </div>
         )}
       </div>

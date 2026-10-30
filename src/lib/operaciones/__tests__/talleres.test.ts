@@ -6,6 +6,7 @@ import { assertFechaEditable } from "@/lib/utils/periodos"
 import {
   cancelarInscripcion,
   crearTaller,
+  esNino,
   editarInscripcion,
   inscribirEnTaller,
   listarTalleres,
@@ -23,6 +24,8 @@ import {
   talleresDePersona,
   validarPreguntas,
   validarRespuestas,
+  validarTaller,
+  valorYKitDeInscripcion,
 } from "../talleres"
 import { supabaseFalso } from "./supabase-falso"
 
@@ -387,6 +390,81 @@ describe("pagos del taller", () => {
   })
 })
 
+describe("niños con kit o sin kit (Cena de la Gratitud)", () => {
+  const CENA = { precio: 120000, precio_nino_con_kit: 60000, precio_nino_sin_kit: 0 }
+
+  it("es niño hasta los 15 años; sin edad, el registro civil es niño, la cedula no y la tarjeta de identidad pide la edad", () => {
+    expect(esNino({ edad: 15 })).toBe(true)
+    expect(esNino({ edad: 16, documento: "TI1029384756" })).toBe(false)
+    expect(esNino({ documento: "RC1122334455" })).toBe(true)
+    expect(esNino({ documento: "TI1029384756" })).toBeNull()
+    expect(esNino({ documento: "1020304050" })).toBe(false)
+    expect(esNino({})).toBe(false)
+  })
+
+  it("niño sin kit gratis, con kit 60.000; desde los 16 el valor normal y siempre con kit", () => {
+    expect(valorYKitDeInscripcion(CENA, { documento: "TI1", edad: 10, kit: false })).toEqual({ valor: 0, kit: false })
+    expect(valorYKitDeInscripcion(CENA, { documento: "RC1", edad: 4, kit: true })).toEqual({ valor: 60000, kit: true })
+    expect(valorYKitDeInscripcion(CENA, { documento: "TI1", edad: 16, kit: false })).toEqual({ valor: 120000, kit: true })
+    expect(valorYKitDeInscripcion(CENA, { documento: "1020304050", kit: null })).toEqual({ valor: 120000, kit: true })
+    expect(() => valorYKitDeInscripcion(CENA, { documento: "TI1", edad: 10, kit: null })).toThrow(/con kit o sin kit/)
+    expect(() => valorYKitDeInscripcion(CENA, { documento: "TI1", kit: true })).toThrow(/edad/)
+  })
+
+  it("un taller sin precios de niños cobra a todos lo mismo y deja el kit como venga", () => {
+    expect(valorYKitDeInscripcion({ precio: 25000 }, { edad: 8, kit: false })).toEqual({ valor: 25000, kit: false })
+    expect(valorYKitDeInscripcion({ precio: 25000, precio_nino_con_kit: null, precio_nino_sin_kit: null }, { edad: 8 })).toEqual({
+      valor: 25000,
+      kit: null,
+    })
+  })
+
+  it("el taller guarda los dos valores de niños, o ninguno", () => {
+    expect(validarTaller({ nombre: "Cena", precio: 120000, precioNinoConKit: 60000, precioNinoSinKit: 0 })).toMatchObject({
+      precio_nino_con_kit: 60000,
+      precio_nino_sin_kit: 0,
+    })
+    expect(validarTaller({ nombre: "Cena", precio: 120000 })).toMatchObject({ precio_nino_con_kit: null, precio_nino_sin_kit: null })
+    expect(() => validarTaller({ nombre: "Cena", precio: 120000, precioNinoConKit: 60000 })).toThrow(/los dos valores/)
+  })
+
+  it("desde la invitacion cada uno queda con lo que le toca", async () => {
+    const supabase = supabaseFalso({ talleres: [taller({ ...CENA, preguntas: [] })], taller_inscripciones: [] })
+    const base = { tallerId: "t-1", telefono: "3001112233", origen: "invitacion" as const, autorizoDatos: true }
+    await inscribirEnTaller(supabase, INVITACION, { ...base, nombre: "Mamá", documento: "52123456", edad: "40", kit: false })
+    await inscribirEnTaller(supabase, INVITACION, { ...base, nombre: "Niño sin kit", documento: "TI111", edad: "8", kit: false })
+    await inscribirEnTaller(supabase, INVITACION, { ...base, nombre: "Niña con kit", documento: "RC222", edad: "5", kit: true })
+    await inscribirEnTaller(supabase, INVITACION, { ...base, nombre: "Joven", documento: "TI333", edad: "16", kit: false })
+    const filas = supabase.tablas.taller_inscripciones.map((f: { nombre: string; valor_acordado: number; kit: boolean }) => [
+      f.nombre,
+      f.valor_acordado,
+      f.kit,
+    ])
+    expect(filas).toEqual([
+      ["Mamá", 120000, true],
+      ["Niño sin kit", 0, false],
+      ["Niña con kit", 60000, true],
+      ["Joven", 120000, true],
+    ])
+    await expect(
+      inscribirEnTaller(supabase, INVITACION, { ...base, nombre: "Sin kit dicho", documento: "TI444", edad: "9" })
+    ).rejects.toThrow(/con kit o sin kit/)
+  })
+
+  it("si a un niño le cambian el kit, el valor se ajusta solo y queda en la auditoria; un valor a mano se respeta", async () => {
+    const supabase = supabaseFalso({
+      talleres: [taller({ ...CENA })],
+      taller_inscripciones: [inscripcion({ documento: "TI111", edad: 8, kit: false, valor_acordado: 0 })],
+      ventas_externas: [],
+    })
+    await editarInscripcion(supabase, ADMIN, "i-1", { kit: "si", valorAcordado: "0" })
+    expect(supabase.tablas.taller_inscripciones[0]).toMatchObject({ kit: true, valor_acordado: 60000 })
+    expect(supabase.tablas.auditoria_financiera[0]).toMatchObject({ valor_anterior: 0, valor_nuevo: 60000 })
+    await editarInscripcion(supabase, ADMIN, "i-1", { kit: "no", valorAcordado: "30000" })
+    expect(supabase.tablas.taller_inscripciones[0]).toMatchObject({ kit: false, valor_acordado: 30000 })
+  })
+})
+
 describe("cambios a una inscripcion", () => {
   it("no se cancela si ya pago algo", async () => {
     const supabase = supabaseFalso({
@@ -398,6 +476,7 @@ describe("cambios a una inscripcion", () => {
 
   it("el valor a pagar no baja de lo ya pagado, y el cambio queda en la auditoria", async () => {
     const supabase = supabaseFalso({
+      talleres: [taller()],
       taller_inscripciones: [inscripcion()],
       ventas_externas: [{ id: "v-1", taller_inscripcion_id: "i-1", monto: 20000, metodo_pago: "nequi", fecha: "2026-10-21" }],
     })

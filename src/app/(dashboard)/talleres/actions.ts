@@ -65,6 +65,8 @@ function leerTaller(formData: FormData): DatosTaller {
     fechaInicio: texto(formData, 'fecha_inicio') || null,
     lugar: texto(formData, 'lugar') || null,
     precio: parseMoneyInput(formData.get('precio')) ?? 0,
+    precioNinoConKit: parseMoneyInput(formData.get('precio_nino_con_kit')),
+    precioNinoSinKit: parseMoneyInput(formData.get('precio_nino_sin_kit')),
     cupo: texto(formData, 'cupo') || null,
     estado: texto(formData, 'estado') || null,
     instruccionesPago: texto(formData, 'instrucciones_pago') || null,

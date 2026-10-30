@@ -10,7 +10,7 @@ import { pesos } from '@/lib/utils/pesos'
 import { metodoPagoLegible } from '@/lib/utils/textos'
 import { documentoLegible, edadLegible, kitLegible, type EstadoPagoTaller, type PreguntaTaller } from '@/lib/operaciones/talleres-reglas'
 import { anularMovimientoTallerAction, cancelarInscripcionAction, marcarAsistenciaAction } from '../actions'
-import { ChipEstadoPago, ChipKit } from '../piezas'
+import { ChipEstadoPago, ChipKit, type PreciosNinos } from '../piezas'
 import { FormularioEditarInscripcion, FormularioInscripcion, FormularioPago } from './formularios'
 
 export type PagoFila = { id: string; monto: number; metodo_pago: string; fecha: string; estado?: string | null; notas?: string | null }
@@ -58,6 +58,7 @@ function coincide(fila: FilaInscrito, busqueda: string) {
 export function InscritosTaller({
   tallerId,
   precio,
+  preciosNinos = null,
   preguntas,
   filas,
   hoy,
@@ -66,6 +67,8 @@ export function InscritosTaller({
 }: {
   tallerId: string
   precio: number
+  /** Lo que pagan los niños con kit y sin kit (si el taller cobra distinto). */
+  preciosNinos?: PreciosNinos | null
   preguntas: PreguntaTaller[]
   filas: FilaInscrito[]
   hoy: string
@@ -121,6 +124,7 @@ export function InscritosTaller({
           <FormularioInscripcion
             tallerId={tallerId}
             precio={precio}
+            preciosNinos={preciosNinos}
             preguntas={preguntas}
             hoy={hoy}
             isAdmin={isAdmin}

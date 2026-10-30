@@ -123,6 +123,57 @@ export function kitLegible(kit: boolean | null | undefined): string {
   return ""
 }
 
+/** Hasta esta edad (incluida) se cobra como niño; desde los 16, como adulto. */
+export const EDAD_MAXIMA_NINO = 15
+
+/**
+ * ¿Se cobra como niño? Lo decide la edad: hasta los 15 años si; desde los 16,
+ * no (aunque tenga tarjeta de identidad). Sin edad: con registro civil es niño
+ * (es para menores de 7), con cedula u otro documento es adulto, y con tarjeta
+ * de identidad no se sabe (null): hay que preguntar la edad.
+ */
+export function esNino(persona: { documento?: string | null; edad?: number | null }): boolean | null {
+  if (persona.edad !== null && persona.edad !== undefined) return persona.edad <= EDAD_MAXIMA_NINO
+  const documento = String(persona.documento ?? "").trim()
+  if (/^RC/i.test(documento)) return true
+  if (/^TI/i.test(documento)) return null
+  return false
+}
+
+/** ¿El taller cobra distinto a los niños segun lleven kit o no? */
+export function tienePreciosNinos(taller: { precio_nino_con_kit?: number | string | null; precio_nino_sin_kit?: number | string | null }) {
+  return (
+    taller.precio_nino_con_kit !== null &&
+    taller.precio_nino_con_kit !== undefined &&
+    taller.precio_nino_sin_kit !== null &&
+    taller.precio_nino_sin_kit !== undefined
+  )
+}
+
+/**
+ * Lo que paga una persona y si lleva kit, segun el taller (pedido de Sebastian
+ * del 30 oct 2026 para la Cena de la Gratitud: niños hasta 15 años sin kit
+ * gratis, con kit 60.000; desde los 16, el valor normal y con kit). Si el taller
+ * tiene precios para niños: desde los 16 van siempre con kit y pagan el valor del
+ * taller; un niño escoge, y paga el valor de con kit o el de sin kit. Si no los
+ * tiene, todos pagan el valor del taller y el kit queda como venga.
+ */
+export function valorYKitDeInscripcion(
+  taller: { precio: number | string; precio_nino_con_kit?: number | string | null; precio_nino_sin_kit?: number | string | null },
+  persona: { documento?: string | null; edad?: number | null; kit?: boolean | null }
+): { valor: number; kit: boolean | null } {
+  const precio = Number(taller.precio || 0)
+  const kit = persona.kit ?? null
+  if (!tienePreciosNinos(taller)) return { valor: precio, kit }
+  const nino = esNino(persona)
+  if (nino === null) {
+    throw new OperacionError(`Escribe la edad: los niños hasta ${EDAD_MAXIMA_NINO} años pagan distinto según el kit.`)
+  }
+  if (!nino) return { valor: precio, kit: true }
+  if (kit === null) throw new OperacionError("Di si el niño va con kit o sin kit: cambia lo que paga.")
+  return { valor: Number(kit ? taller.precio_nino_con_kit : taller.precio_nino_sin_kit), kit }
+}
+
 /** La edad como se lee en pantalla: "15 años", "1 año". */
 export function edadLegible(edad: number | null | undefined): string {
   if (edad === null || edad === undefined) return ""
@@ -297,6 +348,10 @@ export type DatosTaller = {
   fechaInicio?: string | null
   lugar?: string | null
   precio: number | string
+  /** Lo que paga un niño (hasta 15 años) que va con kit; vacio si los niños pagan como todos. */
+  precioNinoConKit?: number | string | null
+  /** Lo que paga un niño que va sin kit (0 si es gratis); vacio si los niños pagan como todos. */
+  precioNinoSinKit?: number | string | null
   cupo?: number | string | null
   estado?: string | null
   instruccionesPago?: string | null
@@ -316,6 +371,18 @@ export function validarTaller(datos: DatosTaller) {
   const precio = Number(datos.precio)
   if (!Number.isFinite(precio) || precio < 0) throw new OperacionError("El valor del taller no puede ser negativo.")
 
+  const precioNino = (valor: unknown, cual: string) => {
+    if (valor === null || valor === undefined || String(valor).trim() === "") return null
+    const numero = Number(valor)
+    if (!Number.isFinite(numero) || numero < 0) throw new OperacionError(`El valor de los niños ${cual} no puede ser negativo.`)
+    return numero
+  }
+  const precioNinoConKit = precioNino(datos.precioNinoConKit, "con kit")
+  const precioNinoSinKit = precioNino(datos.precioNinoSinKit, "sin kit")
+  if ((precioNinoConKit === null) !== (precioNinoSinKit === null)) {
+    throw new OperacionError("Escribe los dos valores de los niños (con kit y sin kit), o déjalos los dos vacíos.")
+  }
+
   let cupo: number | null = null
   if (datos.cupo !== null && datos.cupo !== undefined && String(datos.cupo).trim() !== "" && Number(datos.cupo) !== 0) {
     cupo = Number(datos.cupo)
@@ -334,6 +401,8 @@ export function validarTaller(datos: DatosTaller) {
     fecha_inicio: normalizarFechaTaller(datos.fechaInicio),
     lugar: textoOpcional(datos.lugar, 200, "El lugar"),
     precio,
+    precio_nino_con_kit: precioNinoConKit,
+    precio_nino_sin_kit: precioNinoSinKit,
     cupo,
     estado,
     instrucciones_pago: textoOpcional(datos.instruccionesPago, 2000, "Cómo pagar"),

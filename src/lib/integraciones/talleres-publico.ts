@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto"
 import type { DbClient } from "@/lib/supabase/types"
 import { OperacionError } from "@/lib/operaciones/errores"
-import { inscribirEnTaller, preguntasGuardadas, resumirTaller, type Taller } from "@/lib/operaciones/talleres"
+import { EDAD_MAXIMA_NINO, inscribirEnTaller, preguntasGuardadas, resumirTaller, type Taller } from "@/lib/operaciones/talleres"
 import { esAnuladoCompleto } from "@/lib/utils/contable"
 import { objeto } from "@/lib/utils/lectura"
 import { secretoCoincide } from "@/lib/seguridad/secretos"
@@ -72,6 +72,10 @@ function tallerParaInvitacion(taller: Taller, inscritos: number) {
     fechaInicio: taller.fecha_inicio,
     lugar: taller.lugar,
     precio: Number(taller.precio || 0),
+    // niños hasta 15 años, si el taller les cobra distinto segun el kit (null: pagan como todos)
+    precioNinoConKit: taller.precio_nino_con_kit === null ? null : Number(taller.precio_nino_con_kit),
+    precioNinoSinKit: taller.precio_nino_sin_kit === null ? null : Number(taller.precio_nino_sin_kit),
+    edadMaximaNino: EDAD_MAXIMA_NINO,
     cupo: taller.cupo,
     cuposRestantes: restantes,
     estado: taller.estado,

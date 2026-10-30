@@ -151,6 +151,37 @@ export function TallerForm({ taller, preguntas = [] }: { taller?: Taller | null;
           <p className="text-xs text-gris">Déjalo en 0 si es gratis. Cambiarlo no toca a quienes ya se inscribieron.</p>
         </div>
 
+        <fieldset className="space-y-2 md:col-span-2">
+          <legend className={claseEtiqueta}>
+            Niños hasta 15 años <span className="font-normal text-gris">(si pagan distinto según el kit)</span>
+          </legend>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="block space-y-1.5">
+              <span className="text-sm text-tinta">Con kit</span>
+              <MoneyInput
+                name="precio_nino_con_kit"
+                defaultValue={taller?.precio_nino_con_kit ?? ''}
+                placeholder="Como todos"
+                disabled={enviando}
+              />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-sm text-tinta">Sin kit</span>
+              <MoneyInput
+                name="precio_nino_sin_kit"
+                defaultValue={taller?.precio_nino_sin_kit ?? ''}
+                placeholder="Como todos"
+                disabled={enviando}
+              />
+            </label>
+          </div>
+          <p className="text-xs text-gris">
+            Con estos dos valores, desde los 16 años van siempre con kit y pagan el valor por persona; cada niño de 15
+            años o menos escoge con kit o sin kit y paga eso. Escribe 0 si es gratis, o déjalos vacíos si los niños pagan
+            como todos.
+          </p>
+        </fieldset>
+
         <div className="space-y-2">
           <label htmlFor="cupo" className={claseEtiqueta}>
             Cupo

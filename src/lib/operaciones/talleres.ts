@@ -17,7 +17,9 @@ import {
   preguntasGuardadas,
   resumirTaller,
   textoOpcional,
+  tienePreciosNinos,
   validarRespuestas,
+  valorYKitDeInscripcion,
   validarTaller,
   type DatosTaller,
   type GastoLeido,
@@ -407,7 +409,7 @@ export async function inscribirEnTaller(supabase: DbClient, actor: ActorErp, dat
   if (nombre.length > 120) throw new OperacionError("El nombre es muy largo (máximo 120 caracteres).")
   const documento = normalizarDocumento(datos.documento)
   const edad = normalizarEdad(datos.edad)
-  const kit = normalizarKit(datos.kit)
+  const kitPedido = normalizarKit(datos.kit)
   const telefono = normalizarTelefono(datos.telefono)
   const correo = normalizarCorreo(datos.correo)
   if (desdeInvitacion) {
@@ -419,8 +421,10 @@ export async function inscribirEnTaller(supabase: DbClient, actor: ActorErp, dat
     exigirObligatorias: desdeInvitacion,
   })
 
-  const precio = Number(taller.precio || 0)
-  let valorAcordado = precio
+  // Lo del taller: desde los 16 pagan su valor (y van con kit si el taller cobra distinto a los niños); un niño,
+  // segun lleve kit o no. Desde la invitacion siempre es eso; el equipo puede poner otro valor a mano.
+  const { valor: valorDelTaller, kit } = valorYKitDeInscripcion(taller, { documento, edad, kit: kitPedido })
+  let valorAcordado = valorDelTaller
   if (!desdeInvitacion && datos.valorAcordado !== null && datos.valorAcordado !== undefined && String(datos.valorAcordado).trim() !== "") {
     valorAcordado = Number(datos.valorAcordado)
     if (!Number.isFinite(valorAcordado) || valorAcordado < 0) {
@@ -540,14 +544,33 @@ export async function editarInscripcion(
   }
   if (cambios.edad !== undefined) fila.edad = normalizarEdad(cambios.edad)
   if (cambios.kit !== undefined) fila.kit = normalizarKit(cambios.kit)
+
+  // Si cambio el kit, la edad o el documento y el taller cobra distinto a los niños, el valor a pagar se ajusta
+  // solo (salvo que el admin haya escrito otro a mano en el mismo cambio).
+  let valorPedido = cambios.valorAcordado
+  const persona = {
+    documento: fila.documento !== undefined ? fila.documento : actual.documento,
+    edad: fila.edad !== undefined ? fila.edad : actual.edad,
+    kit: fila.kit !== undefined ? fila.kit : actual.kit,
+  }
+  if (persona.documento !== actual.documento || persona.edad !== actual.edad || persona.kit !== actual.kit) {
+    const taller = await leerTallerPorId(supabase, actual.taller_id)
+    if (tienePreciosNinos(taller)) {
+      const regla = valorYKitDeInscripcion(taller, persona)
+      if (regla.kit !== persona.kit) fila.kit = regla.kit
+      const aMano =
+        valorPedido !== undefined && valorPedido !== null && String(valorPedido).trim() !== "" && Number(valorPedido) !== Number(actual.valor_acordado)
+      if (!aMano) valorPedido = regla.valor
+    }
+  }
   if (cambios.telefono !== undefined) fila.telefono = normalizarTelefono(cambios.telefono)
   if (cambios.correo !== undefined) fila.correo = normalizarCorreo(cambios.correo)
   if (cambios.notas !== undefined) fila.notas = textoOpcional(cambios.notas, 1000, "La nota")
   if (cambios.asistenteId !== undefined) fila.asistente_id = cambios.asistenteId || null
 
   let valorAnterior: number | null = null
-  if (cambios.valorAcordado !== undefined && cambios.valorAcordado !== null && String(cambios.valorAcordado).trim() !== "") {
-    const valor = Number(cambios.valorAcordado)
+  if (valorPedido !== undefined && valorPedido !== null && String(valorPedido).trim() !== "") {
+    const valor = Number(valorPedido)
     if (!Number.isFinite(valor) || valor < 0) throw new OperacionError("El valor a pagar no puede ser negativo.")
     if (valor !== Number(actual.valor_acordado)) {
       const pagado = await totalPagado(supabase, inscripcionId)

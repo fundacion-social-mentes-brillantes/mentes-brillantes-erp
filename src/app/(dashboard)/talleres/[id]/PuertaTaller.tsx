@@ -8,7 +8,7 @@ import { pesos } from '@/lib/utils/pesos'
 import { documentoLegible, edadLegible, type PreguntaTaller } from '@/lib/operaciones/talleres-reglas'
 import { marcarAsistenciaAction } from '../actions'
 import { EscanerQr, prepararSonido } from './EscanerQr'
-import { ChipKit } from '../piezas'
+import { ChipKit, type PreciosNinos } from '../piezas'
 import { FormularioInscripcion, FormularioPago } from './formularios'
 import type { FilaInscrito } from './InscritosTaller'
 
@@ -21,6 +21,7 @@ const sinTildes = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-�
 export function PuertaTaller({
   tallerId,
   precio,
+  preciosNinos = null,
   preguntas,
   filas,
   hoy,
@@ -29,6 +30,8 @@ export function PuertaTaller({
 }: {
   tallerId: string
   precio: number
+  /** Lo que pagan los niños con kit y sin kit (si el taller cobra distinto). */
+  preciosNinos?: PreciosNinos | null
   preguntas: PreguntaTaller[]
   filas: FilaInscrito[]
   hoy: string
@@ -196,6 +199,7 @@ export function PuertaTaller({
           <FormularioInscripcion
             tallerId={tallerId}
             precio={precio}
+            preciosNinos={preciosNinos}
             preguntas={preguntas}
             hoy={hoy}
             isAdmin={isAdmin}

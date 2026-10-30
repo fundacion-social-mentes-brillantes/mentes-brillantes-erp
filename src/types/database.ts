@@ -1232,6 +1232,8 @@ export type Database = {
           lugar: string | null
           nombre: string
           precio: number
+          precio_nino_con_kit: number | null
+          precio_nino_sin_kit: number | null
           preguntas: Json
           slug: string
           tipo: string
@@ -1249,6 +1251,8 @@ export type Database = {
           lugar?: string | null
           nombre: string
           precio?: number
+          precio_nino_con_kit?: number | null
+          precio_nino_sin_kit?: number | null
           preguntas?: Json
           slug: string
           tipo?: string
@@ -1266,6 +1270,8 @@ export type Database = {
           lugar?: string | null
           nombre?: string
           precio?: number
+          precio_nino_con_kit?: number | null
+          precio_nino_sin_kit?: number | null
           preguntas?: Json
           slug?: string
           tipo?: string

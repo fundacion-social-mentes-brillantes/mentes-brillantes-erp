@@ -24,6 +24,7 @@ import {
   normalizarTelefono,
   preguntasGuardadas,
   validarRespuestas,
+  valorYKitDeInscripcion,
   type EstadoTaller,
 } from "@/lib/operaciones/talleres-reglas"
 import { mensajeDeError } from "@/lib/utils/errores"
@@ -94,7 +95,7 @@ export const OPERACIONES_TALLERES: DefinicionOperacion[] = [
 
       const documento = normalizarDocumento(args.cedula)
       const edad = normalizarEdad(args.edad)
-      const kit = normalizarKit(args.kit)
+      const kitPedido = normalizarKit(args.kit)
       const telefono = normalizarTelefono(args.celular)
       const correo = normalizarCorreo(args.correo)
       const respuestas = validarRespuestas(preguntasGuardadas(taller.preguntas), args.respuestas ?? {})
@@ -111,9 +112,11 @@ export const OPERACIONES_TALLERES: DefinicionOperacion[] = [
         }
       }
 
+      // Lo del taller (desde los 16 el valor normal y con kit; un niño, segun el kit), como en la web.
       const precio = Number(taller.precio || 0)
-      let valorAcordado = precio
-      if (args.valor_acordado !== undefined && Number(args.valor_acordado) !== precio) {
+      const { valor: valorDelTaller, kit } = valorYKitDeInscripcion(taller, { documento, edad, kit: kitPedido })
+      let valorAcordado = valorDelTaller
+      if (args.valor_acordado !== undefined && Number(args.valor_acordado) !== valorDelTaller) {
         if (actor.role !== "admin") throw new OperacionMcpError("Solo el administrador puede cambiar el valor a pagar.")
         valorAcordado = Number(args.valor_acordado)
       }
@@ -169,7 +172,8 @@ export const OPERACIONES_TALLERES: DefinicionOperacion[] = [
         avisos: [
           lleno ? `OJO: el taller ya tiene ${count} inscritos y su cupo es ${taller.cupo}.` : null,
           taller.estado !== "abierto" ? `El taller está «${ETIQUETA_ESTADO_TALLER[taller.estado as EstadoTaller] ?? taller.estado}».` : null,
-          valorAcordado !== precio ? `Paga ${money(valorAcordado)} en vez del precio del taller (${money(precio)}).` : null,
+          valorDelTaller !== precio ? `Va como niño ${kitLegible(kit).toLowerCase()}: paga ${money(valorDelTaller)}.` : null,
+          valorAcordado !== valorDelTaller ? `Paga ${money(valorAcordado)} en vez de lo del taller (${money(valorDelTaller)}).` : null,
         ],
       }
     },
