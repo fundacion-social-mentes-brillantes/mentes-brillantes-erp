@@ -184,6 +184,14 @@ export function FormularioInscripcion({
           <Input name="edad" type="number" inputMode="numeric" min={0} max={120} step={1} autoComplete="off" disabled={enviando} />
         </label>
         <label className="block space-y-1.5">
+          <span className={claseEtiqueta}>Kit</span>
+          <select name="kit" defaultValue="" className={claseSelect} disabled={enviando}>
+            <option value="">Sin dato</option>
+            <option value="si">Con kit</option>
+            <option value="no">Sin kit</option>
+          </select>
+        </label>
+        <label className="block space-y-1.5">
           <span className={claseEtiqueta}>Celular</span>
           <Input name="telefono" type="tel" inputMode="tel" maxLength={30} autoComplete="off" disabled={enviando} />
         </label>
@@ -252,6 +260,7 @@ export type DatosEditables = {
   nombre: string
   documento: string | null
   edad: number | null
+  kit: boolean | null
   telefono: string | null
   correo: string | null
   notas: string | null
@@ -299,6 +308,19 @@ export function FormularioEditarInscripcion({
             defaultValue={inscripcion.edad ?? ''}
             disabled={enviando}
           />
+        </label>
+        <label className="block space-y-1.5">
+          <span className={claseEtiqueta}>Kit</span>
+          <select
+            name="kit"
+            defaultValue={inscripcion.kit === true ? 'si' : inscripcion.kit === false ? 'no' : ''}
+            className={claseSelect}
+            disabled={enviando}
+          >
+            <option value="">Sin dato</option>
+            <option value="si">Con kit</option>
+            <option value="no">Sin kit</option>
+          </select>
         </label>
         <label className="block space-y-1.5">
           <span className={claseEtiqueta}>Celular</span>

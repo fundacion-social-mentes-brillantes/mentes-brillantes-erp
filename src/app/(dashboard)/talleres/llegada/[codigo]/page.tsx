@@ -4,6 +4,7 @@ import { requireRoles } from '@/lib/utils/authz'
 import { codigoDeBoleta, documentoLegible, edadLegible, entradaPorCodigo } from '@/lib/operaciones/talleres'
 import { formatearFechaEvento } from '@/lib/utils/fechas'
 import { pesos } from '@/lib/utils/pesos'
+import { ChipKit } from '../../piezas'
 import { RegistrarLlegada } from './RegistrarLlegada'
 
 // Lo que abre la camara normal del celular al leer el QR de una boleta: el QR
@@ -54,6 +55,11 @@ export default async function LlegadaPage({ params }: { params: Promise<{ codigo
         <h1 id="entrada-nombre" className="mt-1 text-2xl font-bold leading-tight text-tinta">
           {inscripcion.nombre}
         </h1>
+        {inscripcion.kit !== null && (
+          <p className="mt-2">
+            <ChipKit kit={inscripcion.kit} />
+          </p>
+        )}
         <ul className="mt-3 space-y-1.5 text-sm text-gris">
           <li className="flex items-center gap-2">
             <Ticket className="h-4 w-4" aria-hidden />

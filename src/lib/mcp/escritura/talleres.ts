@@ -19,6 +19,8 @@ import {
   normalizarCorreo,
   normalizarDocumento,
   normalizarEdad,
+  kitLegible,
+  normalizarKit,
   normalizarTelefono,
   preguntasGuardadas,
   validarRespuestas,
@@ -74,6 +76,7 @@ export const OPERACIONES_TALLERES: DefinicionOperacion[] = [
       nombre: z.string().trim().min(2).max(120),
       cedula: z.string().trim().max(30).optional().describe("Cedula, o TI y el numero si es una tarjeta de identidad"),
       edad: z.coerce.number().int().min(0).max(120).optional().describe("Anos cumplidos"),
+      kit: z.boolean().optional().describe("true si va con el kit del taller, false si va sin kit"),
       celular: z.string().trim().max(30).optional(),
       correo: z.string().trim().max(160).optional(),
       valor_acordado: z.coerce.number().min(0).max(100_000_000).optional().describe("Solo admin: lo que pagara si no es el precio del taller"),
@@ -91,6 +94,7 @@ export const OPERACIONES_TALLERES: DefinicionOperacion[] = [
 
       const documento = normalizarDocumento(args.cedula)
       const edad = normalizarEdad(args.edad)
+      const kit = normalizarKit(args.kit)
       const telefono = normalizarTelefono(args.celular)
       const correo = normalizarCorreo(args.correo)
       const respuestas = validarRespuestas(preguntasGuardadas(taller.preguntas), args.respuestas ?? {})
@@ -133,6 +137,7 @@ export const OPERACIONES_TALLERES: DefinicionOperacion[] = [
         nombre: args.nombre,
         documento,
         edad,
+        kit,
         telefono,
         correo,
         respuestas,
@@ -152,6 +157,7 @@ export const OPERACIONES_TALLERES: DefinicionOperacion[] = [
           nombre: args.nombre,
           identificacion: documento ? enmascarar(documento) : null,
           edad,
+          kit: kitLegible(kit) || null,
           contacto_movil: telefono ? enmascarar(telefono) : null,
           contacto_mail: correo ? enmascarar(correo) : null,
           valor_a_pagar: valorAcordado,
@@ -174,6 +180,7 @@ export const OPERACIONES_TALLERES: DefinicionOperacion[] = [
         nombre: d.nombre,
         documento: d.documento,
         edad: d.edad,
+        kit: d.kit,
         telefono: d.telefono,
         correo: d.correo,
         respuestas: d.respuestas,

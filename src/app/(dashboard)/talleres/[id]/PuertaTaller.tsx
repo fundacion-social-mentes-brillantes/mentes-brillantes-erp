@@ -8,6 +8,7 @@ import { pesos } from '@/lib/utils/pesos'
 import { documentoLegible, edadLegible, type PreguntaTaller } from '@/lib/operaciones/talleres-reglas'
 import { marcarAsistenciaAction } from '../actions'
 import { EscanerQr, prepararSonido } from './EscanerQr'
+import { ChipKit } from '../piezas'
 import { FormularioInscripcion, FormularioPago } from './formularios'
 import type { FilaInscrito } from './InscritosTaller'
 
@@ -145,7 +146,10 @@ export function PuertaTaller({
                     <Check className="h-6 w-6" strokeWidth={3} />
                   </button>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold text-tinta">{fila.nombre}</p>
+                    <p className="flex min-w-0 items-center gap-2">
+                      <span className="truncate font-semibold text-tinta">{fila.nombre}</span>
+                      <ChipKit kit={fila.kit} />
+                    </p>
                     <p className="text-xs text-gris">
                       {fila.pendiente > 0 ? (
                         <span className="font-semibold text-ambar">Debe {pesos(fila.pendiente)}</span>

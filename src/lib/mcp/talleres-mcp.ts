@@ -1,7 +1,7 @@
 import type { DbClient } from "@/lib/supabase/types"
 import { cargarMediosPago } from "@/lib/medios-pago"
 import { cargarTaller, listarTalleres } from "@/lib/operaciones/talleres"
-import { ETIQUETA_ESTADO_PAGO, ETIQUETA_ESTADO_TALLER, type EstadoTaller, type Taller } from "@/lib/operaciones/talleres-reglas"
+import { ETIQUETA_ESTADO_PAGO, ETIQUETA_ESTADO_TALLER, kitLegible, type EstadoTaller, type Taller } from "@/lib/operaciones/talleres-reglas"
 import { listarTraslados } from "@/lib/operaciones/traslados"
 import { formatearFechaEvento } from "@/lib/utils/fechas"
 import { metodoPagoLegible } from "@/lib/utils/textos"
@@ -133,6 +133,7 @@ export async function vistaTaller(supabase: DbClient, texto: string) {
       nombre: f.nombre,
       identificacion: f.documento ? enmascarar(f.documento) : null,
       edad: f.edad,
+      kit: kitLegible(f.kit) || null,
       contacto_movil: f.telefono ? enmascarar(f.telefono) : null,
       estado: f.estado === "cancelado" ? "Cancelada" : "Inscrita",
       llego: f.asistio,

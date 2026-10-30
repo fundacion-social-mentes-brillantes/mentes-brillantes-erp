@@ -1142,6 +1142,7 @@ export type Database = {
           estado: string
           hora_llegada: string | null
           id: string
+          kit: boolean | null
           nombre: string
           notas: string | null
           origen: string
@@ -1166,6 +1167,7 @@ export type Database = {
           estado?: string
           hora_llegada?: string | null
           id?: string
+          kit?: boolean | null
           nombre: string
           notas?: string | null
           origen?: string
@@ -1190,6 +1192,7 @@ export type Database = {
           estado?: string
           hora_llegada?: string | null
           id?: string
+          kit?: boolean | null
           nombre?: string
           notas?: string | null
           origen?: string

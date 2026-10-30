@@ -102,6 +102,8 @@ export async function inscribirDesdeInvitacion(supabase: DbClient, slug: string,
     nombre: texto("nombre", 120),
     documento: texto("documento", 30) || null,
     edad: texto("edad", 10) || null,
+    // con kit (true) o sin kit (false); si no llega, queda sin dato
+    kit: typeof datos.kit === "boolean" || typeof datos.kit === "string" ? datos.kit : null,
     telefono: texto("telefono", 30) || null,
     correo: texto("correo", 160) || null,
     respuestas: objeto(datos.respuestas),
@@ -121,7 +123,7 @@ export async function boletaPorCodigo(supabase: DbClient, codigo: string) {
   if (!CODIGO.test(codigo)) return null
   const { data: inscripcion } = await supabase
     .from("taller_inscripciones")
-    .select("id, taller_id, nombre, valor_acordado, estado, asistio, comprobante_ruta, creado_en")
+    .select("id, taller_id, nombre, valor_acordado, estado, asistio, kit, comprobante_ruta, creado_en")
     .eq("codigo_boleta", codigo)
     .maybeSingle()
   if (!inscripcion) return null
@@ -150,6 +152,7 @@ export async function boletaPorCodigo(supabase: DbClient, codigo: string) {
     numero: inscripcion.estado === "cancelado" ? null : (anteriores ?? []).length,
     cancelada: inscripcion.estado === "cancelado",
     asistio: inscripcion.asistio,
+    kit: inscripcion.kit ?? null,
     valor: Number(inscripcion.valor_acordado || 0),
     pagado: fila.pagado,
     pendiente: fila.pendiente,

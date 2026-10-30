@@ -2,6 +2,7 @@ import {
   ETIQUETA_ESTADO_PAGO,
   ETIQUETA_ESTADO_TALLER,
   ESTADOS_TALLER,
+  kitLegible,
   type EstadoPagoTaller,
   type EstadoTaller,
 } from '@/lib/operaciones/talleres-reglas'
@@ -32,6 +33,12 @@ const COLOR_ESTADO_PAGO: Record<EstadoPagoTaller, string> = {
 
 export function ChipEstadoPago({ estado }: { estado: EstadoPagoTaller }) {
   return <span className={`${CHIP} ${COLOR_ESTADO_PAGO[estado]}`}>{ETIQUETA_ESTADO_PAGO[estado]}</span>
+}
+
+/** «Con kit» o «Sin kit», para verlo de un vistazo en la puerta. Sin dato no muestra nada. */
+export function ChipKit({ kit }: { kit: boolean | null | undefined }) {
+  if (kit === null || kit === undefined) return null
+  return <span className={`${CHIP} ${kit ? 'bg-acento/12 text-acento' : 'bg-suave-2 text-gris'}`}>{kitLegible(kit)}</span>
 }
 
 export const claseSelect =

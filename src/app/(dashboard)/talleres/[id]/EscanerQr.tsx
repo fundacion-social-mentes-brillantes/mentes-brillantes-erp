@@ -5,6 +5,7 @@ import { CircleAlert, CircleCheck, Flashlight, FlashlightOff, RotateCcw, ScanLin
 import { codigoDeBoleta } from '@/lib/operaciones/talleres-reglas'
 import { formatearHora } from '@/lib/utils/fechas'
 import { pesos } from '@/lib/utils/pesos'
+import { ChipKit } from '../piezas'
 import { marcarAsistenciaAction, registrarLlegadaQrAction } from '../actions'
 
 // El lector de QR de la puerta: abre la camara de atras del celular y lee las
@@ -17,6 +18,7 @@ type Resultado =
   | {
       tipo: 'llego' | 'ya'
       nombre: string
+      kit: boolean | null
       numero: number | null
       pendiente: number
       hora: string | null
@@ -175,6 +177,7 @@ export function EscanerQr({
         setResultado({
           tipo: l.yaHabiaLlegado ? 'ya' : 'llego',
           nombre: l.nombre,
+          kit: l.kit,
           numero: l.numero,
           pendiente: l.pendiente,
           hora: l.horaLlegada,
@@ -399,6 +402,11 @@ function TarjetaResultado({
             {llego ? 'Llegó' : `Esta entrada ya se usó${resultado.hora ? ` a las ${formatearHora(resultado.hora)}` : ''}`}
           </p>
           <p className="text-xl font-bold leading-tight">{resultado.nombre}</p>
+          {resultado.kit !== null && (
+            <p className="mt-1">
+              <ChipKit kit={resultado.kit} />
+            </p>
+          )}
           <p className="mt-0.5 text-sm text-gris">
             {resultado.numero ? `Entrada N.º ${resultado.numero}` : 'Entrada'}
             {llego && resultado.hora ? ` · ${formatearHora(resultado.hora)}` : ''}

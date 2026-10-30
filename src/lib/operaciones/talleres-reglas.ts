@@ -63,8 +63,9 @@ export function normalizarDocumento(valor: unknown): string | null {
 /**
  * El documento como se lee en pantalla. Se guarda en un solo campo: la cedula
  * va sola ("1020304050" -> "CC 1020304050") y otro tipo lleva sus letras
- * adelante, como la tarjeta de identidad de un menor ("TI1029384756" ->
- * "TI 1029384756", asi lo manda la invitacion de la Cena de la Gratitud).
+ * adelante, como la tarjeta de identidad ("TI1029384756" -> "TI 1029384756")
+ * o el registro civil de los menores de 7 anos ("RC1122334455" -> "RC ..."),
+ * asi los manda la invitacion de la Cena de la Gratitud.
  */
 export function documentoLegible(documento: string | null | undefined): string {
   const limpio = String(documento ?? "").trim()
@@ -95,6 +96,31 @@ export function normalizarEdad(valor: unknown): number | null {
   const edad = numero === undefined ? NaN : Number(numero)
   if (!Number.isInteger(edad) || edad > 120) throw new OperacionError("La edad debe ser un número de años, de 0 a 120.")
   return edad
+}
+
+/**
+ * Si va con kit (el kit especial del taller) o sin el. Entiende true/false y
+ * "si"/"no", "con"/"sin" (lo que mandan la invitacion y los formularios). Sin
+ * dato queda null: las inscripciones de antes no lo tienen.
+ */
+export function normalizarKit(valor: unknown): boolean | null {
+  if (valor === true || valor === false) return valor
+  const texto = String(valor ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+  if (!texto) return null
+  if (["si", "con", "con kit", "true", "1"].includes(texto)) return true
+  if (["no", "sin", "sin kit", "false", "0"].includes(texto)) return false
+  throw new OperacionError("Di si va con kit o sin kit.")
+}
+
+/** "Con kit", "Sin kit", o vacío si no se sabe. */
+export function kitLegible(kit: boolean | null | undefined): string {
+  if (kit === true) return "Con kit"
+  if (kit === false) return "Sin kit"
+  return ""
 }
 
 /** La edad como se lee en pantalla: "15 años", "1 año". */

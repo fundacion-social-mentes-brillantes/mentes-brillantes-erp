@@ -125,6 +125,7 @@ describe("rutas de la invitacion de talleres", () => {
           nombre: "Ana Gómez",
           documento: "52.123.456",
           edad: "15",
+          kit: false,
           telefono: "300 111 2233",
           correo: "ana@example.com",
           respuestas: { acompanante: "no" },
@@ -139,7 +140,7 @@ describe("rutas de la invitacion de talleres", () => {
     expect(cuerpo).toMatchObject({ valor: 25000, instruccionesPago: "Nequi de la fundación" })
     // (el codigo de la boleta lo pone la base; la de memoria no lo genera)
     expect(Object.keys(cuerpo).every((k) => ["codigoBoleta", "instruccionesPago", "valor"].includes(k))).toBe(true)
-    expect(base.tablas.taller_inscripciones.at(-1)).toMatchObject({ origen: "invitacion", valor_acordado: 25000, edad: 15 })
+    expect(base.tablas.taller_inscripciones.at(-1)).toMatchObject({ origen: "invitacion", valor_acordado: 25000, edad: 15, kit: false })
     expect(base.escrituras.some((e: any) => e.tabla === "asistentes" || e.tabla === "ventas_externas")).toBe(false)
   })
 
@@ -164,7 +165,8 @@ describe("rutas de la invitacion de talleres", () => {
   it("la boleta dice como va el pago, sin cedula ni celular", async () => {
     const r = await verBoleta(pedir("http://x/b"), conCodigo(CODIGO))
     const { boleta } = await r.json()
-    expect(boleta).toMatchObject({ nombre: "María Ríos", numero: 1, valor: 25000, pagado: 10000, pendiente: 15000, estadoPago: "abono" })
+    // (esta inscripcion es de antes del kit: queda sin dato)
+    expect(boleta).toMatchObject({ nombre: "María Ríos", numero: 1, kit: null, valor: 25000, pagado: 10000, pendiente: 15000, estadoPago: "abono" })
     expect(JSON.stringify(boleta)).not.toMatch(/1020304050|3001234567/)
     expect((await verBoleta(pedir("http://x/b"), conCodigo("no-es-un-codigo"))).status).toBe(404)
   })

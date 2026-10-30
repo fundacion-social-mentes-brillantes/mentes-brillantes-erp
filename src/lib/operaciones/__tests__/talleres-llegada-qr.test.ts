@@ -23,6 +23,7 @@ function inscripcion(extra: Record<string, unknown> = {}) {
     asistio: false,
     hora_llegada: null,
     codigo_boleta: CODIGO,
+    kit: true,
     creado_en: "2026-10-29T10:00:00Z",
     ...extra,
   }
@@ -73,6 +74,7 @@ describe("el documento en pantalla", () => {
     expect(documentoLegible("1020304050")).toBe("CC 1020304050")
     expect(documentoLegible("TI1029384756")).toBe("TI 1029384756")
     expect(documentoLegible("ti1029384756")).toBe("TI 1029384756")
+    expect(documentoLegible("RC1122334455")).toBe("RC 1122334455")
     expect(documentoLegible(null)).toBe("")
     expect(documentoLegible("")).toBe("")
   })
@@ -83,7 +85,7 @@ describe("la entrada de una boleta", () => {
     const entrada = await entradaPorCodigo(base(), CODIGO)
     expect(entrada).toMatchObject({
       taller: { id: "t-1", nombre: "Cena de la Gratitud 2026" },
-      inscripcion: { id: "i-1", nombre: "María Ríos", asistio: false },
+      inscripcion: { id: "i-1", nombre: "María Ríos", asistio: false, kit: true },
       numero: 2,
       cancelada: false,
       pagado: 60000,
@@ -106,6 +108,7 @@ describe("registrar la llegada con el QR", () => {
       yaHabiaLlegado: false,
       inscripcionId: "i-1",
       nombre: "María Ríos",
+      kit: true,
       numero: 2,
       pendiente: 60000,
       tallerId: "t-1",

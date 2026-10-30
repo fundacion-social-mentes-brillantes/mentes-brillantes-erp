@@ -8,9 +8,9 @@ import { Input } from '@/components/ui/input'
 import { formatearFechaHora, formatearFechaIso } from '@/lib/utils/fechas'
 import { pesos } from '@/lib/utils/pesos'
 import { metodoPagoLegible } from '@/lib/utils/textos'
-import { documentoLegible, edadLegible, type EstadoPagoTaller, type PreguntaTaller } from '@/lib/operaciones/talleres-reglas'
+import { documentoLegible, edadLegible, kitLegible, type EstadoPagoTaller, type PreguntaTaller } from '@/lib/operaciones/talleres-reglas'
 import { anularMovimientoTallerAction, cancelarInscripcionAction, marcarAsistenciaAction } from '../actions'
-import { ChipEstadoPago } from '../piezas'
+import { ChipEstadoPago, ChipKit } from '../piezas'
 import { FormularioEditarInscripcion, FormularioInscripcion, FormularioPago } from './formularios'
 
 export type PagoFila = { id: string; monto: number; metodo_pago: string; fecha: string; estado?: string | null; notas?: string | null }
@@ -20,6 +20,7 @@ export type FilaInscrito = {
   nombre: string
   documento: string | null
   edad: number | null
+  kit: boolean | null
   telefono: string | null
   correo: string | null
   respuestas: Record<string, string>
@@ -200,7 +201,10 @@ export function InscritosTaller({
                       <tr className={`${fila.estado === 'cancelado' ? 'opacity-60' : ''} ${expandida ? 'bg-suave/60' : 'hover:bg-suave/50'}`}>
                         <td className="px-5 py-3">
                           <button type="button" onClick={() => setAbierta(expandida ? null : fila.id)} className="text-left">
-                            <span className="font-semibold text-tinta hover:text-acento">{fila.nombre}</span>
+                            <span className="flex flex-wrap items-center gap-2">
+                              <span className="font-semibold text-tinta hover:text-acento">{fila.nombre}</span>
+                              <ChipKit kit={fila.kit} />
+                            </span>
                             <span className="block text-xs text-gris">
                               {[fila.documento && documentoLegible(fila.documento), edadLegible(fila.edad), fila.telefono].filter(Boolean).join(' · ') || 'Sin datos de contacto'}
                             </span>
@@ -266,6 +270,7 @@ export function InscritosTaller({
                       <p className="flex items-center gap-1.5 font-semibold text-tinta">
                         {fila.asistio && <Check className="h-4 w-4 shrink-0 text-verde" aria-label="Llegó" />}
                         <span className="truncate">{fila.nombre}</span>
+                        <ChipKit kit={fila.kit} />
                       </p>
                       <p className="mt-0.5 text-xs text-gris">
                         {fila.pagado > 0 ? `Pagó ${pesos(fila.pagado)}` : 'Sin pagos'}
@@ -379,6 +384,10 @@ function DetalleInscrito({
             <div>
               <dt className="text-xs text-gris">Edad</dt>
               <dd className="text-tinta">{edadLegible(fila.edad) || '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-gris">Kit</dt>
+              <dd className="text-tinta">{kitLegible(fila.kit) || 'Sin dato'}</dd>
             </div>
             <div>
               <dt className="text-xs text-gris">Celular</dt>
