@@ -24,7 +24,7 @@ function base(tablas: Record<string, any[]>) {
   return supabaseFalso({
     agenda_eventos: [],
     agenda_diferencias_resueltas: [],
-    asistentes: [{ id: "a-36", codigo: 36, nombre: "Edna Yeimmy Baquero Ruiz" }],
+    asistentes: [{ id: "a-36", codigo: "36", nombre: "Edna Yeimmy Baquero Ruiz" }],
     coach_sesiones: [],
     ...tablas,
   })
@@ -37,6 +37,30 @@ describe("diferencias entre la agenda y el ERP", () => {
       coach_sesiones: [{ id: "s-1", asistente_id: "a-36", fecha: "2026-12-04", evento_agenda_id: "Nn2AP9wgTGkYhJBtE8I5" }],
     })
     expect(await calcularDiferencias(supabase, VENTANA)).toEqual([])
+  })
+
+  it("si el código de la agenda ya es de otra persona, manda la persona de la sesión enlazada", async () => {
+    const supabase = base({
+      asistentes: [
+        { id: "a-36", codigo: "36", nombre: "Edna Yeimmy Baquero Ruiz" },
+        { id: "a-262", codigo: "262", nombre: "María Angélica" },
+      ],
+      agenda_eventos: [evento({ id: "Nn2AP9wgTGkYhJBtE8I5", codigo_persona: 262, fecha: "2026-12-10" })],
+      coach_sesiones: [{ id: "s-1", asistente_id: "a-36", fecha: "2026-12-04", evento_agenda_id: "Nn2AP9wgTGkYhJBtE8I5" }],
+    })
+    const [d] = await calcularDiferencias(supabase, VENTANA)
+    expect(d).toMatchObject({ tipo: "fecha_movida", nombrePersona: "Edna Yeimmy Baquero Ruiz" })
+  })
+
+  it("con muchos eventos lee las sesiones enlazadas por tandas", async () => {
+    const eventos = Array.from({ length: 250 }, (_, i) => evento({ id: `ev-${i}`, fecha: "2026-12-10" }))
+    const supabase = base({
+      agenda_eventos: eventos,
+      coach_sesiones: [{ id: "s-7", asistente_id: "a-36", fecha: "2026-11-02", evento_agenda_id: "ev-230" }],
+    })
+    const diferencias = await calcularDiferencias(supabase, VENTANA)
+    expect(diferencias).toHaveLength(1)
+    expect(diferencias[0]).toMatchObject({ tipo: "fecha_movida", eventoId: "ev-230" })
   })
 
   it("si la sesión enlazada está en otra fecha, avisa que se movió a nombre de la ficha de verdad", async () => {

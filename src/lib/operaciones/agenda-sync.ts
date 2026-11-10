@@ -292,35 +292,34 @@ export async function calcularDiferencias(
 
   // Sesiones del ERP en la ventana, y las enlazadas a estos eventos aunque su
   // fecha quede por fuera (las que se movieron), para cruzarlas con los eventos.
-  const [{ data: sesiones }, { data: enlazadas }] = await Promise.all([
+  // Las enlazadas se piden de a pocos eventos: con una ventana larga la lista
+  // entera no cabe en una sola consulta. Si una tanda falla, solo falta ese cruce.
+  const TANDA = 100
+  const ids = lista.map((e) => e.id)
+  const tandas = Array.from({ length: Math.ceil(ids.length / TANDA) }, (_, i) => ids.slice(i * TANDA, (i + 1) * TANDA))
+  const [{ data: sesiones }, ...enlazadas] = await Promise.all([
     admin.from("coach_sesiones").select("id, asistente_id, fecha, evento_agenda_id").gte("fecha", desde).lte("fecha", hasta),
-    admin
-      .from("coach_sesiones")
-      .select("id, asistente_id, fecha, evento_agenda_id")
-      .in(
-        "evento_agenda_id",
-        lista.map((e) => e.id)
-      ),
+    ...tandas.map((tanda) => admin.from("coach_sesiones").select("id, asistente_id, fecha, evento_agenda_id").in("evento_agenda_id", tanda)),
   ])
 
   type SesionErp = NonNullable<typeof sesiones>[number]
   const porEvento = new Map<string, SesionErp>()
   const porPersonaFecha = new Map<string, SesionErp>()
-  for (const s of [...(sesiones || []), ...(enlazadas || [])]) {
+  for (const s of [...(sesiones || []), ...enlazadas.flatMap((r) => r.data || [])]) {
     if (s.evento_agenda_id) porEvento.set(s.evento_agenda_id, s)
     porPersonaFecha.set(`${s.asistente_id}|${s.fecha}`, s)
   }
 
-  // Una persona repetida: en la agenda quedó con un código que el ERP no tiene,
-  // pero su sesión de ese evento ya está registrada a nombre de otra ficha (la de
-  // verdad). Manda la sesión enlazada: no es una persona nueva.
-  const sinCodigo = lista
-    .filter((e) => !porCodigo.has(String(e.codigo_persona)) && porEvento.has(e.id))
-    .map((e) => porEvento.get(e.id)!.asistente_id)
-  const { data: porSesion } = sinCodigo.length
-    ? await admin.from("asistentes").select("id, codigo, nombre").in("id", Array.from(new Set(sinCodigo)))
-    : { data: [] }
-  const porId = new Map((porSesion || []).map((p) => [p.id, p]))
+  // Si el evento ya tiene su sesion en el ERP, la persona es la de esa sesion
+  // (la que se registro y se cobro), aunque en la agenda haya quedado con otro
+  // codigo: una persona repetida con un codigo que el ERP no tiene, o un codigo
+  // que despues se le dio a otra persona. Se leen las fichas que falten.
+  const porId = new Map((personas || []).map((p) => [p.id, p]))
+  const faltan = Array.from(new Set(Array.from(porEvento.values()).map((s) => s.asistente_id))).filter((id) => !porId.has(id))
+  if (faltan.length) {
+    const { data: masFichas } = await admin.from("asistentes").select("id, codigo, nombre").in("id", faltan)
+    for (const p of masFichas || []) porId.set(p.id, p)
+  }
 
   // En Colombia, no en UTC: el servidor corre en UTC y de noche ya va un dia
   // adelante, asi que una sesion de manana se reportaba como "ya dictada".
@@ -334,7 +333,7 @@ export async function calcularDiferencias(
   for (const ev of lista) {
     const codigo = String(ev.codigo_persona)
     const sesionEnlazada = porEvento.get(ev.id)
-    const persona = porCodigo.get(codigo) ?? (sesionEnlazada ? porId.get(sesionEnlazada.asistente_id) : undefined)
+    const persona = (sesionEnlazada ? porId.get(sesionEnlazada.asistente_id) : undefined) ?? porCodigo.get(codigo)
     const nombre = persona?.nombre || ev.nombre_persona || `código ${codigo}`
 
     // 1) La agenda tiene a alguien que el ERP no conoce. Si borraron el evento,
