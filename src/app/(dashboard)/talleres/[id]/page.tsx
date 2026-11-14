@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { ArrowLeft, CalendarDays, Edit2, ExternalLink, MapPin, Ticket, Users } from 'lucide-react'
 import { requireRoles } from '@/lib/utils/authz'
 import { cargarTaller, tienePreciosNinos } from '@/lib/operaciones/talleres'
-import { enlaceInvitacion } from '@/lib/integraciones/talleres-publico'
+import { enlaceInvitacion, urlSitioTalleres } from '@/lib/integraciones/talleres-publico'
 import { fechaHoyBogota, formatearFechaEvento } from '@/lib/utils/fechas'
 import { pesos } from '@/lib/utils/pesos'
 import { objeto } from '@/lib/utils/lectura'
@@ -53,6 +53,7 @@ export default async function TallerPage({
     asistente_id: f.asistente_id,
     comprobante_ruta: f.comprobante_ruta,
     comprobante_en: f.comprobante_en,
+    codigo_boleta: f.codigo_boleta ?? null,
     notas: f.notas,
     creado_en: f.creado_en,
     pagado: f.pagado,
@@ -184,6 +185,8 @@ export default async function TallerPage({
       {pestana === 'inscritos' && (
         <InscritosTaller
           tallerId={taller.id}
+          tallerNombre={taller.nombre}
+          sitioTalleres={urlSitioTalleres()}
           precio={precio}
           preciosNinos={preciosNinos}
           preguntas={preguntas}

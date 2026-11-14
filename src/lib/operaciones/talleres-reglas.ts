@@ -180,6 +180,60 @@ export function edadLegible(edad: number | null | undefined): string {
   return `${edad} ${edad === 1 ? "año" : "años"}`
 }
 
+// ------------------------------------------------------------- reenviar la boleta por WhatsApp
+
+/** El numero para wa.me: un celular colombiano de 10 digitos lleva el 57 adelante. */
+export function numeroWhatsApp(telefono: string | null | undefined): string | null {
+  const digitos = String(telefono ?? "").replace(/\D/g, "")
+  if (!digitos) return null
+  return digitos.length === 10 ? `57${digitos}` : digitos
+}
+
+/** Menor de edad: menos de 18 años, o con tarjeta de identidad o registro civil. */
+export function esMenorDeEdad(persona: { documento?: string | null; edad?: number | null }): boolean {
+  if (persona.edad !== null && persona.edad !== undefined) return persona.edad < 18
+  return /^(TI|RC)/i.test(String(persona.documento ?? "").trim())
+}
+
+/**
+ * El enlace general de una boleta en la pagina de invitaciones
+ * (talleres.gimnasioemocionalmb.com/boleta/?c=<codigo>): la pagina manda cada
+ * boleta a la de su taller. Sirve para cualquier taller.
+ */
+export function enlaceBoleta(sitio: string, codigo: string): string {
+  return `${sitio.replace(/\/+$/, "")}/boleta/?c=${codigo}`
+}
+
+/**
+ * El mensaje para reenviarle a alguien su boleta por WhatsApp. Si es menor de
+ * edad, el celular suele ser del papa o la mama: se habla de «la entrada de
+ * <nombre>».
+ */
+export function mensajeBoleta(datos: {
+  nombre: string
+  documento?: string | null
+  edad?: number | null
+  taller: string
+  enlace: string
+}): string {
+  const primerNombre = datos.nombre.trim().split(/\s+/)[0] || datos.nombre.trim()
+  const saludo = esMenorDeEdad(datos)
+    ? `Hola. Esta es la entrada de ${primerNombre} para ${datos.taller} 💛`
+    : `Hola, ${primerNombre}. Esta es tu entrada para ${datos.taller} 💛`
+  return [
+    saludo,
+    `Ábrela aquí: ${datos.enlace}`,
+    "Ese día solo preséntala en la entrada para poder ingresar.",
+    "Gimnasio Emocional Mentes Brillantes",
+  ].join("\n")
+}
+
+/** El enlace de WhatsApp con el mensaje de la boleta ya escrito. Null si no hay celular. */
+export function whatsappBoleta(telefono: string | null | undefined, mensaje: string): string | null {
+  const numero = numeroWhatsApp(telefono)
+  return numero ? `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}` : null
+}
+
 const CODIGO_BOLETA = /^[0-9a-f]{32}$/i
 
 /**

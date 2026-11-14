@@ -2,13 +2,23 @@
 
 import { Fragment, useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
-import { Check, ChevronDown, FileImage, Search, UserPlus } from 'lucide-react'
+import { Check, ChevronDown, Copy, FileImage, Search, Send, UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { formatearFechaHora, formatearFechaIso } from '@/lib/utils/fechas'
 import { pesos } from '@/lib/utils/pesos'
 import { metodoPagoLegible } from '@/lib/utils/textos'
-import { documentoLegible, edadLegible, kitLegible, type EstadoPagoTaller, type PreguntaTaller } from '@/lib/operaciones/talleres-reglas'
+import {
+  documentoLegible,
+  edadLegible,
+  enlaceBoleta,
+  kitLegible,
+  mensajeBoleta,
+  numeroWhatsApp,
+  whatsappBoleta,
+  type EstadoPagoTaller,
+  type PreguntaTaller,
+} from '@/lib/operaciones/talleres-reglas'
 import { anularMovimientoTallerAction, cancelarInscripcionAction, marcarAsistenciaAction } from '../actions'
 import { ChipEstadoPago, ChipKit, type PreciosNinos } from '../piezas'
 import { FormularioEditarInscripcion, FormularioInscripcion, FormularioPago } from './formularios'
@@ -32,6 +42,8 @@ export type FilaInscrito = {
   asistente_id: string | null
   comprobante_ruta: string | null
   comprobante_en: string | null
+  /** El codigo de su boleta (la base le pone uno a toda inscripcion). */
+  codigo_boleta: string | null
   notas: string | null
   creado_en: string
   pagado: number
@@ -57,6 +69,8 @@ function coincide(fila: FilaInscrito, busqueda: string) {
 
 export function InscritosTaller({
   tallerId,
+  tallerNombre,
+  sitioTalleres,
   precio,
   preciosNinos = null,
   preguntas,
@@ -66,6 +80,9 @@ export function InscritosTaller({
   inscribirAbierto = false,
 }: {
   tallerId: string
+  tallerNombre: string
+  /** La direccion de la pagina de invitaciones, para armar el enlace de cada boleta. */
+  sitioTalleres: string
   precio: number
   /** Lo que pagan los niños con kit y sin kit (si el taller cobra distinto). */
   preciosNinos?: PreciosNinos | null
@@ -243,6 +260,7 @@ export function InscritosTaller({
                             <DetalleInscrito
                               fila={fila}
                               tallerId={tallerId}
+                              boleta={{ sitio: sitioTalleres, taller: tallerNombre }}
                               preguntas={preguntas}
                               hoy={hoy}
                               isAdmin={isAdmin}
@@ -289,7 +307,15 @@ export function InscritosTaller({
                   </button>
                   {expandida && (
                     <div className="bg-suave/60 px-4 pb-4">
-                      <DetalleInscrito fila={fila} tallerId={tallerId} preguntas={preguntas} hoy={hoy} isAdmin={isAdmin} alAvisar={setAviso} />
+                      <DetalleInscrito
+                        fila={fila}
+                        tallerId={tallerId}
+                        boleta={{ sitio: sitioTalleres, taller: tallerNombre }}
+                        preguntas={preguntas}
+                        hoy={hoy}
+                        isAdmin={isAdmin}
+                        alAvisar={setAviso}
+                      />
                     </div>
                   )}
                 </div>
@@ -310,6 +336,7 @@ function textoRespuesta(pregunta: PreguntaTaller, valor: string) {
 function DetalleInscrito({
   fila,
   tallerId,
+  boleta,
   preguntas,
   hoy,
   isAdmin,
@@ -317,6 +344,7 @@ function DetalleInscrito({
 }: {
   fila: FilaInscrito
   tallerId: string
+  boleta: { sitio: string; taller: string }
   preguntas: PreguntaTaller[]
   hoy: string
   isAdmin: boolean
@@ -338,6 +366,27 @@ function DetalleInscrito({
   }
 
   const respuestas = preguntas.filter((p) => fila.respuestas?.[p.id])
+
+  // Reenviar la boleta (la perdio, cambio de celular, o salio una version nueva): su enlace general y un mensaje ya
+  // escrito para WhatsApp. El codigo no cambia, asi que las boletas de antes siguen sirviendo en la puerta.
+  const enlace = fila.codigo_boleta ? enlaceBoleta(boleta.sitio, fila.codigo_boleta) : null
+  const whatsapp = enlace
+    ? whatsappBoleta(
+        fila.telefono,
+        mensajeBoleta({ nombre: fila.nombre, documento: fila.documento, edad: fila.edad, taller: boleta.taller, enlace })
+      )
+    : null
+  const [copiado, setCopiado] = useState<boolean | null>(null)
+  const copiarEnlace = async () => {
+    if (!enlace) return
+    try {
+      await navigator.clipboard.writeText(enlace)
+      setCopiado(true)
+    } catch {
+      // Sin permiso para copiar: se muestra el enlace para copiarlo a mano.
+      setCopiado(false)
+    }
+  }
 
   return (
     <div className="space-y-4 pt-2">
@@ -398,7 +447,7 @@ function DetalleInscrito({
               <dd className="text-tinta">
                 {fila.telefono ? (
                   <a
-                    href={`https://wa.me/${fila.telefono.length === 10 ? `57${fila.telefono}` : fila.telefono}`}
+                    href={`https://wa.me/${numeroWhatsApp(fila.telefono) ?? fila.telefono}`}
                     target="_blank"
                     rel="noreferrer"
                     className="text-acento hover:underline"
@@ -458,6 +507,31 @@ function DetalleInscrito({
               <FileImage className="h-4 w-4" />
               Ver comprobante que subió{fila.comprobante_en ? ` (${formatearFechaHora(fila.comprobante_en)})` : ''}
             </a>
+          )}
+
+          {!cancelada && enlace && (
+            <div className="space-y-1.5">
+              <p className="text-xs text-gris">Su boleta</p>
+              <div className="flex flex-wrap gap-2">
+                {whatsapp && (
+                  <a
+                    href={whatsapp}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-9 items-center gap-2 rounded-xl bg-acento px-3 text-sm font-semibold text-sobre-acento transition-colors hover:bg-acento-fuerte"
+                  >
+                    <Send className="h-4 w-4" aria-hidden />
+                    Enviar boleta por WhatsApp
+                  </a>
+                )}
+                <Button size="sm" variant="outline" onClick={copiarEnlace}>
+                  <Copy className="h-4 w-4" aria-hidden />
+                  {copiado ? 'Enlace copiado' : 'Copiar enlace de la boleta'}
+                </Button>
+              </div>
+              {!whatsapp && <p className="text-xs text-gris">No tiene celular: copia el enlace y mándaselo por donde puedas.</p>}
+              {copiado === false && <p className="break-all text-xs text-tinta select-all">{enlace}</p>}
+            </div>
           )}
 
           <div>
