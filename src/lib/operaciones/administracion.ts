@@ -290,10 +290,13 @@ export async function validarDevolucionAdelanto(supabase: DbClient, datos: Datos
 
   const { data: adelanto, error: adelantoError } = await supabase
     .from("adelantos_socios")
-    .select("id, socio_id, periodo_id, monto, fecha, tipo")
+    .select("id, socio_id, periodo_id, monto, fecha, tipo, taller_id")
     .eq("id", datos.adelantoId)
     .single()
   if (adelantoError || !adelanto) throw new OperacionError("No se encontro ese adelanto.")
+  if (adelanto.taller_id) {
+    throw new OperacionError("Ese adelanto es a cuenta de un taller: se descuenta en la nómina del taller, no se devuelve aquí.")
+  }
   if (adelanto.tipo === "devolucion") {
     throw new OperacionError("Ese movimiento ya es una devolucion: no se devuelve una devolucion.")
   }

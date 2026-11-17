@@ -565,3 +565,50 @@ export function resumirTaller<T extends InscripcionParaResumen>(datos: {
 }
 
 export type ResumenTaller = ReturnType<typeof resumirTaller>
+
+// ------------------------------------------------------------- nomina de cada taller
+
+// Desde el 16 nov 2026 la plata de cada taller va aparte de la fundacion: lo
+// recaudado menos sus gastos se reparte entre los socios activos con sus
+// porcentajes, cuando el admin lo decide (al cerrar el taller, y otra vez si
+// despues llegan pagos). Cada reparto se lleva solo lo que quedaba por repartir.
+
+export type SocioNomina = { id: string; nombre: string; porcentaje: number }
+
+export type FilaRepartoTaller = {
+  socioId: string
+  nombre: string
+  porcentaje: number
+  /** Su parte de lo que queda por repartir. */
+  valor: number
+  /** Lo que se le habia adelantado a cuenta de este taller y aun no se le descuenta. */
+  adelantos: number
+  /** Lo que se le entrega: su parte menos sus adelantos (puede quedar negativo, como en la liquidacion). */
+  neto: number
+}
+
+const redondear = (n: number) => Math.round(n * 100) / 100
+
+/**
+ * Lo que toca en el proximo reparto de un taller: lo que queda por repartir
+ * (recaudado - gastos - lo ya repartido) entre los socios activos, menos lo
+ * que cada uno recibio adelantado a cuenta de este taller.
+ */
+export function calcularRepartoTaller(datos: {
+  recaudado: number
+  gastos: number
+  repartido: number
+  socios: SocioNomina[]
+  /** Por socio: adelantos a cuenta de este taller que aun no se le han descontado. */
+  adelantosPendientes?: Record<string, number>
+}): { porRepartir: number; filas: FilaRepartoTaller[] } {
+  const porRepartir = redondear(Number(datos.recaudado || 0) - Number(datos.gastos || 0) - Number(datos.repartido || 0))
+  const base = Math.max(0, porRepartir)
+  const filas = datos.socios.map((s) => {
+    const porcentaje = Number(s.porcentaje || 0)
+    const valor = redondear((base * porcentaje) / 100)
+    const adelantos = redondear(Number(datos.adelantosPendientes?.[s.id] || 0))
+    return { socioId: s.id, nombre: s.nombre, porcentaje, valor, adelantos, neto: redondear(valor - adelantos) }
+  })
+  return { porRepartir, filas }
+}

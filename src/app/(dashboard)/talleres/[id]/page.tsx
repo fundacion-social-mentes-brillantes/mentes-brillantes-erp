@@ -12,8 +12,10 @@ import { EstadoTallerBotones } from './EstadoTallerBotones'
 import { GastosTaller, type GastoFila } from './GastosTaller'
 import { InscritosTaller, type FilaInscrito } from './InscritosTaller'
 import { PuertaTaller } from './PuertaTaller'
+import { NominaTaller } from './NominaTaller'
+import { cargarNominaTaller } from '@/lib/operaciones/talleres-nomina'
 
-type Pestana = 'inscritos' | 'puerta' | 'gastos'
+type Pestana = 'inscritos' | 'puerta' | 'gastos' | 'nomina'
 
 export default async function TallerPage({
   params,
@@ -28,8 +30,11 @@ export default async function TallerPage({
 
   const datos = await cargarTaller(supabase, id)
   if (!datos) notFound()
+  // La nomina (lo que le toca a cada socio) solo la ve el admin, y solo se lee en su pestaña.
+  const nomina = isAdmin && ver === 'nomina' ? await cargarNominaTaller(supabase, id) : null
   const { taller, preguntas, resumen, gastos } = datos
-  const pestana: Pestana = ver === 'puerta' ? 'puerta' : ver === 'gastos' && isAdmin ? 'gastos' : 'inscritos'
+  const pestana: Pestana =
+    ver === 'puerta' ? 'puerta' : ver === 'gastos' && isAdmin ? 'gastos' : ver === 'nomina' && isAdmin ? 'nomina' : 'inscritos'
   const hoy = fechaHoyBogota()
   const precio = Number(taller.precio || 0)
   const preciosNinos = tienePreciosNinos(taller)
@@ -65,7 +70,7 @@ export default async function TallerPage({
   const pestanas: Array<{ clave: Pestana; nombre: string }> = [
     { clave: 'inscritos', nombre: `Inscritos (${resumen.inscritos})` },
     { clave: 'puerta', nombre: 'Puerta' },
-    ...(isAdmin ? [{ clave: 'gastos' as const, nombre: 'Gastos' }] : []),
+    ...(isAdmin ? [{ clave: 'gastos' as const, nombre: 'Gastos' }, { clave: 'nomina' as const, nombre: 'Nómina' }] : []),
   ]
 
   const cifras = [
@@ -206,6 +211,25 @@ export default async function TallerPage({
           hoy={hoy}
           isAdmin={isAdmin}
           escanear={escanear === '1'}
+        />
+      )}
+      {pestana === 'nomina' && isAdmin && nomina && (
+        <NominaTaller
+          tallerId={taller.id}
+          hoy={hoy}
+          nomina={{
+            recaudado: nomina.recaudado,
+            gastos: nomina.gastos,
+            repartido: nomina.repartido,
+            porRepartir: nomina.porRepartir,
+            porCobrar: nomina.porCobrar,
+            conDeuda: nomina.conDeuda,
+            socios: nomina.socios,
+            propuesta: nomina.propuesta,
+            repartos: nomina.repartos,
+            adelantos: nomina.adelantos,
+            adelantosPendientes: nomina.adelantosPendientes,
+          }}
         />
       )}
       {pestana === 'gastos' && isAdmin && (

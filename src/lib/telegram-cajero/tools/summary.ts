@@ -44,6 +44,8 @@ export async function getSummary(supabase: SupabaseReader, fechaInicio: string, 
       supabase
         .from("ventas_externas")
         .select("id, monto, metodo_pago, fecha, estado, notas, concepto", conteo(exacto))
+        // Sin la plata de los talleres: va aparte de la fundacion (nomina de cada taller).
+        .is("taller_inscripcion_id", null)
         .gte("fecha", fechaInicio)
         .lte("fecha", fechaFin),
       porId
@@ -52,6 +54,7 @@ export async function getSummary(supabase: SupabaseReader, fechaInicio: string, 
       supabase
         .from("egresos")
         .select("id, monto, metodo_pago, fecha, estado, notas, concepto", conteo(exacto))
+        .is("taller_id", null)
         .gte("fecha", fechaInicio)
         .lte("fecha", fechaFin),
       porId

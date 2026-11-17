@@ -32,6 +32,8 @@ import {
 } from "@/lib/operaciones/talleres-reglas"
 import { mensajeDeError } from "@/lib/utils/errores"
 import { OperacionMcpError } from "../operaciones"
+import { anularRepartoTaller, prepararRepartoTaller, registrarAdelantoTaller, repartirTaller } from "@/lib/operaciones/talleres-nomina"
+import { buscarSocio } from "@/lib/operaciones/administracion"
 import { resolverInscripcion, resolverTaller } from "../talleres-mcp"
 import { FECHA, METODO_PAGO, enmascarar, money, operacion, resolverPersona, type DefinicionOperacion } from "./comun"
 
@@ -614,6 +616,125 @@ export const OPERACIONES_TALLERES: DefinicionOperacion[] = [
         kit: kitLegible(data?.kit) || null,
         valor_a_pagar: data ? Number(data.valor_acordado) : null,
       }
+    },
+  }),
+  // ---------------------------------------------------------- nomina de cada taller (solo admin)
+  operacion({
+    nombre: "repartir_taller",
+    titulo: "Repartir entre los socios la plata de un taller",
+    descripcion:
+      "La plata de cada taller va aparte de la fundacion (no entra a la liquidacion). Reparte lo que queda por repartir " +
+      "(recaudado - gastos - lo ya repartido) entre los socios activos con sus porcentajes, menos lo que cada uno recibio " +
+      "adelantado a cuenta de ese taller. Solo se anota: la plata se entrega por fuera. Se puede repartir otra vez si " +
+      "despues llegan pagos (reparte solo lo nuevo).",
+    roles: ["admin"],
+    riesgo: "crear",
+    schema: {
+      taller: TALLER,
+      fecha: FECHA.optional().describe("Fecha del reparto; por defecto hoy"),
+      notas: z.string().trim().max(500).optional(),
+    },
+    previsualizar: async (admin, _actor, args) => {
+      const taller = await resolverTaller(admin, args.taller)
+      const { nomina, fecha, filas } = await prepararRepartoTaller(admin, taller.id, { fecha: args.fecha })
+      return {
+        datos: { tallerId: taller.id, fecha, notas: args.notas ?? null, porRepartir: nomina.porRepartir },
+        resumen: `Repartir ${money(nomina.porRepartir)} de «${taller.nombre}»: ${filas.map((f) => `${f.nombre} ${money(f.neto)}`).join(", ")}`,
+        detalle: {
+          taller: taller.nombre,
+          fecha,
+          recaudado: nomina.recaudado,
+          gastos: nomina.gastos,
+          ya_repartido: nomina.repartido,
+          se_reparte: nomina.porRepartir,
+          socios: filas.map((f) => ({ socio: f.nombre, porcentaje: f.porcentaje, su_parte: f.valor, adelantos: f.adelantos, a_entregar: f.neto })),
+        },
+        avisos: [
+          "Solo se anota lo que le toca a cada socio: la plata se entrega por fuera. Si fue un error, se puede anular.",
+          nomina.porCobrar > 0
+            ? `Todavía faltan ${money(nomina.porCobrar)} por cobrar en este taller: cuando lleguen, quedarán por repartir.`
+            : null,
+          taller.estado === "abierto" ? "El taller sigue con inscripciones abiertas." : null,
+        ],
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const r = await repartirTaller(admin, { userId: actor.userId, role: actor.role }, d.tallerId, { fecha: d.fecha, notas: d.notas })
+      const socios = r.filas.map((f) => ({ socio: f.nombre, a_entregar: f.neto }))
+      // Si entre el borrador y la confirmacion llego un pago, se reparte lo de ese momento y se avisa.
+      return Math.abs(r.utilidad - Number(d.porRepartir)) > 0.005
+        ? { reparto_id: r.id, repartido: r.utilidad, socios, aviso: `Mientras tanto cambiaron las cuentas: se repartió ${money(r.utilidad)}.` }
+        : { reparto_id: r.id, repartido: r.utilidad, socios }
+    },
+  }),
+  operacion({
+    nombre: "anular_reparto_taller",
+    titulo: "Anular un reparto de un taller",
+    descripcion:
+      "Anula un reparto equivocado de la nomina de un taller: lo repartido vuelve a quedar por repartir y los adelantos que " +
+      "descontaba vuelven a quedar pendientes. No se borra: queda anulado con su motivo y en la auditoria.",
+    roles: ["admin"],
+    riesgo: "destructiva",
+    schema: {
+      reparto_id: z.string().guid().describe("reparto_id (herramienta taller, en nomina.repartos)"),
+      motivo: z.string().trim().min(3).max(300),
+    },
+    previsualizar: async (admin, _actor, args) => {
+      const { data: reparto } = await admin
+        .from("talleres_repartos")
+        .select("id, taller_id, fecha, utilidad, estado")
+        .eq("id", args.reparto_id)
+        .maybeSingle()
+      if (!reparto) throw new OperacionMcpError("Ese reparto no existe.")
+      if (reparto.estado === "anulado") throw new OperacionMcpError("Ese reparto ya está anulado.")
+      const { data: taller } = await admin.from("talleres").select("nombre").eq("id", reparto.taller_id).maybeSingle()
+      if (!taller) throw new OperacionMcpError("No encontré el taller de ese reparto.")
+      return {
+        datos: { repartoId: reparto.id, motivo: args.motivo },
+        resumen: `Anular el reparto de ${money(Number(reparto.utilidad))} del ${reparto.fecha} en «${taller.nombre}»`,
+        detalle: { taller: taller.nombre, fecha: reparto.fecha, repartido: Number(reparto.utilidad), motivo: args.motivo },
+        avisos: ["Lo repartido vuelve a quedar por repartir y los adelantos que descontaba vuelven a quedar pendientes."],
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const r = await anularRepartoTaller(admin, { userId: actor.userId, role: actor.role }, d.repartoId, d.motivo)
+      return { reparto_id: r.id, anulado: true, vuelve_a_quedar_por_repartir: r.utilidad }
+    },
+  }),
+  operacion({
+    nombre: "adelanto_taller",
+    titulo: "Dar un adelanto a un socio a cuenta de un taller",
+    descripcion:
+      "Plata que se le entrega a un socio a cuenta de lo que le tocara de un taller. Sale de una cuenta de la fundacion y se " +
+      "le descuenta en el proximo reparto de ESE taller (no en la liquidacion de la fundacion). Para un adelanto a cuenta de " +
+      "la liquidacion de la fundacion usa preparar_adelanto_socio. El socio va por su nombre en el ERP (Yudy es Alexandra Ortega).",
+    roles: ["admin"],
+    riesgo: "crear",
+    schema: {
+      taller: TALLER,
+      socio: z.string().trim().min(2).max(160),
+      monto: z.coerce.number().positive().max(100_000_000),
+      fecha: FECHA.optional(),
+      metodo_pago: METODO_PAGO.optional().describe("De que cuenta sale; por defecto efectivo"),
+      notas: z.string().trim().max(300).optional(),
+    },
+    previsualizar: async (admin, _actor, args) => {
+      const taller = await resolverTaller(admin, args.taller)
+      const socio = await buscarSocio(admin, args.socio)
+      if (!socio.activo) throw new OperacionMcpError(`${socio.nombre} no está activo como socio.`)
+      const monto = exigirMontoPositivo(args.monto)
+      const metodoPago = await exigirMedioPago(admin, args.metodo_pago || "efectivo")
+      const fecha = String(args.fecha || fechaHoyBogota())
+      return {
+        datos: { tallerId: taller.id, socioId: socio.id, monto, fecha, metodoPago, notas: args.notas ?? null },
+        resumen: `Adelanto de ${money(monto)} a ${socio.nombre} a cuenta de «${taller.nombre}» (sale de ${nombreMedio(metodoPago)})`,
+        detalle: { taller: taller.nombre, socio: socio.nombre, monto, fecha, cuenta: nombreMedio(metodoPago) },
+        avisos: ["Se le descuenta en el próximo reparto de este taller, no en la liquidación de la fundación."],
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      const r = await registrarAdelantoTaller(admin, { userId: actor.userId, role: actor.role }, d)
+      return { adelanto_id: r.id, monto: r.monto, socio: r.socio, taller: r.taller }
     },
   }),
 ]

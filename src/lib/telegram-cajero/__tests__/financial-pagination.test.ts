@@ -34,6 +34,10 @@ function pagedSupabase(
           predicates.push((row) => values.includes(row?.[column]))
           return query
         },
+        is(column: string, value: unknown) {
+          predicates.push((row) => (row?.[column] ?? null) === value)
+          return query
+        },
         or() {
           return query
         },
@@ -491,6 +495,16 @@ describe("paginacion de consultas financieras compartidas", () => {
         fecha: "2026-01-01",
         estado: "activo",
         concepto: "Operacion",
+      },
+      // El gasto de un taller va aparte de la fundacion: no cuenta en el resumen.
+      {
+        id: "e-2",
+        monto: 500_000,
+        metodo_pago: "nequi",
+        fecha: "2026-01-02",
+        estado: "activo",
+        concepto: "Refrigerios del taller",
+        taller_id: "t-1",
       },
     ]
     const { client } = pagedSupabase(

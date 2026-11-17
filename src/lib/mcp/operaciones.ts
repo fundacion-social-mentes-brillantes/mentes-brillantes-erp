@@ -57,6 +57,9 @@ export type OperacionEscritura =
   | "estado_taller"
   | "cancelar_inscripcion_taller"
   | "editar_inscripcion_taller"
+  | "repartir_taller"
+  | "anular_reparto_taller"
+  | "adelanto_taller"
 
 export type BorradorOperacion = {
   id: string

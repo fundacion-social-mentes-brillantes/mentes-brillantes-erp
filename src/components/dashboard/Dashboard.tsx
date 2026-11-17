@@ -170,8 +170,9 @@ export async function Dashboard({ periodo: periodoId, nombre, rol }: { periodo?:
       necesitaMovimientos ? supabase.from("pagos_abonos").select("monto, fecha_pago, metodo_pago, origen_fondos, estado, notas").gte("fecha_pago", inicio).lte("fecha_pago", fin) : vacio,
       necesitaMovimientos ? supabase.from("movimientos_saldo_favor").select("monto, fecha, metodo_pago, tipo, notas").gte("fecha", inicio).lte("fecha", fin) : vacio,
       necesitaMovimientos ? supabase.from("donaciones_asistentes").select("monto, estado, notas, fecha").gte("fecha", inicio).lte("fecha", fin) : vacio,
-      necesitaMovimientos ? supabase.from("ventas_externas").select("monto, estado, notas, fecha").gte("fecha", inicio).lte("fecha", fin) : vacio,
-      necesitaMovimientos ? supabase.from("egresos").select("monto, fecha, estado, notas").gte("fecha", inicio).lte("fecha", fin) : vacio,
+      // Sin la plata de los talleres: va aparte y se reparte en la nomina de cada taller.
+      necesitaMovimientos ? supabase.from("ventas_externas").select("monto, estado, notas, fecha").is("taller_inscripcion_id", null).gte("fecha", inicio).lte("fecha", fin) : vacio,
+      necesitaMovimientos ? supabase.from("egresos").select("monto, fecha, estado, notas").is("taller_id", null).gte("fecha", inicio).lte("fecha", fin) : vacio,
       supabase.from("cuentas_por_cobrar").select("valor_total, pagos_abonos(monto, estado, notas)").gte("fecha_emision", inicio).lte("fecha_emision", fin),
     ]);
 

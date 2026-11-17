@@ -1,4 +1,4 @@
-import { agruparPorMetodo } from "@/lib/utils/liquidaciones"
+import { agruparPorMetodo, esDeTaller, esIngresoDeTaller } from "@/lib/utils/liquidaciones"
 import { leerTodas, leerTodasSinLanzar } from "@/lib/supabase/paginar"
 import type { DbClient } from "@/lib/supabase/types"
 import {
@@ -161,7 +161,7 @@ async function consultarMovimientosRango(supabase: SupabaseClient, fechaInicio: 
     leerTodasSinLanzar((desde, hasta) =>
       supabase
         .from("ventas_externas")
-        .select("id, comprador_nombre, concepto, monto, metodo_pago, fecha, estado, notas")
+        .select("id, comprador_nombre, concepto, monto, metodo_pago, fecha, estado, notas, taller_inscripcion_id")
         .gte("fecha", fechaInicio)
         .lte("fecha", fechaFin)
         .order("fecha", { ascending: false })
@@ -171,7 +171,7 @@ async function consultarMovimientosRango(supabase: SupabaseClient, fechaInicio: 
     leerTodasSinLanzar((desde, hasta) =>
       supabase
         .from("egresos")
-        .select("id, concepto, monto, metodo_pago, fecha, estado, notas")
+        .select("id, concepto, monto, metodo_pago, fecha, estado, notas, taller_id")
         .gte("fecha", fechaInicio)
         .lte("fecha", fechaFin)
         .order("fecha", { ascending: false })
@@ -206,10 +206,15 @@ async function consultarMovimientosRango(supabase: SupabaseClient, fechaInicio: 
   const donacionesValidas = donaciones.filter((item) => !esAnuladoCompleto(item))
   const ventasValidas = ventasExternas.filter((item) => !esAnuladoCompleto(item))
   const egresosValidos = egresos.filter((item) => !esAnuladoCompleto(item))
+  // La plata de los talleres va aparte (nomina de cada taller): no entra a la utilidad de la fundacion.
+  const ventasFundacion = ventasValidas.filter((item) => !esIngresoDeTaller(item))
+  const egresosFundacion = egresosValidos.filter((item) => !esDeTaller(item))
   const ingresosCartera = money(sumarMontos([...abonosOperativos, ...ingresosSaldoFavor]))
   const totalDonaciones = money(sumarMontos(donacionesValidas))
-  const totalVentasExternas = money(sumarMontos(ventasValidas))
-  const totalEgresos = money(sumarMontos(egresosValidos))
+  const totalVentasExternas = money(sumarMontos(ventasFundacion))
+  const totalEgresos = money(sumarMontos(egresosFundacion))
+  const ingresosTalleres = money(sumarMontos(ventasValidas.filter((item) => esIngresoDeTaller(item))))
+  const gastosTalleres = money(sumarMontos(egresosValidos.filter((item) => esDeTaller(item))))
   const ingresosOperativos = ingresosCartera + totalDonaciones + totalVentasExternas
   const resumenMetodo = agruparPorMetodo({
     abonos: abonosOperativos,
@@ -231,6 +236,11 @@ async function consultarMovimientosRango(supabase: SupabaseClient, fechaInicio: 
       ingresos_operativos_cop: ingresosOperativos,
       egresos_cop: totalEgresos,
       utilidad_estimada_cop: ingresosOperativos - totalEgresos,
+      talleres_aparte: {
+        nota: "La plata de los talleres no entra a la utilidad de la fundacion: se reparte en la nomina de cada taller.",
+        ingresos_cop: ingresosTalleres,
+        gastos_cop: gastosTalleres,
+      },
     },
     ingresos_por_metodo: resumenMetodo.resumen,
     pagos: abonos.map((pago) => ({
@@ -253,6 +263,7 @@ async function consultarMovimientosRango(supabase: SupabaseClient, fechaInicio: 
       metodo_pago: egreso.metodo_pago,
       estado: egreso.estado,
       valido: !esAnuladoCompleto(egreso),
+      de_taller: esDeTaller(egreso),
       notas: egreso.notas,
     })),
     donaciones: donaciones.map((donacion) => ({
@@ -274,6 +285,7 @@ async function consultarMovimientosRango(supabase: SupabaseClient, fechaInicio: 
       metodo_pago: venta.metodo_pago,
       estado: venta.estado,
       valido: !esAnuladoCompleto(venta),
+      de_taller: esIngresoDeTaller(venta),
       notas: venta.notas,
     })),
     alertas: [

@@ -9,7 +9,16 @@ import { GenerarLiquidacionBtn } from './GenerarLiquidacionBtn'
 import { ResumenPorCuentaInteractivo } from './ResumenPorCuentaInteractivo'
 import { ExportarLiquidacion } from '@/components/liquidaciones/ExportarLiquidacion'
 import { ImagenAdelantosSocio } from './ImagenAdelantosSocio'
-import { agruparAdelantosConDevoluciones, agruparAdelantosPorSocio, agruparPorMetodo, construirDetallesResumenPorCuenta, MetodoPago, metodosDelResumen } from '@/lib/utils/liquidaciones'
+import {
+  agruparAdelantosConDevoluciones,
+  agruparAdelantosPorSocio,
+  agruparPorMetodo,
+  construirDetallesResumenPorCuenta,
+  esDeTaller,
+  esIngresoDeTaller,
+  MetodoPago,
+  metodosDelResumen,
+} from '@/lib/utils/liquidaciones'
 import { cargarMediosPago, mediosConocidos } from '@/lib/medios-pago'
 import { fechaHoyBogota } from '@/lib/utils/fechas'
 import { esAnuladoCompleto, filtrarIngresosOperativos, filtrarIngresosRealesSaldoAFavor, sumarMontos } from '@/lib/utils/contable'
@@ -101,14 +110,14 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
 
   const { data: rawVentasExternas, error: ventasExternasError } = await supabase
     .from('ventas_externas')
-    .select('id, comprador_nombre, concepto, monto, estado, notas, metodo_pago, fecha')
+    .select('id, comprador_nombre, concepto, monto, estado, notas, metodo_pago, fecha, taller_inscripcion_id')
     .gte('fecha', periodo.fecha_inicio)
     .lte('fecha', periodo.fecha_fin)
   if (ventasExternasError) console.error('Error al consultar ventas externas:', ventasExternasError)
 
   const { data: rawEgresosData, error: egresosError } = await supabase
     .from('egresos')
-    .select('id, concepto, categoria, monto, estado, notas, metodo_pago, fecha')
+    .select('id, concepto, categoria, monto, estado, notas, metodo_pago, fecha, taller_id')
     .gte('fecha', periodo.fecha_inicio)
     .lte('fecha', periodo.fecha_fin)
   if (egresosError) console.error('Error al consultar egresos:', egresosError)
@@ -161,6 +170,8 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
     salidas_adelantos?: number
     traslados_entrada?: number
     traslados_salida?: number
+    ingresos_talleres?: number
+    salidas_talleres?: number
   }[] = []
   let resumenTotales = { total_ingresos: 0, total_salidas: 0, saldo_neto_periodo: 0 }
 
@@ -187,13 +198,16 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
     donacionesValidas = donacionesPeriodo.filter((d) => !esAnuladoCompleto(d))
     donaciones_periodo = Math.round(donacionesValidas.reduce((acc: number, curr) => acc + Number(curr.monto), 0))
 
+    // La plata de los talleres va aparte (se reparte en la nomina de cada taller): no entra a la utilidad.
     const ventasExternasValidas = ventasExternasPeriodo.filter((v) => !esAnuladoCompleto(v))
     ventas_externas_periodo = Math.round(
-      ventasExternasValidas.reduce((acc: number, curr) => acc + Number(curr.monto), 0)
+      ventasExternasValidas.filter((v) => !esIngresoDeTaller(v)).reduce((acc: number, curr) => acc + Number(curr.monto), 0)
     )
 
     egresosData = egresosPeriodoRaw.filter((item) => !esAnuladoCompleto(item))
-    const egresosValidos = Math.round(egresosData.reduce((acc, curr) => acc + Number(curr.monto), 0))
+    const egresosValidos = Math.round(
+      egresosPeriodoRaw.filter((item) => !esAnuladoCompleto(item) && !esDeTaller(item)).reduce((acc, curr) => acc + Number(curr.monto), 0)
+    )
     adelantos_periodo = Math.round(adelantos.reduce((acc: number, curr) => acc + Number(curr.monto), 0))
     egresos_periodo = egresosValidos
 
@@ -251,6 +265,8 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
             salidas_adelantos: Number(row.salidas_adelantos ?? 0),
             traslados_entrada: Number(row.traslados_entrada ?? 0),
             traslados_salida: Number(row.traslados_salida ?? 0),
+            ingresos_talleres: Number(row.ingresos_talleres ?? 0),
+            salidas_talleres: Number(row.salidas_talleres ?? 0),
           }
         : item
     })

@@ -2,6 +2,7 @@ import type { DbClient } from "@/lib/supabase/types"
 import { cargarMediosPago } from "@/lib/medios-pago"
 import { cargarTaller, listarTalleres } from "@/lib/operaciones/talleres"
 import { ETIQUETA_ESTADO_PAGO, ETIQUETA_ESTADO_TALLER, kitLegible, type EstadoTaller, type Taller } from "@/lib/operaciones/talleres-reglas"
+import { cargarNominaTaller } from "@/lib/operaciones/talleres-nomina"
 import { listarTraslados } from "@/lib/operaciones/traslados"
 import { formatearFechaEvento } from "@/lib/utils/fechas"
 import { metodoPagoLegible } from "@/lib/utils/textos"
@@ -74,7 +75,12 @@ const etiquetaEstado = (estado: string) => ETIQUETA_ESTADO_TALLER[estado as Esta
 
 /** Herramienta talleres: todos, con sus cifras principales. */
 export async function vistaTalleres(supabase: DbClient) {
-  const lista = await listarTalleres(supabase)
+  const [lista, repartos] = await Promise.all([
+    listarTalleres(supabase),
+    supabase.from("talleres_repartos").select("taller_id, utilidad").eq("estado", "activo"),
+  ])
+  const repartido = new Map<string, number>()
+  for (const r of repartos.data ?? []) repartido.set(r.taller_id, (repartido.get(r.taller_id) ?? 0) + Number(r.utilidad))
   return {
     total: lista.length,
     talleres: lista.map(({ taller, resumen }) => ({
@@ -95,16 +101,21 @@ export async function vistaTalleres(supabase: DbClient) {
       por_cobrar: resumen.porCobrar,
       gastos: resumen.gastos,
       queda: resumen.resultado,
+      ya_repartido: repartido.get(taller.id) ?? 0,
+      por_repartir: Math.round((resumen.resultado - (repartido.get(taller.id) ?? 0)) * 100) / 100,
     })),
-    aclaracion: "La plata de los talleres entra a la fundación como venta externa y sus gastos como egresos: ya está en la liquidación.",
+    aclaracion:
+      "Desde el 16-nov-2026 la plata de los talleres va APARTE de la fundación: sus pagos y gastos no entran a la liquidación " +
+      "de los socios. Cada taller tiene su nómina: lo recaudado menos sus gastos se reparte entre los socios activos con sus " +
+      "porcentajes (preparar_repartir_taller). Los pagos que llegan después quedan por_repartir.",
   }
 }
 
 /** Herramienta taller: un taller con sus inscritos, pagos y gastos (sin cédulas ni teléfonos completos). */
 export async function vistaTaller(supabase: DbClient, texto: string) {
   const t = await resolverTaller(supabase, texto)
-  const datos = await cargarTaller(supabase, t.id)
-  if (!datos) throw new OperacionMcpError("No encontré ese taller.")
+  const [datos, nomina] = await Promise.all([cargarTaller(supabase, t.id), cargarNominaTaller(supabase, t.id)])
+  if (!datos || !nomina) throw new OperacionMcpError("No encontré ese taller.")
   const { taller, resumen, gastos } = datos
   return {
     id: taller.id,
@@ -152,6 +163,29 @@ export async function vistaTaller(supabase: DbClient, texto: string) {
       cuenta: metodoPagoLegible(g.metodo_pago),
       estado: g.estado,
     })),
+    // La nomina del taller: va aparte de la fundacion y se reparte entre los socios.
+    nomina: {
+      recaudado: nomina.recaudado,
+      gastos: nomina.gastos,
+      ya_repartido: nomina.repartido,
+      por_repartir: nomina.porRepartir,
+      por_cobrar: nomina.porCobrar,
+      proximo_reparto:
+        nomina.porRepartir > 0
+          ? nomina.propuesta.map((f) => ({ socio: f.nombre, porcentaje: f.porcentaje, su_parte: f.valor, adelantos: f.adelantos, a_entregar: f.neto }))
+          : [],
+      repartos: nomina.repartos.map((r) => ({
+        reparto_id: r.id,
+        fecha: r.fecha,
+        repartido: r.utilidad,
+        estado: r.estado === "anulado" ? `Anulado${r.motivoAnulacion ? `: ${r.motivoAnulacion}` : ""}` : "Anotado",
+        socios: r.socios.map((s) => ({ socio: s.nombre, su_parte: s.valor, adelantos: s.adelantos, a_entregar: s.neto })),
+      })),
+      adelantos: nomina.adelantos.map((a) => ({ socio: a.nombre, monto: a.monto, fecha: a.fecha, cuenta: metodoPagoLegible(a.metodoPago) })),
+      aclaracion:
+        "Lo de los talleres no entra a la liquidación de la fundación. Repartir solo se anota (la plata se entrega por fuera): " +
+        "preparar_repartir_taller. Si llegan pagos después, vuelve a quedar algo por_repartir.",
+    },
   }
 }
 

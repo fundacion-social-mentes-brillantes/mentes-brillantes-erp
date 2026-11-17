@@ -5,7 +5,7 @@ import { Search, Wallet, X } from 'lucide-react'
 import type { MetodoPago, MovimientoResumenDetalle, ResumenMetodo } from '@/lib/utils/liquidaciones'
 import { metodoPagoLegible } from '@/lib/utils/textos'
 
-type ColumnaDetalle = 'ingresos' | 'egresos' | 'adelantos' | 'traslados' | 'saldo'
+type ColumnaDetalle = 'ingresos' | 'egresos' | 'adelantos' | 'traslados' | 'talleres' | 'saldo'
 
 type ResumenPorCuentaInteractivoProps = {
   periodo: {
@@ -38,6 +38,7 @@ const columnaLabels: Record<ColumnaDetalle, string> = {
   egresos: 'egresos operativos',
   adelantos: 'adelantos no operativos',
   traslados: 'traslados entre cuentas',
+  talleres: 'talleres (van aparte)',
   saldo: 'saldo neto operativo',
 }
 
@@ -49,6 +50,8 @@ const tipoLabels: Record<MovimientoResumenDetalle['tipo'], string> = {
   egreso: 'Egreso',
   adelanto: 'Adelanto',
   traslado: 'Traslado entre cuentas',
+  taller_ingreso: 'Pago de un taller',
+  taller_gasto: 'Gasto de un taller',
 }
 
 const currency = new Intl.NumberFormat('es-CO', {
@@ -64,8 +67,8 @@ const formatMoney = (value: number, opts: { negative?: boolean; signed?: boolean
 }
 
 const signedMonto = (movimiento: MovimientoResumenDetalle, columna: ColumnaDetalle) => {
-  // Un traslado ya trae su signo: negativo en la cuenta de donde sale, positivo en la que recibe.
-  if (movimiento.categoria === 'traslado') return movimiento.monto
+  // Un traslado y lo de un taller ya traen su signo: negativo lo que sale, positivo lo que entra.
+  if (movimiento.categoria === 'traslado' || movimiento.categoria === 'taller') return movimiento.monto
   if (columna === 'egresos' || columna === 'adelantos') return -movimiento.monto
   if (columna === 'saldo' && movimiento.categoria === 'egreso') return -movimiento.monto
   return movimiento.monto
@@ -84,7 +87,13 @@ function filtrarDetalles(detalles: MovimientoResumenDetalle[], metodo: MetodoPag
     if (columna === 'egresos') return movimiento.categoria === 'egreso'
     if (columna === 'adelantos') return movimiento.categoria === 'adelanto'
     if (columna === 'traslados') return movimiento.categoria === 'traslado'
-    return movimiento.categoria === 'ingreso' || movimiento.categoria === 'egreso' || movimiento.categoria === 'traslado'
+    if (columna === 'talleres') return movimiento.categoria === 'taller'
+    return (
+      movimiento.categoria === 'ingreso' ||
+      movimiento.categoria === 'egreso' ||
+      movimiento.categoria === 'traslado' ||
+      movimiento.categoria === 'taller'
+    )
   })
 }
 
@@ -162,7 +171,7 @@ export function ResumenPorCuentaInteractivo({
         </span>
       </div>
       <div className="px-5 py-3 border-b border-linea bg-suave/60 text-xs text-gris">
-        Total salidas y saldo neto del periodo usan solo egresos operativos. Los adelantos se muestran aparte y no reducen la utilidad. Los traslados entre cuentas de la fundación mueven el saldo de cada cuenta, pero no son ingreso ni gasto.
+        Total salidas y saldo neto del periodo usan solo egresos operativos. Los adelantos se muestran aparte y no reducen la utilidad. Los traslados entre cuentas de la fundación mueven el saldo de cada cuenta, pero no son ingreso ni gasto. Los talleres llevan sus cuentas aparte: su plata está en el saldo de cada cuenta, pero no en la utilidad de los socios; se reparte en la nómina de cada taller.
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left">
@@ -173,6 +182,7 @@ export function ResumenPorCuentaInteractivo({
               <th className="px-4 py-3 text-right">Egresos operativos</th>
               <th className="px-4 py-3 text-right">Adelantos no operativos</th>
               <th className="px-4 py-3 text-right">Traslados</th>
+              <th className="px-4 py-3 text-right">Talleres</th>
               <th className="px-4 py-3 text-right">Saldo neto operativo</th>
             </tr>
           </thead>
@@ -217,6 +227,17 @@ export function ResumenPorCuentaInteractivo({
                     className="text-tinta"
                   />
                 </td>
+                <td className="px-4 py-3 text-right text-gris">
+                  <ValorResumenButton
+                    value={Number(row.ingresos_talleres ?? 0) - Number(row.salidas_talleres ?? 0)}
+                    signed
+                    label={`Detalle de talleres - ${nombreCuenta(row.metodo_pago)}`}
+                    onClick={() =>
+                      openDetalle(row.metodo_pago, 'talleres', Number(row.ingresos_talleres ?? 0) - Number(row.salidas_talleres ?? 0))
+                    }
+                    className="text-tinta"
+                  />
+                </td>
                 <td className={`px-4 py-3 text-right font-semibold ${row.saldo_neto_periodo >= 0 ? 'text-verde' : 'text-rojo'}`}>
                   <ValorResumenButton
                     value={row.saldo_neto_periodo}
@@ -234,6 +255,12 @@ export function ResumenPorCuentaInteractivo({
               <td className="px-4 py-3 text-right text-rojo">{formatMoney(resumenTotales.total_salidas, { negative: true })}</td>
               <td className="px-4 py-3 text-right text-ambar">{formatMoney(adelantosPeriodo, { negative: true })}</td>
               <td className="px-4 py-3 text-right text-gris">{formatMoney(0)}</td>
+              <td className="px-4 py-3 text-right text-gris">
+                {formatMoney(
+                  resumenPorCuenta.reduce((t, r) => t + Number(r.ingresos_talleres ?? 0) - Number(r.salidas_talleres ?? 0), 0),
+                  { signed: true }
+                )}
+              </td>
               <td className="px-4 py-3 text-right">{formatMoney(resumenTotales.saldo_neto_periodo, { signed: true })}</td>
             </tr>
           </tbody>

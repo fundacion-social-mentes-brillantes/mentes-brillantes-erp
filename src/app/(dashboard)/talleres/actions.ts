@@ -23,6 +23,13 @@ import {
   type DatosTaller,
   type LlegadaRegistrada,
 } from '@/lib/operaciones/talleres'
+import {
+  anularRepartoTaller,
+  quitarAdelantoTaller,
+  registrarAdelantoTaller,
+  repartirTaller,
+} from '@/lib/operaciones/talleres-nomina'
+import { pesos as pesosTexto } from '@/lib/utils/pesos'
 
 // Talleres. Todo pasa por lib/operaciones/talleres.ts, que guarda la plata
 // como ventas externas y egresos marcados con el taller.
@@ -313,4 +320,63 @@ export async function anularMovimientoTallerAction(
   }
   revalidarTaller(tallerId, true)
   return { success: true }
+}
+
+// ------------------------------------------------------------ nomina de cada taller (solo admin)
+
+/** Reparte entre los socios lo que queda por repartir del taller (solo se anota). */
+export async function repartirTallerAction(tallerId: string, _prev: TallerState, formData: FormData): Promise<TallerState> {
+  let mensaje: string
+  try {
+    const { supabase, user } = await requireAdmin()
+    const r = await repartirTaller(supabase, { userId: user.id, role: 'admin' }, tallerId, {
+      fecha: texto(formData, 'fecha') || fechaHoyBogota(),
+      notas: texto(formData, 'notas') || null,
+    })
+    mensaje = `Reparto anotado: ${r.filas.map((f) => `${f.nombre.split(' ')[0]} ${pesosTexto(f.neto)}`).join(', ')}.`
+  } catch (e) {
+    return errorDeAccion(e, 'No se pudo repartir el taller.', 'talleres')
+  }
+  revalidarTaller(tallerId)
+  return { success: true, mensaje }
+}
+
+export async function anularRepartoTallerAction(tallerId: string, repartoId: string, motivo: string): Promise<TallerState> {
+  try {
+    const { supabase, user } = await requireAdmin()
+    await anularRepartoTaller(supabase, { userId: user.id, role: 'admin' }, repartoId, motivo)
+  } catch (e) {
+    return errorDeAccion(e, 'No se pudo anular el reparto.', 'talleres')
+  }
+  revalidarTaller(tallerId)
+  return { success: true, mensaje: 'Reparto anulado: lo que se había repartido vuelve a quedar por repartir.' }
+}
+
+export async function crearAdelantoTallerAction(tallerId: string, _prev: TallerState, formData: FormData): Promise<TallerState> {
+  try {
+    const { supabase, user } = await requireAdmin()
+    await registrarAdelantoTaller(supabase, { userId: user.id, role: 'admin' }, {
+      tallerId,
+      socioId: texto(formData, 'socio_id'),
+      monto: parseMoneyInput(formData.get('monto')) ?? 0,
+      fecha: texto(formData, 'fecha') || fechaHoyBogota(),
+      metodoPago: texto(formData, 'metodo_pago'),
+      notas: texto(formData, 'notas') || null,
+    })
+  } catch (e) {
+    return errorDeAccion(e, 'No se pudo registrar el adelanto.', 'talleres')
+  }
+  revalidarTaller(tallerId)
+  return { success: true, mensaje: 'Adelanto registrado: se le descuenta en el próximo reparto de este taller.' }
+}
+
+export async function quitarAdelantoTallerAction(tallerId: string, adelantoId: string): Promise<TallerState> {
+  try {
+    const { supabase, user } = await requireAdmin()
+    await quitarAdelantoTaller(supabase, { userId: user.id, role: 'admin' }, adelantoId)
+  } catch (e) {
+    return errorDeAccion(e, 'No se pudo quitar el adelanto.', 'talleres')
+  }
+  revalidarTaller(tallerId)
+  return { success: true, mensaje: 'Adelanto quitado.' }
 }

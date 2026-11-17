@@ -31,6 +31,7 @@ export type Database = {
           notas: string | null
           periodo_id: string | null
           socio_id: string | null
+          taller_id: string | null
           tipo: string
           usuario_id: string | null
         }
@@ -45,6 +46,7 @@ export type Database = {
           notas?: string | null
           periodo_id?: string | null
           socio_id?: string | null
+          taller_id?: string | null
           tipo?: string
           usuario_id?: string | null
         }
@@ -59,6 +61,7 @@ export type Database = {
           notas?: string | null
           periodo_id?: string | null
           socio_id?: string | null
+          taller_id?: string | null
           tipo?: string
           usuario_id?: string | null
         }
@@ -599,12 +602,14 @@ export type Database = {
           id: string
           ingresos_abonos: number
           ingresos_donaciones: number
+          ingresos_talleres: number
           ingresos_ventas_externas: number
           metodo_pago: Database["public"]["Enums"]["metodo_pago"]
           periodo_id: string
           saldo_neto_periodo: number
           salidas_adelantos: number
           salidas_egresos: number
+          salidas_talleres: number
           total_ingresos: number
           total_salidas: number
           traslados_entrada: number
@@ -616,12 +621,14 @@ export type Database = {
           id?: string
           ingresos_abonos?: number
           ingresos_donaciones?: number
+          ingresos_talleres?: number
           ingresos_ventas_externas?: number
           metodo_pago: Database["public"]["Enums"]["metodo_pago"]
           periodo_id: string
           saldo_neto_periodo?: number
           salidas_adelantos?: number
           salidas_egresos?: number
+          salidas_talleres?: number
           total_ingresos?: number
           total_salidas?: number
           traslados_entrada?: number
@@ -633,12 +640,14 @@ export type Database = {
           id?: string
           ingresos_abonos?: number
           ingresos_donaciones?: number
+          ingresos_talleres?: number
           ingresos_ventas_externas?: number
           metodo_pago?: Database["public"]["Enums"]["metodo_pago"]
           periodo_id?: string
           saldo_neto_periodo?: number
           salidas_adelantos?: number
           salidas_egresos?: number
+          salidas_talleres?: number
           total_ingresos?: number
           total_salidas?: number
           traslados_entrada?: number
@@ -1323,6 +1332,87 @@ export type Database = {
         }
         Relationships: []
       }
+      talleres_repartos: {
+        Row: {
+          anulado_en: string | null
+          anulado_por: string | null
+          creado_en: string
+          estado: string
+          fecha: string
+          gastos: number
+          id: string
+          motivo_anulacion: string | null
+          notas: string | null
+          recaudado: number
+          repartido_antes: number
+          taller_id: string
+          usuario_id: string | null
+          utilidad: number
+        }
+        Insert: {
+          anulado_en?: string | null
+          anulado_por?: string | null
+          creado_en?: string
+          estado?: string
+          fecha: string
+          gastos: number
+          id?: string
+          motivo_anulacion?: string | null
+          notas?: string | null
+          recaudado: number
+          repartido_antes: number
+          taller_id: string
+          usuario_id?: string | null
+          utilidad: number
+        }
+        Update: {
+          anulado_en?: string | null
+          anulado_por?: string | null
+          creado_en?: string
+          estado?: string
+          fecha?: string
+          gastos?: number
+          id?: string
+          motivo_anulacion?: string | null
+          notas?: string | null
+          recaudado?: number
+          repartido_antes?: number
+          taller_id?: string
+          usuario_id?: string | null
+          utilidad?: number
+        }
+        Relationships: []
+      }
+      talleres_repartos_socios: {
+        Row: {
+          adelantos_descontados: number
+          id: string
+          porcentaje: number
+          reparto_id: string
+          socio_id: string
+          valor_correspondiente: number
+          valor_neto: number
+        }
+        Insert: {
+          adelantos_descontados?: number
+          id?: string
+          porcentaje: number
+          reparto_id: string
+          socio_id: string
+          valor_correspondiente: number
+          valor_neto: number
+        }
+        Update: {
+          adelantos_descontados?: number
+          id?: string
+          porcentaje?: number
+          reparto_id?: string
+          socio_id?: string
+          valor_correspondiente?: number
+          valor_neto?: number
+        }
+        Relationships: []
+      }
       traslados_cuentas: {
         Row: {
           anulado_en: string | null
@@ -1491,6 +1581,20 @@ export type Database = {
       }
       fn_crear_medio_pago: {
         Args: { p_nombre: string }
+        Returns: string
+      }
+      fn_guardar_reparto_taller: {
+        Args: {
+          p_fecha: string
+          p_gastos: number
+          p_notas: string | null
+          p_recaudado: number
+          p_repartido_antes: number
+          p_socios: Json
+          p_taller_id: string
+          p_usuario_id: string | null
+          p_utilidad: number
+        }
         Returns: string
       }
       mb_current_asistente_id: { Args: never; Returns: string }

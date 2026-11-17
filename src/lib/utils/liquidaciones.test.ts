@@ -289,3 +289,53 @@ describe('traslados entre cuentas en el resumen por cuenta', () => {
     expect(resumen.find((x) => x.metodo_pago === 'banco_caja_social')!.total_ingresos).toBe(20000)
   })
 })
+
+describe('la plata de los talleres va aparte de la fundación', () => {
+  const pagos = [{ monto: 100000, metodo_pago: 'nequi', notas: 'Pago directo' }]
+  const cena = [
+    { id: 'v1', fecha: '2026-10-30', monto: 60000, metodo_pago: 'nequi', concepto: 'Cena · Inscripción', taller_inscripcion_id: 'i-1' },
+    { id: 'v2', fecha: '2026-10-30', monto: 25000, metodo_pago: 'nequi', concepto: 'Libro', taller_inscripcion_id: null },
+  ]
+  const gastos = [
+    { id: 'e1', fecha: '2026-10-31', monto: 10000, metodo_pago: 'nequi', concepto: 'Refrigerios', taller_id: 't-1' },
+    { id: 'e2', fecha: '2026-10-31', monto: 5000, metodo_pago: 'nequi', concepto: 'Papelería', taller_id: null },
+  ]
+
+  it('no entra a ingresos ni gastos, pero sí al saldo de la cuenta (es plata real)', () => {
+    const { resumen, totales } = agruparPorMetodo({ abonos: pagos, ventasExternas: cena, egresos: gastos })
+    const nequi = resumen.find((x) => x.metodo_pago === 'nequi')!
+    expect(nequi.ingresos_ventas_externas).toBe(25000)
+    expect(nequi.total_ingresos).toBe(125000)
+    expect(nequi.total_salidas).toBe(5000)
+    expect(nequi.ingresos_talleres).toBe(60000)
+    expect(nequi.salidas_talleres).toBe(10000)
+    // 125.000 - 5.000 de la fundación, más 60.000 - 10.000 del taller
+    expect(nequi.saldo_neto_periodo).toBe(170000)
+    expect(totales.total_ingresos).toBe(125000)
+    expect(totales.ingresos_talleres).toBe(60000)
+  })
+
+  it('los adelantos a cuenta de un taller se descuentan en su nómina, no en la fundación', () => {
+    const { resumen } = agruparPorMetodo({
+      abonos: pagos,
+      adelantos: [
+        { monto: 20000, metodo_pago: 'nequi', socio_id: 's1' },
+        { monto: 30000, metodo_pago: 'nequi', socio_id: 's1', taller_id: 't-1' },
+      ],
+    })
+    expect(resumen.find((x) => x.metodo_pago === 'nequi')!.salidas_adelantos).toBe(20000)
+  })
+
+  it('en el detalle sale como «taller», con el gasto en negativo', () => {
+    const detalles = construirDetallesResumenPorCuenta({ ventasExternas: cena, egresos: gastos })
+    const deTaller = detalles.filter((d) => d.categoria === 'taller')
+    expect(deTaller.map((d) => [d.tipo, d.monto])).toEqual(
+      expect.arrayContaining([
+        ['taller_ingreso', 60000],
+        ['taller_gasto', -10000],
+      ])
+    )
+    expect(detalles.find((d) => d.id.includes('v2'))!.categoria).toBe('ingreso')
+    expect(detalles.find((d) => d.id.includes('e2'))!.categoria).toBe('egreso')
+  })
+})

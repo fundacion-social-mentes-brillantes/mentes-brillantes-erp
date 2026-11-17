@@ -8,8 +8,17 @@ import { mediosConocidos } from "@/lib/medios-pago"
 
 /** La clave de una cuenta de dinero (efectivo, nequi, banco_caja_social... ver medios_pago). */
 export type MetodoPago = string
-export type CategoriaResumenDetalle = "ingreso" | "egreso" | "adelanto" | "traslado"
-export type TipoResumenDetalle = "abono" | "saldo_favor" | "donacion" | "venta_externa" | "egreso" | "adelanto" | "traslado"
+export type CategoriaResumenDetalle = "ingreso" | "egreso" | "adelanto" | "traslado" | "taller"
+export type TipoResumenDetalle =
+  | "abono"
+  | "saldo_favor"
+  | "donacion"
+  | "venta_externa"
+  | "egreso"
+  | "adelanto"
+  | "traslado"
+  | "taller_ingreso"
+  | "taller_gasto"
 
 /** Algo con nombre, embebido por PostgREST (persona, socio). */
 type ConNombre = { nombre?: string | null }
@@ -32,6 +41,10 @@ type Movimiento = {
   concepto?: string | null
   comprador_nombre?: string | null
   categoria?: string | null
+  /** Pago de la inscripcion a un taller (venta externa): va aparte de la fundacion. */
+  taller_inscripcion_id?: string | null
+  /** Gasto o adelanto de un taller: va aparte de la fundacion. */
+  taller_id?: string | null
   cuentas_por_cobrar?: Embebido<{ concepto?: string | null; asistentes?: Embebido<ConNombre> }>
   asistentes?: Embebido<ConNombre>
   socios?: Embebido<ConNombre>
@@ -62,7 +75,19 @@ export type ResumenMetodo = {
   traslados_entrada?: number
   /** Plata que salio hacia otra cuenta de la fundacion (no es gasto). */
   traslados_salida?: number
+  /** Lo que entro por los talleres: esta en la cuenta, pero no es ingreso de la fundacion. */
+  ingresos_talleres?: number
+  /** Lo que se gasto en los talleres: salio de la cuenta, pero no es gasto de la fundacion. */
+  salidas_talleres?: number
 }
+
+// Desde el 16 nov 2026 la plata de los talleres va aparte (pedido de Sebastian):
+// no entra a la utilidad ni a la liquidacion de los socios, se reparte en la
+// nomina de cada taller. Sigue en el saldo de cada cuenta porque es plata real.
+/** Un pago de la inscripcion a un taller. */
+export const esIngresoDeTaller = (v: { taller_inscripcion_id?: string | null }) => Boolean(v.taller_inscripcion_id)
+/** Un gasto (o un adelanto) a cuenta de un taller. */
+export const esDeTaller = (m: { taller_id?: string | null }) => Boolean(m.taller_id)
 
 /** Un traslado entre cuentas propias (tabla traslados_cuentas). */
 export type TrasladoCuentas = {
@@ -262,12 +287,13 @@ export function construirDetallesResumenPorCuenta({
   ventasExternas
     .filter((v) => !esAnuladoCompleto(v))
     .forEach((v, index) => {
+      const deTaller = esIngresoDeTaller(v)
       detalles.push({
         id: detalleId("venta_externa", index, v.id),
         fecha: v.fecha || "",
         metodo_pago: normalizarMetodo(v.metodo_pago),
-        categoria: "ingreso",
-        tipo: "venta_externa",
+        categoria: deTaller ? "taller" : "ingreso",
+        tipo: deTaller ? "taller_ingreso" : "venta_externa",
         persona: fallbackText(v.comprador_nombre, "Sin persona asociada"),
         concepto: fallbackText(v.concepto, v.notas, "Venta externa"),
         monto: toSafeNumber(v.monto),
@@ -277,19 +303,22 @@ export function construirDetallesResumenPorCuenta({
   egresos
     .filter((e) => !esAnuladoCompleto(e))
     .forEach((e, index) => {
+      const deTaller = esDeTaller(e)
       detalles.push({
         id: detalleId("egreso", index, e.id),
         fecha: e.fecha || "",
         metodo_pago: normalizarMetodo(e.metodo_pago),
-        categoria: "egreso",
-        tipo: "egreso",
+        categoria: deTaller ? "taller" : "egreso",
+        tipo: deTaller ? "taller_gasto" : "egreso",
         persona: "Sin persona asociada",
         concepto: fallbackText(e.concepto, e.notas, e.categoria, "Egreso"),
-        monto: toSafeNumber(e.monto),
+        // Lo de un taller lleva su signo (el gasto, negativo), como un traslado.
+        monto: deTaller ? -toSafeNumber(e.monto) : toSafeNumber(e.monto),
       })
     })
 
-  adelantos.forEach((a, index) => {
+  // Los adelantos a cuenta de un taller se descuentan en la nomina de ese taller.
+  adelantos.filter((a) => !esDeTaller(a)).forEach((a, index) => {
     detalles.push({
       id: detalleId("adelanto", index, a.id),
       fecha: a.fecha || "",
@@ -394,6 +423,8 @@ export function agruparPorMetodo({
         salidas_adelantos: 0,
         traslados_entrada: 0,
         traslados_salida: 0,
+        ingresos_talleres: 0,
+        salidas_talleres: 0,
       },
     }),
     {} as Record<MetodoPago, ResumenMetodo>
@@ -420,17 +451,19 @@ export function agruparPorMetodo({
     .filter((v) => !esAnuladoCompleto(v))
     .forEach((v) => {
       const key = normalizarMetodo(v.metodo_pago)
-      base[key].ingresos_ventas_externas = (base[key].ingresos_ventas_externas || 0) + Number(v.monto || 0)
+      if (esIngresoDeTaller(v)) base[key].ingresos_talleres = (base[key].ingresos_talleres || 0) + Number(v.monto || 0)
+      else base[key].ingresos_ventas_externas = (base[key].ingresos_ventas_externas || 0) + Number(v.monto || 0)
     })
 
   egresos
     .filter((e) => !esAnuladoCompleto(e))
     .forEach((e) => {
       const key = normalizarMetodo(e.metodo_pago)
-      base[key].salidas_egresos = (base[key].salidas_egresos || 0) + Number(e.monto || 0)
+      if (esDeTaller(e)) base[key].salidas_talleres = (base[key].salidas_talleres || 0) + Number(e.monto || 0)
+      else base[key].salidas_egresos = (base[key].salidas_egresos || 0) + Number(e.monto || 0)
     })
 
-  adelantos.forEach((a) => {
+  adelantos.filter((a) => !esDeTaller(a)).forEach((a) => {
     const key = normalizarMetodo(a.metodo_pago)
     base[key].salidas_adelantos = (base[key].salidas_adelantos || 0) + Number(a.monto || 0)
   })
@@ -450,8 +483,14 @@ export function agruparPorMetodo({
     item.total_ingresos =
       (item.ingresos_abonos || 0) + (item.ingresos_donaciones || 0) + (item.ingresos_ventas_externas || 0)
     item.total_salidas = item.salidas_egresos || 0
+    // El saldo es la plata real de la cuenta: tambien la de los talleres (como en fn_cerrar_liquidacion_impl).
     item.saldo_neto_periodo =
-      item.total_ingresos - item.total_salidas + (item.traslados_entrada || 0) - (item.traslados_salida || 0)
+      item.total_ingresos -
+      item.total_salidas +
+      (item.traslados_entrada || 0) -
+      (item.traslados_salida || 0) +
+      (item.ingresos_talleres || 0) -
+      (item.salidas_talleres || 0)
     return item
   })
 
@@ -469,6 +508,8 @@ export function agruparPorMetodo({
       salidas_adelantos: (acc.salidas_adelantos || 0) + (r.salidas_adelantos || 0),
       traslados_entrada: (acc.traslados_entrada || 0) + (r.traslados_entrada || 0),
       traslados_salida: (acc.traslados_salida || 0) + (r.traslados_salida || 0),
+      ingresos_talleres: (acc.ingresos_talleres || 0) + (r.ingresos_talleres || 0),
+      salidas_talleres: (acc.salidas_talleres || 0) + (r.salidas_talleres || 0),
     }),
     {
       metodo_pago: "otro",
@@ -482,6 +523,8 @@ export function agruparPorMetodo({
       salidas_adelantos: 0,
       traslados_entrada: 0,
       traslados_salida: 0,
+      ingresos_talleres: 0,
+      salidas_talleres: 0,
     }
   )
 
