@@ -5,18 +5,17 @@ import { FileText, Image as ImageIcon } from 'lucide-react'
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
 import { createClient } from '@/lib/supabase/client'
-import { pesos } from '@/lib/utils/pesos'
+import { fechaHoyBogota } from '@/lib/utils/fechas'
+import {
+  ALTO_HOJA,
+  DocumentoLiquidacion,
+  type DocumentoLiquidacionProps,
+  type SocioDocumento,
+} from './DocumentoLiquidacion'
 
-type SocioData = {
-  id: string
-  nombre: string
-  porcentaje: number
-  corresponde: number
-  adelantos: number
-  neto: number
-}
+export type { SocioDocumento }
 
-type ExportProps = {
+type ExportProps = Omit<DocumentoLiquidacionProps, 'generadoEl' | 'empresa'> & {
   empresa: {
     nombre: string
     nit: string
@@ -24,59 +23,48 @@ type ExportProps = {
     telefono?: string | null
     ciudad?: string | null
   }
-  periodo: {
-    nombre: string
-    estado: string
-    fecha_inicio: string
-    fecha_fin: string
-  }
-  financiero: {
-    ingresos_cartera: number
-    donaciones: number
-    ingresos_totales: number
-    egresos: number
-    utilidad: number
-  }
-  sociosData: SocioData[]
 }
 
-export function ExportarLiquidacion({ empresa: initialEmpresa, periodo, financiero, sociosData }: ExportProps) {
+export function ExportarLiquidacion({ empresa: initialEmpresa, periodo, financiero, talleres, socios }: ExportProps) {
   const [empresa, setEmpresa] = useState(initialEmpresa)
   const [isExporting, setIsExporting] = useState(false)
+  const [generadoEl, setGeneradoEl] = useState(() => fechaHoyBogota())
+  // El PDF va del alto de una hoja; la imagen termina donde termina el contenido (menos blanco en el celular).
+  const [hoja, setHoja] = useState(false)
   const printRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
 
-  const formatCurrency = (amount: number) => pesos(amount)
-
   const generateImage = async (type: 'pdf' | 'png') => {
     if (!printRef.current || !supabase) return
-    
+
     try {
       setIsExporting(true)
-      
-      // Fetch latest config right before generating
+      setGeneradoEl(fechaHoyBogota())
+      setHoja(type === 'pdf')
+
+      // El nombre y el NIT mas recientes, por si los cambiaron despues de abrir la pagina.
       const { data: latestEmpresa, error } = await supabase
         .from('configuracion_empresa')
         .select('*')
         .eq('id', 1)
         .single()
-        
-      if (!error && latestEmpresa) {
-        setEmpresa(latestEmpresa)
-        // Wait a tiny bit for React to re-render the hidden div with new data
-        await new Promise(resolve => setTimeout(resolve, 100))
-      }
-      
-      // html2canvas configuration for high quality
+
+      if (!error && latestEmpresa) setEmpresa(latestEmpresa)
+      // Un momento para que React vuelva a dibujar el documento escondido, y que la letra y el logo esten listos.
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      await document.fonts?.ready
+      const logo = printRef.current.querySelector('img')
+      if (logo && !logo.complete) await new Promise((resolve) => logo.addEventListener('load', resolve, { once: true }))
+
       const canvas = await html2canvas(printRef.current, {
-        scale: 2, // Higher resolution
+        scale: 3,
         useCORS: true,
         logging: false,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
       })
 
       const imgData = canvas.toDataURL('image/png')
-      const fileName = `Liquidacion_${periodo.nombre.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}`
+      const fileName = `Liquidacion_${periodo.nombre.replace(/\s+/g, '_')}_${fechaHoyBogota()}`
 
       if (type === 'png') {
         const link = document.createElement('a')
@@ -84,17 +72,13 @@ export function ExportarLiquidacion({ empresa: initialEmpresa, periodo, financie
         link.download = `${fileName}.png`
         link.click()
       } else if (type === 'pdf') {
-        // A4 size: 210 x 297 mm
-        const pdf = new jsPDF({
-          orientation: 'portrait',
-          unit: 'mm',
-          format: 'a4'
-        })
-
-        const pdfWidth = pdf.internal.pageSize.getWidth()
-        const pdfHeight = (canvas.height * pdfWidth) / canvas.width
-        
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight)
+        // Siempre UNA sola pagina, del ancho de una A4. Normalmente es A4 exacta; si el periodo tiene
+        // muchos adelantos, la pagina se alarga en vez de partirse en dos o de achicar la letra.
+        const ancho = 210
+        const alto = Math.max(297, (canvas.height * ancho) / canvas.width)
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [ancho, alto] })
+        pdf.addImage(imgData, 'PNG', 0, 0, ancho, (canvas.height * ancho) / canvas.width, undefined, 'FAST')
+        pdf.setProperties({ title: `Liquidación de socios · ${periodo.nombre}` })
         pdf.save(`${fileName}.pdf`)
       }
     } catch (error) {
@@ -126,102 +110,18 @@ export function ExportarLiquidacion({ empresa: initialEmpresa, periodo, financie
         </button>
       </div>
 
-      {/* Hidden Printable Container */}
-      <div className="absolute -left-[9999px] top-0">
-        <div 
-          ref={printRef} data-documento 
-          className="p-10" 
-          style={{ width: '800px', minHeight: '1131px', fontFamily: 'sans-serif', backgroundColor: '#ffffff', color: '#111827' }}
-        >
-          {/* Header */}
-          <div className="pb-6 mb-8 text-center" style={{ borderBottom: '2px solid #374151' }}>
-            {/* <img> a proposito: html2canvas copia la imagen tal cual para el PDF; next/image no sirve ahi. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logo-mentes-brillantes.png"
-              alt="Gimnasio Emocional Mentes Brillantes"
-              style={{ width: '170px', height: '86px', objectFit: 'contain', margin: '0 auto 12px auto' }}
-            />
-            <h1 className="text-3xl font-bold mb-2" style={{ color: '#111827' }}>
-              {empresa.nombre}
-            </h1>
-            <p className="font-medium text-lg" style={{ color: '#4b5563' }}>NIT: {empresa.nit}</p>
-            {(empresa.correo || empresa.telefono || empresa.ciudad) && (
-              <p className="text-sm mt-2" style={{ color: '#6b7280' }}>
-                {[empresa.ciudad, empresa.telefono, empresa.correo].filter(Boolean).join(' | ')}
-              </p>
-            )}
-          </div>
-
-          {/* Document Title & Info */}
-          <div className="flex justify-between items-end mb-8">
-            <div>
-              <h2 className="text-2xl font-bold mb-1" style={{ color: '#1f2937' }}>Reporte de Liquidación</h2>
-              <p style={{ color: '#6b7280' }}>Período: <span className="font-semibold" style={{ color: '#374151' }}>{periodo.nombre}</span></p>
-              <p style={{ color: '#6b7280' }}>Estado: <span className="font-semibold" style={{ color: '#374151' }}>{periodo.estado}</span></p>
-            </div>
-            <div className="text-right">
-              <p className="text-sm" style={{ color: '#6b7280' }}>Fecha de generación:</p>
-              <p className="font-medium" style={{ color: '#1f2937' }}>{new Date().toLocaleDateString('es-CO')}</p>
-            </div>
-          </div>
-
-          {/* Financial Summary */}
-          <div className="grid grid-cols-3 gap-4 mb-10">
-            <div className="p-4 rounded-lg" style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb' }}>
-              <p className="text-sm mb-1" style={{ color: '#6b7280' }}>Ingresos Totales</p>
-              <p className="text-xl font-bold" style={{ color: '#15803d' }}>{formatCurrency(financiero.ingresos_totales)}</p>
-              <p className="text-xs mt-1" style={{ color: '#6b7280' }}>
-                Cartera: {formatCurrency(financiero.ingresos_cartera)} · Donaciones: {formatCurrency(financiero.donaciones)}
-              </p>
-            </div>
-            <div className="p-4 rounded-lg" style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb' }}>
-              <p className="text-sm mb-1" style={{ color: '#6b7280' }}>Egresos del Período</p>
-              <p className="text-xl font-bold" style={{ color: '#dc2626' }}>{formatCurrency(financiero.egresos)}</p>
-            </div>
-            <div className="p-4 rounded-lg" style={{ backgroundColor: '#f3f4f6', border: '1px solid #d1d5db' }}>
-              <p className="text-sm font-medium mb-1" style={{ color: '#4b5563' }}>Utilidad Neta a Repartir</p>
-              <p className="text-2xl font-bold" style={{ color: '#111827' }}>{formatCurrency(financiero.utilidad)}</p>
-            </div>
-          </div>
-
-          {/* Socios Table */}
-          <div className="mb-8">
-            <h3 className="text-lg font-bold mb-4 pb-2" style={{ color: '#1f2937', borderBottom: '1px solid #e5e7eb' }}>
-              Distribución por Socio
-            </h3>
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr style={{ backgroundColor: '#f3f4f6' }}>
-                  <th className="py-3 px-4 font-semibold" style={{ color: '#374151', border: '1px solid #e5e7eb' }}>Socio</th>
-                  <th className="py-3 px-4 font-semibold text-center" style={{ color: '#374151', border: '1px solid #e5e7eb' }}>%</th>
-                  <th className="py-3 px-4 font-semibold text-right" style={{ color: '#374151', border: '1px solid #e5e7eb' }}>Corresponde</th>
-                  <th className="py-3 px-4 font-semibold text-right" style={{ color: '#374151', border: '1px solid #e5e7eb' }}>Adelantos</th>
-                  <th className="py-3 px-4 font-bold text-right" style={{ color: '#111827', border: '1px solid #d1d5db', backgroundColor: '#e5e7eb' }}>Neto a Pagar</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sociosData.map((socio, index) => (
-                  <tr key={socio.id} style={{ backgroundColor: index % 2 === 0 ? '#ffffff' : '#f9fafb' }}>
-                    <td className="py-3 px-4 font-medium" style={{ color: '#1f2937', border: '1px solid #e5e7eb' }}>{socio.nombre}</td>
-                    <td className="py-3 px-4 text-center" style={{ color: '#4b5563', border: '1px solid #e5e7eb' }}>{socio.porcentaje}%</td>
-                    <td className="py-3 px-4 text-right" style={{ color: '#1f2937', border: '1px solid #e5e7eb' }}>{formatCurrency(socio.corresponde)}</td>
-                    {/* Sin adelantos se ve "$ 0" en gris, no "-$ 0" en rojo. */}
-                    <td className="py-3 px-4 text-right" style={{ color: socio.adelantos > 0 ? '#dc2626' : '#6b7280', border: '1px solid #e5e7eb' }}>{formatCurrency(-socio.adelantos)}</td>
-                    <td className="py-3 px-4 text-right font-bold" style={{ color: '#111827', border: '1px solid #d1d5db', backgroundColor: '#f3f4f6' }}>
-                      {formatCurrency(socio.neto)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Footer */}
-          <div className="mt-16 pt-8 text-center text-sm" style={{ borderTop: '1px solid #e5e7eb', color: '#9ca3af' }}>
-            <p>Documento generado automáticamente por el Sistema Administrativo Mentes Brillantes.</p>
-            <p>Este documento es de carácter informativo.</p>
-          </div>
+      {/* Lo que se convierte en PDF e imagen. Fuera de pantalla: nunca se ve en la app. */}
+      <div className="absolute -left-[9999px] top-0" aria-hidden>
+        <div ref={printRef} data-documento>
+          <DocumentoLiquidacion
+            empresa={{ nombre: empresa.nombre, nit: empresa.nit }}
+            periodo={periodo}
+            financiero={financiero}
+            talleres={talleres}
+            socios={socios}
+            generadoEl={generadoEl}
+            altoMinimo={hoja ? ALTO_HOJA : undefined}
+          />
         </div>
       </div>
     </>

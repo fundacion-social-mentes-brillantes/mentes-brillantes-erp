@@ -7,7 +7,7 @@ import { AdelantoForm } from './AdelantoForm'
 import { DevolucionAdelantoForm } from './DevolucionAdelantoForm'
 import { GenerarLiquidacionBtn } from './GenerarLiquidacionBtn'
 import { ResumenPorCuentaInteractivo } from './ResumenPorCuentaInteractivo'
-import { ExportarLiquidacion } from '@/components/liquidaciones/ExportarLiquidacion'
+import { ExportarLiquidacion, type SocioDocumento } from '@/components/liquidaciones/ExportarLiquidacion'
 import { ImagenAdelantosSocio } from './ImagenAdelantosSocio'
 import {
   agruparAdelantosConDevoluciones,
@@ -289,6 +289,13 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
     )
   }
 
+  // Lo de los talleres (va aparte): solo para avisarlo en el reporte que se descarga.
+  // Se suma antes de esconder cuentas, para no perder una cuenta que solo movio plata de talleres.
+  const talleresPeriodo = {
+    ingresos: Math.round(resumenPorCuenta.reduce((acc, r) => acc + Number(r.ingresos_talleres ?? 0), 0)),
+    salidas: Math.round(resumenPorCuenta.reduce((acc, r) => acc + Number(r.salidas_talleres ?? 0), 0)),
+  }
+
   // Se muestran las cuentas activas y, de las ocultas, solo las que tuvieron movimiento.
   const activas = new Set(mediosConocidos().filter((m) => m.activo).map((m) => m.clave))
   resumenPorCuenta = resumenPorCuenta.filter(
@@ -317,30 +324,49 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
     ciudad: null
   }
 
-  // Preparar datos para exportación
-  const sociosExportData = periodo.estado === 'abierto' 
-    ? socios?.map(socio => {
-        const porcentaje = Number(socio.porcentaje_participacion)
-        const corresponde = (utilidad_neta * porcentaje) / 100
-        const adelantosSocio = adelantos.filter((a) => a.socio_id === socio.id)
-        const totalAdelantos = adelantosSocio.reduce((acc: number, curr) => acc + Number(curr.monto), 0)
-        return {
-          id: socio.id,
-          nombre: socio.nombre ?? 'Sin nombre',
-          porcentaje,
-          corresponde,
-          adelantos: totalAdelantos,
-          neto: corresponde - totalAdelantos
-        }
-      }) || []
-    : liquidaciones?.map((liq) => ({
-        id: liq.id,
-        nombre: liq.socios?.nombre ?? 'Sin nombre',
-        porcentaje: Number(liq.porcentaje_aplicado),
-        corresponde: Number(liq.valor_correspondiente),
-        adelantos: Number(liq.adelantos_descontados),
-        neto: Number(liq.valor_neto_pagar)
-      })) || []
+  // Preparar datos para exportación. Cada socio lleva el detalle de sus adelantos
+  // (con lo que ya devolvio) para que el reporte explique de donde sale el descuento.
+  const detalleAdelantos = (socioId: string | null | undefined): SocioDocumento['detalle'] =>
+    (adelantosPorSocio.find((s) => s.socioId === socioId)?.adelantos ?? []).map(
+      ({ adelanto, devoluciones, entregado, devuelto, pendiente }) => ({
+        fecha: String(adelanto.fecha || ''),
+        monto: entregado,
+        devuelto,
+        pendiente,
+        notas: adelanto.notas || null,
+        fechaDevolucion: devoluciones.length ? String(devoluciones[devoluciones.length - 1].fecha || '') : null,
+      })
+    )
+
+  const sociosExportData: SocioDocumento[] = (
+    periodo.estado === 'abierto'
+      ? socios?.map((socio) => {
+          const porcentaje = Number(socio.porcentaje_participacion)
+          const corresponde = (utilidad_neta * porcentaje) / 100
+          const adelantosSocio = adelantos.filter((a) => a.socio_id === socio.id)
+          const totalAdelantos = adelantosSocio.reduce((acc: number, curr) => acc + Number(curr.monto), 0)
+          return {
+            id: socio.id,
+            nombre: socio.nombre ?? 'Sin nombre',
+            porcentaje,
+            corresponde,
+            adelantos: totalAdelantos,
+            neto: corresponde - totalAdelantos,
+            detalle: detalleAdelantos(socio.id),
+          }
+        })
+      : liquidaciones?.map((liq) => ({
+          id: liq.id,
+          nombre: liq.socios?.nombre ?? 'Sin nombre',
+          porcentaje: Number(liq.porcentaje_aplicado),
+          corresponde: Number(liq.valor_correspondiente),
+          adelantos: Number(liq.adelantos_descontados),
+          neto: Number(liq.valor_neto_pagar),
+          detalle: detalleAdelantos(liq.socio_id),
+        }))
+  ) || []
+  // De mayor a menor porcentaje, para que la barra y las columnas del reporte vayan en el mismo orden.
+  sociosExportData.sort((a, b) => b.porcentaje - a.porcentaje || a.nombre.localeCompare(b.nombre, 'es'))
 
   return (
     <div className="space-y-6 max-w-6xl">
@@ -376,11 +402,13 @@ export default async function DetallePeriodoPage({ params }: { params: Promise<{
             financiero={{
               ingresos_cartera: ingresos_cobrados,
               donaciones: donaciones_periodo,
+              ventas_externas: ventas_externas_periodo,
               ingresos_totales: ingresos_operativos,
               egresos: egresos_periodo,
               utilidad: utilidad_neta
             }}
-            sociosData={sociosExportData}
+            talleres={talleresPeriodo}
+            socios={sociosExportData}
           />
           {periodo.estado === 'abierto' && (
             <GenerarLiquidacionBtn periodoId={periodo.id} />

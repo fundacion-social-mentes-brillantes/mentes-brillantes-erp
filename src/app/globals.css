@@ -425,3 +425,11 @@
     }
   }
 }
+
+/* html2canvas (PDF e imagenes que se descargan) mide donde se apoya la letra con una
+   imagencita de 1 px puesta en linea. El reset de Tailwind pone toda imagen en bloque, la
+   medida salia mal y la letra de los documentos quedaba unos 8 px mas abajo que sus cajas y
+   rayas. Esta regla solo toca esa imagencita de prueba. */
+img[src^="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP"] {
+  display: inline;
+}
