@@ -7,6 +7,7 @@ import { CATEGORIAS_EGRESO } from "@/lib/operaciones/movimientos"
 import {
   cambiarEstadoTaller,
   cancelarInscripcion,
+  editarInscripcion,
   inscribirEnTaller,
   marcarAsistencia,
   registrarGastoTaller,
@@ -16,6 +17,7 @@ import {
 import {
   ESTADOS_TALLER,
   ETIQUETA_ESTADO_TALLER,
+  edadLegible,
   normalizarCorreo,
   normalizarDocumento,
   normalizarEdad,
@@ -23,6 +25,7 @@ import {
   normalizarKit,
   normalizarTelefono,
   preguntasGuardadas,
+  tienePreciosNinos,
   validarRespuestas,
   valorYKitDeInscripcion,
   type EstadoTaller,
@@ -418,6 +421,199 @@ export const OPERACIONES_TALLERES: DefinicionOperacion[] = [
     ejecutar: async (admin, actor, d) => {
       const r = await cancelarInscripcion(admin, { userId: actor.userId, role: actor.role }, d.inscripcionId, d.motivo)
       return { inscripcion_id: r.id, cancelada: true }
+    },
+  }),
+  operacion({
+    nombre: "editar_inscripcion_taller",
+    titulo: "Cambiar los datos de una inscripcion a un taller",
+    descripcion:
+      "Cambia los datos de una inscripcion: nombre, cedula o tarjeta de identidad, edad, kit, celular, correo, notas o " +
+      "a quien del ERP esta enlazada. Sirve para corregir un dato o para pasar un cupo regalado (ya pagado) a otra " +
+      "persona: los pagos se quedan en la inscripcion. Manda solo los campos que cambian. Si el taller cobra distinto " +
+      "a los niños, el valor a pagar se ajusta solo al cambiar edad, documento o kit; un valor a mano (descuento o " +
+      "cortesia) solo lo pone el admin.",
+    roles: ["admin", "caja"],
+    // Como en la web (editarInscripcionAction): admin y caja cambian datos; el valor a mano, solo el admin.
+    riesgo: "editar",
+    schema: {
+      taller: TALLER,
+      persona: PERSONA_INSCRITA,
+      inscripcion_id: INSCRIPCION_ID,
+      nombre: z.string().trim().min(2).max(120).optional().describe("Nombre completo nuevo"),
+      cedula: z.string().trim().max(30).optional().describe("Cedula, o TI/RC y el numero; vacio para quitarla"),
+      edad: z.coerce.number().int().min(0).max(120).optional().describe("Anos cumplidos"),
+      kit: z.boolean().optional().describe("true: con kit; false: sin kit"),
+      celular: z.string().trim().max(30).optional().describe("Vacio para quitarlo"),
+      correo: z.string().trim().max(160).optional().describe("Vacio para quitarlo"),
+      notas: z.string().trim().max(1000).optional().describe("Reemplaza las notas; vacio para borrarlas"),
+      persona_erp: z
+        .string()
+        .trim()
+        .min(2)
+        .max(160)
+        .optional()
+        .describe("Su nombre o codigo en el ERP para enlazarla, o «ninguna» para quitar el enlace (si el cupo paso a otra persona)"),
+      valor_acordado: z.coerce.number().min(0).max(100_000_000).optional().describe("Solo admin: lo que pagara (descuento o cortesia)"),
+    },
+    previsualizar: async (admin, actor, args) => {
+      const taller = await resolverTaller(admin, args.taller)
+      const buscada = await resolverInscripcion(admin, taller.id, { inscripcionId: args.inscripcion_id, persona: args.persona })
+      const { data: actual, error } = await admin
+        .from("taller_inscripciones")
+        .select("id, nombre, documento, edad, kit, telefono, correo, notas, asistente_id, valor_acordado, estado")
+        .eq("id", buscada.id)
+        .single()
+      if (error || !actual) throw new OperacionMcpError("No se pudo leer la inscripción.")
+      if (actual.estado === "cancelado") throw new OperacionMcpError("Esa inscripción está cancelada.")
+      if (args.valor_acordado !== undefined && actor.role !== "admin") {
+        throw new OperacionMcpError("Solo el administrador puede cambiar el valor a pagar.")
+      }
+
+      // Lo que cambia, ya limpio (asi el borrador muestra exactamente lo que quedaria guardado).
+      const cambios: {
+        nombre?: string
+        documento?: string | null
+        edad?: number | null
+        kit?: boolean | null
+        telefono?: string | null
+        correo?: string | null
+        notas?: string | null
+        asistenteId?: string | null
+        valorAcordado?: number
+      } = {}
+      if (args.nombre !== undefined && args.nombre !== actual.nombre) cambios.nombre = args.nombre
+      if (args.cedula !== undefined) {
+        const documento = normalizarDocumento(args.cedula)
+        if (documento !== actual.documento) cambios.documento = documento
+      }
+      if (args.edad !== undefined) {
+        const edad = normalizarEdad(args.edad)
+        if (edad !== actual.edad) cambios.edad = edad
+      }
+      if (args.kit !== undefined && args.kit !== actual.kit) cambios.kit = args.kit
+      if (args.celular !== undefined) {
+        const telefono = normalizarTelefono(args.celular)
+        if (telefono !== actual.telefono) cambios.telefono = telefono
+      }
+      if (args.correo !== undefined) {
+        const correo = normalizarCorreo(args.correo)
+        if (correo !== actual.correo) cambios.correo = correo
+      }
+      if (args.notas !== undefined && (args.notas || null) !== actual.notas) cambios.notas = args.notas || null
+      let enlazadaCon: string | null = null
+      if (args.persona_erp !== undefined) {
+        if (/^ningun[oa]?$/i.test(args.persona_erp)) {
+          if (actual.asistente_id) cambios.asistenteId = null
+        } else {
+          const enlazada = await resolverPersona(admin, args.persona_erp)
+          enlazadaCon = `${enlazada.nombre} (codigo ${enlazada.codigo})`
+          if (enlazada.id !== actual.asistente_id) cambios.asistenteId = enlazada.id
+        }
+      }
+      const valorAntes = Number(actual.valor_acordado)
+      if (args.valor_acordado !== undefined && Number(args.valor_acordado) !== valorAntes) cambios.valorAcordado = Number(args.valor_acordado)
+      if (Object.keys(cambios).length === 0) throw new OperacionMcpError("No hay nada que cambiar: esos datos ya son los que tiene.")
+
+      if (cambios.documento) {
+        const { data: repetidas } = await admin
+          .from("taller_inscripciones")
+          .select("id, nombre")
+          .eq("taller_id", taller.id)
+          .eq("documento", cambios.documento)
+          .neq("estado", "cancelado")
+        const otra = (repetidas ?? []).find((r) => r.id !== actual.id)
+        if (otra) throw new OperacionMcpError(`Esa cédula ya está inscrita en este taller (${otra.nombre}).`)
+      }
+
+      // El valor que quedaria: a mano (admin), o el de la regla de los niños si cambia edad, documento o kit.
+      const despues = {
+        documento: cambios.documento !== undefined ? cambios.documento : actual.documento,
+        edad: cambios.edad !== undefined ? cambios.edad : actual.edad,
+        kit: cambios.kit !== undefined ? cambios.kit : actual.kit,
+      }
+      let valorDespues = cambios.valorAcordado ?? valorAntes
+      let kitDespues = despues.kit
+      const tocaRegla = despues.documento !== actual.documento || despues.edad !== actual.edad || despues.kit !== actual.kit
+      if (tocaRegla && tienePreciosNinos(taller)) {
+        const regla = valorYKitDeInscripcion(taller, despues)
+        kitDespues = regla.kit
+        if (cambios.valorAcordado === undefined) valorDespues = regla.valor
+      }
+      const pagado = await totalPagado(admin, actual.id)
+      if (valorDespues < pagado) {
+        throw new OperacionMcpError(
+          `Ya pagó ${money(pagado)}: el valor a pagar no puede quedar en ${money(valorDespues)}. Si se le devolvió plata, el admin anula primero ese pago.`
+        )
+      }
+
+      const nombreDespues = cambios.nombre ?? actual.nombre
+      const visible = (v: {
+        nombre: string
+        documento: string | null
+        edad: number | null
+        kit: boolean | null
+        telefono: string | null
+        correo: string | null
+      }) => ({
+        nombre: v.nombre,
+        identificacion: v.documento ? enmascarar(v.documento) : null,
+        edad: edadLegible(v.edad) || null,
+        kit: kitLegible(v.kit) || null,
+        contacto_movil: v.telefono ? enmascarar(v.telefono) : null,
+        contacto_mail: v.correo ? enmascarar(v.correo) : null,
+      })
+      const antes = visible(actual)
+      const luego = visible({
+        nombre: nombreDespues,
+        documento: despues.documento,
+        edad: despues.edad,
+        kit: kitDespues,
+        telefono: cambios.telefono !== undefined ? cambios.telefono : actual.telefono,
+        correo: cambios.correo !== undefined ? cambios.correo : actual.correo,
+      })
+      const cambiaron = (Object.keys(antes) as Array<keyof typeof antes>).filter((k) => antes[k] !== luego[k])
+
+      return {
+        datos: { inscripcionId: actual.id, cambios },
+        resumen:
+          nombreDespues !== actual.nombre
+            ? `Pasar la inscripción de ${actual.nombre} a ${nombreDespues} en «${taller.nombre}» (los pagos se quedan)`
+            : `Cambiar los datos de ${actual.nombre} en «${taller.nombre}»`,
+        detalle: {
+          taller: taller.nombre,
+          inscripcion_id: actual.id,
+          antes: Object.fromEntries(cambiaron.map((k) => [k, antes[k]])),
+          despues: Object.fromEntries(cambiaron.map((k) => [k, luego[k]])),
+          ya_pago: pagado,
+          valor_a_pagar: valorDespues !== valorAntes ? { antes: valorAntes, despues: valorDespues } : valorAntes,
+          falta_despues: Math.max(0, valorDespues - pagado),
+          cambia_comentario_interno: cambios.notas !== undefined,
+          enlace_erp:
+            cambios.asistenteId === null ? "se quita" : enlazadaCon ? `queda enlazada a ${enlazadaCon}` : actual.asistente_id ? "sigue igual" : null,
+        },
+        avisos: [
+          `Los pagos se quedan en esta inscripción${pagado > 0 ? ` (ya pagó ${money(pagado)})` : ""}: es el mismo cupo con otros datos. La boleta y su QR no cambian.`,
+          valorDespues !== valorAntes ? `El valor a pagar pasa de ${money(valorAntes)} a ${money(valorDespues)}.` : null,
+          cambios.nombre !== undefined && actual.asistente_id && args.persona_erp === undefined
+            ? "Sigue enlazada a la ficha del ERP de antes. Si el cupo pasó a otra persona, vuelve a preparar con persona_erp: «ninguna» (o el nombre de la nueva)."
+            : null,
+        ],
+      }
+    },
+    ejecutar: async (admin, actor, d) => {
+      await editarInscripcion(admin, { userId: actor.userId, role: actor.role }, d.inscripcionId, d.cambios)
+      const { data } = await admin
+        .from("taller_inscripciones")
+        .select("id, nombre, edad, kit, valor_acordado")
+        .eq("id", d.inscripcionId)
+        .single()
+      return {
+        inscripcion_id: d.inscripcionId,
+        nombre: data?.nombre ?? null,
+        edad: edadLegible(data?.edad) || null,
+        kit: kitLegible(data?.kit) || null,
+        valor_a_pagar: data ? Number(data.valor_acordado) : null,
+      }
     },
   }),
 ]

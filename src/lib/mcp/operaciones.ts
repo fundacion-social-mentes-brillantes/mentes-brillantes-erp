@@ -56,6 +56,7 @@ export type OperacionEscritura =
   | "llegada_taller"
   | "estado_taller"
   | "cancelar_inscripcion_taller"
+  | "editar_inscripcion_taller"
 
 export type BorradorOperacion = {
   id: string

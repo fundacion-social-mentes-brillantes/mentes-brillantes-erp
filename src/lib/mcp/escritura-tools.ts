@@ -88,6 +88,7 @@ const ORDEN: OperacionEscritura[] = [
   "llegada_taller",
   "estado_taller",
   "cancelar_inscripcion_taller",
+  "editar_inscripcion_taller",
 ]
 
 const TODAS = new Map<string, DefinicionOperacion>(

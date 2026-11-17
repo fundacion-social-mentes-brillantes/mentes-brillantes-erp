@@ -70,6 +70,7 @@ const PERMISOS_ESPERADOS: Record<string, Array<"admin" | "caja">> = {
   pago_taller: ["admin", "caja"],
   llegada_taller: ["admin", "caja"],
   cancelar_inscripcion_taller: ["admin", "caja"],
+  editar_inscripcion_taller: ["admin", "caja"],
   gasto_taller: ["admin"],
   estado_taller: ["admin"],
 }
